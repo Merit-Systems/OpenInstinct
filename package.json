@@ -60,6 +60,7 @@
     "build": "turbo run build:app",
     "build:app": "next build",
     "check": "turbo run lint:app types:check:app test:app ui:check ui:integrity format:check foundation:check knip && turbo boundaries",
+    "check:foundation": "turbo run lint:app types:check:app test:app ui:check format:check foundation:check knip && turbo boundaries",
     "deps:check": "taze --fail-on-outdated",
     "deploy": "turbo run deploy:app",
     "deploy:app": "eve deploy",
@@ -80,7 +81,8 @@
     "types:check": "turbo run types:check:app",
     "types:check:app": "tsc --noEmit -p tsconfig.json",
     "ui:check": "merit ui check --root .",
-    "ui:integrity": "merit ui integrity check --root . || node scripts/ui-integrity.ts",
+    "ui:integrity": "merit ui integrity check --root .",
+    "ui:integrity:github": "node scripts/ui-integrity.ts",
     "build:eve": "eve build",
     "dev:eve": "eve dev",
     "start:eve": "eve start"
