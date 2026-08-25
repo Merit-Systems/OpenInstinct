@@ -32,9 +32,9 @@ importers:
       '@merit-systems/brand':
         specifier: 0.12.2
         version: 0.12.2(react@19.2.6)
-      '@onkernel/sdk':
-        specifier: 0.94.0
-        version: 0.94.0
+      '@onkernel/eve-extension':
+        specifier: ^0.1.4
+        version: 0.1.4(ai@7.0.79(zod@4.4.3))(better-auth@1.6.24(next@16.3.0-preview.6(@babel/core@7.29.7)(react-dom@19.2.6(react@19.2.6))(react@19.2.6))(react-dom@19.2.6(react@19.2.6))(react@19.2.6)(vitest@4.1.10(@edge-runtime/vm@3.2.0)(@types/node@24.13.3)(vite@8.2.2(@types/node@24.13.3)(esbuild@0.27.0)(jiti@2.7.0)(tsx@4.21.0)(yaml@2.9.0))))(eve@0.44.4(@vercel/blob@2.8.0)(ai@7.0.79(zod@4.4.3))(chokidar@4.0.0)(dotenv@17.4.2)(jiti@2.7.0)(lru-cache@11.5.2)(vite@8.2.2(@types/node@24.13.3)(esbuild@0.27.0)(jiti@2.7.0)(tsx@4.21.0)(yaml@2.9.0)))
       '@radix-ui/react-use-controllable-state':
         specifier: 1.2.2
         version: 1.2.2(@types/react@19.2.15)(react@19.2.6)
@@ -1014,8 +1014,11 @@ packages:
     resolution: {integrity: sha512-oGB+UxlgWcgQkgwo8GcEGwemoTFt3FIO9ababBmaGwXIoBKZ+GTy0pP185beGg7Llih/NSHSV2XAs1lnznocSg==}
     engines: {node: '>= 8'}
 
-  '@onkernel/sdk@0.94.0':
-    resolution: {integrity: sha512-hpOzV+KA7FRuCETB6qrvpQm2mbkAWQNVdMaa6MwqqDmHmo7bGdEH7SZvJyXiBQGPpVNjLEWwH8lElsBmgyp8Dw==}
+  '@onkernel/eve-extension@0.1.4':
+    resolution: {integrity: sha512-aZ4+ETq9AsEFXKVrroFum5iQXxV5QkFj1XRGmw/4uD133qDXW3RqtNhM2rLvbrJKBLbsEJV6IUK3fqLIlD1nzw==}
+    engines: {node: '>=24'}
+    peerDependencies:
+      eve: '>=0.25'
 
   '@opentelemetry/semantic-conventions@1.43.0':
     resolution: {integrity: sha512-eSYWTm620tTk45EKSedaUL8MFYI8hW164hIXsgIHyxu3VobUB3fFCu5t0hQby6OoWRPsG1KkKUG2M5UadiLiVg==}
@@ -2877,15 +2880,49 @@ packages:
     resolution: {integrity: sha512-Nu+HWKpkgovCh/ezlG7wCVwF7RErTzLzZMbGKFBdGBCbTKyK+s5VXPLl+0+TpNEQPH8AVaGzOpIsXUOtkqylCQ==}
     engines: {node: '>=20.0.0'}
 
+  '@vercel/cli-config@0.2.1':
+    resolution: {integrity: sha512-RhfyXmRLHdbnry8RJqHDc+5rGxMZ0bu+fpysZjtv3bE+BubpuwxTancHOKiH5zKQREsdwFVr3mOI2kOvxlOyxA==}
+
   '@vercel/cli-config@0.2.4':
     resolution: {integrity: sha512-kZ5SojbrV06GHoU6QIWGwDXLov+s9rWZ7QqdqKfJfBGCNUieGfgaCjeeenNy8Y+QC0bwC0dZ2B4l5Hvdmrgpdw==}
+
+  '@vercel/cli-exec@1.0.0':
+    resolution: {integrity: sha512-kQF8LGie/Hbdq9/psJxLE7owRTcqMQMhgybU04gCeR7cbQAr5t8OrjefDNColJv1QSSucFt4pLwRiARVmlOnug==}
+    engines: {node: '>= 18'}
 
   '@vercel/cli-exec@1.0.1':
     resolution: {integrity: sha512-g9XerViJ/paZujufXYcu5XYI2vU2rtB4sgdpjUHde5RnOkdmpu0ngH46LCFGHoPXO/C+qDPSczIHIRN+8Q2YKQ==}
     engines: {node: '>= 18'}
 
+  '@vercel/connect@0.4.3':
+    resolution: {integrity: sha512-NDB5MhjvmeBXWAohLX7wKYnaI18pzvcqmPgSqdPHUcIdYNgHk8KlqjSkII92MgOb+zzP5t0J0yiQScwXKzkmow==}
+    peerDependencies:
+      '@ai-sdk/mcp': ^1 || ^2
+      '@auth/core': '>=0.37.0'
+      '@chat-adapter/slack': ^4.0.0
+      ai: ^6 || ^7.0.0-beta.0
+      better-auth: '>=1.5.0'
+      eve: '>=0.13.7'
+    peerDependenciesMeta:
+      '@ai-sdk/mcp':
+        optional: true
+      '@auth/core':
+        optional: true
+      '@chat-adapter/slack':
+        optional: true
+      ai:
+        optional: true
+      better-auth:
+        optional: true
+      eve:
+        optional: true
+
   '@vercel/oidc@3.2.0':
     resolution: {integrity: sha512-UycprH3T6n3jH0k44NHMa7pnFHGu/N05MjojYr+Mc6I7obkoLIJujSWwin1pCvdy/eOxrI/l3uDLQsmcrOb4ug==}
+    engines: {node: '>= 20'}
+
+  '@vercel/oidc@3.8.1':
+    resolution: {integrity: sha512-ufdalm2MWOYksyj8KVpWjoOFPJO6zoYpuyvIggIQ2bB0CFCjTCiTkGXHqAKwG77GVRjOaN3/8S5ITlZpXWmqOw==}
     engines: {node: '>= 20'}
 
   '@vercel/oidc@3.8.5':
@@ -6724,7 +6761,17 @@ snapshots:
       '@nodelib/fs.scandir': 2.1.5
       fastq: 1.20.1
 
-  '@onkernel/sdk@0.94.0': {}
+  '@onkernel/eve-extension@0.1.4(ai@7.0.79(zod@4.4.3))(better-auth@1.6.24(next@16.3.0-preview.6(@babel/core@7.29.7)(react-dom@19.2.6(react@19.2.6))(react@19.2.6))(react-dom@19.2.6(react@19.2.6))(react@19.2.6)(vitest@4.1.10(@edge-runtime/vm@3.2.0)(@types/node@24.13.3)(vite@8.2.2(@types/node@24.13.3)(esbuild@0.27.0)(jiti@2.7.0)(tsx@4.21.0)(yaml@2.9.0))))(eve@0.44.4(@vercel/blob@2.8.0)(ai@7.0.79(zod@4.4.3))(chokidar@4.0.0)(dotenv@17.4.2)(jiti@2.7.0)(lru-cache@11.5.2)(vite@8.2.2(@types/node@24.13.3)(esbuild@0.27.0)(jiti@2.7.0)(tsx@4.21.0)(yaml@2.9.0)))':
+    dependencies:
+      '@vercel/connect': 0.4.3(ai@7.0.79(zod@4.4.3))(better-auth@1.6.24(next@16.3.0-preview.6(@babel/core@7.29.7)(react-dom@19.2.6(react@19.2.6))(react@19.2.6))(react-dom@19.2.6(react@19.2.6))(react@19.2.6)(vitest@4.1.10(@edge-runtime/vm@3.2.0)(@types/node@24.13.3)(vite@8.2.2(@types/node@24.13.3)(esbuild@0.27.0)(jiti@2.7.0)(tsx@4.21.0)(yaml@2.9.0))))(eve@0.44.4(@vercel/blob@2.8.0)(ai@7.0.79(zod@4.4.3))(chokidar@4.0.0)(dotenv@17.4.2)(jiti@2.7.0)(lru-cache@11.5.2)(vite@8.2.2(@types/node@24.13.3)(esbuild@0.27.0)(jiti@2.7.0)(tsx@4.21.0)(yaml@2.9.0)))
+      eve: 0.44.4(@vercel/blob@2.8.0)(ai@7.0.79(zod@4.4.3))(chokidar@4.0.0)(dotenv@17.4.2)(jiti@2.7.0)(lru-cache@11.5.2)(vite@8.2.2(@types/node@24.13.3)(esbuild@0.27.0)(jiti@2.7.0)(tsx@4.21.0)(yaml@2.9.0))
+      zod: 4.4.3
+    transitivePeerDependencies:
+      - '@ai-sdk/mcp'
+      - '@auth/core'
+      - '@chat-adapter/slack'
+      - ai
+      - better-auth
 
   '@opentelemetry/semantic-conventions@1.43.0': {}
 
@@ -8315,18 +8362,41 @@ snapshots:
       undici: 6.28.0
     optional: true
 
+  '@vercel/cli-config@0.2.1':
+    dependencies:
+      xdg-app-paths: 5.5.1
+      zod: 4.1.11
+
   '@vercel/cli-config@0.2.4':
     dependencies:
       xdg-app-paths: 5.5.1
       zod: 4.1.11
     optional: true
 
+  '@vercel/cli-exec@1.0.0':
+    dependencies:
+      execa: 5.1.1
+
   '@vercel/cli-exec@1.0.1':
     dependencies:
       execa: 5.1.1
     optional: true
 
+  '@vercel/connect@0.4.3(ai@7.0.79(zod@4.4.3))(better-auth@1.6.24(next@16.3.0-preview.6(@babel/core@7.29.7)(react-dom@19.2.6(react@19.2.6))(react@19.2.6))(react-dom@19.2.6(react@19.2.6))(react@19.2.6)(vitest@4.1.10(@edge-runtime/vm@3.2.0)(@types/node@24.13.3)(vite@8.2.2(@types/node@24.13.3)(esbuild@0.27.0)(jiti@2.7.0)(tsx@4.21.0)(yaml@2.9.0))))(eve@0.44.4(@vercel/blob@2.8.0)(ai@7.0.79(zod@4.4.3))(chokidar@4.0.0)(dotenv@17.4.2)(jiti@2.7.0)(lru-cache@11.5.2)(vite@8.2.2(@types/node@24.13.3)(esbuild@0.27.0)(jiti@2.7.0)(tsx@4.21.0)(yaml@2.9.0)))':
+    dependencies:
+      '@vercel/oidc': 3.8.1
+    optionalDependencies:
+      ai: 7.0.79(zod@4.4.3)
+      better-auth: 1.6.24(next@16.3.0-preview.6(@babel/core@7.29.7)(react-dom@19.2.6(react@19.2.6))(react@19.2.6))(react-dom@19.2.6(react@19.2.6))(react@19.2.6)(vitest@4.1.10(@edge-runtime/vm@3.2.0)(@types/node@24.13.3)(vite@8.2.2(@types/node@24.13.3)(esbuild@0.27.0)(jiti@2.7.0)(tsx@4.21.0)(yaml@2.9.0)))
+      eve: 0.44.4(@vercel/blob@2.8.0)(ai@7.0.79(zod@4.4.3))(chokidar@4.0.0)(dotenv@17.4.2)(jiti@2.7.0)(lru-cache@11.5.2)(vite@8.2.2(@types/node@24.13.3)(esbuild@0.27.0)(jiti@2.7.0)(tsx@4.21.0)(yaml@2.9.0))
+
   '@vercel/oidc@3.2.0': {}
+
+  '@vercel/oidc@3.8.1':
+    dependencies:
+      '@vercel/cli-config': 0.2.1
+      '@vercel/cli-exec': 1.0.0
+      jose: 5.10.0
 
   '@vercel/oidc@3.8.5':
     dependencies:
@@ -9665,8 +9735,7 @@ snapshots:
 
   jiti@2.7.0: {}
 
-  jose@5.10.0:
-    optional: true
+  jose@5.10.0: {}
 
   jose@6.2.10: {}
 
@@ -10566,8 +10635,7 @@ snapshots:
       string-width: 7.2.0
       strip-ansi: 7.2.0
 
-  os-paths@4.4.0:
-    optional: true
+  os-paths@4.4.0: {}
 
   oxc-parser@0.140.0:
     dependencies:
@@ -11688,12 +11756,10 @@ snapshots:
     dependencies:
       os-paths: 4.4.0
       xdg-portable: 7.3.0
-    optional: true
 
   xdg-portable@7.3.0:
     dependencies:
       os-paths: 4.4.0
-    optional: true
 
   yallist@3.1.1: {}
 
@@ -11717,8 +11783,7 @@ snapshots:
 
   zod@3.25.76: {}
 
-  zod@4.1.11:
-    optional: true
+  zod@4.1.11: {}
 
   zod@4.4.3: {}
 

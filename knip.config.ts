@@ -3,7 +3,7 @@ import type { KnipConfig } from "knip";
 export default {
   entry: [
     "agent/channels/**/*.ts",
-    "agent/tools/**/*.ts",
+    "agent/extensions/**/*.ts",
     "foundation.config.ts",
     "taze.config.ts",
   ],

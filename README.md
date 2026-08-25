@@ -1,8 +1,8 @@
 # Eve Kernel
 
-An experimental [Eve](https://eve.dev) agent with the default Web Chat UI and a [Kernel](https://www.kernel.sh/docs) cloud-browser tool.
+An experimental [Eve](https://eve.dev) agent with the default Web Chat UI and Kernel's official [`@onkernel/eve-extension`](https://www.kernel.sh/docs/integrations/vercel/eve-extension).
 
-The agent can create a Kernel browser, execute Playwright code, expose the live view, reuse the session across tool calls, and close it when the task is complete.
+The extension mounts Kernel's hosted MCP server and maintained `browse` skill. The agent has the complete Kernel MCP toolset: browser lifecycle, Playwright, computer controls, browser curl, managed authentication and credentials, profiles, proxies, replays, browser pools, and VM command execution.
 
 ## Getting started
 
@@ -14,7 +14,7 @@ cp .env.example .env.local
 pnpm dev
 ```
 
-Set `KERNEL_API_KEY` in `.env.local`, then open the local Next.js URL to use the chat UI.
+Set `KERNEL_API_KEY` in `.env.local`, then open the local Next.js URL to use the chat UI. The deployed agent uses the shared Kernel API key configured in Vercel.
 
 For Eve's terminal interface, run:
 

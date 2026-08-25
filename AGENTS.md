@@ -57,8 +57,8 @@ Run the validation the task requests. When it does not establish the behavior yo
 ## Repository contract
 
 - The repository root owns the single Next.js application, Eve agent, and shared UI contract.
-- Keep the stock Eve chat composition on `/`; browser capabilities belong under `agent/tools`.
-- Validate runtime environment variables through `env.ts`. `KERNEL_API_KEY` is required for browser tool execution.
+- Keep the stock Eve chat composition on `/`; Kernel browser capabilities belong under the official extension mount in `agent/extensions/kernel`.
+- Validate runtime environment variables through `env.ts`. `KERNEL_API_KEY` is required by the shared-key Kernel MCP connection.
 - Run `pnpm check` and `pnpm build` before handing off changes.
 
 ## Merit design system

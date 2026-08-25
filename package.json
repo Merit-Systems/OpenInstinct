@@ -3,7 +3,7 @@
   "dependencies": {
     "@base-ui/react": "^1.7.0",
     "@merit-systems/brand": "0.12.2",
-    "@onkernel/sdk": "0.94.0",
+    "@onkernel/eve-extension": "^0.1.4",
     "@radix-ui/react-use-controllable-state": "1.2.2",
     "@streamdown/cjk": "1.0.3",
     "@streamdown/code": "1.1.1",
