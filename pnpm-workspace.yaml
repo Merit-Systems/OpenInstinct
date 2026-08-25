@@ -16,6 +16,7 @@ minimumReleaseAgeExclude:
   - picomatch
   - systeminformation
 allowBuilds:
+  esbuild: true
   sharp: true
 
 catalogs:

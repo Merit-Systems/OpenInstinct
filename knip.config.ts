@@ -11,6 +11,8 @@ export default {
     // Imported through the owning Tailwind stylesheet rather than TypeScript.
     "@merit-systems/brand",
     "tailwindcss",
+    // Executed indirectly by Foundation to mint the protected registry token.
+    "vercel",
     // Loaded from generated configuration and the Foundation Base UI baseline.
     "@merit-systems/oxlint-config",
     "next-themes",

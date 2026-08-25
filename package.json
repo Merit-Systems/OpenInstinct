@@ -48,6 +48,7 @@
     "taze": "19.16.0",
     "turbo": "2.10.5",
     "typescript": "6.0.3",
+    "vercel": "59.5.0",
     "vitest": "4.1.10"
   },
   "engines": {

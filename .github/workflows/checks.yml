@@ -20,4 +20,9 @@ jobs:
       id-token: write
       packages: read
     uses: Merit-Systems/foundation/.github/workflows/checks.yml@v1
+    with:
+      # The reusable workflow exchanges GitHub OIDC for a short-lived Vercel
+      # access token. Foundation's protected UI integrity check uses it to mint
+      # the engineering-docs project token without a persisted secret.
+      check-command: VERCEL_TOKEN="$TURBO_TOKEN" pnpm check
     secrets: inherit
