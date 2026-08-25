@@ -25,7 +25,7 @@ import {
   updateBrowserRunTask,
 } from "@/lib/browser-run-store";
 
-const taskTimeoutMs = 180_000;
+const taskTimeoutMs = 15 * 60_000;
 
 export function BrowserRunDetail({ groupId }: { readonly groupId: string }) {
   const router = useRouter();
@@ -226,7 +226,7 @@ async function runPersistedTask(
         status: "running",
       });
       timeout = window.setTimeout(() => {
-        update({ terminalMessage: "Timed out after 3 minutes; cancelling…" });
+        update({ terminalMessage: "Timed out after 15 minutes; cancelling…" });
         void response.cancel();
       }, taskTimeoutMs);
 

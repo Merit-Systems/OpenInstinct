@@ -16,6 +16,7 @@ minimumReleaseAgeExclude:
   - picomatch
   - systeminformation
 allowBuilds:
+  cbor-extract: false
   esbuild: true
   sharp: true
 

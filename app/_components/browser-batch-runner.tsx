@@ -3,11 +3,7 @@
 import { ExternalLinkIcon, PlayIcon, RotateCcwIcon } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
-import {
-  BrowserRunTable,
-  formatCost,
-  summarizeBrowserRunTasks,
-} from "@/app/_components/browser-run-table";
+import { GlobalTaskHistory } from "@/app/_components/global-task-history";
 import { useBrowserRunGroups } from "@/app/_components/use-browser-run-groups";
 import { Button } from "@/components/ui/button";
 import {
@@ -44,8 +40,6 @@ export function BrowserBatchRunner() {
   const [groupName, setGroupName] = useState("");
   const [concurrency, setConcurrency] = useState(4);
   const parsedTasks = useMemo(() => parseTasks(input), [input]);
-  const allTasks = groups.flatMap((group) => group.tasks);
-  const summary = summarizeBrowserRunTasks(allTasks);
 
   const handleSubmit = () => {
     if (parsedTasks.length === 0) return;
@@ -159,39 +153,7 @@ export function BrowserBatchRunner() {
           </CardContent>
         </Card>
 
-        <section aria-labelledby="all-tasks-heading" className="grid gap-4">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-            <div>
-              <h2 className="type-card-title" id="all-tasks-heading">
-                All tasks
-              </h2>
-              <p className="mt-1 type-supporting-body text-muted-foreground">
-                Every saved task across {String(groups.length)} groups. Open a
-                group to resume or inspect its run.
-              </p>
-            </div>
-            {allTasks.length > 0 ? (
-              <div className="flex flex-wrap gap-x-5 gap-y-1 type-label">
-                <span>
-                  {String(summary.completed)}/{String(allTasks.length)} complete
-                </span>
-                <span className="text-success">
-                  {String(summary.succeeded)} succeeded
-                </span>
-                <span>
-                  {formatCost(summary.costUsd, summary.costComplete)} total
-                </span>
-              </div>
-            ) : null}
-          </div>
-
-          <BrowserRunTable
-            emptyDescription="Create a group above to start the first persisted batch."
-            emptyTitle="No saved tasks"
-            groups={groups}
-            showGroup
-          />
-        </section>
+        <GlobalTaskHistory localGroups={groups} />
       </div>
     </main>
   );

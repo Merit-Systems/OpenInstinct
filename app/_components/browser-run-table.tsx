@@ -61,6 +61,7 @@ export function BrowserRunTable({
                 Task
               </TableHead>
               <TableHead>Status</TableHead>
+              <TableHead>Run at</TableHead>
               <TableHead>Time</TableHead>
               <TableHead>LLM cost</TableHead>
               <TableHead className="w-[38%] pr-4">Terminal message</TableHead>
@@ -71,15 +72,21 @@ export function BrowserRunTable({
               <TableRow key={task.id}>
                 {showGroup ? (
                   <TableCell className="max-w-48 pl-4 whitespace-normal">
-                    <Button
-                      className="text-left whitespace-normal"
-                      onClick={() => router.push(`/runs/${group.id}`)}
-                      size="none"
-                      type="button"
-                      variant="quiet"
-                    >
-                      {group.name}
-                    </Button>
+                    {group.id ? (
+                      <Button
+                        className="text-left whitespace-normal"
+                        onClick={() => router.push(`/runs/${group.id}`)}
+                        size="none"
+                        type="button"
+                        variant="quiet"
+                      >
+                        {group.name}
+                      </Button>
+                    ) : (
+                      <span className="text-muted-foreground">
+                        {group.name}
+                      </span>
+                    )}
                   </TableCell>
                 ) : null}
                 <TableCell
@@ -94,6 +101,9 @@ export function BrowserRunTable({
                 </TableCell>
                 <TableCell>
                   <TaskStatusBadge status={task.status} />
+                </TableCell>
+                <TableCell className="whitespace-nowrap tabular-nums">
+                  {formatTaskTimestamp(task.startedAt)}
                 </TableCell>
                 <TableCell className="tabular-nums">
                   {formatTaskDuration(task, clock)}
@@ -189,4 +199,15 @@ function formatTaskDuration(task: BrowserRunTask, now: number) {
     return formatDuration(now - task.startedAt);
   }
   return formatDuration(task.durationMs);
+}
+
+const taskTimestampFormatter = new Intl.DateTimeFormat(undefined, {
+  dateStyle: "medium",
+  timeStyle: "short",
+});
+
+function formatTaskTimestamp(timestamp: number | undefined) {
+  return timestamp === undefined
+    ? "—"
+    : taskTimestampFormatter.format(new Date(timestamp));
 }
