@@ -4,6 +4,7 @@ export default {
   entry: [
     "agent/channels/**/*.ts",
     "agent/extensions/**/*.ts",
+    "agent/tools/**/*.ts",
     "foundation.config.ts",
     "taze.config.ts",
   ],

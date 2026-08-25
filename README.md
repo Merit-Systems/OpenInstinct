@@ -4,6 +4,16 @@ An experimental [Eve](https://eve.dev) agent with the default Web Chat UI and Ke
 
 The extension mounts Kernel's hosted MCP server and maintained `browse` skill. The agent has the complete Kernel MCP toolset: browser lifecycle, Playwright, computer controls, browser curl, managed authentication and credentials, profiles, proxies, replays, browser pools, and VM command execution.
 
+## Browser request compiler experiment
+
+Eve can learn a repeatable read task from a Kernel browser trace and replay the useful network request without repeating the UI navigation. Ask it to compile a task, for example:
+
+> Find coffee shops in Boston in the browser, learn the task, then test the compiled version with Chicago.
+
+The agent enables Kernel telemetry, performs the first task normally, selects an observed JSON API request, replaces the concrete input with a named parameter, and verifies a second call through Kernel browser curl. The compiled request still inherits the live browser's cookies, TLS identity, and proxy, but skips page navigation and visual reasoning.
+
+This first version intentionally compiles only successful JSON `GET` fetch/XHR requests. Parameterization uses exact examples from the observed request, compiled artifacts live only in the current Eve chat session, and captured headers, cookies, credentials, request bodies, and response bodies are never persisted in the artifact.
+
 ## Getting started
 
 Install dependencies, configure Kernel, and run the development server:

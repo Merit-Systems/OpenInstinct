@@ -35,6 +35,9 @@ importers:
       '@onkernel/eve-extension':
         specifier: ^0.1.4
         version: 0.1.4(ai@7.0.79(zod@4.4.3))(better-auth@1.6.24(next@16.3.0-preview.6(@babel/core@7.29.7)(react-dom@19.2.6(react@19.2.6))(react@19.2.6))(react-dom@19.2.6(react@19.2.6))(react@19.2.6)(vitest@4.1.10(@edge-runtime/vm@3.2.0)(@types/node@24.13.3)(vite@8.2.2(@types/node@24.13.3)(esbuild@0.27.0)(jiti@2.7.0)(tsx@4.21.0)(yaml@2.9.0))))(eve@0.44.4(@vercel/blob@2.8.0)(ai@7.0.79(zod@4.4.3))(chokidar@4.0.0)(dotenv@17.4.2)(jiti@2.7.0)(lru-cache@11.5.2)(vite@8.2.2(@types/node@24.13.3)(esbuild@0.27.0)(jiti@2.7.0)(tsx@4.21.0)(yaml@2.9.0)))
+      '@onkernel/sdk':
+        specifier: 0.94.0
+        version: 0.94.0
       '@radix-ui/react-use-controllable-state':
         specifier: 1.2.2
         version: 1.2.2(@types/react@19.2.15)(react@19.2.6)
@@ -1019,6 +1022,9 @@ packages:
     engines: {node: '>=24'}
     peerDependencies:
       eve: '>=0.25'
+
+  '@onkernel/sdk@0.94.0':
+    resolution: {integrity: sha512-hpOzV+KA7FRuCETB6qrvpQm2mbkAWQNVdMaa6MwqqDmHmo7bGdEH7SZvJyXiBQGPpVNjLEWwH8lElsBmgyp8Dw==}
 
   '@opentelemetry/semantic-conventions@1.43.0':
     resolution: {integrity: sha512-eSYWTm620tTk45EKSedaUL8MFYI8hW164hIXsgIHyxu3VobUB3fFCu5t0hQby6OoWRPsG1KkKUG2M5UadiLiVg==}
@@ -6772,6 +6778,8 @@ snapshots:
       - '@chat-adapter/slack'
       - ai
       - better-auth
+
+  '@onkernel/sdk@0.94.0': {}
 
   '@opentelemetry/semantic-conventions@1.43.0': {}
 
