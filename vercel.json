@@ -1,0 +1,4 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "installCommand": "pnpm config set --global //npm.pkg.github.com/:_authToken \"$NODE_AUTH_TOKEN\" && pnpm install --frozen-lockfile"
+}
