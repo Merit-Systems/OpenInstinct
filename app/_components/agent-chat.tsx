@@ -4,7 +4,7 @@ import type { UserContent } from "ai";
 import { isTurnFailureEvent } from "eve/client";
 import { useEveAgent } from "eve/react";
 import { AlertCircleIcon, BrainIcon, PlusIcon, SquareIcon } from "lucide-react";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import {
   Conversation,
   ConversationContent,
@@ -74,6 +74,24 @@ export function AgentChat({
     sessionless || !isEmpty || errorMessage !== undefined;
   const showConversationLayout = isRestoring || hasConversationContent;
   const activeSessionId = sessionId ?? agent.session?.sessionId;
+  const messageTimestamps = useMemo(() => {
+    const timestamps = new Map<string, string>();
+
+    for (const event of agent.events) {
+      if (event.type === "message.received") {
+        timestamps.set(`${event.data.turnId}:user`, event.meta.at);
+      }
+
+      if (event.type === "step.started") {
+        const messageId = `${event.data.turnId}:assistant`;
+        if (!timestamps.has(messageId)) {
+          timestamps.set(messageId, event.meta.at);
+        }
+      }
+    }
+
+    return timestamps;
+  }, [agent.events]);
 
   const requestCancellation = () => {
     setCancellationError(undefined);
@@ -168,6 +186,7 @@ export function AgentChat({
                     setCancellationError(undefined);
                     return agent.respond(inputResponses);
                   }}
+                  timestamp={messageTimestamps.get(message.id)}
                 />
               )
             )}

@@ -15,6 +15,7 @@ import {
   KeyRoundIcon,
   XCircleIcon,
 } from "lucide-react";
+import { useState } from "react";
 import {
   Message,
   MessageContent,
@@ -59,6 +60,7 @@ export function AgentMessage({
   isStreaming,
   message,
   onInputResponses,
+  timestamp,
 }: {
   readonly canRespond: boolean;
   readonly isStreaming: boolean;
@@ -66,7 +68,10 @@ export function AgentMessage({
   readonly onInputResponses: (
     responses: readonly AgentInputResponse[]
   ) => void | Promise<void>;
+  readonly timestamp?: string;
 }) {
+  const [optimisticTimestamp] = useState(() => new Date().toISOString());
+  const displayedTimestamp = timestamp ?? optimisticTimestamp;
   const lastTextIndex = message.parts.reduce(
     (last, part, index) => (part.type === "text" ? index : last),
     -1
@@ -97,8 +102,38 @@ export function AgentMessage({
           )
         )}
       </MessageContent>
+      <time
+        className={cn(
+          "text-muted-foreground",
+          message.role === "user" ? "ml-auto pr-1" : "mr-auto"
+        )}
+        dateTime={displayedTimestamp}
+        title={formatFullTimestamp(displayedTimestamp)}
+      >
+        <span className="type-caption" suppressHydrationWarning>
+          {formatTimestamp(displayedTimestamp)}
+        </span>
+      </time>
     </Message>
   );
+}
+
+const timestampFormatter = new Intl.DateTimeFormat(undefined, {
+  hour: "numeric",
+  minute: "2-digit",
+});
+
+const fullTimestampFormatter = new Intl.DateTimeFormat(undefined, {
+  dateStyle: "medium",
+  timeStyle: "short",
+});
+
+function formatTimestamp(timestamp: string) {
+  return timestampFormatter.format(new Date(timestamp));
+}
+
+function formatFullTimestamp(timestamp: string) {
+  return fullTimestampFormatter.format(new Date(timestamp));
 }
 
 function AgentMessagePart({
