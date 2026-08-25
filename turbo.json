@@ -39,7 +39,11 @@
       "outputs": []
     },
     "ui:integrity": {
-      "env": ["ACTIONS_ID_TOKEN_REQUEST_TOKEN", "ACTIONS_ID_TOKEN_REQUEST_URL"],
+      "env": [
+        "ACTIONS_ID_TOKEN_REQUEST_TOKEN",
+        "ACTIONS_ID_TOKEN_REQUEST_URL",
+        "MERIT_REGISTRY_OIDC_TOKEN"
+      ],
       "inputs": [
         "components.json",
         "package.json",
