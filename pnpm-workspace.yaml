@@ -1,0 +1,3 @@
+minimumReleaseAgeStrict: true
+allowBuilds:
+  sharp: false
