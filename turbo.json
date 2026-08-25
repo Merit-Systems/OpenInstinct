@@ -39,6 +39,7 @@
       "outputs": []
     },
     "ui:integrity": {
+      "env": ["ACTIONS_ID_TOKEN_REQUEST_TOKEN", "ACTIONS_ID_TOKEN_REQUEST_URL"],
       "inputs": [
         "components.json",
         "package.json",

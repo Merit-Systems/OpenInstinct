@@ -13,25 +13,6 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  registry-auth-probe:
-    name: Registry auth probe
-    permissions:
-      contents: read
-      id-token: write
-    runs-on: ubuntu-latest
-    steps:
-      - name: Verify GitHub OIDC registry access
-        uses: actions/github-script@v8
-        with:
-          script: |
-            const token = await core.getIDToken()
-            core.setSecret(token)
-            const response = await fetch("https://merit.engineering/r/integrity.json", {
-              headers: { "x-vercel-trusted-oidc-idp-token": token },
-            })
-            core.info(`Registry response: ${response.status}`)
-            if (!response.ok) core.setFailed(`Registry rejected GitHub OIDC with ${response.status}`)
-
   foundation:
     name: Foundation
     permissions:
@@ -39,9 +20,4 @@ jobs:
       id-token: write
       packages: read
     uses: Merit-Systems/foundation/.github/workflows/checks.yml@v1
-    with:
-      # The reusable workflow exchanges GitHub OIDC for a short-lived Vercel
-      # access token. Foundation's protected UI integrity check uses it to mint
-      # the engineering-docs project token without a persisted secret.
-      check-command: VERCEL_TOKEN="$TURBO_TOKEN" pnpm check
     secrets: inherit
