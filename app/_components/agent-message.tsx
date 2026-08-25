@@ -71,7 +71,8 @@ export function AgentMessage({
   readonly timestamp?: string;
 }) {
   const [optimisticTimestamp] = useState(() => new Date().toISOString());
-  const displayedTimestamp = timestamp ?? optimisticTimestamp;
+  const displayedTimestamp =
+    timestamp ?? (message.role === "user" ? optimisticTimestamp : undefined);
   const lastTextIndex = message.parts.reduce(
     (last, part, index) => (part.type === "text" ? index : last),
     -1
@@ -102,18 +103,20 @@ export function AgentMessage({
           )
         )}
       </MessageContent>
-      <time
-        className={cn(
-          "text-muted-foreground",
-          message.role === "user" ? "ml-auto pr-1" : "mr-auto"
-        )}
-        dateTime={displayedTimestamp}
-        title={formatFullTimestamp(displayedTimestamp)}
-      >
-        <span className="type-caption" suppressHydrationWarning>
-          {formatTimestamp(displayedTimestamp)}
-        </span>
-      </time>
+      {displayedTimestamp ? (
+        <time
+          className={cn(
+            "text-muted-foreground",
+            message.role === "user" ? "ml-auto pr-1" : "mr-auto"
+          )}
+          dateTime={displayedTimestamp}
+          title={formatFullTimestamp(displayedTimestamp)}
+        >
+          <span className="type-caption" suppressHydrationWarning>
+            {formatTimestamp(displayedTimestamp)}
+          </span>
+        </time>
+      ) : null}
     </Message>
   );
 }

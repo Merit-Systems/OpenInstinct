@@ -82,11 +82,11 @@ export function AgentChat({
         timestamps.set(`${event.data.turnId}:user`, event.meta.at);
       }
 
-      if (event.type === "step.started") {
-        const messageId = `${event.data.turnId}:assistant`;
-        if (!timestamps.has(messageId)) {
-          timestamps.set(messageId, event.meta.at);
-        }
+      if (
+        event.type === "message.completed" &&
+        event.data.finishReason !== "tool-calls"
+      ) {
+        timestamps.set(`${event.data.turnId}:assistant`, event.meta.at);
       }
     }
 
