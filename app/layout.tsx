@@ -4,8 +4,9 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Eve Kernel",
-  description: "An experimental Eve agent with Kernel cloud browser tools.",
+  title: "Browser Batch Runner · Eve Kernel",
+  description:
+    "Run and compare concurrent browser-agent tasks with live timing and cost.",
 };
 
 export default function RootLayout({

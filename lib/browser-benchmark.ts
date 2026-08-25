@@ -1,5 +1,5 @@
 import type { MessageStreamEvent } from "eve/client";
-import { taskCompletionSchema } from "./task-completion.js";
+import { taskCompletionSchema } from "./task-completion";
 
 export function measureBrowserTask(
   events: readonly MessageStreamEvent[],
