@@ -1,16 +1,26 @@
-# eve-kernel
+# Eve Kernel
 
-This is an [eve](https://eve.dev) agent bootstrapped with [`eve init`](https://eve.dev/docs/reference/cli#eve-init).
+An experimental [Eve](https://eve.dev) agent with the default Web Chat UI and a [Kernel](https://www.kernel.sh/docs) cloud-browser tool.
+
+The agent can create a Kernel browser, execute Playwright code, expose the live view, reuse the session across tool calls, and close it when the task is complete.
 
 ## Getting started
 
-First, run the development server:
+Install dependencies, configure Kernel, and run the development server:
 
 ```bash
-eve dev
+pnpm install
+cp .env.example .env.local
+pnpm dev
 ```
 
-The development TUI opens an interactive session where you can send messages to your agent.
+Set `KERNEL_API_KEY` in `.env.local`, then open the local Next.js URL to use the chat UI.
+
+For Eve's terminal interface, run:
+
+```bash
+pnpm dev:eve
+```
 
 Start by editing `agent/instructions.md` to define the agent's identity, purpose, tone, and response guidelines. Configure its model and runtime behavior in `agent/agent.ts`.
 

@@ -1,0 +1,23 @@
+# foundation:checks:v1
+name: Checks
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+      - master
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  foundation:
+    name: Foundation
+    permissions:
+      contents: read
+      id-token: write
+      packages: read
+    uses: Merit-Systems/foundation/.github/workflows/checks.yml@v1
+    secrets: inherit

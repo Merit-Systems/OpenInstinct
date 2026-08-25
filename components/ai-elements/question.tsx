@@ -5,14 +5,19 @@ import type {
   ComponentProps,
   FormEvent,
   HTMLAttributes,
-  MouseEvent,
   ReactNode,
 } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
-import { createContext, useCallback, useContext, useMemo, useState } from "react";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useMemo,
+  useState,
+} from "react";
 
 export interface QuestionValue {
   selectedValues: readonly string[];
@@ -47,12 +52,15 @@ const useQuestion = () => {
   return context;
 };
 
-export type QuestionProps = Omit<ComponentProps<"form">, "defaultValue" | "onSubmit" | "value"> & {
+export type QuestionProps = Omit<
+  ComponentProps<"form">,
+  "defaultValue" | "onSubmit" | "value"
+> & {
   defaultValue?: QuestionValue;
   disabled?: boolean;
   onSubmit?: (
     response: QuestionResponse,
-    event: FormEvent<HTMLFormElement>,
+    event: FormEvent<HTMLFormElement>
   ) => void | Promise<void>;
   onValueChange?: (value: QuestionValue) => void;
   selectionMode?: SelectionMode;
@@ -64,7 +72,7 @@ const EMPTY_VALUE: QuestionValue = { selectedValues: [], text: "" };
 const getSelectedValues = (
   currentValues: readonly string[],
   optionValue: string,
-  selectionMode: SelectionMode,
+  selectionMode: SelectionMode
 ): readonly string[] => {
   const isSelected = currentValues.includes(optionValue);
 
@@ -100,22 +108,26 @@ export const Question = ({
       }
       onValueChange?.(nextValue);
     },
-    [controlledValue, onValueChange],
+    [controlledValue, onValueChange]
   );
 
   const setText = useCallback(
     (text: string) => {
       setValue({ ...value, text });
     },
-    [setValue, value],
+    [setValue, value]
   );
 
   const toggleValue = useCallback(
     (optionValue: string) => {
-      const selectedValues = getSelectedValues(value.selectedValues, optionValue, selectionMode);
+      const selectedValues = getSelectedValues(
+        value.selectedValues,
+        optionValue,
+        selectionMode
+      );
       setValue({ ...value, selectedValues });
     },
-    [selectionMode, setValue, value],
+    [selectionMode, setValue, value]
   );
 
   const contextValue = useMemo(
@@ -127,7 +139,7 @@ export const Question = ({
       text: value.text,
       toggleValue,
     }),
-    [disabled, selectionMode, setText, toggleValue, value],
+    [disabled, selectionMode, setText, toggleValue, value]
   );
 
   const handleSubmit = useCallback(
@@ -147,16 +159,19 @@ export const Question = ({
           selectedValues: value.selectedValues,
           text: text.length > 0 ? text : undefined,
         },
-        event,
+        event
       );
     },
-    [disabled, onSubmit, value],
+    [disabled, onSubmit, value]
   );
 
   return (
     <QuestionContext.Provider value={contextValue}>
       <form
-        className={cn("space-y-4 rounded-lg border bg-background p-4", className)}
+        className={cn(
+          "space-y-4 rounded-lg border bg-background p-4",
+          className
+        )}
         onSubmit={handleSubmit}
         {...props}
       >
@@ -168,19 +183,28 @@ export const Question = ({
 
 export type QuestionPromptProps = HTMLAttributes<HTMLParagraphElement>;
 
-export const QuestionPrompt = ({ className, ...props }: QuestionPromptProps) => (
+export const QuestionPrompt = ({
+  className,
+  ...props
+}: QuestionPromptProps) => (
   <p className={cn("font-medium text-sm", className)} {...props} />
 );
 
 export type QuestionDescriptionProps = HTMLAttributes<HTMLParagraphElement>;
 
-export const QuestionDescription = ({ className, ...props }: QuestionDescriptionProps) => (
+export const QuestionDescription = ({
+  className,
+  ...props
+}: QuestionDescriptionProps) => (
   <p className={cn("text-muted-foreground text-sm", className)} {...props} />
 );
 
 export type QuestionOptionsProps = HTMLAttributes<HTMLDivElement>;
 
-export const QuestionOptions = ({ className, ...props }: QuestionOptionsProps) => {
+export const QuestionOptions = ({
+  className,
+  ...props
+}: QuestionOptionsProps) => {
   const { selectionMode } = useQuestion();
 
   return (
@@ -192,7 +216,10 @@ export const QuestionOptions = ({ className, ...props }: QuestionOptionsProps) =
   );
 };
 
-export type QuestionOptionProps = Omit<ComponentProps<typeof Button>, "value"> & {
+export type QuestionOptionProps = Omit<
+  ComponentProps<typeof Button>,
+  "value"
+> & {
   value: string;
 };
 
@@ -208,12 +235,12 @@ export const QuestionOption = ({
   const question = useQuestion();
   const isSelected = question.selectedValues.includes(value);
   const role = question.selectionMode === "single" ? "radio" : "checkbox";
-  const handleClick = useCallback(
-    (event: MouseEvent<HTMLButtonElement>) => {
+  const handleClick = useCallback<NonNullable<QuestionOptionProps["onClick"]>>(
+    (event) => {
       question.toggleValue(value);
       onClick?.(event);
     },
-    [onClick, question, value],
+    [onClick, question, value]
   );
 
   return (
@@ -232,16 +259,24 @@ export const QuestionOption = ({
   );
 };
 
-export type QuestionInputProps = Omit<ComponentProps<typeof Textarea>, "defaultValue" | "value">;
+export type QuestionInputProps = Omit<
+  ComponentProps<typeof Textarea>,
+  "defaultValue" | "value"
+>;
 
-export const QuestionInput = ({ className, disabled, onChange, ...props }: QuestionInputProps) => {
+export const QuestionInput = ({
+  className,
+  disabled,
+  onChange,
+  ...props
+}: QuestionInputProps) => {
   const question = useQuestion();
   const handleChange = useCallback(
     (event: ChangeEvent<HTMLTextAreaElement>) => {
       question.setText(event.currentTarget.value);
       onChange?.(event);
     },
-    [onChange, question],
+    [onChange, question]
   );
 
   return (
@@ -257,8 +292,14 @@ export const QuestionInput = ({ className, disabled, onChange, ...props }: Quest
 
 export type QuestionActionsProps = HTMLAttributes<HTMLDivElement>;
 
-export const QuestionActions = ({ className, ...props }: QuestionActionsProps) => (
-  <div className={cn("flex items-center justify-end gap-2", className)} {...props} />
+export const QuestionActions = ({
+  className,
+  ...props
+}: QuestionActionsProps) => (
+  <div
+    className={cn("flex items-center justify-end gap-2", className)}
+    {...props}
+  />
 );
 
 export type QuestionSubmitProps = ComponentProps<typeof Button> & {
@@ -271,10 +312,15 @@ export const QuestionSubmit = ({
   ...props
 }: QuestionSubmitProps) => {
   const question = useQuestion();
-  const hasResponse = question.selectedValues.length > 0 || question.text.trim().length > 0;
+  const hasResponse =
+    question.selectedValues.length > 0 || question.text.trim().length > 0;
 
   return (
-    <Button disabled={question.disabled || disabled || !hasResponse} type="submit" {...props}>
+    <Button
+      disabled={question.disabled || disabled || !hasResponse}
+      type="submit"
+      {...props}
+    >
       {children}
     </Button>
   );

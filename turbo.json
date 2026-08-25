@@ -1,0 +1,54 @@
+{
+  "$schema": "https://turborepo.dev/schema.json",
+  "tasks": {
+    "build:app": {
+      "dependsOn": ["^build:app"],
+      "env": ["KERNEL_API_KEY"],
+      "outputs": [".next/**", "!.next/cache/**"]
+    },
+    "dev:app": {
+      "cache": false,
+      "persistent": true
+    },
+    "deploy:app": {
+      "cache": false
+    },
+    "format:check": {
+      "outputs": []
+    },
+    "foundation:check": {
+      "outputs": []
+    },
+    "knip": {
+      "outputs": []
+    },
+    "lint:app": {
+      "outputs": []
+    },
+    "start:app": {
+      "cache": false,
+      "persistent": true
+    },
+    "test:app": {
+      "outputs": []
+    },
+    "types:check:app": {
+      "outputs": ["*.tsbuildinfo"]
+    },
+    "ui:check": {
+      "outputs": []
+    },
+    "ui:integrity": {
+      "inputs": [
+        "components.json",
+        "package.json",
+        "tsconfig.json",
+        "components/**",
+        "app/globals.css",
+        "foundation.config.ts",
+        "pnpm-lock.yaml"
+      ],
+      "outputs": []
+    }
+  }
+}

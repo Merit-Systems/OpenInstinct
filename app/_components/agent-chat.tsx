@@ -1,6 +1,7 @@
 "use client";
 
 import type { UserContent } from "ai";
+import { isTurnFailureEvent } from "eve/client";
 import { useEveAgent } from "eve/react";
 import { AlertCircleIcon, BrainIcon, PlusIcon, SquareIcon } from "lucide-react";
 import { useState } from "react";
@@ -48,14 +49,15 @@ export function AgentChat({
           window.history,
           window.history.state,
           "",
-          `/s/${encodeURIComponent(session.sessionId)}`,
+          `/s/${encodeURIComponent(session.sessionId)}`
         );
       }
     },
   });
 
   const isBusy = agent.status === "submitted" || agent.status === "streaming";
-  const isRestoring = sessionId !== undefined && agent.events.length === 0 && isBusy;
+  const isRestoring =
+    sessionId !== undefined && agent.events.length === 0 && isBusy;
   const isEmpty = agent.data.messages.length === 0;
   const lastMessage = agent.data.messages.at(-1);
   const isPendingAssistantShell =
@@ -63,10 +65,13 @@ export function AgentChat({
     lastMessage.parts.every((part) => part.type === "step-start");
   const showPendingThinking =
     isBusy &&
-    (agent.status === "submitted" || lastMessage?.role !== "assistant" || isPendingAssistantShell);
+    (agent.status === "submitted" ||
+      lastMessage?.role !== "assistant" ||
+      isPendingAssistantShell);
   const turnFailure = isBusy ? undefined : getLatestTurnFailure(agent.events);
   const errorMessage = cancellationError ?? agent.error?.message ?? turnFailure;
-  const hasConversationContent = sessionless || !isEmpty || errorMessage !== undefined;
+  const hasConversationContent =
+    sessionless || !isEmpty || errorMessage !== undefined;
   const showConversationLayout = isRestoring || hasConversationContent;
   const activeSessionId = sessionId ?? agent.session?.sessionId;
 
@@ -79,7 +84,8 @@ export function AgentChat({
 
   const handleSubmit = async (message: PromptInputMessage) => {
     const text = message.text.trim();
-    if ((text.length === 0 && message.files.length === 0) || isRestoring) return;
+    if ((text.length === 0 && message.files.length === 0) || isRestoring)
+      return;
 
     setCancellationError(undefined);
     const options = isBusy ? { turnPolicy: "steer" as const } : undefined;
@@ -107,7 +113,10 @@ export function AgentChat({
 
   const composer = (
     <PromptInput onSubmit={handleSubmit}>
-      <PromptInputTextarea disabled={isRestoring} placeholder="Send a message…" />
+      <PromptInputTextarea
+        disabled={isRestoring}
+        placeholder="Send a message…"
+      />
       {isBusy && !isRestoring ? (
         <PromptInputButton
           aria-label="Stop"
@@ -118,7 +127,10 @@ export function AgentChat({
           <SquareIcon className="size-3 fill-current" />
         </PromptInputButton>
       ) : null}
-      <PromptInputSubmit disabled={isRestoring} status={isBusy ? undefined : agent.status} />
+      <PromptInputSubmit
+        disabled={isRestoring}
+        status={isBusy ? undefined : agent.status}
+      />
     </PromptInput>
   );
 
@@ -147,7 +159,8 @@ export function AgentChat({
                 <AgentMessage
                   canRespond={!isBusy}
                   isStreaming={
-                    agent.status === "streaming" && index === agent.data.messages.length - 1
+                    agent.status === "streaming" &&
+                    index === agent.data.messages.length - 1
                   }
                   key={message.id}
                   message={message}
@@ -156,7 +169,7 @@ export function AgentChat({
                     return agent.respond(inputResponses);
                   }}
                 />
-              ),
+              )
             )}
             {showPendingThinking ? <PendingThinking /> : null}
             {errorMessage ? <ErrorMessage message={errorMessage} /> : null}
@@ -170,12 +183,14 @@ export function AgentChat({
           "mx-auto w-full px-4 sm:px-6",
           showConversationLayout
             ? "fixed bottom-0 left-1/2 z-20 max-w-3xl -translate-x-1/2 bg-gradient-to-t from-background via-background to-transparent pt-4 pb-6"
-            : "flex max-w-xl flex-1 flex-col items-center justify-center gap-8 pb-[10vh]",
+            : "flex max-w-xl flex-1 flex-col items-center justify-center gap-8 pb-[10vh]"
         )}
       >
         {showConversationLayout ? null : (
           <div className="flex flex-col items-center gap-3 text-center">
-            <h1 className="font-medium text-5xl tracking-tighter">{AGENT_NAME}</h1>
+            <h1 className="font-medium text-5xl tracking-tighter">
+              {AGENT_NAME}
+            </h1>
           </div>
         )}
         <div className="w-full">{composer}</div>
@@ -203,11 +218,17 @@ function ErrorMessage({ message }: { readonly message: string }) {
   );
 }
 
-function ChatHeader({ canStartNewChat }: { readonly canStartNewChat: boolean }) {
+function ChatHeader({
+  canStartNewChat,
+}: {
+  readonly canStartNewChat: boolean;
+}) {
   return (
     <header className="pointer-events-none fixed top-0 right-0 left-0 z-20 h-14">
       <div className="relative mx-auto flex h-full w-full max-w-3xl items-center justify-center bg-background px-24">
-        <span className="truncate text-muted-foreground text-sm">{AGENT_NAME}</span>
+        <span className="truncate text-muted-foreground text-sm">
+          {AGENT_NAME}
+        </span>
         {canStartNewChat ? (
           <Button
             aria-label="Start a new chat"
@@ -240,16 +261,22 @@ function PendingThinking() {
 }
 
 function toErrorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : "Unable to cancel the response.";
+  return error instanceof Error
+    ? error.message
+    : "Unable to cancel the response.";
 }
 
 function getLatestTurnFailure(
-  events: ReturnType<typeof useEveAgent>["events"],
+  events: ReturnType<typeof useEveAgent>["events"]
 ): string | undefined {
   for (let index = events.length - 1; index >= 0; index -= 1) {
     const event = events[index];
 
-    if (event.type === "turn.failed") {
+    if (!event) {
+      continue;
+    }
+
+    if (isTurnFailureEvent(event) && event.type === "turn.failed") {
       return event.data.code === "MODEL_CALL_FAILED"
         ? "The model is temporarily unavailable. Please try again."
         : event.data.message;

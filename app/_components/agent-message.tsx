@@ -15,7 +15,11 @@ import {
   KeyRoundIcon,
   XCircleIcon,
 } from "lucide-react";
-import { Message, MessageContent, MessageResponse } from "@/components/ai-elements/message";
+import {
+  Message,
+  MessageContent,
+  MessageResponse,
+} from "@/components/ai-elements/message";
 import {
   Question,
   QuestionActions,
@@ -27,7 +31,11 @@ import {
   type QuestionResponse,
   QuestionSubmit,
 } from "@/components/ai-elements/question";
-import { Reasoning, ReasoningContent, ReasoningTrigger } from "@/components/ai-elements/reasoning";
+import {
+  Reasoning,
+  ReasoningContent,
+  ReasoningTrigger,
+} from "@/components/ai-elements/reasoning";
 import {
   Tool,
   ToolContent,
@@ -55,11 +63,13 @@ export function AgentMessage({
   readonly canRespond: boolean;
   readonly isStreaming: boolean;
   readonly message: EveMessage;
-  readonly onInputResponses: (responses: readonly AgentInputResponse[]) => void | Promise<void>;
+  readonly onInputResponses: (
+    responses: readonly AgentInputResponse[]
+  ) => void | Promise<void>;
 }) {
   const lastTextIndex = message.parts.reduce(
     (last, part, index) => (part.type === "text" ? index : last),
-    -1,
+    -1
   );
   const hasAssistantText =
     message.role === "assistant" &&
@@ -78,9 +88,13 @@ export function AgentMessage({
               key={partKey(part, index)}
               onInputResponses={onInputResponses}
               part={part}
-              showCaret={isStreaming && message.role === "assistant" && index === lastTextIndex}
+              showCaret={
+                isStreaming &&
+                message.role === "assistant" &&
+                index === lastTextIndex
+              }
             />
-          ),
+          )
         )}
       </MessageContent>
     </Message>
@@ -94,7 +108,9 @@ function AgentMessagePart({
   showCaret,
 }: {
   readonly canRespond: boolean;
-  readonly onInputResponses: (responses: readonly AgentInputResponse[]) => void | Promise<void>;
+  readonly onInputResponses: (
+    responses: readonly AgentInputResponse[]
+  ) => void | Promise<void>;
   readonly part: EveMessagePart;
   readonly showCaret: boolean;
 }) {
@@ -133,7 +149,10 @@ function AgentMessagePart({
 
       return (
         <Tool
-          defaultOpen={part.state === "approval-requested" || part.state === "approval-responded"}
+          defaultOpen={
+            part.state === "approval-requested" ||
+            part.state === "approval-responded"
+          }
         >
           <ToolHeader
             state={part.state}
@@ -165,10 +184,12 @@ function QuestionRequest({
   readonly canRespond: boolean;
   readonly inputRequest: EveMessageInputRequest;
   readonly inputResponse?: AgentInputResponse;
-  readonly onInputResponses: (responses: readonly AgentInputResponse[]) => void | Promise<void>;
+  readonly onInputResponses: (
+    responses: readonly AgentInputResponse[]
+  ) => void | Promise<void>;
 }) {
   const selectedOption = inputRequest.options?.find(
-    (option) => option.id === inputResponse?.optionId,
+    (option) => option.id === inputResponse?.optionId
   );
   const hasOptions = (inputRequest.options?.length ?? 0) > 0;
   const acceptsFreeform = inputRequest.allowFreeform === true || !hasOptions;
@@ -193,13 +214,22 @@ function QuestionRequest({
     >
       <QuestionPrompt>{inputRequest.prompt}</QuestionPrompt>
       {hasOptions ? (
-        <QuestionOptions className="flex-col items-stretch" aria-label={inputRequest.prompt}>
+        <QuestionOptions
+          className="flex-col items-stretch"
+          aria-label={inputRequest.prompt}
+        >
           {inputRequest.options?.map((option) => (
-            <QuestionOption className="justify-start text-left" key={option.id} value={option.id}>
+            <QuestionOption
+              className="justify-start text-left"
+              key={option.id}
+              value={option.id}
+            >
               <span>
                 <span className="block">{option.label}</span>
                 {option.description ? (
-                  <span className="block font-normal text-xs opacity-70">{option.description}</span>
+                  <span className="block font-normal text-xs opacity-70">
+                    {option.description}
+                  </span>
                 ) : null}
               </span>
             </QuestionOption>
@@ -211,7 +241,10 @@ function QuestionRequest({
       ) : null}
       {inputResponse ? (
         <QuestionDescription>
-          Responded: {selectedOption?.label ?? inputResponse.text ?? inputResponse.optionId}
+          Responded:{" "}
+          {selectedOption?.label ??
+            inputResponse.text ??
+            inputResponse.optionId}
         </QuestionDescription>
       ) : (
         <QuestionActions>
@@ -224,13 +257,19 @@ function QuestionRequest({
 
 function AttachmentPart({ part }: { readonly part: EveFilePart }) {
   const label = part.filename ?? "Attachment";
-  const detail = [part.mediaType, formatBytes(part.size)].filter(Boolean).join(" - ");
+  const detail = [part.mediaType, formatBytes(part.size)]
+    .filter(Boolean)
+    .join(" - ");
   const isImage = part.mediaType.startsWith("image/") && part.url !== undefined;
   const Icon = isImage ? ImageIcon : FileIcon;
   const body = (
     <span className="flex max-w-sm items-center gap-3 rounded-md border bg-background/60 p-2 text-sm">
       {isImage ? (
-        <img alt={label} className="size-12 shrink-0 rounded-sm object-cover" src={part.url} />
+        <img
+          alt={label}
+          className="size-12 shrink-0 rounded-sm object-cover"
+          src={part.url}
+        />
       ) : (
         <span className="flex size-10 shrink-0 items-center justify-center rounded-sm bg-muted text-muted-foreground">
           <Icon className="size-4" />
@@ -238,9 +277,13 @@ function AttachmentPart({ part }: { readonly part: EveFilePart }) {
       )}
       <span className="min-w-0 flex-1">
         <span className="block truncate font-medium">{label}</span>
-        {detail ? <span className="block truncate text-muted-foreground">{detail}</span> : null}
+        {detail ? (
+          <span className="block truncate text-muted-foreground">{detail}</span>
+        ) : null}
       </span>
-      {part.url ? <ExternalLinkIcon className="size-4 shrink-0 text-muted-foreground" /> : null}
+      {part.url ? (
+        <ExternalLinkIcon className="size-4 shrink-0 text-muted-foreground" />
+      ) : null}
     </span>
   );
 
@@ -253,12 +296,22 @@ function AttachmentPart({ part }: { readonly part: EveFilePart }) {
   );
 }
 
-function AuthorizationPrompt({ part }: { readonly part: EveAuthorizationPart }) {
-  const isAuthorized = part.state === "completed" && part.outcome === "authorized";
+function AuthorizationPrompt({
+  part,
+}: {
+  readonly part: EveAuthorizationPart;
+}) {
+  const isAuthorized =
+    part.state === "completed" && part.outcome === "authorized";
   const isCompleted = part.state === "completed";
-  const Icon = isAuthorized ? CheckCircleIcon : isCompleted ? XCircleIcon : KeyRoundIcon;
+  const Icon = isAuthorized
+    ? CheckCircleIcon
+    : isCompleted
+      ? XCircleIcon
+      : KeyRoundIcon;
   const instructions = part.authorization?.instructions;
-  const shouldShowInstructions = instructions !== undefined && instructions !== part.description;
+  const shouldShowInstructions =
+    instructions !== undefined && instructions !== part.description;
 
   return (
     <div
@@ -268,7 +321,7 @@ function AuthorizationPrompt({ part }: { readonly part: EveAuthorizationPart }) 
           ? "border-emerald-500/30 bg-emerald-500/5"
           : isCompleted
             ? "border-destructive/30 bg-destructive/5"
-            : "border-blue-500/30 bg-blue-500/5",
+            : "border-blue-500/30 bg-blue-500/5"
       )}
     >
       <div className="flex items-start gap-3">
@@ -279,14 +332,16 @@ function AuthorizationPrompt({ part }: { readonly part: EveAuthorizationPart }) 
               ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
               : isCompleted
                 ? "bg-destructive/10 text-destructive"
-                : "bg-blue-500/10 text-blue-700 dark:text-blue-300",
+                : "bg-blue-500/10 text-blue-700 dark:text-blue-300"
           )}
         >
           <Icon className="size-4" />
         </span>
         <div className="min-w-0 flex-1 space-y-2">
           <p className="font-medium text-sm">{authorizationTitle(part)}</p>
-          <p className="text-muted-foreground text-sm">{authorizationDescription(part)}</p>
+          <p className="text-muted-foreground text-sm">
+            {authorizationDescription(part)}
+          </p>
           {shouldShowInstructions ? (
             <p className="text-muted-foreground text-sm">{instructions}</p>
           ) : null}
@@ -299,11 +354,18 @@ function AuthorizationPrompt({ part }: { readonly part: EveAuthorizationPart }) 
             </div>
           ) : null}
           {part.state === "required" && part.authorization?.url ? (
-            <Button asChild size="sm">
-              <a href={part.authorization.url} rel="noreferrer" target="_blank">
-                <ExternalLinkIcon className="size-4" />
-                Sign in with {part.displayName}
-              </a>
+            <Button
+              render={
+                <a
+                  href={part.authorization.url}
+                  rel="noreferrer"
+                  target="_blank"
+                />
+              }
+              size="sm"
+            >
+              <ExternalLinkIcon className="size-4" />
+              Sign in with {part.displayName}
             </Button>
           ) : null}
         </div>
@@ -333,7 +395,9 @@ function authorizationDescription(part: EveAuthorizationPart): string {
   return `${part.displayName} authorization ${formatAuthorizationOutcome(part.outcome)}${tail}.`;
 }
 
-function formatAuthorizationOutcome(outcome: NonNullable<EveAuthorizationPart["outcome"]>): string {
+function formatAuthorizationOutcome(
+  outcome: NonNullable<EveAuthorizationPart["outcome"]>
+): string {
   switch (outcome) {
     case "authorized":
       return "authorized";
@@ -365,7 +429,9 @@ function InputRequestActions({
   part,
 }: {
   readonly canRespond: boolean;
-  readonly onInputResponses: (responses: readonly AgentInputResponse[]) => void | Promise<void>;
+  readonly onInputResponses: (
+    responses: readonly AgentInputResponse[]
+  ) => void | Promise<void>;
   readonly part: EveDynamicToolPart;
 }) {
   const inputRequest = part.toolMetadata?.eve?.inputRequest;
@@ -375,7 +441,7 @@ function InputRequestActions({
 
   const inputResponse = part.toolMetadata?.eve?.inputResponse;
   const selectedOption = inputRequest.options?.find(
-    (option) => option.id === inputResponse?.optionId,
+    (option) => option.id === inputResponse?.optionId
   );
 
   return (
@@ -383,7 +449,10 @@ function InputRequestActions({
       <p className="text-muted-foreground text-sm">{inputRequest.prompt}</p>
       {inputResponse ? (
         <p className="font-medium text-sm">
-          Responded: {selectedOption?.label ?? inputResponse.text ?? inputResponse.optionId}
+          Responded:{" "}
+          {selectedOption?.label ??
+            inputResponse.text ??
+            inputResponse.optionId}
         </p>
       ) : (
         <div className="flex flex-wrap gap-2">

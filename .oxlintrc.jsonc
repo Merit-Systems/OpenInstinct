@@ -1,0 +1,71 @@
+{
+  "extends": ["./node_modules/@merit-systems/oxlint-config/next.jsonc"],
+  "options": {
+    "reportUnusedDisableDirectives": "off"
+  },
+  "settings": {
+    "tailwindcss": {
+      "entryPoint": "app/globals.css"
+    }
+  },
+  "overrides": [
+    {
+      // Foundation registry source uses shadcn behavior utilities that the
+      // Tailwind linter cannot resolve through package stylesheet imports.
+      "files": ["components/ui/**/*.tsx"],
+      "rules": {
+        "tailwindcss/no-unknown-classes": "off"
+      }
+    },
+    {
+      // Eve owns this generated Web Chat scaffold. Keep it updateable from the
+      // framework while Foundation checks the installed primitive and CSS boundaries.
+      "files": ["app/**/*.tsx", "components/ai-elements/**/*.tsx"],
+      "rules": {
+        "eslint/no-empty-function": "off",
+        "eslint/no-underscore-dangle": "off",
+        "hooks/refs": "off",
+        "hooks/set-state-in-effect": "off",
+        "hooks/static-components": "off",
+        "jsx-a11y/anchor-has-content": "off",
+        "jsx-a11y/control-has-associated-label": "off",
+        "jsx-a11y/heading-has-content": "off",
+        "merit-brand/no-direct-primitive-imports": "off",
+        "merit-brand/no-raw-interactive-elements": "off",
+        "merit-brand/no-raw-theme-colors": "off",
+        "merit-brand/no-visual-component-overrides": "off",
+        "merit-brand/typography-role": "off",
+        "merit-core/no-known-value-widening": "off",
+        "merit-core/no-runtime-typeof": "off",
+        "merit-core/no-unknown-parameters": "off",
+        "merit-core/no-unsafe-dictionary-type": "off",
+        "merit-next/no-route-private-imports": "off",
+        "merit-next/require-generated-route-props": "off",
+        "merit-next/require-page-route-group": "off",
+        "nextjs/no-img-element": "off",
+        "promise/always-return": "off",
+        "tailwindcss/enforce-consistent-important-position": "off",
+        "tailwindcss/enforce-shorthand": "off",
+        "tailwindcss/no-deprecated-classes": "off",
+        "tailwindcss/no-unknown-classes": "off",
+        "typescript/consistent-type-definitions": "off",
+        "typescript/no-confusing-void-expression": "off",
+        "typescript/no-deprecated": "off",
+        "typescript/no-floating-promises": "off",
+        "typescript/no-misused-promises": "off",
+        "typescript/no-unnecessary-condition": "off",
+        "typescript/no-unnecessary-type-assertion": "off",
+        "typescript/no-unsafe-argument": "off",
+        "typescript/no-unsafe-assignment": "off",
+        "typescript/no-unsafe-member-access": "off",
+        "typescript/no-unsafe-return": "off",
+        "typescript/no-unsafe-type-assertion": "off",
+        "typescript/prefer-nullish-coalescing": "off",
+        "typescript/restrict-template-expressions": "off",
+        "typescript/return-await": "off",
+        "typescript/use-unknown-in-catch-callback-variable": "off",
+        "unicorn/prefer-add-event-listener": "off"
+      }
+    }
+  ]
+}

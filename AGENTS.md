@@ -53,3 +53,43 @@ A setup may report `eve link` as a prerequisite; run it, then retry the continua
 ## Validate the change
 
 Run the validation the task requests. When it does not establish the behavior you changed, run the narrowest relevant check.
+
+## Repository contract
+
+- The repository root owns the single Next.js application, Eve agent, and shared UI contract.
+- Keep the stock Eve chat composition on `/`; browser capabilities belong under `agent/tools`.
+- Validate runtime environment variables through `env.ts`. `KERNEL_API_KEY` is required for browser tool execution.
+- Run `pnpm check` and `pnpm build` before handing off changes.
+
+## Merit design system
+
+Before planning or changing product UI:
+
+- Read `docs/brand/agent-guidance.md` and `docs/brand/design-system.md`.
+- Preserve the current `components.json` primitive base and local extensions.
+- Use `@merit` for supported core primitives. Use official shadcn only outside the documented Merit core.
+- Run `pnpm ui:check`, `pnpm ui:integrity`, and the repository's full required check before handing off.
+
+<!-- foundation:type-ownership:v1 -->
+
+## Type ownership
+
+- Keep each TypeScript concept anchored to one source of truth.
+- Before adding a `type` or `interface`, search for an existing owning export,
+  schema-derived type, model inference, or function/value type that can be
+  reused or derived.
+- Prefer inference for implementation details and contextual callbacks.
+- Add a named type only for a real domain concept, public boundary, validation
+  source, or meaningfully reused composition.
+- Do not mirror schemas, database rows, router inputs or outputs, SDK payloads,
+  library exports, or function results with parallel interfaces.
+
+<!-- /foundation:type-ownership -->
+
+<!-- BEGIN:nextjs-agent-rules -->
+# This is NOT the Next.js you know
+
+This version has breaking changes — APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` (resolved from this file's directory; in monorepos the `next` package may not be visible from the repo root) before writing any code. Heed deprecation notices.
+
+This block is written and re-added by `next dev` — verify at `node_modules/next/dist/server/lib/generate-agent-files.js`. Removing it from a diff only re-creates the uncommitted change; committing it with your work keeps the tree clean.
+<!-- END:nextjs-agent-rules -->

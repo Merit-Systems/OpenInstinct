@@ -1,6 +1,6 @@
 {
   "$schema": "https://ui.shadcn.com/schema.json",
-  "style": "new-york",
+  "style": "base-nova",
   "rsc": true,
   "tsx": true,
   "tailwind": {
@@ -18,5 +18,12 @@
     "lib": "@/lib",
     "hooks": "@/hooks"
   },
-  "registries": {}
+  "registries": {
+    "@merit": {
+      "url": "https://merit.engineering/r/{name}.json",
+      "headers": {
+        "x-vercel-trusted-oidc-idp-token": "${MERIT_REGISTRY_OIDC_TOKEN}"
+      }
+    }
+  }
 }

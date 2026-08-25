@@ -1,3 +1,27 @@
 minimumReleaseAgeStrict: true
+minimumReleaseAge: 1440
+minimumReleaseAgeExclude:
+  # Eve 0.44.4's current official scaffold resolves the matching AI SDK release cohort.
+  - "@ai-sdk/*"
+  - ai
+  - "@merit-systems/*"
+  - "@vercel/*"
+  - "@onkernel/*"
+  - eve
+  # These browser and rendering transitive releases are locked by the current Eve UI scaffold.
+  - baseline-browser-mapping
+  - caniuse-lite
+  - electron-to-chromium
+  - mermaid
+  - picomatch
+  - systeminformation
 allowBuilds:
-  sharp: false
+  sharp: true
+
+catalogs:
+  foundation:
+    "@merit-systems/foundation": 0.15.3
+    "@merit-systems/oxfmt-config": 0.15.3
+    "@merit-systems/oxlint-config": 0.15.3
+    "@merit-systems/taze-config": 0.15.3
+    "@merit-systems/typescript-config": 0.15.3
