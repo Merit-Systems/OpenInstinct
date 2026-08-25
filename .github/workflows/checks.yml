@@ -13,6 +13,25 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  registry-auth-probe:
+    name: Registry auth probe
+    permissions:
+      contents: read
+      id-token: write
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify GitHub OIDC registry access
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const token = await core.getIDToken()
+            core.setSecret(token)
+            const response = await fetch("https://merit.engineering/r/integrity.json", {
+              headers: { "x-vercel-trusted-oidc-idp-token": token },
+            })
+            core.info(`Registry response: ${response.status}`)
+            if (!response.ok) core.setFailed(`Registry rejected GitHub OIDC with ${response.status}`)
+
   foundation:
     name: Foundation
     permissions:
