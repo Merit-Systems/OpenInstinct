@@ -88,8 +88,7 @@ async function runShadcn(arguments_: string[]) {
 
 async function proxyRegistryRequest(
   request: IncomingMessage,
-  response: ServerResponse,
-  token: string
+  response: ServerResponse
 ) {
   const requestUrl = new URL(request.url ?? "/", "http://127.0.0.1");
   if (!/^\/r\/[a-z0-9-]+\.json$/.test(requestUrl.pathname)) {
@@ -98,17 +97,26 @@ async function proxyRegistryRequest(
   }
   const upstream = await fetch(
     `https://merit.engineering${requestUrl.pathname}`,
-    { headers: { "x-vercel-trusted-oidc-idp-token": token } }
+    {
+      headers: {
+        "x-vercel-trusted-oidc-idp-token": await readRegistryToken(),
+      },
+    }
   );
+  if (!upstream.ok) {
+    console.error(
+      `The Merit registry returned ${String(upstream.status)} for ${requestUrl.pathname}.`
+    );
+  }
   response.writeHead(upstream.status, {
     "content-type": upstream.headers.get("content-type") ?? "application/json",
   });
   response.end(Buffer.from(await upstream.arrayBuffer()));
 }
 
-async function runRegistryCommand(arguments_: string[], token: string) {
+async function runRegistryCommand(arguments_: string[]) {
   const server = createServer((request, response) => {
-    proxyRegistryRequest(request, response, token).catch(() => {
+    proxyRegistryRequest(request, response).catch(() => {
       if (!response.headersSent) response.writeHead(502);
       if (!response.writableEnded) response.end();
     });
@@ -138,9 +146,8 @@ async function runRegistryCommand(arguments_: string[], token: string) {
   return { completed };
 }
 
-const token = await readRegistryToken();
 const report = await auditUiSourceIntegrity(process.cwd(), {
-  runRegistryCommand: (arguments_) => runRegistryCommand(arguments_, token),
+  runRegistryCommand,
 });
 
 console.log(formatUiSourceIntegrityReport(report));
