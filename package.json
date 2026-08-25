@@ -57,6 +57,8 @@
   "name": "eve-kernel",
   "packageManager": "pnpm@11.15.1",
   "scripts": {
+    "bench:browser": "eve eval browser",
+    "bench:compare": "node --experimental-strip-types scripts/compare-browser-benchmarks.ts",
     "boundaries": "turbo boundaries",
     "build": "turbo run build:app",
     "build:app": "next build",

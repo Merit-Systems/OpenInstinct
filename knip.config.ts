@@ -5,6 +5,8 @@ export default {
     "agent/channels/**/*.ts",
     "agent/extensions/**/*.ts",
     "agent/tools/**/*.ts",
+    "evals/**/*.eval.ts",
+    "evals/evals.config.ts",
     "foundation.config.ts",
     "taze.config.ts",
   ],
