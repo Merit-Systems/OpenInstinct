@@ -5,7 +5,6 @@ export type DeploymentMode = "hosted" | "local";
 export function getDeploymentMode(environment?: {
   readonly LOCAL_VAULT_ASSISTANT_MODE?: string;
   readonly VERCEL?: string;
-  readonly VERCEL_REGION?: string;
 }): DeploymentMode {
   const resolved = environment ?? getEnv();
   const configured = resolved.LOCAL_VAULT_ASSISTANT_MODE?.trim();
@@ -16,5 +15,5 @@ export function getDeploymentMode(environment?: {
     );
   }
 
-  return resolved.VERCEL === "1" && resolved.VERCEL_REGION ? "hosted" : "local";
+  return resolved.VERCEL === "1" ? "hosted" : "local";
 }

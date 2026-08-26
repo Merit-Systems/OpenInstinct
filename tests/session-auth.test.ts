@@ -16,10 +16,7 @@ describe("multi-user request identity", () => {
 
   it("defaults local machines and Vercel deployments safely", () => {
     expect(getDeploymentMode({})).toBe("local");
-    expect(getDeploymentMode({ VERCEL: "1" })).toBe("local");
-    expect(getDeploymentMode({ VERCEL: "1", VERCEL_REGION: "iad1" })).toBe(
-      "hosted"
-    );
+    expect(getDeploymentMode({ VERCEL: "1" })).toBe("hosted");
   });
 
   it("extracts ownership ids from every Eve session route", () => {

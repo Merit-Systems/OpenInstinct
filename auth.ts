@@ -12,6 +12,7 @@ import { getEnv } from "@/lib/runtime-env";
 const LOCAL_UNUSED_DATABASE_URL =
   "postgresql://local:local@127.0.0.1:1/local_unused";
 const LOCAL_UNUSED_SECRET = "local-vault-assistant-auth-is-disabled-locally";
+const AUTH_MIGRATION_LOCK_ID = 1_972_040_815;
 const phoneUserSchema = z.object({ phoneNumber: z.string().min(1) });
 
 const env = getEnv();
@@ -102,17 +103,35 @@ export async function ensureAuthDatabase() {
   if (getDeploymentMode() === "local") return;
   requireHostedAuthConfiguration();
 
-  migrationPromise ??= runAuthMigrations();
-  await migrationPromise;
+  const currentMigration = (migrationPromise ??= runAuthMigrations());
+  try {
+    await currentMigration;
+  } catch (error) {
+    if (migrationPromise === currentMigration) migrationPromise = undefined;
+    throw error;
+  }
 }
 
 async function runAuthMigrations() {
+  const lockClient = await authPool.connect();
+  let lockAcquired = false;
   try {
+    await lockClient.query("SELECT pg_advisory_lock($1)", [
+      AUTH_MIGRATION_LOCK_ID,
+    ]);
+    lockAcquired = true;
     const { runMigrations } = await getMigrations(auth.options);
     await runMigrations();
-  } catch (error) {
-    migrationPromise = undefined;
-    throw error;
+  } finally {
+    try {
+      if (lockAcquired) {
+        await lockClient.query("SELECT pg_advisory_unlock($1)", [
+          AUTH_MIGRATION_LOCK_ID,
+        ]);
+      }
+    } finally {
+      lockClient.release();
+    }
   }
 }
 
