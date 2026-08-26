@@ -35,9 +35,8 @@ export function taskFromHistoryRun(
   events: readonly MessageStreamEvent[],
   now = Date.now()
 ): BrowserRunTask {
-  const startedAt =
-    eventTime(events.find((event) => event.type === "message.received")) ??
-    new Date(run.createdAt).getTime();
+  const received = events.find((event) => event.type === "message.received");
+  const startedAt = eventTime(received) ?? new Date(run.createdAt).getTime();
   const completion = readTaskCompletion(events);
   const terminalFailure = events.findLast(
     (event) =>
@@ -76,7 +75,10 @@ export function taskFromHistoryRun(
     costUsd: metrics.costUsd,
     durationMs: metrics.durationMs,
     id: run.sessionId,
-    prompt: run.prompt,
+    prompt:
+      received?.type === "message.received" && received.data.message.trim()
+        ? received.data.message
+        : run.prompt,
     sessionId: run.sessionId,
     startedAt,
     status,
