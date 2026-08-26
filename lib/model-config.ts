@@ -2,7 +2,7 @@ import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { z } from "zod";
-import { getEnv } from "../env";
+import { getEnv } from "./runtime-env";
 import { getLocalDataDirectory } from "./data-directory";
 import { readSecretSync } from "./server/secret-store";
 

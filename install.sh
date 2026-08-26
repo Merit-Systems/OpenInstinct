@@ -164,7 +164,7 @@ LAUNCHER_HEADER
 export LOCAL_VAULT_ASSISTANT_HOME="$install_home"
 export LOCAL_VAULT_ASSISTANT_BIN_DIR="$bin_directory"
 export PATH="$install_home/tools/bin:$install_home/runtime/node/bin:$PATH"
-exec "$install_home/app/local-assistant" "$@"
+exec "$install_home/app/bin/local-assistant" "$@"
 LAUNCHER_BODY
 } >"$launcher"
 chmod +x "$launcher"

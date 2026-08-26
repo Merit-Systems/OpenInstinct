@@ -1,5 +1,5 @@
 import { defineMcpClientConnection } from "eve/connections";
-import { getEnv } from "../../../../env.js";
+import { getEnv } from "../../../../lib/runtime-env.js";
 import { readConnectionSecret } from "../../../../lib/server/manager-store.js";
 
 export const kernelToolAllowlist = [

@@ -1,8 +1,11 @@
+import { HostedManagerOnboarding } from "@/app/_components/hosted-manager-onboarding";
 import { ManagerShell } from "@/app/_components/manager-shell";
 import { LocalVaultAssistantManager } from "@/app/_components/local-vault-assistant-manager";
-import { getEnv } from "@/env";
-import { managerSetupRequestSchema } from "@/lib/manager";
-import { redirect } from "next/navigation";
+import { getEnv } from "@/lib/runtime-env";
+import {
+  DEFAULT_LOCAL_MANAGER_URL,
+  managerSetupRequestSchema,
+} from "@/lib/manager";
 
 export default async function Page({
   searchParams,
@@ -11,7 +14,18 @@ export default async function Page({
     Record<string, string | readonly string[] | undefined>
   >;
 }) {
-  if (getEnv().VERCEL) redirect("/chat");
+  const env = getEnv();
+  if (env.VERCEL || env.VERCEL_ENV) {
+    return (
+      <ManagerShell active="manager">
+        <HostedManagerOnboarding
+          managerUrl={
+            env.LOCAL_VAULT_ASSISTANT_MANAGER_URL ?? DEFAULT_LOCAL_MANAGER_URL
+          }
+        />
+      </ManagerShell>
+    );
+  }
 
   const query = await searchParams;
   const requestedSetup = managerSetupRequestSchema.safeParse({

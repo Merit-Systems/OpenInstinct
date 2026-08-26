@@ -1,7 +1,8 @@
 import { defineTool } from "eve/tools";
-import { getEnv } from "../../env.js";
+import { getEnv } from "../../lib/runtime-env.js";
 import {
   createManagerSetupUrl,
+  DEFAULT_LOCAL_MANAGER_URL,
   managerSetupRequestSchema,
 } from "../../lib/manager.js";
 
@@ -11,8 +12,7 @@ export default defineTool({
   inputSchema: managerSetupRequestSchema,
   execute(request) {
     const url = createManagerSetupUrl(
-      getEnv().LOCAL_VAULT_ASSISTANT_MANAGER_URL ??
-        "https://local-vault-assistant.localhost",
+      getEnv().LOCAL_VAULT_ASSISTANT_MANAGER_URL ?? DEFAULT_LOCAL_MANAGER_URL,
       request
     );
 

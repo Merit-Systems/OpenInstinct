@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-repository_directory="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+repository_directory="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$repository_directory"
 
 readonly EVE_HOST="127.0.0.1"
@@ -79,6 +79,29 @@ while (($# > 0)); do
   esac
 done
 
+if [[ ! -x node_modules/.bin/portless ]]; then
+  "${package_manager[@]}" install
+fi
+
+"${package_manager[@]}" exec portless proxy start
+
+existing_url="$(
+  "${package_manager[@]}" exec portless list 2>/dev/null | \
+    awk '$1 ~ /^https?:\/\/local-vault-assistant\./ { print $1; exit }'
+)"
+if [[ -n "$existing_url" ]]; then
+  if curl --insecure --silent --fail "$existing_url" >/dev/null 2>&1; then
+    printf '\nLocal Vault Assistant is already running: %s\n\n' "$existing_url"
+    if [[ "${LOCAL_VAULT_ASSISTANT_NO_OPEN:-0}" != "1" ]] && \
+      command -v open >/dev/null 2>&1; then
+      open "$existing_url"
+    fi
+    exit 0
+  fi
+  "${package_manager[@]}" exec portless alias \
+    --remove local-vault-assistant >/dev/null 2>&1 || true
+fi
+
 if [[ "$mode" == "start" && ! -f .output/.local-vault-assistant-build ]]; then
   "${package_manager[@]}" build:eve
   [[ -f .output/server/index.mjs ]]
@@ -90,19 +113,14 @@ if [[ "$mode" == "start" && ! -f .next/BUILD_ID ]]; then
     "${package_manager[@]}" build
 fi
 
-if [[ ! -x node_modules/.bin/portless ]]; then
-  "${package_manager[@]}" install
-fi
-
-if [[ "$mode" == "dev" ]]; then
-  exec "${package_manager[@]}" exec portless run \
-    --name local-vault-assistant \
-    "$repository_directory/scripts/run-local-app" dev "$@"
-fi
-
 eve_pid=""
 web_pid=""
+route_registered=0
 cleanup() {
+  if [[ "$route_registered" == "1" ]]; then
+    "${package_manager[@]}" exec portless alias \
+      --remove local-vault-assistant >/dev/null 2>&1 || true
+  fi
   if [[ -n "$web_pid" ]] && kill -0 "$web_pid" >/dev/null 2>&1; then
     kill -TERM "$web_pid" >/dev/null 2>&1 || true
     wait "$web_pid" 2>/dev/null || true
@@ -114,58 +132,83 @@ cleanup() {
 }
 trap cleanup EXIT
 
-HOST="$EVE_HOST" NITRO_HOST="$EVE_HOST" \
-  PORT="$EVE_PORT" NITRO_PORT="$EVE_PORT" \
-  node .output/server/index.mjs &
-eve_pid=$!
+if [[ "$mode" == "start" ]]; then
+  HOST="$EVE_HOST" NITRO_HOST="$EVE_HOST" \
+    PORT="$EVE_PORT" NITRO_PORT="$EVE_PORT" \
+    node .output/server/index.mjs &
+  eve_pid=$!
 
-eve_ready=0
-for _ in {1..120}; do
-  if ! kill -0 "$eve_pid" >/dev/null 2>&1; then
-    wait "$eve_pid" || true
-    printf 'The local agent runtime stopped before it became ready.\n' >&2
+  eve_ready=0
+  for _ in {1..120}; do
+    if ! kill -0 "$eve_pid" >/dev/null 2>&1; then
+      wait "$eve_pid" || true
+      printf 'The local agent runtime stopped before it became ready.\n' >&2
+      exit 1
+    fi
+    if curl --silent --fail \
+      "http://$EVE_HOST:$EVE_PORT/eve/v1/health" >/dev/null 2>&1; then
+      eve_ready=1
+      break
+    fi
+    sleep 0.25
+  done
+
+  if [[ "$eve_ready" != "1" ]]; then
+    printf 'The local agent runtime did not become ready on port %s.\n' \
+      "$EVE_PORT" >&2
     exit 1
   fi
-  if curl --silent --fail \
-    "http://$EVE_HOST:$EVE_PORT/eve/v1/health" >/dev/null 2>&1; then
-    eve_ready=1
+fi
+
+app_port="$(
+  node -e \
+    'const net=require("node:net");const server=net.createServer();server.listen(0,"127.0.0.1",()=>{console.log(server.address().port);server.close()})'
+)"
+
+node node_modules/next/dist/bin/next "$mode" \
+  --hostname 127.0.0.1 --port "$app_port" "$@" &
+web_pid=$!
+
+web_ready=0
+for _ in {1..120}; do
+  if ! kill -0 "$web_pid" >/dev/null 2>&1; then
+    wait "$web_pid" || true
+    printf 'The local manager stopped before it became ready.\n' >&2
+    exit 1
+  fi
+  if curl --silent --fail "http://127.0.0.1:$app_port" >/dev/null 2>&1; then
+    web_ready=1
     break
   fi
   sleep 0.25
 done
 
-if [[ "$eve_ready" != "1" ]]; then
-  printf 'The local agent runtime did not become ready on port %s.\n' \
-    "$EVE_PORT" >&2
+if [[ "$web_ready" != "1" ]]; then
+  printf 'The local manager did not become ready.\n' >&2
   exit 1
 fi
 
-forward_interrupt() {
-  if [[ -n "$web_pid" ]] && kill -0 "$web_pid" >/dev/null 2>&1; then
-    kill -INT "$web_pid" >/dev/null 2>&1 || true
-  fi
-}
+"${package_manager[@]}" exec portless alias \
+  local-vault-assistant "$app_port"
+route_registered=1
 
-forward_termination() {
-  if [[ -n "$web_pid" ]] && kill -0 "$web_pid" >/dev/null 2>&1; then
-    kill -TERM "$web_pid" >/dev/null 2>&1 || true
-  fi
-}
+public_url="$(
+  "${package_manager[@]}" exec portless list 2>/dev/null | \
+    awk '$1 ~ /^https?:\/\/local-vault-assistant\./ { print $1; exit }'
+)"
+public_url="${public_url:-$LOCAL_URL}"
+printf '\nLocal Vault Assistant: %s\n\n' "$public_url"
 
-trap forward_interrupt INT
-trap forward_termination TERM
+if [[ "${LOCAL_VAULT_ASSISTANT_NO_OPEN:-0}" != "1" ]] && \
+  command -v open >/dev/null 2>&1; then
+  open "$public_url"
+fi
 
-"${package_manager[@]}" exec portless run \
-  --name local-vault-assistant \
-  "$repository_directory/scripts/run-local-app" start "$@" &
-web_pid=$!
+trap 'exit 130' INT
+trap 'exit 143' TERM
 
 set +e
-while kill -0 "$web_pid" >/dev/null 2>&1; do
-  wait "$web_pid"
-  web_status=$?
-done
+wait "$web_pid"
+web_status=$?
 set -e
-
-trap - INT TERM
-exit "${web_status:-0}"
+exit "$web_status"

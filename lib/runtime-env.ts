@@ -30,6 +30,7 @@ export function getEnv() {
       LOCAL_VAULT_ASSISTANT_MODEL_API_KEY: optionalValue,
       LOCAL_VAULT_ASSISTANT_MODEL_BASE_URL: optionalValue,
       VERCEL: optionalValue,
+      VERCEL_ENV: z.enum(["production", "preview", "development"]).optional(),
     },
     experimental__runtimeEnv: {},
   });

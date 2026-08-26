@@ -1,5 +1,5 @@
 import { managerMutationSchema } from "@/lib/manager";
-import { getEnv } from "@/env";
+import { getEnv } from "@/lib/runtime-env";
 import {
   applyManagerMutation,
   readManagerSnapshot,

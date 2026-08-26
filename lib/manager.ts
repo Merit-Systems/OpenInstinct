@@ -1,5 +1,8 @@
 import { z } from "zod";
 
+export const DEFAULT_LOCAL_MANAGER_URL =
+  "https://local-vault-assistant.localhost";
+
 export const connectionProviderSchema = z.enum([
   "kernel",
   "local-model",

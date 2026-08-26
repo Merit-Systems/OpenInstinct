@@ -2,7 +2,7 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { EveEvalResult, EveEvalRunSummary } from "eve/evals";
 import type { EvalReporter } from "eve/evals/reporters";
-import { getEnv } from "../../env.js";
+import { getEnv } from "../../lib/runtime-env.js";
 import {
   measureBrowserTask,
   readTaskCompletion,

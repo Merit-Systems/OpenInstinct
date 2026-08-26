@@ -1,6 +1,6 @@
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { getEnv } from "../env";
+import { getEnv } from "./runtime-env";
 
 export function getLocalDataDirectory() {
   return (

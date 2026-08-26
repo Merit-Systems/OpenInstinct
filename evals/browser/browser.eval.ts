@@ -1,6 +1,6 @@
 import { defineEval } from "eve/evals";
 import { includes } from "eve/evals/expect";
-import { getEnv } from "../../env.js";
+import { getEnv } from "../../lib/runtime-env.js";
 import { didCompleteKernelBrowserAction } from "../../lib/browser-benchmark.js";
 import { browserBenchmarkTasks } from "../../lib/browser-benchmark-tasks.js";
 
