@@ -9,6 +9,12 @@ const optionalValue = z
 export function getEnv() {
   return createEnv({
     server: {
+      BETTER_AUTH_INFRA_API_KEY: optionalValue,
+      BETTER_AUTH_SECRET: optionalValue,
+      BETTER_AUTH_URL: optionalValue.refine(
+        (value) => value === undefined || URL.canParse(value),
+        "BETTER_AUTH_URL must be an absolute URL"
+      ),
       BROWSER_BENCH_LABEL: z.string().min(1).optional(),
       BROWSER_BENCH_REPETITIONS: z.coerce
         .number()
@@ -28,6 +34,7 @@ export function getEnv() {
         (value) => value === undefined || URL.canParse(value),
         "EVE_NEXT_PRODUCTION_ORIGIN must be an absolute URL"
       ),
+      HOSTED_SECRET_ENCRYPTION_KEY: optionalValue,
       KERNEL_API_KEY: optionalValue,
       LOCAL_VAULT_ASSISTANT_ALLOW_REMOTE_MANAGER: z
         .enum(["true", "false"])
@@ -42,6 +49,7 @@ export function getEnv() {
       LOCAL_VAULT_ASSISTANT_MODEL: optionalValue,
       LOCAL_VAULT_ASSISTANT_MODEL_API_KEY: optionalValue,
       LOCAL_VAULT_ASSISTANT_MODEL_BASE_URL: optionalValue,
+      LOCAL_VAULT_ASSISTANT_MODE: z.enum(["hosted", "local"]).optional(),
       VERCEL: optionalValue,
       VERCEL_ENV: z.enum(["production", "preview", "development"]).optional(),
       VERCEL_REGION: optionalValue,

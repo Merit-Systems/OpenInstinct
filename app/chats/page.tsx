@@ -3,12 +3,14 @@ import Link from "next/link";
 import { ManagerShell } from "@/app/_components/manager-shell";
 import { Button } from "@/components/ui/button";
 import { combineChatUsage, formatChatUsage } from "@/lib/chat";
-import { getAppStore } from "@/lib/server/database";
+import { getAppStore } from "@/lib/server/app-store";
+import { requireRequestScope } from "@/lib/server/request-scope";
 
 export const dynamic = "force-dynamic";
 
 export default async function AllChatsPage() {
-  const chats = await (await getAppStore()).listChats();
+  const scope = await requireRequestScope();
+  const chats = await (await getAppStore()).listChats(scope);
   const totalUsage = combineChatUsage(chats.map((chat) => chat.usage));
 
   return (

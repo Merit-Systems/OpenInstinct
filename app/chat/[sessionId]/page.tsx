@@ -1,6 +1,7 @@
 import { AgentChat } from "@/app/_components/agent-chat";
 import { ManagerShell } from "@/app/_components/manager-shell";
-import { getAppStore } from "@/lib/server/database";
+import { getAppStore } from "@/lib/server/app-store";
+import { requireRequestScope } from "@/lib/server/request-scope";
 
 export default async function ChatSessionPage({
   params,
@@ -8,7 +9,8 @@ export default async function ChatSessionPage({
   readonly params: Promise<{ readonly sessionId: string }>;
 }) {
   const { sessionId } = await params;
-  const chat = (await (await getAppStore()).listChats()).find(
+  const scope = await requireRequestScope();
+  const chat = (await (await getAppStore()).listChats(scope)).find(
     (candidate) => candidate.sessionId === sessionId
   );
   return (

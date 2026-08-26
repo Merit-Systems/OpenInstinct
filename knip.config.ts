@@ -4,6 +4,7 @@ export default {
   entry: [
     "agent/channels/**/*.ts",
     "agent/extensions/**/*.ts",
+    "agent/hooks/**/*.ts",
     "agent/tools/**/*.ts",
     "evals/**/*.eval.ts",
     "evals/evals.config.ts",

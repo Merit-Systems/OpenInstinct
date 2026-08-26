@@ -1,5 +1,4 @@
 import { defineMcpClientConnection } from "eve/connections";
-import { getBrowserSettings } from "../../../../lib/browser-config.js";
 import { getEnv } from "../../../../lib/runtime-env.js";
 
 export const kernelToolAllowlist = [
@@ -15,26 +14,26 @@ export const kernelToolAllowlist = [
   "exec_command",
 ];
 
+export function getKernelSystemToken() {
+  const token = getEnv().KERNEL_API_KEY;
+  if (!token) {
+    throw new Error(
+      "Cloud browser execution requires KERNEL_API_KEY in the system environment."
+    );
+  }
+  return token;
+}
+
 export default defineMcpClientConnection({
   url: "https://mcp.onkernel.com/mcp",
   description:
     "Kernel cloud browser with the complete browser, authentication, networking, observability, pool, and VM execution toolset.",
   auth: {
-    getToken: async () => {
-      if ((await getBrowserSettings()).mode !== "cloud") {
-        throw new Error(
-          "The local browser is selected. Use the local_browser tool instead."
-        );
+    getToken: async ({ principal }) => {
+      if (principal.type !== "user") {
+        throw new Error("An authenticated workspace user is required.");
       }
-      const token = getEnv().KERNEL_API_KEY;
-
-      if (!token) {
-        throw new Error(
-          "Cloud browser execution requires KERNEL_API_KEY in the system environment."
-        );
-      }
-
-      return { token };
+      return { token: getKernelSystemToken() };
     },
   },
   tools: { allow: kernelToolAllowlist },

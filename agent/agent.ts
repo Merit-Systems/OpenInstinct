@@ -1,12 +1,17 @@
 import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
 import { defineAgent, defineDynamic } from "eve";
 import { getModelSettings } from "../lib/model-config.js";
+import { scopeFromPrincipal } from "../lib/access-scope.js";
 
 export default defineAgent({
   model: defineDynamic({
     events: {
-      "step.started": async () => {
-        const modelSettings = await getModelSettings();
+      "step.started": async (_event, ctx) => {
+        const caller = ctx.session.auth.current ?? ctx.session.auth.initiator;
+        if (!caller) throw new Error("An authenticated user is required.");
+        const modelSettings = await getModelSettings(
+          scopeFromPrincipal(caller)
+        );
         if (!modelSettings.baseURL) return modelSettings.modelId;
 
         return createOpenAICompatible({

@@ -2,6 +2,7 @@ import Kernel from "@onkernel/sdk";
 import { defineTool } from "eve/tools";
 import { always } from "eve/tools/approval";
 import { z } from "zod";
+import { scopeFromPrincipal } from "../../lib/access-scope.js";
 import { getBrowserSettings } from "../../lib/browser-config.js";
 import { runLocalVaultAutofill } from "../../lib/local-browser.js";
 import { getEnv } from "../../lib/runtime-env.js";
@@ -21,7 +22,11 @@ export default defineTool({
   outputSchema,
   approval: always(),
   async execute(input, context) {
-    const browser = await getBrowserSettings();
+    const caller =
+      context.session.auth.current ?? context.session.auth.initiator;
+    if (!caller) throw new Error("An authenticated user is required.");
+    const scope = scopeFromPrincipal(caller);
+    const browser = await getBrowserSettings(scope);
     if (browser.mode === "cloud" && !input.browserSessionId) {
       throw new Error(
         "A Kernel browser session ID is required for cloud autofill."
@@ -29,6 +34,7 @@ export default defineTool({
     }
 
     const resolved = await prepareVaultAutofill(
+      scope,
       input.vaultItemId,
       input.fields.map(({ field }) => field)
     );

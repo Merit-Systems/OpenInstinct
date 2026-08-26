@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   createManagerSetupUrl,
   isAllowedManagerMutationOrigin,
+  isAllowedMutationOrigin,
   isLocalManagerHostname,
   managerMutationSchema,
   managerSetupRequestSchema,
@@ -182,6 +183,24 @@ describe("local manager setup links", () => {
         host: "127.0.0.1:62650",
         origin: "https://evil.localhost",
         requestUrl: "http://127.0.0.1:62650/api/manager",
+      })
+    ).toBe(false);
+  });
+
+  it("allows only same-origin writes in hosted mode", () => {
+    const request = {
+      forwardedHost: "assistant.example.com",
+      forwardedProto: "https",
+      host: "internal.example:3000",
+      origin: "https://assistant.example.com",
+      requestUrl: "http://internal.example:3000/api/manager",
+    };
+
+    expect(isAllowedMutationOrigin(request)).toBe(true);
+    expect(
+      isAllowedMutationOrigin({
+        ...request,
+        origin: "https://attacker.example.com",
       })
     ).toBe(false);
   });

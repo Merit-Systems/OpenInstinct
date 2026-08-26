@@ -1,4 +1,5 @@
 import { defineDynamic, defineTool } from "eve/tools";
+import { scopeFromPrincipal } from "../../lib/access-scope.js";
 import { getBrowserSettings } from "../../lib/browser-config.js";
 import {
   localBrowserActionSchema,
@@ -7,8 +8,14 @@ import {
 
 export default defineDynamic({
   events: {
-    "step.started": async () => {
-      if ((await getBrowserSettings()).mode !== "local") return null;
+    "step.started": async (_event, ctx) => {
+      const caller = ctx.session.auth.current ?? ctx.session.auth.initiator;
+      if (!caller) return null;
+      if (
+        (await getBrowserSettings(scopeFromPrincipal(caller))).mode !== "local"
+      ) {
+        return null;
+      }
 
       return defineTool({
         description:

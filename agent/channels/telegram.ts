@@ -1,4 +1,5 @@
 import { telegramChannel } from "eve/channels/telegram";
+import { localAccessScope } from "../../lib/access-scope.js";
 import { readTelegramCredentials } from "../../lib/server/manager-store.js";
 
 export default telegramChannel({
@@ -15,7 +16,7 @@ export default telegramChannel({
 });
 
 async function requireTelegramCredentials() {
-  const credentials = await readTelegramCredentials();
+  const credentials = await readTelegramCredentials(localAccessScope);
   if (!credentials) {
     throw new Error(
       "Telegram is not connected. Add a bot in the local manager."

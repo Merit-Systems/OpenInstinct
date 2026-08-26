@@ -1,12 +1,13 @@
 import { randomUUID } from "node:crypto";
+import type { AccessScope } from "../access-scope";
 import { getBrowserSettings, selectBrowserMode } from "../browser-config";
-import { getModelSettings } from "../model-config";
 import {
   type ConnectionProvider,
   type ManagerMutation,
   managerSnapshotSchema,
 } from "../manager";
-import { getAppStore } from "./database";
+import { getModelSettings } from "../model-config";
+import { getAppStore } from "./app-store";
 import {
   deleteSecret,
   hasSecret,
@@ -19,27 +20,36 @@ import {
   prepareTelegramConnection,
 } from "./telegram";
 
-export async function readManagerSnapshot() {
+export async function readManagerSnapshot(scope: AccessScope) {
   const store = await getAppStore();
+  await store.ensureScope(scope);
   const [browser, connectionRows, vaultRows, modelSettings] = await Promise.all(
     [
-      getBrowserSettings(),
-      store.listConnections(),
-      store.listVaultItems(),
-      getModelSettings(),
+      getBrowserSettings(scope),
+      store.listConnections(scope),
+      store.listVaultItems(scope),
+      getModelSettings(scope),
     ]
   );
   const [connections, vaultItems] = await Promise.all([
     Promise.all(
       connectionRows.map(async (row) => ({
         ...row,
-        hasSecret: await hasSecret({ id: row.id, namespace: "connection" }),
+        hasSecret: await hasSecret({
+          id: row.id,
+          namespace: "connection",
+          scope,
+        }),
       }))
     ),
     Promise.all(
       vaultRows.map(async (row) => ({
         ...row,
-        hasSecret: await hasSecret({ id: row.id, namespace: "vault" }),
+        hasSecret: await hasSecret({
+          id: row.id,
+          namespace: "vault",
+          scope,
+        }),
       }))
     ),
   ]);
@@ -49,7 +59,7 @@ export async function readManagerSnapshot() {
     connections,
     runtime: {
       inference: modelSettings.modelId,
-      mode: "local-first",
+      mode: scope.mode === "local" ? "local-first" : "hosted",
       source: modelSettings.source,
     },
     secretStore: secretStoreStatus(),
@@ -57,44 +67,56 @@ export async function readManagerSnapshot() {
   });
 }
 
-export async function applyManagerMutation(mutation: ManagerMutation) {
+export async function applyManagerMutation(
+  scope: AccessScope,
+  mutation: ManagerMutation
+) {
+  const store = await getAppStore();
+  await store.ensureScope(scope);
+
   switch (mutation.action) {
     case "browser.select":
-      await selectBrowserMode(mutation.mode);
+      await selectBrowserMode(scope, mutation.mode);
       break;
     case "connection.create":
-      await createConnection(mutation.input);
+      await createConnection(scope, mutation.input);
       break;
     case "connection.delete":
-      await removeRecord("connection", mutation.id);
+      await removeRecord(scope, "connection", mutation.id);
       break;
     case "model.select":
-      await (await getAppStore()).selectGatewayModel(mutation.modelId);
+      await store.selectGatewayModel(scope, mutation.modelId);
       break;
     case "vault.create":
-      await createVaultItem(mutation.input);
+      await createVaultItem(scope, mutation.input);
       break;
     case "vault.delete":
-      await removeRecord("vault", mutation.id);
+      await removeRecord(scope, "vault", mutation.id);
       break;
   }
 
-  return readManagerSnapshot();
+  return readManagerSnapshot(scope);
 }
 
-async function readConnectionSecret(provider: ConnectionProvider) {
-  const row = await (await getAppStore()).readConnectionByProvider(provider);
+async function readConnectionSecret(
+  scope: AccessScope,
+  provider: ConnectionProvider
+) {
+  const row = await (
+    await getAppStore()
+  ).readConnectionByProvider(scope, provider);
   return row
-    ? await readSecret({ id: row.id, namespace: "connection" })
+    ? await readSecret({ id: row.id, namespace: "connection", scope })
     : undefined;
 }
 
-export async function readTelegramCredentials() {
-  const value = await readConnectionSecret("telegram");
+export async function readTelegramCredentials(scope: AccessScope) {
+  const value = await readConnectionSecret(scope, "telegram");
   return value ? parseTelegramCredentials(value) : undefined;
 }
 
 async function createConnection(
+  scope: AccessScope,
   input: Extract<ManagerMutation, { action: "connection.create" }>["input"]
 ) {
   const telegram =
@@ -109,6 +131,7 @@ async function createConnection(
     await writeSecret({
       id,
       namespace: "connection",
+      scope,
       value: connection.secret,
     });
   }
@@ -117,6 +140,7 @@ async function createConnection(
   let replacedIds: readonly string[];
   try {
     replacedIds = await store.createConnection(
+      scope,
       {
         account: connection.account,
         createdAt: now,
@@ -126,34 +150,35 @@ async function createConnection(
         provider: connection.provider,
         updatedAt: now,
       },
-      connection.provider === "kernel" || connection.provider === "telegram"
+      connection.provider === "telegram"
     );
     if (connection.provider === "local-model") {
-      await store.selectLocalModel();
+      await store.selectLocalModel(scope);
     }
   } catch (error) {
-    await deleteSecret({ id, namespace: "connection" });
+    await deleteSecret({ id, namespace: "connection", scope });
     throw error;
   }
 
   await Promise.all(
     replacedIds.map((replacedId) =>
-      deleteSecret({ id: replacedId, namespace: "connection" })
+      deleteSecret({ id: replacedId, namespace: "connection", scope })
     )
   );
 }
 
 async function createVaultItem(
+  scope: AccessScope,
   input: Extract<ManagerMutation, { action: "vault.create" }>["input"]
 ) {
   const id = randomUUID();
   const now = new Date().toISOString();
-  await writeSecret({ id, namespace: "vault", value: input.secret });
+  await writeSecret({ id, namespace: "vault", scope, value: input.secret });
 
   try {
     await (
       await getAppStore()
-    ).createVaultItem({
+    ).createVaultItem(scope, {
       account: input.account,
       createdAt: now,
       id,
@@ -162,17 +187,21 @@ async function createVaultItem(
       updatedAt: now,
     });
   } catch (error) {
-    await deleteSecret({ id, namespace: "vault" });
+    await deleteSecret({ id, namespace: "vault", scope });
     throw error;
   }
 }
 
-async function removeRecord(namespace: "connection" | "vault", id: string) {
-  await deleteSecret({ id, namespace });
+async function removeRecord(
+  scope: AccessScope,
+  namespace: "connection" | "vault",
+  id: string
+) {
   const store = await getAppStore();
-  if (namespace === "connection") {
-    await store.deleteConnection(id);
-  } else {
-    await store.deleteVaultItem(id);
-  }
+  const deleted =
+    namespace === "connection"
+      ? await store.deleteConnection(scope, id)
+      : await store.deleteVaultItem(scope, id);
+  if (!deleted) return;
+  await deleteSecret({ id, namespace, scope });
 }

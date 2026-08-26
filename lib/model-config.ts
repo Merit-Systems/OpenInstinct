@@ -1,14 +1,16 @@
+import type { AccessScope } from "./access-scope";
 import { getEnv } from "./runtime-env";
-import { getAppStore } from "./server/database";
-import { readSecretSync } from "./server/secret-store";
+import { getAppStore } from "./server/app-store";
+import { readSecret } from "./server/secret-store";
 
-export async function getModelSettings() {
+export async function getModelSettings(scope: AccessScope) {
   const env = getEnv();
   const { localModel, settings } = await (
     await getAppStore()
-  ).readModelStorage();
+  ).readModelStorage(scope);
   const configuredBaseURL = env.LOCAL_VAULT_ASSISTANT_MODEL_BASE_URL?.trim();
   const usesStoredModel =
+    scope.mode === "local" &&
     !configuredBaseURL &&
     settings.model_source !== "gateway" &&
     Boolean(localModel?.endpoint);
@@ -31,7 +33,11 @@ export async function getModelSettings() {
     apiKey:
       env.LOCAL_VAULT_ASSISTANT_MODEL_API_KEY?.trim() ??
       (usesStoredModel && localModel
-        ? readSecretSync({ id: localModel.id, namespace: "connection" })
+        ? await readSecret({
+            id: localModel.id,
+            namespace: "connection",
+            scope,
+          })
         : undefined),
     baseURL,
     modelId,

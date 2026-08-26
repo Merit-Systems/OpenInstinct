@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { localAccessScope } from "@/lib/access-scope";
 import { isLocalManagerHostname } from "@/lib/manager";
 import { readTelegramCredentials } from "@/lib/server/manager-store";
 import { getTelegramUpdates } from "@/lib/server/telegram";
@@ -23,7 +24,7 @@ export async function POST(request: Request) {
 
   try {
     const { botId, offset } = requestSchema.parse(await request.json());
-    const credentials = await readTelegramCredentials();
+    const credentials = await readTelegramCredentials(localAccessScope);
     if (!credentials) {
       return Response.json({ configured: false, nextOffset: offset });
     }

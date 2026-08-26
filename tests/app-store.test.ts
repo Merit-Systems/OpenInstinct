@@ -2,7 +2,8 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { createSqliteStore } from "../lib/server/database/sqlite-store";
+import { localAccessScope } from "../lib/access-scope";
+import { createSqliteStore } from "../lib/server/app-store";
 
 const temporaryDirectories: string[] = [];
 
@@ -15,13 +16,16 @@ afterEach(() => {
 describe("SQLite app store", () => {
   it("persists the global chat index", async () => {
     const store = await createStore();
-    await store.saveChat({ sessionId: "session-1", title: "First request" });
-    await store.saveChat({
+    await store.saveChat(localAccessScope, {
+      sessionId: "session-1",
+      title: "First request",
+    });
+    await store.saveChat(localAccessScope, {
       sessionId: "session-1",
       usage: { costUsd: 0.012, inputTokens: 1200, outputTokens: 300 },
     });
 
-    expect(await store.listChats()).toEqual([
+    expect(await store.listChats(localAccessScope)).toEqual([
       expect.objectContaining({
         sessionId: "session-1",
         title: "First request",
@@ -44,14 +48,20 @@ describe("SQLite app store", () => {
     };
     const second = { ...first, id: "kernel-2" };
 
-    expect(await store.createConnection(first, true)).toEqual([]);
-    expect(await store.createConnection(second, true)).toEqual(["kernel-1"]);
-    expect(await store.listConnections()).toEqual([second]);
+    expect(await store.createConnection(localAccessScope, first, true)).toEqual(
+      []
+    );
+    expect(
+      await store.createConnection(localAccessScope, second, true)
+    ).toEqual(["kernel-1"]);
+    expect(await store.listConnections(localAccessScope)).toEqual([second]);
 
-    await store.selectGatewayModel("openai/gpt-5.4");
-    await store.selectBrowserMode("cloud");
-    await expect(store.readBrowserMode()).resolves.toBe("cloud");
-    await expect(store.readModelStorage()).resolves.toEqual({
+    await store.selectGatewayModel(localAccessScope, "openai/gpt-5.4");
+    await store.selectBrowserMode(localAccessScope, "cloud");
+    await expect(store.readBrowserMode(localAccessScope)).resolves.toBe(
+      "cloud"
+    );
+    await expect(store.readModelStorage(localAccessScope)).resolves.toEqual({
       settings: {
         gateway_model: "openai/gpt-5.4",
         model_source: "gateway",
