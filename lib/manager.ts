@@ -64,6 +64,27 @@ const vaultItemInputSchema = z.object({
   secret: z.string().min(1).max(20_000),
 });
 
+const setupPrefillSchema = z.object({
+  account: z.string().trim().max(200).optional(),
+  label: z.string().trim().max(120).optional(),
+});
+
+export const managerSetupRequestSchema = z.discriminatedUnion("target", [
+  setupPrefillSchema
+    .extend({
+      endpoint: z.string().trim().max(2_000).optional(),
+      provider: connectionProviderSchema,
+      target: z.literal("connection"),
+    })
+    .strict(),
+  setupPrefillSchema
+    .extend({
+      kind: vaultItemKindSchema,
+      target: z.literal("vault"),
+    })
+    .strict(),
+]);
+
 export const managerMutationSchema = z.discriminatedUnion("action", [
   z.object({
     action: z.literal("connection.create"),
@@ -76,5 +97,25 @@ export const managerMutationSchema = z.discriminatedUnion("action", [
 
 export type ConnectionProvider = z.infer<typeof connectionProviderSchema>;
 export type ManagerMutation = z.infer<typeof managerMutationSchema>;
+export type ManagerSetupRequest = z.infer<typeof managerSetupRequestSchema>;
 export type ManagerSnapshot = z.infer<typeof managerSnapshotSchema>;
 export type VaultItemKind = z.infer<typeof vaultItemKindSchema>;
+
+export function createManagerSetupUrl(
+  baseUrl: string,
+  request: ManagerSetupRequest
+) {
+  const url = new URL("/", baseUrl);
+  url.searchParams.set("setup", request.target);
+  if (request.account) url.searchParams.set("account", request.account);
+  if (request.label) url.searchParams.set("label", request.label);
+
+  if (request.target === "connection") {
+    url.searchParams.set("provider", request.provider);
+    if (request.endpoint) url.searchParams.set("endpoint", request.endpoint);
+  } else {
+    url.searchParams.set("kind", request.kind);
+  }
+
+  return url.toString();
+}

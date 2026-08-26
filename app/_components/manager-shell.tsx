@@ -22,19 +22,19 @@ export function ManagerShell({
   readonly children: ReactNode;
 }) {
   return (
-    <div className="min-h-dvh bg-background text-foreground lg:grid lg:grid-cols-[15rem_minmax(0,1fr)]">
-      <aside className="border-b bg-card lg:sticky lg:top-0 lg:h-dvh lg:border-r lg:border-b-0">
-        <div className="flex h-full flex-col gap-5 px-4 py-4 lg:px-3 lg:py-5">
-          <Link className="flex items-center gap-2.5 px-2" href="/">
-            <span className="flex size-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
-              <BotIcon className="size-4" />
+    <div className="min-h-dvh bg-background text-foreground">
+      <header className="sticky top-0 z-20 border-b border-border/40 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80">
+        <div className="flex w-full items-center gap-4 px-4 py-3">
+          <Link className="flex shrink-0 items-center gap-2" href="/">
+            <span className="flex size-7 items-center justify-center rounded-full bg-primary text-primary-foreground">
+              <BotIcon className="size-3.5" />
             </span>
-            <span className="type-card-title">Local Vault Assistant</span>
+            <span className="type-product-title">Local Vault</span>
           </Link>
 
           <nav
             aria-label="Manager navigation"
-            className="flex gap-1 lg:flex-col"
+            className="ml-auto flex items-center gap-1 sm:ml-4"
           >
             {navigation.map((item) => {
               const Icon = item.icon;
@@ -43,9 +43,10 @@ export function ManagerShell({
                   aria-current={active === item.id ? "page" : undefined}
                   className={cn(
                     buttonVariants({
-                      variant: active === item.id ? "secondary" : "ghost",
+                      size: "sm",
+                      variant: active === item.id ? "subtle" : "quiet",
                     }),
-                    "justify-start"
+                    "hidden sm:inline-flex"
                   )}
                   href={item.href}
                   key={item.id}
@@ -57,18 +58,44 @@ export function ManagerShell({
             })}
           </nav>
 
-          <div className="ml-auto lg:mt-auto lg:ml-0">
-            <Link
-              className={cn(buttonVariants({ variant: "default" }), "w-full")}
-              href="/chat"
-            >
-              <MessageSquareIcon />
-              Open chat
-            </Link>
-          </div>
+          <Link
+            className={buttonVariants({ size: "sm", variant: "default" })}
+            href="/chat"
+          >
+            <MessageSquareIcon />
+            <span className="hidden sm:inline">Open chat</span>
+            <span className="sm:hidden">Chat</span>
+          </Link>
         </div>
-      </aside>
-      <div className="min-w-0">{children}</div>
+        <nav
+          aria-label="Manager navigation on small screens"
+          className="flex gap-1 border-t border-border/40 px-3 py-1 sm:hidden"
+        >
+          {navigation.map((item) => {
+            const Icon = item.icon;
+            return (
+              <Link
+                aria-current={active === item.id ? "page" : undefined}
+                className={cn(
+                  buttonVariants({
+                    size: "sm",
+                    variant: active === item.id ? "subtle" : "quiet",
+                  }),
+                  "flex-1"
+                )}
+                href={item.href}
+                key={item.id}
+              >
+                <Icon />
+                {item.label}
+              </Link>
+            );
+          })}
+        </nav>
+      </header>
+      <div className="mx-auto flex w-full max-w-3xl flex-col px-4 py-10 sm:py-12">
+        {children}
+      </div>
     </div>
   );
 }

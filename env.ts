@@ -22,6 +22,10 @@ export function getEnv() {
         .default("false")
         .transform((value) => value === "true"),
       LOCAL_VAULT_ASSISTANT_DATA_DIR: optionalValue,
+      LOCAL_VAULT_ASSISTANT_MANAGER_URL: optionalValue.refine(
+        (value) => value === undefined || URL.canParse(value),
+        "LOCAL_VAULT_ASSISTANT_MANAGER_URL must be an absolute URL"
+      ),
       LOCAL_VAULT_ASSISTANT_MODEL: optionalValue,
       LOCAL_VAULT_ASSISTANT_MODEL_API_KEY: optionalValue,
       LOCAL_VAULT_ASSISTANT_MODEL_BASE_URL: optionalValue,

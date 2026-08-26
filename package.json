@@ -47,6 +47,7 @@
     "oxfmt": "0.64.0",
     "oxlint": "1.78.0",
     "oxlint-tsgolint": "7.0.2001",
+    "portless": "0.15.6",
     "taze": "19.16.0",
     "turbo": "2.10.5",
     "typescript": "6.0.3",
@@ -56,6 +57,9 @@
     "node": "24.x"
   },
   "name": "local-vault-assistant",
+  "portless": {
+    "name": "local-vault-assistant"
+  },
   "packageManager": "pnpm@11.15.1",
   "scripts": {
     "bench:browser": "eve eval browser",

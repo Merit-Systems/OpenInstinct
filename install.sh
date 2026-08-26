@@ -7,13 +7,20 @@ readonly NODE_VERSION="24.12.0"
 readonly PNPM_VERSION="11.15.1"
 readonly INSTALL_HOME="${LOCAL_VAULT_ASSISTANT_HOME:-$HOME/.local/share/local-vault-assistant}"
 readonly APP_DIR="$INSTALL_HOME/app"
+readonly RELEASES_DIR="$INSTALL_HOME/releases"
 readonly BIN_DIR="${LOCAL_VAULT_ASSISTANT_BIN_DIR:-$HOME/.local/bin}"
 
 temporary_directory=""
+release_directory=""
+release_ready=0
 
 cleanup() {
   if [[ -n "$temporary_directory" && -d "$temporary_directory" ]]; then
     rm -rf "$temporary_directory"
+  fi
+  if [[ "$release_ready" != "1" && -n "$release_directory" && \
+    -d "$release_directory" ]]; then
+    rm -rf "$release_directory"
   fi
 }
 
@@ -47,7 +54,7 @@ esac
 
 printf '\n\033[1m%s\033[0m\n\n' "$PRODUCT_NAME"
 temporary_directory="$(mktemp -d)"
-mkdir -p "$INSTALL_HOME" "$BIN_DIR"
+mkdir -p "$INSTALL_HOME" "$RELEASES_DIR" "$BIN_DIR"
 
 node_major="0"
 if command -v node >/dev/null 2>&1; then
@@ -94,7 +101,6 @@ fi
 success "Package runtime ready"
 
 source_archive="$temporary_directory/source.tar.gz"
-source_directory="$temporary_directory/source"
 archive_url="${LOCAL_VAULT_ASSISTANT_ARCHIVE_URL:-https://api.github.com/repos/$REPOSITORY/tarball/main}"
 info "Downloading the latest release"
 if ! curl -fsSL "$archive_url" -o "$source_archive" 2>/dev/null; then
@@ -106,32 +112,44 @@ if ! curl -fsSL "$archive_url" -o "$source_archive" 2>/dev/null; then
   fi
 fi
 
-mkdir -p "$source_directory"
-tar -xzf "$source_archive" -C "$source_directory" --strip-components=1
-
-next_app="$INSTALL_HOME/app.next"
-previous_app="$INSTALL_HOME/app.previous"
-rm -rf "$next_app"
-mv "$source_directory" "$next_app"
+release_id="$(date -u +%Y%m%dT%H%M%SZ)-$$"
+release_directory="$RELEASES_DIR/$release_id"
+mkdir -p "$release_directory"
+tar -xzf "$source_archive" -C "$release_directory" --strip-components=1
 
 info "Installing dependencies"
 (
-  cd "$next_app"
+  cd "$release_directory"
   "$INSTALL_HOME/tools/bin/pnpm" install --frozen-lockfile
 )
 
-info "Building the local app"
+info "Building the local agent"
 (
-  cd "$next_app"
-  "$INSTALL_HOME/tools/bin/pnpm" build
+  cd "$release_directory"
+  "$INSTALL_HOME/tools/bin/pnpm" build:eve
+  [[ -f .output/server/index.mjs ]] || fail "The local agent build was not created."
+  touch .output/.local-vault-assistant-build
 )
 
-rm -rf "$previous_app"
-if [[ -d "$APP_DIR" ]]; then
-  mv "$APP_DIR" "$previous_app"
+info "Building the local manager"
+(
+  cd "$release_directory"
+  EVE_NEXT_PRODUCTION_ORIGIN="http://127.0.0.1:4274" \
+    "$INSTALL_HOME/tools/bin/pnpm" build
+  [[ -f .next/BUILD_ID ]] || fail "The local manager build was not created."
+)
+
+next_link="$INSTALL_HOME/app.next"
+rm -f "$next_link"
+ln -s "$release_directory" "$next_link"
+
+if [[ -L "$APP_DIR" ]]; then
+  rm "$APP_DIR"
+elif [[ -e "$APP_DIR" ]]; then
+  mv "$APP_DIR" "$INSTALL_HOME/app.previous.$release_id"
 fi
-mv "$next_app" "$APP_DIR"
-rm -rf "$previous_app"
+mv "$next_link" "$APP_DIR"
+release_ready=1
 
 launcher="$BIN_DIR/local-vault-assistant"
 {

@@ -18,6 +18,8 @@ export default {
     "@merit-systems/oxlint-config",
     "next-themes",
     "sonner",
+    // Executed by the local shell launcher rather than imported by TypeScript.
+    "portless",
   ],
   ignoreIssues: {
     // Eve AI Elements and Foundation registry primitives intentionally expose

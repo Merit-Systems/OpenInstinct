@@ -4,6 +4,10 @@ set -euo pipefail
 repository_directory="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$repository_directory"
 
+readonly EVE_HOST="127.0.0.1"
+readonly EVE_PORT="4274"
+readonly LOCAL_URL="https://local-vault-assistant.localhost"
+
 if command -v pnpm >/dev/null 2>&1; then
   package_manager=(pnpm)
 else
@@ -46,17 +50,24 @@ while (($# > 0)); do
         printf '✗ pnpm is unavailable\n'
         failures=$((failures + 1))
       fi
+      if [[ -x node_modules/.bin/portless ]]; then
+        printf '✓ Portless %s\n' "$(node_modules/.bin/portless --version)"
+      else
+        printf '✗ Portless is unavailable\n'
+        failures=$((failures + 1))
+      fi
       if [[ -x /usr/bin/security ]]; then
         printf '✓ macOS Keychain command\n'
       else
         printf '✗ macOS Keychain command is unavailable\n'
         failures=$((failures + 1))
       fi
-      if [[ -f .next/BUILD_ID ]]; then
-        printf '✓ Production build\n'
+      if [[ -f .output/.local-vault-assistant-build && -f .next/BUILD_ID ]]; then
+        printf '✓ Agent and manager production builds\n'
       else
-        printf '• Production build will be created on first launch\n'
+        printf '• Production builds will be created on first launch\n'
       fi
+      printf '• Manager URL: %s\n' "$LOCAL_URL"
       exit "$failures"
       ;;
     update)
@@ -68,22 +79,62 @@ while (($# > 0)); do
   esac
 done
 
+if [[ "$mode" == "start" && ! -f .output/.local-vault-assistant-build ]]; then
+  "${package_manager[@]}" build:eve
+  [[ -f .output/server/index.mjs ]]
+  touch .output/.local-vault-assistant-build
+fi
+
 if [[ "$mode" == "start" && ! -f .next/BUILD_ID ]]; then
-  "${package_manager[@]}" build
+  EVE_NEXT_PRODUCTION_ORIGIN="http://$EVE_HOST:$EVE_PORT" \
+    "${package_manager[@]}" build
 fi
 
-if [[ "${LOCAL_VAULT_ASSISTANT_NO_OPEN:-0}" != "1" ]] && \
-  command -v open >/dev/null 2>&1; then
-  port="${PORT:-3000}"
-  (
-    for _ in {1..60}; do
-      if curl --silent --fail "http://localhost:$port" >/dev/null 2>&1; then
-        open "http://localhost:$port"
-        exit
-      fi
-      sleep 0.25
-    done
-  ) >/dev/null 2>&1 &
+if [[ ! -x node_modules/.bin/portless ]]; then
+  "${package_manager[@]}" install
 fi
 
-exec "${package_manager[@]}" "$mode" "$@"
+if [[ "$mode" == "dev" ]]; then
+  exec "${package_manager[@]}" exec portless run \
+    --name local-vault-assistant \
+    "$repository_directory/scripts/run-local-app" dev "$@"
+fi
+
+eve_pid=""
+cleanup() {
+  if [[ -n "$eve_pid" ]] && kill -0 "$eve_pid" >/dev/null 2>&1; then
+    kill "$eve_pid" >/dev/null 2>&1 || true
+    wait "$eve_pid" 2>/dev/null || true
+  fi
+}
+trap cleanup EXIT
+
+HOST="$EVE_HOST" NITRO_HOST="$EVE_HOST" \
+  PORT="$EVE_PORT" NITRO_PORT="$EVE_PORT" \
+  node .output/server/index.mjs &
+eve_pid=$!
+
+eve_ready=0
+for _ in {1..120}; do
+  if ! kill -0 "$eve_pid" >/dev/null 2>&1; then
+    wait "$eve_pid" || true
+    printf 'The local agent runtime stopped before it became ready.\n' >&2
+    exit 1
+  fi
+  if curl --silent --fail \
+    "http://$EVE_HOST:$EVE_PORT/eve/v1/health" >/dev/null 2>&1; then
+    eve_ready=1
+    break
+  fi
+  sleep 0.25
+done
+
+if [[ "$eve_ready" != "1" ]]; then
+  printf 'The local agent runtime did not become ready on port %s.\n' \
+    "$EVE_PORT" >&2
+  exit 1
+fi
+
+"${package_manager[@]}" exec portless run \
+  --name local-vault-assistant \
+  "$repository_directory/scripts/run-local-app" start "$@"

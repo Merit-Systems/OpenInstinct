@@ -33,7 +33,9 @@ curl -fsSL https://raw.githubusercontent.com/Merit-Systems/open-instinct/main/in
 ~/.local/bin/local-vault-assistant
 ```
 
-The installer sets up an isolated Node.js runtime, installs the app, and builds it without requiring admin access. The launcher opens the local setup manager, where you add your browser connection and choose a hosted or local model.
+The installer sets up an isolated Node.js runtime, installs the app, and builds it. The launcher opens the manager at `https://local-vault-assistant.localhost`, where you add your browser connection and choose a hosted or local model. [Portless](https://github.com/vercel-labs/portless) assigns the underlying app port, so the assistant never claims `localhost:3000` and its URL stays stable across restarts.
+
+Portless may ask for administrator approval on first launch to trust its local HTTPS certificate and bind the standard HTTPS port. The app and its vault still run only on your machine.
 
 ```bash
 ~/.local/bin/local-vault-assistant doctor  # Check the installation

@@ -16,13 +16,14 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
-  Card,
-  CardAction,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -37,6 +38,7 @@ import {
   type ConnectionProvider,
   connectionProviderSchema,
   type ManagerMutation,
+  type ManagerSetupRequest,
   type ManagerSnapshot,
   managerSnapshotSchema,
   type VaultItemKind,
@@ -57,7 +59,11 @@ const vaultKindLabels: Record<VaultItemKind, string> = {
   token: "Token",
 };
 
-export function LocalVaultAssistantManager() {
+export function LocalVaultAssistantManager({
+  initialSetup,
+}: {
+  readonly initialSetup?: ManagerSetupRequest;
+}) {
   const [snapshot, setSnapshot] = useState<ManagerSnapshot>();
   const [error, setError] = useState<string>();
   const [busy, setBusy] = useState(false);
@@ -104,19 +110,19 @@ export function LocalVaultAssistantManager() {
   );
 
   return (
-    <main className="mx-auto flex w-full max-w-7xl flex-col gap-6 px-4 py-6 sm:px-6 lg:px-8 lg:py-10">
-      <header className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-        <div className="max-w-2xl">
-          <p className="type-label text-primary">Local control plane</p>
-          <h1 className="mt-1 font-medium text-4xl tracking-tight">Manager</h1>
-          <p className="mt-2 type-supporting-body text-muted-foreground">
-            Control inference, browser connections, and private credentials from
-            this device.
+    <main className="flex flex-col gap-12">
+      <header className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex flex-col gap-2">
+          <h1 className="type-page-title">Manager</h1>
+          <p className="type-supporting-body text-muted-foreground">
+            Manage private credentials, connections, and local inference on this
+            device.
           </p>
         </div>
         <Button
           disabled={busy}
           onClick={() => void refresh()}
+          size="sm"
           type="button"
           variant="outline"
         >
@@ -133,104 +139,134 @@ export function LocalVaultAssistantManager() {
         </Alert>
       ) : null}
 
-      <section
-        aria-label="Local Vault Assistant status"
-        className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4"
-      >
-        <StatusCard
-          detail={snapshot?.runtime.inference ?? "Loading…"}
-          icon={BotIcon}
-          label="Inference"
-          state={snapshot ? "Local-first" : "Checking"}
+      <section aria-labelledby="status-heading" className="space-y-3">
+        <SectionHeading
+          description="A quick read on the services available to the agent."
+          id="status-heading"
+          title="Local status"
         />
-        <StatusCard
-          detail={kernel?.label ?? "Add a connection below"}
-          icon={LinkIcon}
-          label="Kernel"
-          state={kernel?.hasSecret ? "Connected" : "Not connected"}
-          variant={kernel?.hasSecret ? "success" : "warning"}
-        />
-        <StatusCard
-          detail={snapshot?.secretStore.kind ?? "Checking host"}
-          icon={ShieldCheckIcon}
-          label="Secret store"
-          state={snapshot?.secretStore.available ? "Available" : "Unavailable"}
-          variant={snapshot?.secretStore.available ? "success" : "warning"}
-        />
-        <StatusCard
-          detail="Secret values never render in this UI"
-          icon={KeyRoundIcon}
-          label="Vault"
-          state={`${String(snapshot?.vaultItems.length ?? 0)} saved`}
-        />
+        <ul className="rounded-xl border border-border px-4">
+          <StatusRow
+            detail={snapshot?.runtime.inference ?? "Loading…"}
+            icon={BotIcon}
+            label="Inference"
+            state={snapshot ? "Local-first" : "Checking"}
+          />
+          <StatusRow
+            detail={kernel?.label ?? "Add a connection below"}
+            icon={LinkIcon}
+            label="Kernel"
+            state={kernel?.hasSecret ? "Connected" : "Not connected"}
+            variant={kernel?.hasSecret ? "success" : "warning"}
+          />
+          <StatusRow
+            detail={snapshot?.secretStore.kind ?? "Checking host"}
+            icon={ShieldCheckIcon}
+            label="Secret store"
+            state={
+              snapshot?.secretStore.available ? "Available" : "Unavailable"
+            }
+            variant={snapshot?.secretStore.available ? "success" : "warning"}
+          />
+          <StatusRow
+            detail="Values never render in this interface"
+            icon={KeyRoundIcon}
+            label="Vault"
+            state={`${String(snapshot?.vaultItems.length ?? 0)} saved`}
+          />
+        </ul>
       </section>
 
-      <Tabs defaultValue="connections">
-        <TabsList aria-label="Manager sections" variant="line">
-          <TabsTrigger value="connections">Connections</TabsTrigger>
-          <TabsTrigger value="vault">Auth vault</TabsTrigger>
-          <TabsTrigger value="runtime">Runtime</TabsTrigger>
-        </TabsList>
+      <Tabs
+        defaultValue={
+          initialSetup?.target === "vault" ? "vault" : "connections"
+        }
+      >
+        <div className="overflow-x-auto">
+          <TabsList
+            aria-label="Manager sections"
+            className="w-full justify-start border-b border-border"
+            variant="line"
+          >
+            <TabsTrigger value="connections">Connections</TabsTrigger>
+            <TabsTrigger value="vault">Auth vault</TabsTrigger>
+            <TabsTrigger value="runtime">Runtime</TabsTrigger>
+          </TabsList>
+        </div>
 
-        <TabsContent className="pt-4" value="connections">
-          <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_23rem]">
-            <ConnectionList busy={busy} onDelete={mutate} snapshot={snapshot} />
-            <ConnectionForm busy={busy} onSubmit={mutate} />
-          </div>
+        <TabsContent className="pt-5" value="connections">
+          <ConnectionSection
+            busy={busy}
+            initialSetup={
+              initialSetup?.target === "connection" ? initialSetup : undefined
+            }
+            onDelete={mutate}
+            onSubmit={mutate}
+            snapshot={snapshot}
+          />
         </TabsContent>
 
-        <TabsContent className="pt-4" value="vault">
-          <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_23rem]">
-            <VaultList busy={busy} onDelete={mutate} snapshot={snapshot} />
-            <VaultForm busy={busy} onSubmit={mutate} />
-          </div>
+        <TabsContent className="pt-5" value="vault">
+          <VaultSection
+            busy={busy}
+            initialSetup={
+              initialSetup?.target === "vault" ? initialSetup : undefined
+            }
+            onDelete={mutate}
+            onSubmit={mutate}
+            snapshot={snapshot}
+          />
         </TabsContent>
 
-        <TabsContent className="pt-4" value="runtime">
-          <Card>
-            <CardHeader>
-              <CardTitle>Local runtime</CardTitle>
-              <CardDescription>
-                The local Eve service is the authority for sessions, policies,
-                and secrets.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="grid gap-4 sm:grid-cols-2">
-              <RuntimeRow
-                label="Mode"
-                value={snapshot?.runtime.mode ?? "Loading…"}
-              />
-              <RuntimeRow
-                label="Model"
-                value={snapshot?.runtime.inference ?? "Loading…"}
-              />
-              <RuntimeRow label="Metadata" value="Private local database" />
-              <RuntimeRow
-                label="Secrets"
-                value={snapshot?.secretStore.kind ?? "Checking…"}
-              />
-              <p className="type-supporting-body text-muted-foreground sm:col-span-2">
-                New model settings apply to the next agent step.
-              </p>
-            </CardContent>
-          </Card>
+        <TabsContent className="pt-5" value="runtime">
+          <RuntimeSection snapshot={snapshot} />
         </TabsContent>
       </Tabs>
 
-      <Alert variant="information">
-        <ShieldCheckIcon />
-        <AlertTitle>Local vault boundary</AlertTitle>
-        <AlertDescription>
-          The manager stores labels and opaque handles in the local database.
-          Secret values are written directly to the OS keychain and are never
-          returned by the manager API.
-        </AlertDescription>
-      </Alert>
+      <aside className="border-l-2 border-information-border pl-4">
+        <div className="flex items-start gap-3">
+          <ShieldCheckIcon className="mt-0.5 size-4 shrink-0 text-information" />
+          <div>
+            <h2 className="type-label">Local vault boundary</h2>
+            <p className="mt-1 type-supporting-body text-muted-foreground">
+              Labels and opaque handles live in the local database. Secret
+              values go directly to the OS keychain and are never returned by
+              the manager API or placed in chat.
+            </p>
+          </div>
+        </div>
+      </aside>
     </main>
   );
 }
 
-function StatusCard({
+function SectionHeading({
+  action,
+  description,
+  id,
+  title,
+}: {
+  readonly action?: React.ReactNode;
+  readonly description: string;
+  readonly id: string;
+  readonly title: string;
+}) {
+  return (
+    <div className="flex items-end justify-between gap-4">
+      <div className="space-y-1">
+        <h2 className="type-section-title" id={id}>
+          {title}
+        </h2>
+        <p className="type-supporting-body text-muted-foreground">
+          {description}
+        </p>
+      </div>
+      {action}
+    </div>
+  );
+}
+
+function StatusRow({
   detail,
   icon: Icon,
   label,
@@ -244,115 +280,133 @@ function StatusCard({
   readonly variant?: "information" | "success" | "warning";
 }) {
   return (
-    <Card size="sm">
-      <CardHeader>
-        <div className="flex items-center gap-2 text-muted-foreground">
-          <Icon className="size-4" />
-          <span className="type-label">{label}</span>
-        </div>
-        <CardAction>
-          <Badge variant={variant}>{state}</Badge>
-        </CardAction>
-      </CardHeader>
-      <CardContent className="truncate text-muted-foreground" title={detail}>
-        {detail}
-      </CardContent>
-    </Card>
+    <li className="flex min-w-0 items-center gap-3 border-b border-border py-3 last:border-b-0">
+      <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground">
+        <Icon className="size-3.5" />
+      </span>
+      <div className="min-w-0 flex-1 leading-tight">
+        <p className="type-label">{label}</p>
+        <p
+          className="truncate type-caption text-muted-foreground"
+          title={detail}
+        >
+          {detail}
+        </p>
+      </div>
+      <Badge variant={variant}>{state}</Badge>
+    </li>
   );
 }
 
-function ConnectionList({
+function ConnectionSection({
   busy,
+  initialSetup,
   onDelete,
+  onSubmit,
   snapshot,
 }: {
   readonly busy: boolean;
+  readonly initialSetup?: Extract<
+    ManagerSetupRequest,
+    { target: "connection" }
+  >;
   readonly onDelete: (mutation: ManagerMutation) => Promise<boolean>;
+  readonly onSubmit: (mutation: ManagerMutation) => Promise<boolean>;
   readonly snapshot?: ManagerSnapshot;
 }) {
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Connections</CardTitle>
-        <CardDescription>
-          Services the local agent is allowed to use.
-        </CardDescription>
-      </CardHeader>
-      <CardContent>
-        {snapshot?.connections.length ? (
-          <div className="divide-y">
-            {snapshot.connections.map((connection) => (
-              <div
-                className="flex items-center gap-3 py-3 first:pt-0 last:pb-0"
-                key={connection.id}
-              >
-                <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground">
-                  <LinkIcon className="size-4" />
-                </span>
-                <div className="min-w-0 flex-1">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <p className="type-label">{connection.label}</p>
-                    <Badge
-                      variant={
-                        connection.hasSecret ||
-                        connection.provider === "local-model"
-                          ? "success"
-                          : "warning"
-                      }
-                    >
-                      {connection.hasSecret ||
-                      connection.provider === "local-model"
-                        ? "Ready"
-                        : "No credential"}
-                    </Badge>
-                  </div>
-                  <p className="truncate text-muted-foreground">
-                    {providerLabels[connection.provider]}
-                    {connection.account ? ` · ${connection.account}` : ""}
-                    {connection.endpoint ? ` · ${connection.endpoint}` : ""}
-                  </p>
-                </div>
-                <Button
-                  aria-label={`Remove ${connection.label}`}
-                  disabled={busy}
-                  onClick={() =>
-                    void onDelete({
-                      action: "connection.delete",
-                      id: connection.id,
-                    })
-                  }
-                  size="icon"
-                  type="button"
-                  variant="ghost"
-                >
-                  <Trash2Icon />
-                </Button>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <EmptyState
-            icon={LinkIcon}
-            message="Add Kernel, a local model, email, or another service."
-            title="No connections yet"
+    <section aria-labelledby="connections-heading" className="space-y-3">
+      <SectionHeading
+        action={
+          <ConnectionDialog
+            busy={busy}
+            initialSetup={initialSetup}
+            onSubmit={onSubmit}
           />
+        }
+        description="Services this device allows the agent to use."
+        id="connections-heading"
+        title="Connections"
+      />
+      <ul className="rounded-xl border border-border px-4">
+        {snapshot?.connections.length ? (
+          snapshot.connections.map((connection) => (
+            <li
+              className="flex min-w-0 items-center gap-3 border-b border-border py-3 last:border-b-0"
+              key={connection.id}
+            >
+              <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground">
+                <LinkIcon className="size-3.5" />
+              </span>
+              <div className="min-w-0 flex-1 leading-tight">
+                <div className="flex flex-wrap items-center gap-2">
+                  <p className="type-label">{connection.label}</p>
+                  <Badge
+                    variant={
+                      connection.hasSecret ||
+                      connection.provider === "local-model"
+                        ? "success"
+                        : "warning"
+                    }
+                  >
+                    {connection.hasSecret ||
+                    connection.provider === "local-model"
+                      ? "Ready"
+                      : "No credential"}
+                  </Badge>
+                </div>
+                <p className="truncate type-caption text-muted-foreground">
+                  {providerLabels[connection.provider]}
+                  {connection.account ? ` · ${connection.account}` : ""}
+                  {connection.endpoint ? ` · ${connection.endpoint}` : ""}
+                </p>
+              </div>
+              <Button
+                aria-label={`Remove ${connection.label}`}
+                disabled={busy}
+                onClick={() =>
+                  void onDelete({
+                    action: "connection.delete",
+                    id: connection.id,
+                  })
+                }
+                size="icon-sm"
+                type="button"
+                variant="quiet"
+              >
+                <Trash2Icon />
+              </Button>
+            </li>
+          ))
+        ) : (
+          <EmptyRow message="Add Kernel, a local model, email, or another service." />
         )}
-      </CardContent>
-    </Card>
+      </ul>
+    </section>
   );
 }
 
-function ConnectionForm({
+function ConnectionDialog({
   busy,
+  initialSetup,
   onSubmit,
 }: {
   readonly busy: boolean;
+  readonly initialSetup?: Extract<
+    ManagerSetupRequest,
+    { target: "connection" }
+  >;
   readonly onSubmit: (mutation: ManagerMutation) => Promise<boolean>;
 }) {
-  const [provider, setProvider] = useState<ConnectionProvider>("kernel");
-  const [label, setLabel] = useState("Kernel browser");
-  const [endpoint, setEndpoint] = useState("");
-  const [account, setAccount] = useState("");
+  const [open, setOpen] = useState(Boolean(initialSetup));
+  const [provider, setProvider] = useState<ConnectionProvider>(
+    initialSetup?.provider ?? "kernel"
+  );
+  const [label, setLabel] = useState(
+    initialSetup?.label ?? providerLabels[initialSetup?.provider ?? "kernel"]
+  );
+  const [endpoint, setEndpoint] = useState(initialSetup?.endpoint ?? "");
+  const [account, setAccount] = useState(initialSetup?.account ?? "");
   const [secret, setSecret] = useState("");
 
   const submit = async (event: FormEvent) => {
@@ -365,18 +419,24 @@ function ConnectionForm({
       setAccount("");
       setEndpoint("");
       setSecret("");
+      setOpen(false);
     }
   };
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Add connection</CardTitle>
-        <CardDescription>
-          Credentials go straight to the local keychain.
-        </CardDescription>
-      </CardHeader>
-      <CardContent>
+    <Dialog onOpenChange={setOpen} open={open}>
+      <DialogTrigger render={<Button size="sm" type="button" />}>
+        <PlusIcon />
+        Add
+      </DialogTrigger>
+      <DialogContent className="sm:max-w-lg">
+        <DialogHeader>
+          <DialogTitle>Add connection</DialogTitle>
+          <DialogDescription>
+            Enter the credential on this device. It goes straight to the local
+            keychain and never enters the conversation.
+          </DialogDescription>
+        </DialogHeader>
         <form className="grid gap-4" onSubmit={(event) => void submit(event)}>
           <div className="grid gap-2">
             <Label htmlFor="connection-provider">Provider</Label>
@@ -385,6 +445,8 @@ function ConnectionForm({
                 const next = connectionProviderSchema.parse(value);
                 setProvider(next);
                 setLabel(providerLabels[next]);
+                setAccount("");
+                setEndpoint("");
               }}
               value={provider}
             >
@@ -415,21 +477,27 @@ function ConnectionForm({
             }
             value={account}
           />
-          <Field
-            id="connection-endpoint"
-            label="Endpoint"
-            onChange={setEndpoint}
-            placeholder={
-              provider === "local-model"
-                ? "http://127.0.0.1:11434/v1"
-                : "Optional"
-            }
-            value={endpoint}
-          />
+          {provider === "local-model" || provider === "custom" ? (
+            <Field
+              id="connection-endpoint"
+              label="Endpoint"
+              onChange={setEndpoint}
+              placeholder={
+                provider === "local-model"
+                  ? "http://127.0.0.1:11434/v1"
+                  : "https://api.example.com"
+              }
+              value={endpoint}
+            />
+          ) : null}
           <Field
             autoComplete="off"
             id="connection-secret"
-            label="API key or token"
+            label={
+              provider === "email"
+                ? "Password or app token"
+                : "API key or token"
+            }
             onChange={setSecret}
             placeholder={
               provider === "local-model" ? "Optional" : "Stored in Keychain"
@@ -437,94 +505,105 @@ function ConnectionForm({
             type="password"
             value={secret}
           />
-          <Button disabled={busy || !label.trim()} type="submit">
-            <PlusIcon />
-            Add connection
-          </Button>
+          <DialogFooter>
+            <Button disabled={busy || !label.trim()} type="submit">
+              <PlusIcon />
+              Add connection
+            </Button>
+          </DialogFooter>
         </form>
-      </CardContent>
-    </Card>
+      </DialogContent>
+    </Dialog>
   );
 }
 
-function VaultList({
+function VaultSection({
   busy,
+  initialSetup,
   onDelete,
+  onSubmit,
   snapshot,
 }: {
   readonly busy: boolean;
+  readonly initialSetup?: Extract<ManagerSetupRequest, { target: "vault" }>;
   readonly onDelete: (mutation: ManagerMutation) => Promise<boolean>;
+  readonly onSubmit: (mutation: ManagerMutation) => Promise<boolean>;
   readonly snapshot?: ManagerSnapshot;
 }) {
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Auth vault</CardTitle>
-        <CardDescription>
-          Opaque credential handles available to local tools.
-        </CardDescription>
-      </CardHeader>
-      <CardContent>
-        {snapshot?.vaultItems.length ? (
-          <div className="divide-y">
-            {snapshot.vaultItems.map((item) => (
-              <div
-                className="flex items-center gap-3 py-3 first:pt-0 last:pb-0"
-                key={item.id}
-              >
-                <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground">
-                  <KeyRoundIcon className="size-4" />
-                </span>
-                <div className="min-w-0 flex-1">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <p className="type-label">{item.label}</p>
-                    <Badge variant={item.hasSecret ? "success" : "warning"}>
-                      {item.hasSecret ? "Stored" : "Missing"}
-                    </Badge>
-                  </div>
-                  <p className="truncate text-muted-foreground">
-                    {vaultKindLabels[item.kind]}
-                    {item.account ? ` · ${item.account}` : ""} · handle{" "}
-                    {item.id.slice(0, 8)}
-                  </p>
-                </div>
-                <Button
-                  aria-label={`Remove ${item.label}`}
-                  disabled={busy}
-                  onClick={() =>
-                    void onDelete({ action: "vault.delete", id: item.id })
-                  }
-                  size="icon"
-                  type="button"
-                  variant="ghost"
-                >
-                  <Trash2Icon />
-                </Button>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <EmptyState
-            icon={KeyRoundIcon}
-            message="Save a login, identity, payment profile, or token on this device."
-            title="Vault is empty"
+    <section aria-labelledby="vault-heading" className="space-y-3">
+      <SectionHeading
+        action={
+          <VaultDialog
+            busy={busy}
+            initialSetup={initialSetup}
+            onSubmit={onSubmit}
           />
+        }
+        description="Opaque credential handles available to local tools."
+        id="vault-heading"
+        title="Auth vault"
+      />
+      <ul className="rounded-xl border border-border px-4">
+        {snapshot?.vaultItems.length ? (
+          snapshot.vaultItems.map((item) => (
+            <li
+              className="flex min-w-0 items-center gap-3 border-b border-border py-3 last:border-b-0"
+              key={item.id}
+            >
+              <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground">
+                <KeyRoundIcon className="size-3.5" />
+              </span>
+              <div className="min-w-0 flex-1 leading-tight">
+                <div className="flex flex-wrap items-center gap-2">
+                  <p className="type-label">{item.label}</p>
+                  <Badge variant={item.hasSecret ? "success" : "warning"}>
+                    {item.hasSecret ? "Stored" : "Missing"}
+                  </Badge>
+                </div>
+                <p className="truncate type-caption text-muted-foreground">
+                  {vaultKindLabels[item.kind]}
+                  {item.account ? ` · ${item.account}` : ""} · handle{" "}
+                  {item.id.slice(0, 8)}
+                </p>
+              </div>
+              <Button
+                aria-label={`Remove ${item.label}`}
+                disabled={busy}
+                onClick={() =>
+                  void onDelete({ action: "vault.delete", id: item.id })
+                }
+                size="icon-sm"
+                type="button"
+                variant="quiet"
+              >
+                <Trash2Icon />
+              </Button>
+            </li>
+          ))
+        ) : (
+          <EmptyRow message="Save a login, identity, payment profile, or token on this device." />
         )}
-      </CardContent>
-    </Card>
+      </ul>
+    </section>
   );
 }
 
-function VaultForm({
+function VaultDialog({
   busy,
+  initialSetup,
   onSubmit,
 }: {
   readonly busy: boolean;
+  readonly initialSetup?: Extract<ManagerSetupRequest, { target: "vault" }>;
   readonly onSubmit: (mutation: ManagerMutation) => Promise<boolean>;
 }) {
-  const [kind, setKind] = useState<VaultItemKind>("login");
-  const [label, setLabel] = useState("");
-  const [account, setAccount] = useState("");
+  const [open, setOpen] = useState(Boolean(initialSetup));
+  const [kind, setKind] = useState<VaultItemKind>(
+    initialSetup?.kind ?? "login"
+  );
+  const [label, setLabel] = useState(initialSetup?.label ?? "");
+  const [account, setAccount] = useState(initialSetup?.account ?? "");
   const [secret, setSecret] = useState("");
 
   const submit = async (event: FormEvent) => {
@@ -537,18 +616,23 @@ function VaultForm({
       setAccount("");
       setLabel("");
       setSecret("");
+      setOpen(false);
     }
   };
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Add vault item</CardTitle>
-        <CardDescription>
-          The value is never returned after saving.
-        </CardDescription>
-      </CardHeader>
-      <CardContent>
+    <Dialog onOpenChange={setOpen} open={open}>
+      <DialogTrigger render={<Button size="sm" type="button" />}>
+        <PlusIcon />
+        Add
+      </DialogTrigger>
+      <DialogContent className="sm:max-w-lg">
+        <DialogHeader>
+          <DialogTitle>Add vault item</DialogTitle>
+          <DialogDescription>
+            The secret is stored locally and is never returned after saving.
+          </DialogDescription>
+        </DialogHeader>
         <form className="grid gap-4" onSubmit={(event) => void submit(event)}>
           <div className="grid gap-2">
             <Label htmlFor="vault-kind">Type</Label>
@@ -593,13 +677,63 @@ function VaultForm({
             type="password"
             value={secret}
           />
-          <Button disabled={busy || !label.trim() || !secret} type="submit">
-            <PlusIcon />
-            Save to vault
-          </Button>
+          <DialogFooter>
+            <Button disabled={busy || !label.trim() || !secret} type="submit">
+              <PlusIcon />
+              Save to vault
+            </Button>
+          </DialogFooter>
         </form>
-      </CardContent>
-    </Card>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function RuntimeSection({ snapshot }: { readonly snapshot?: ManagerSnapshot }) {
+  return (
+    <section aria-labelledby="runtime-heading" className="space-y-3">
+      <SectionHeading
+        description="The local Eve service owns sessions, policy, and secret access."
+        id="runtime-heading"
+        title="Runtime"
+      />
+      <dl className="rounded-xl border border-border px-4">
+        <RuntimeRow label="Mode" value={snapshot?.runtime.mode ?? "Loading…"} />
+        <RuntimeRow
+          label="Model"
+          value={snapshot?.runtime.inference ?? "Loading…"}
+        />
+        <RuntimeRow label="Metadata" value="Private local database" />
+        <RuntimeRow
+          label="Secrets"
+          value={snapshot?.secretStore.kind ?? "Checking…"}
+        />
+      </dl>
+      <p className="type-caption text-muted-foreground">
+        New model settings apply to the next agent step.
+      </p>
+    </section>
+  );
+}
+
+function RuntimeRow({
+  label,
+  value,
+}: {
+  readonly label: string;
+  readonly value: string;
+}) {
+  return (
+    <div className="flex items-center gap-3 border-b border-border py-3 last:border-b-0">
+      <DatabaseIcon className="size-4 shrink-0 text-muted-foreground" />
+      <dt className="type-label">{label}</dt>
+      <dd
+        className="ml-auto min-w-0 truncate type-supporting-body text-muted-foreground"
+        title={value}
+      >
+        {value}
+      </dd>
+    </div>
   );
 }
 
@@ -635,45 +769,11 @@ function Field({
   );
 }
 
-function EmptyState({
-  icon: Icon,
-  message,
-  title,
-}: {
-  readonly icon: typeof LinkIcon;
-  readonly message: string;
-  readonly title: string;
-}) {
+function EmptyRow({ message }: { readonly message: string }) {
   return (
-    <div className="flex min-h-52 flex-col items-center justify-center gap-3 rounded-lg border border-dashed p-6 text-center">
-      <span className="flex size-10 items-center justify-center rounded-full bg-muted text-muted-foreground">
-        <Icon className="size-4" />
-      </span>
-      <div>
-        <p className="type-label">{title}</p>
-        <p className="mt-1 text-muted-foreground">{message}</p>
-      </div>
-    </div>
-  );
-}
-
-function RuntimeRow({
-  label,
-  value,
-}: {
-  readonly label: string;
-  readonly value: string;
-}) {
-  return (
-    <div className="flex items-start gap-3 rounded-lg border p-3">
-      <DatabaseIcon className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
-      <div className="min-w-0">
-        <p className="type-label">{label}</p>
-        <p className="truncate text-muted-foreground" title={value}>
-          {value}
-        </p>
-      </div>
-    </div>
+    <li className="py-10 text-center">
+      <p className="type-supporting-body text-muted-foreground">{message}</p>
+    </li>
   );
 }
 

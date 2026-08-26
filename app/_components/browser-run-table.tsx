@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
 import { Spinner } from "@/components/ui/spinner";
 import {
   Table,
@@ -43,7 +42,7 @@ export function BrowserRunTable({
   }, [hasRunningTasks]);
 
   return (
-    <Card>
+    <div className="overflow-hidden rounded-xl border border-border">
       {rows.length === 0 ? (
         <div className="flex min-h-56 items-center justify-center px-6 text-center text-muted-foreground">
           <div>
@@ -141,7 +140,7 @@ export function BrowserRunTable({
           </TableBody>
         </Table>
       )}
-    </Card>
+    </div>
   );
 }
 

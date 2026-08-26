@@ -62,7 +62,7 @@ export function BrowserRunDetail({ groupId }: { readonly groupId: string }) {
 
   if (!loaded) {
     return (
-      <main className="flex min-h-dvh items-center justify-center bg-background text-muted-foreground">
+      <main className="flex min-h-64 items-center justify-center text-muted-foreground">
         <div className="flex items-center gap-2 type-label">
           <RefreshCwIcon className="size-4 animate-spin" />
           Recovering group…
@@ -73,7 +73,7 @@ export function BrowserRunDetail({ groupId }: { readonly groupId: string }) {
 
   if (!group) {
     return (
-      <main className="flex min-h-dvh items-center justify-center bg-background px-4 text-foreground">
+      <main className="flex min-h-64 items-center justify-center text-foreground">
         <div className="max-w-md text-center">
           <h1 className="font-medium text-3xl tracking-tight">
             Group not found
@@ -83,7 +83,7 @@ export function BrowserRunDetail({ groupId }: { readonly groupId: string }) {
           </p>
           <Button
             className="mt-5"
-            onClick={() => router.push("/")}
+            onClick={() => router.push("/tasks")}
             type="button"
             variant="outline"
           >
@@ -99,74 +99,69 @@ export function BrowserRunDetail({ groupId }: { readonly groupId: string }) {
   const wallTimeMs = groupWallTime(group, clock);
 
   return (
-    <main className="min-h-dvh bg-background text-foreground">
-      <div className="mx-auto flex w-full max-w-7xl flex-col gap-6 px-4 py-6 sm:px-6 lg:px-8 lg:py-10">
-        <header className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+    <main className="flex flex-col gap-12">
+      <header className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <Button
+            onClick={() => router.push("/tasks")}
+            size="none"
+            type="button"
+            variant="quiet"
+          >
+            <ArrowLeftIcon />
+            All tasks
+          </Button>
+          <div className="mt-4 flex flex-wrap items-center gap-2">
+            <h1 className="type-page-title">{group.name}</h1>
+            <Badge variant={isActive ? "information" : "outline"}>
+              {isActive ? "running" : "saved"}
+            </Badge>
+          </div>
+          <p className="mt-2 type-supporting-body text-muted-foreground">
+            Created {formatGroupTimestamp(group.createdAt)} · concurrency{" "}
+            {String(group.concurrency)} · refresh-safe recovery
+          </p>
+        </div>
+        <Button
+          onClick={() => window.location.assign("/chat")}
+          type="button"
+          variant="outline"
+        >
+          Open single task
+        </Button>
+      </header>
+
+      <section aria-labelledby="group-results-heading" className="grid gap-4">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
           <div>
-            <Button
-              onClick={() => router.push("/")}
-              size="none"
-              type="button"
-              variant="quiet"
-            >
-              <ArrowLeftIcon />
-              All tasks
-            </Button>
-            <div className="mt-4 flex flex-wrap items-center gap-2">
-              <h1 className="font-medium text-4xl tracking-tight">
-                {group.name}
-              </h1>
-              <Badge variant={isActive ? "information" : "outline"}>
-                {isActive ? "running" : "saved"}
-              </Badge>
-            </div>
-            <p className="mt-2 type-supporting-body text-muted-foreground">
-              Created {formatGroupTimestamp(group.createdAt)} · concurrency{" "}
-              {String(group.concurrency)} · refresh-safe recovery
+            <h2 className="type-card-title" id="group-results-heading">
+              Group tasks
+            </h2>
+            <p className="mt-1 type-supporting-body text-muted-foreground">
+              Reloading reconnects running session IDs and rebuilds results from
+              their durable event streams.
             </p>
           </div>
-          <Button
-            onClick={() => window.location.assign("/chat")}
-            type="button"
-            variant="outline"
-          >
-            Open single task
-          </Button>
-        </header>
-
-        <section aria-labelledby="group-results-heading" className="grid gap-4">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-            <div>
-              <h2 className="type-card-title" id="group-results-heading">
-                Group tasks
-              </h2>
-              <p className="mt-1 type-supporting-body text-muted-foreground">
-                Reloading reconnects running session IDs and rebuilds results
-                from their durable event streams.
-              </p>
-            </div>
-            <div className="flex flex-wrap gap-x-5 gap-y-1 type-label">
-              <span>
-                {String(summary.completed)}/{String(group.tasks.length)}{" "}
-                complete
-              </span>
-              <span className="text-success">
-                {String(summary.succeeded)} succeeded
-              </span>
-              <span>{formatDuration(wallTimeMs)} wall time</span>
-              <span>
-                {formatCost(summary.costUsd, summary.costComplete)} total
-              </span>
-            </div>
+          <div className="flex flex-wrap gap-x-5 gap-y-1 type-label">
+            <span>
+              {String(summary.completed)}/{String(group.tasks.length)} complete
+            </span>
+            <span className="text-success">
+              {String(summary.succeeded)} succeeded
+            </span>
+            <span>{formatDuration(wallTimeMs)} wall time</span>
+            <span>
+              {formatCost(summary.costUsd, summary.costComplete)} total
+            </span>
           </div>
+        </div>
 
-          <BrowserRunTable
-            emptyDescription="This group has no tasks."
-            emptyTitle="No group tasks"
-            groups={[group]}
-          />
-        </section>
-      </div>
+        <BrowserRunTable
+          emptyDescription="This group has no tasks."
+          emptyTitle="No group tasks"
+          groups={[group]}
+        />
+      </section>
     </main>
   );
 }
