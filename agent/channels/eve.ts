@@ -1,14 +1,46 @@
 import { eveChannel } from "eve/channels/eve";
-import { localDev, none, vercelOidc } from "eve/channels/auth";
+import {
+  ForbiddenError,
+  UnauthenticatedError,
+  type AuthFn,
+} from "eve/channels/auth";
+import { type AccessScope, localAccessScope } from "../../lib/access-scope.js";
+import { sessionIdFromPath } from "../../lib/eve-session-path.js";
+import { getAppStore } from "../../lib/server/app-store.js";
+import { requestScopeFromRequest } from "../../lib/server/eve-request-scope.js";
 
-export default eveChannel({
-  auth: [
-    // Lets the eve TUI and your Vercel deployments reach the deployed agent.
-    vercelOidc(),
-    // Open on localhost for `eve dev` and the REPL; ignored in production.
-    localDev(),
-    // Public experimental deployment. Add application auth before using
-    // this agent with private data or privileged tools.
-    none(),
-  ],
-});
+function applicationAuth(): AuthFn {
+  return async (request) => {
+    const scope = await requestScopeFromRequest(request);
+    if (!scope) {
+      throw new UnauthenticatedError({
+        code: "authentication_required",
+        message: "Sign in to continue.",
+      });
+    }
+
+    const sessionId = sessionIdFromPath(new URL(request.url).pathname);
+    if (sessionId && !(await waitForSessionOwnership(scope, sessionId))) {
+      throw new ForbiddenError({ message: "Session not found." });
+    }
+
+    return {
+      attributes: { mode: scope.mode, workspaceId: scope.workspaceId },
+      authenticator:
+        scope.userId === localAccessScope.userId ? "local" : "authjs",
+      principalId: scope.userId,
+      principalType: "user",
+    };
+  };
+}
+
+export default eveChannel({ auth: [applicationAuth()] });
+
+async function waitForSessionOwnership(scope: AccessScope, sessionId: string) {
+  const store = await getAppStore();
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    if (await store.isSessionOwned(scope, sessionId)) return true;
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+  return false;
+}
