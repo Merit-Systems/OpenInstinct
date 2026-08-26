@@ -64,8 +64,6 @@ The button at the top deploys the hosted chat and browser-task surfaces. It asks
 
 The vault and connection manager remain device-only. Hosted deployments open with a manager companion that links to `https://local-vault-assistant.localhost` and explains how to start the device runtime. The hosted surface does not receive Keychain-backed credentials.
 
-Hosted-to-device pairing is not implemented yet. The intended boundary uses encrypted, scoped capability requests so web chat and external adapters can ask a paired device to act without receiving raw passwords or broad provider tokens. See [the device-pairing architecture](docs/device-pairing.md).
-
 ```bash
 pnpm exec eve deploy --project local-vault-assistant --non-interactive --yes
 ```
