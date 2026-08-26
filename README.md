@@ -21,6 +21,7 @@ The result is a personal agent with useful browser capabilities and a much small
 - Recoverable parallel browser jobs with time, outcome, and model-cost tracking at `/tasks`
 - macOS Keychain storage for secret values and a private local database for metadata
 - Local or hosted OpenAI-compatible inference
+- Optional hosted mode with phone sign-in, SMS 2FA, and isolated personal workspaces
 
 ## Run locally
 
@@ -56,11 +57,46 @@ LOCAL_VAULT_ASSISTANT_MODEL_BASE_URL=http://127.0.0.1:11434/v1 \
 ./bin/local-assistant
 ```
 
+Local mode remains the default outside Vercel. It requires no account, creates a
+stable local workspace automatically, and continues to use SQLite plus macOS
+Keychain.
+
+## Run for multiple users
+
+Hosted mode requires Better Auth, Better Auth Infra SMS, Postgres, and an
+application encryption key. Each authenticated phone account receives a stable
+personal workspace. Manager
+settings, connections, vault metadata, encrypted secrets, agent sessions, and
+task history are scoped to that workspace.
+
+```bash
+LOCAL_VAULT_ASSISTANT_MODE=hosted
+BETTER_AUTH_SECRET="$(openssl rand -base64 32)"
+BETTER_AUTH_URL=https://your-host
+BETTER_AUTH_INFRA_API_KEY=your-better-auth-infra-key
+DATABASE_URL=postgresql://user:password@host/database
+HOSTED_SECRET_ENCRYPTION_KEY="$(openssl rand -base64 32)"
+```
+
+The hosted UI exposes phone number plus password as the first factor and a
+one-time SMS code as the required second factor. Phone numbers must use E.164
+format. Better Auth tables are migrated automatically when the hosted auth
+surface is first used. On Vercel, hosted mode is selected automatically;
+setting `LOCAL_VAULT_ASSISTANT_MODE=local` keeps the no-login experience for an
+explicitly local deployment and does not contact Better Auth or the SMS service.
+
+Hosted secrets are encrypted with AES-256-GCM before being written to Postgres.
+Treat `HOSTED_SECRET_ENCRYPTION_KEY` as production key material: store it in the
+deployment secret manager, restrict access, and back it up separately. Rotating
+that key requires re-encrypting existing values.
+
 ## Implementation details
 
 - [Eve](https://eve.dev) provides durable agent sessions, streaming, tools, and the web conversation protocol.
 - [Kernel](https://kernel.sh) provides cloud browsers, Playwright, computer use, profiles, proxies, and browser execution.
 - Next.js provides the local manager, chat, and batch-runner interfaces.
-- SQLite stores non-secret metadata locally; macOS Keychain stores secret values.
+- SQLite stores local non-secret metadata and macOS Keychain stores local secret
+  values. Hosted deployments use workspace-scoped Postgres rows and encrypted
+  secret values.
 
 These are replaceable implementation layers. The durable product boundary is the locally owned vault.

@@ -1,6 +1,7 @@
 import { defineMcpClientConnection } from "eve/connections";
 import { getEnv } from "../../../../lib/runtime-env.js";
 import { readConnectionSecret } from "../../../../lib/server/manager-store.js";
+import { scopeFromPrincipal } from "../../../../lib/access-scope.js";
 
 export const kernelToolAllowlist = [
   "manage_browsers",
@@ -20,10 +21,14 @@ export default defineMcpClientConnection({
   description:
     "Kernel cloud browser with the complete browser, authentication, networking, observability, pool, and VM execution toolset.",
   auth: {
-    getToken: async () => {
+    getToken: async ({ principal }) => {
+      if (principal.type !== "user") {
+        throw new Error("An authenticated workspace user is required.");
+      }
+      const scope = scopeFromPrincipal(principal);
       const token =
-        (await readConnectionSecret("kernel").catch(() => undefined)) ??
-        getEnv().KERNEL_API_KEY;
+        (await readConnectionSecret(scope, "kernel").catch(() => undefined)) ??
+        (scope.mode === "local" ? getEnv().KERNEL_API_KEY : undefined);
 
       if (!token) {
         throw new Error(

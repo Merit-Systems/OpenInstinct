@@ -3,7 +3,7 @@ import { z } from "zod";
 export const DEFAULT_LOCAL_MANAGER_URL =
   "https://local-vault-assistant.localhost";
 
-const connectionProviderSchema = z.enum([
+export const connectionProviderSchema = z.enum([
   "kernel",
   "local-model",
   "email",
@@ -21,7 +21,7 @@ const managerConnectionSchema = z.object({
   updatedAt: z.string(),
 });
 
-const vaultItemKindSchema = z.enum([
+export const vaultItemKindSchema = z.enum([
   "login",
   "payment",
   "address",
@@ -44,7 +44,7 @@ export const managerSnapshotSchema = z.object({
   connections: z.array(managerConnectionSchema),
   runtime: z.object({
     inference: z.string(),
-    mode: z.literal("local-first"),
+    mode: z.enum(["hosted", "local-first"]),
     source: z.enum(["gateway", "local"]),
   }),
   secretStore: z.object({
@@ -163,6 +163,28 @@ export function isAllowedManagerMutationOrigin({
   origin: string | null;
   requestUrl: string;
 }) {
+  return isAllowedMutationOrigin(
+    { forwardedHost, forwardedProto, host, origin, requestUrl },
+    true
+  );
+}
+
+export function isAllowedMutationOrigin(
+  {
+    forwardedHost,
+    forwardedProto,
+    host,
+    origin,
+    requestUrl,
+  }: {
+    forwardedHost: string | null;
+    forwardedProto: string | null;
+    host: string | null;
+    origin: string | null;
+    requestUrl: string;
+  },
+  localOnly = false
+) {
   if (!origin) return true;
 
   let parsedOrigin: URL;
@@ -171,7 +193,7 @@ export function isAllowedManagerMutationOrigin({
   } catch {
     return false;
   }
-  if (!isLocalManagerHostname(parsedOrigin.hostname)) return false;
+  if (localOnly && !isLocalManagerHostname(parsedOrigin.hostname)) return false;
 
   const request = new URL(requestUrl);
   const allowedOrigins = new Set([request.origin]);
@@ -184,7 +206,7 @@ export function isAllowedManagerMutationOrigin({
       const candidateUrl = new URL(
         `${normalizeProtocol(protocol)}//${candidate}`
       );
-      if (isLocalManagerHostname(candidateUrl.hostname)) {
+      if (!localOnly || isLocalManagerHostname(candidateUrl.hostname)) {
         allowedOrigins.add(candidateUrl.origin);
       }
     } catch {

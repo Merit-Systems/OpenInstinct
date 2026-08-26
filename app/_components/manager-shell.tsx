@@ -13,6 +13,7 @@ import { Logo } from "@/components/ui/logo";
 import {
   Sidebar,
   SidebarContent,
+  SidebarFooter,
   SidebarGroup,
   SidebarHeader,
   SidebarInset,
@@ -23,6 +24,7 @@ import {
   SidebarTrigger,
 } from "@/components/ui/sidebar";
 import { useManager } from "./manager/use-manager";
+import { AccountControl } from "./account-control";
 
 const managerNavigation = [
   { href: "/", icon: PanelsTopLeftIcon, id: "workspace", label: "Workspace" },
@@ -98,6 +100,9 @@ function ManagerAppShell({
             </SidebarMenu>
           </SidebarGroup>
         </SidebarContent>
+        <SidebarFooter className="p-0">
+          <AccountControl />
+        </SidebarFooter>
       </Sidebar>
       <SidebarInset className="h-svh overflow-hidden">
         <header className="flex h-12 items-center gap-2 border-b border-border/50 px-4 md:hidden">

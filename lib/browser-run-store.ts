@@ -27,6 +27,12 @@ const browserRunStoreSchema = z.object({
   version: z.literal(1),
 });
 
+const workspaceDocumentSchema = z.object({
+  body: z.object({
+    dataset: z.object({ workspaceId: z.string().optional() }),
+  }),
+});
+
 export type BrowserRunGroup = z.infer<typeof browserRunGroupSchema>;
 export type BrowserRunTask = z.infer<typeof browserRunTaskSchema>;
 export type BrowserRunTaskUpdate = Partial<
@@ -40,7 +46,10 @@ const legacyBrowserRunStoreKey = "eve-kernel:browser-runs:v1";
 
 export function readBrowserRunGroups() {
   const serialized =
-    window.localStorage.getItem(browserRunStoreKey) ??
+    window.localStorage.getItem(workspaceBrowserRunStoreKey()) ??
+    (currentWorkspaceId() === "local:personal"
+      ? window.localStorage.getItem(browserRunStoreKey)
+      : null) ??
     window.localStorage.getItem(legacyBrowserRunStoreKey);
   if (!serialized) return [];
 
@@ -122,8 +131,19 @@ export function updateBrowserRunTask(
 
 function writeBrowserRunGroups(groups: readonly BrowserRunGroup[]) {
   window.localStorage.setItem(
-    browserRunStoreKey,
+    workspaceBrowserRunStoreKey(),
     JSON.stringify({ groups, version: 1 })
   );
   window.dispatchEvent(new Event(browserRunStoreEvent));
+}
+
+function workspaceBrowserRunStoreKey() {
+  return `local-vault-assistant:browser-runs:v2:${currentWorkspaceId()}`;
+}
+
+function currentWorkspaceId() {
+  const parsed = workspaceDocumentSchema.safeParse(window.document);
+  return parsed.success
+    ? (parsed.data.body.dataset.workspaceId ?? "anonymous")
+    : "local:personal";
 }
