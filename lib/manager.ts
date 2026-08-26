@@ -1,14 +1,18 @@
 import { z } from "zod";
+import { paymentCardSecretStringSchema } from "./payment-card";
 
 export const DEFAULT_LOCAL_MANAGER_URL =
   "https://local-vault-assistant.localhost";
 
-const connectionProviderSchema = z.enum([
+export const connectionProviderSchema = z.enum([
   "kernel",
   "local-model",
+  "telegram",
   "email",
   "custom",
 ]);
+
+export const browserModeSchema = z.enum(["local", "cloud"]);
 
 const managerConnectionSchema = z.object({
   account: z.string(),
@@ -21,7 +25,7 @@ const managerConnectionSchema = z.object({
   updatedAt: z.string(),
 });
 
-const vaultItemKindSchema = z.enum([
+export const vaultItemKindSchema = z.enum([
   "login",
   "payment",
   "address",
@@ -41,6 +45,11 @@ const managerVaultItemSchema = z.object({
 });
 
 export const managerSnapshotSchema = z.object({
+  browser: z.object({
+    cloudAvailable: z.boolean(),
+    localAvailable: z.boolean(),
+    mode: browserModeSchema,
+  }),
   connections: z.array(managerConnectionSchema),
   runtime: z.object({
     inference: z.string(),
@@ -64,21 +73,41 @@ const connectionInputSchema = z
     secret: z.string().max(20_000).default(""),
   })
   .superRefine((input, context) => {
-    if (input.provider === "kernel" && input.secret.trim().length === 0) {
+    if (input.provider === "kernel") {
       context.addIssue({
         code: "custom",
-        message: "A Kernel API key is required.",
+        message: "Kernel is configured through the system environment.",
+        path: ["provider"],
+      });
+    }
+    if (input.provider === "telegram" && input.secret.trim().length === 0) {
+      context.addIssue({
+        code: "custom",
+        message: "A Telegram bot token is required.",
         path: ["secret"],
       });
     }
   });
 
-const vaultItemInputSchema = z.object({
-  account: z.string().trim().max(200).default(""),
-  kind: vaultItemKindSchema,
-  label: z.string().trim().min(1).max(120),
-  secret: z.string().min(1).max(20_000),
-});
+const vaultItemInputSchema = z
+  .object({
+    account: z.string().trim().max(200).default(""),
+    kind: vaultItemKindSchema,
+    label: z.string().trim().min(1).max(120),
+    secret: z.string().min(1).max(20_000),
+  })
+  .superRefine((input, context) => {
+    if (
+      input.kind === "payment" &&
+      !paymentCardSecretStringSchema.safeParse(input.secret).success
+    ) {
+      context.addIssue({
+        code: "custom",
+        message: "Complete the card details before saving.",
+        path: ["secret"],
+      });
+    }
+  });
 
 const setupPrefillSchema = z.object({
   account: z.string().trim().max(200).optional(),
@@ -102,6 +131,7 @@ export const managerSetupRequestSchema = z.discriminatedUnion("target", [
 ]);
 
 export const managerMutationSchema = z.discriminatedUnion("action", [
+  z.object({ action: z.literal("browser.select"), mode: browserModeSchema }),
   z.object({
     action: z.literal("connection.create"),
     input: connectionInputSchema,
@@ -115,6 +145,7 @@ export const managerMutationSchema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("vault.delete"), id: z.string().min(1) }),
 ]);
 
+export type BrowserMode = z.infer<typeof browserModeSchema>;
 export type ConnectionProvider = z.infer<typeof connectionProviderSchema>;
 export type ManagerMutation = z.infer<typeof managerMutationSchema>;
 export type ManagerSetupRequest = z.infer<typeof managerSetupRequestSchema>;

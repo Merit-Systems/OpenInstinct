@@ -1,10 +1,12 @@
 "use client";
 
 import {
-  AppWindowIcon,
   BotIcon,
   ChevronsUpDownIcon,
+  CloudIcon,
+  ExternalLinkIcon,
   KeyRoundIcon,
+  LaptopIcon,
   MailIcon,
   MessageSquareIcon,
   SendIcon,
@@ -36,7 +38,12 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import type { ManagerMutation, ManagerSetupRequest } from "@/lib/manager";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import type {
+  ManagerMutation,
+  ManagerSetupRequest,
+  ManagerSnapshot,
+} from "@/lib/manager";
 import type { ModelCatalogItem } from "@/lib/model-catalog";
 import { modelCatalogSchema } from "@/lib/model-catalog";
 import { useManager } from "./use-manager";
@@ -57,11 +64,17 @@ export function WorkspaceManager({
   >;
 }) {
   const { busy, error, mutate, snapshot } = useManager();
-  const kernel = snapshot?.connections.find(
-    (connection) => connection.provider === "kernel"
+  const telegram = snapshot?.connections.find(
+    (connection) => connection.provider === "telegram"
   );
-  const kernelSetup =
-    initialSetup?.provider === "kernel" ? initialSetup : undefined;
+  const telegramSetup =
+    initialSetup?.provider === "telegram" ? initialSetup : undefined;
+  const browserReady = Boolean(
+    snapshot &&
+    (snapshot.browser.mode === "local"
+      ? snapshot.browser.localAvailable
+      : snapshot.browser.cloudAvailable)
+  );
 
   return (
     <main className="flex min-w-0 flex-col gap-8">
@@ -75,7 +88,13 @@ export function WorkspaceManager({
         </Alert>
       ) : null}
 
-      <ChannelsSection kernelConnected={Boolean(kernel?.hasSecret)} />
+      <ChannelsSection
+        busy={busy}
+        browserReady={browserReady}
+        initialSetup={telegramSetup}
+        onSubmit={mutate}
+        telegram={telegram}
+      />
 
       <section aria-labelledby="connectors-heading" className="space-y-3">
         <h2 className="type-section-title" id="connectors-heading">
@@ -84,21 +103,21 @@ export function WorkspaceManager({
         <div className="divide-y divide-border/50 border-y border-border/50">
           <ConnectorRow
             action={
-              <div className="flex shrink-0 items-center gap-2">
-                <span className="type-caption text-muted-foreground">
-                  {kernel?.hasSecret ? "Connected" : "Not connected"}
-                </span>
-                <KernelDialog
+              snapshot ? (
+                <BrowserModeControl
                   busy={busy}
-                  connected={Boolean(kernel?.hasSecret)}
-                  initialSetup={kernelSetup}
+                  browser={snapshot.browser}
                   onSubmit={mutate}
                 />
-              </div>
+              ) : null
             }
-            description="Browser sessions, Playwright, and proxy access."
-            icon={AppWindowIcon}
-            label="Kernel browser"
+            description={
+              snapshot?.browser.mode === "cloud"
+                ? "Run disposable browsers in Kernel."
+                : "Run a private browser on this device."
+            }
+            icon={snapshot?.browser.mode === "cloud" ? CloudIcon : LaptopIcon}
+            label="Browser execution"
           />
           <ConnectorRow
             action={
@@ -127,9 +146,20 @@ export function WorkspaceManager({
 }
 
 function ChannelsSection({
-  kernelConnected,
+  browserReady,
+  busy,
+  initialSetup,
+  onSubmit,
+  telegram,
 }: {
-  readonly kernelConnected: boolean;
+  readonly browserReady: boolean;
+  readonly busy: boolean;
+  readonly initialSetup?: Extract<
+    ManagerSetupRequest,
+    { target: "connection" }
+  >;
+  readonly onSubmit: (mutation: ManagerMutation) => Promise<boolean>;
+  readonly telegram?: ManagerSnapshot["connections"][number];
 }) {
   return (
     <section aria-labelledby="channels-heading" className="space-y-3">
@@ -137,7 +167,7 @@ function ChannelsSection({
         Channels
       </h2>
       <div className="grid gap-2 sm:grid-cols-3">
-        {kernelConnected ? (
+        {browserReady ? (
           <Button
             className="h-11 justify-start"
             render={<Link href="/chat" />}
@@ -156,22 +186,183 @@ function ChannelsSection({
           <MailIcon />
           iMessage
         </Button>
-        <Button className="h-11 justify-start" disabled variant="outline">
-          <SendIcon />
-          Telegram
-        </Button>
+        <TelegramDialog
+          busy={busy}
+          initialSetup={initialSetup}
+          onSubmit={onSubmit}
+          telegram={telegram}
+        />
       </div>
-      {!kernelConnected ? (
+      {!browserReady ? (
         <p className="type-caption text-muted-foreground">
-          Connect Kernel to enable WebChat. iMessage and Telegram are not yet
-          available.
+          Select an available browser to enable WebChat. Cloud mode requires
+          KERNEL_API_KEY in the system environment.
         </p>
       ) : (
         <p className="type-caption text-muted-foreground">
-          iMessage and Telegram are not yet available.
+          Telegram messages are received directly by this device. iMessage is
+          not yet available.
         </p>
       )}
     </section>
+  );
+}
+
+function BrowserModeControl({
+  browser,
+  busy,
+  onSubmit,
+}: {
+  readonly browser: ManagerSnapshot["browser"];
+  readonly busy: boolean;
+  readonly onSubmit: (mutation: ManagerMutation) => Promise<boolean>;
+}) {
+  return (
+    <Tabs
+      onValueChange={(value) => {
+        if (value === "local" || value === "cloud") {
+          void onSubmit({ action: "browser.select", mode: value });
+        }
+      }}
+      value={browser.mode}
+    >
+      <TabsList aria-label="Browser execution">
+        <TabsTrigger disabled={busy || !browser.localAvailable} value="local">
+          <LaptopIcon />
+          Local
+        </TabsTrigger>
+        <TabsTrigger disabled={busy || !browser.cloudAvailable} value="cloud">
+          <CloudIcon />
+          Cloud
+        </TabsTrigger>
+      </TabsList>
+    </Tabs>
+  );
+}
+
+function TelegramDialog({
+  busy,
+  initialSetup,
+  onSubmit,
+  telegram,
+}: {
+  readonly busy: boolean;
+  readonly initialSetup?: Extract<
+    ManagerSetupRequest,
+    { target: "connection" }
+  >;
+  readonly onSubmit: (mutation: ManagerMutation) => Promise<boolean>;
+  readonly telegram?: ManagerSnapshot["connections"][number];
+}) {
+  const [open, setOpen] = useState(Boolean(initialSetup));
+  const [token, setToken] = useState("");
+  const connected = Boolean(telegram?.hasSecret);
+
+  const submit = async (event: FormEvent) => {
+    event.preventDefault();
+    const saved = await onSubmit({
+      action: "connection.create",
+      input: {
+        account: "",
+        endpoint: "",
+        label: initialSetup?.label ?? "Telegram",
+        provider: "telegram",
+        secret: token,
+      },
+    });
+    if (saved) {
+      setToken("");
+      setOpen(false);
+    }
+  };
+
+  return (
+    <Dialog onOpenChange={setOpen} open={open}>
+      <DialogTrigger
+        render={
+          <Button
+            className="h-11 min-w-0 justify-start"
+            type="button"
+            variant="outline"
+          />
+        }
+      >
+        <SendIcon />
+        <span className="truncate">Telegram</span>
+        {connected && telegram?.account ? (
+          <span className="ml-auto truncate type-caption text-muted-foreground">
+            @{telegram.account}
+          </span>
+        ) : null}
+      </DialogTrigger>
+      <DialogContent className="sm:max-w-lg">
+        <DialogHeader>
+          <DialogTitle>
+            {connected ? "Telegram connected" : "Connect Telegram"}
+          </DialogTitle>
+          <DialogDescription>
+            Your bot token stays in macOS Keychain. This device polls Telegram
+            directly, so setup does not need a public webhook or tunnel.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="grid gap-3 rounded-lg border border-border bg-muted/40 p-3">
+          <p className="type-supporting-body">
+            1. Open BotFather, send <code>/newbot</code>, and follow its naming
+            prompts.
+          </p>
+          <p className="type-supporting-body">
+            2. Copy the bot token BotFather gives you and paste it below.
+          </p>
+          <Button
+            nativeButton={false}
+            render={
+              <a
+                href="https://t.me/BotFather"
+                rel="noreferrer"
+                target="_blank"
+              />
+            }
+            type="button"
+            variant="outline"
+          >
+            Open BotFather
+            <ExternalLinkIcon />
+          </Button>
+        </div>
+
+        {connected && telegram?.endpoint ? (
+          <Button
+            nativeButton={false}
+            render={
+              <a href={telegram.endpoint} rel="noreferrer" target="_blank" />
+            }
+            type="button"
+            variant="secondary"
+          >
+            Open @{telegram.account}
+            <ExternalLinkIcon />
+          </Button>
+        ) : null}
+
+        <form className="grid gap-4" onSubmit={(event) => void submit(event)}>
+          <Field
+            autoComplete="off"
+            id="telegram-bot-token"
+            label={connected ? "Replacement bot token" : "Bot token"}
+            onChange={setToken}
+            placeholder="123456789:AA…"
+            type="password"
+            value={token}
+          />
+          <DialogFooter>
+            <Button disabled={busy || !token.trim()} type="submit">
+              {connected ? "Replace bot" : "Connect bot"}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -199,80 +390,6 @@ function ConnectorRow({
       </div>
       {action}
     </div>
-  );
-}
-
-function KernelDialog({
-  busy,
-  connected,
-  initialSetup,
-  onSubmit,
-}: {
-  readonly busy: boolean;
-  readonly connected: boolean;
-  readonly initialSetup?: Extract<
-    ManagerSetupRequest,
-    { target: "connection" }
-  >;
-  readonly onSubmit: (mutation: ManagerMutation) => Promise<boolean>;
-}) {
-  const [open, setOpen] = useState(Boolean(initialSetup));
-  const [secret, setSecret] = useState("");
-
-  const submit = async (event: FormEvent) => {
-    event.preventDefault();
-    const saved = await onSubmit({
-      action: "connection.create",
-      input: {
-        account: initialSetup?.account ?? "",
-        endpoint: "",
-        label: initialSetup?.label ?? "Kernel browser",
-        provider: "kernel",
-        secret,
-      },
-    });
-    if (saved) {
-      setSecret("");
-      setOpen(false);
-    }
-  };
-
-  return (
-    <Dialog onOpenChange={setOpen} open={open}>
-      <DialogTrigger
-        render={<Button size="sm" type="button" variant="outline" />}
-      >
-        {connected ? "Change" : "Connect"}
-      </DialogTrigger>
-      <DialogContent className="sm:max-w-lg">
-        <DialogHeader>
-          <DialogTitle>
-            {connected ? "Replace Kernel key" : "Connect Kernel"}
-          </DialogTitle>
-          <DialogDescription>
-            The key is saved directly to macOS Keychain.
-          </DialogDescription>
-        </DialogHeader>
-        <form className="grid gap-4" onSubmit={(event) => void submit(event)}>
-          <Field
-            autoComplete="off"
-            id="kernel-api-key"
-            label="Kernel API key"
-            onChange={setSecret}
-            placeholder={
-              connected ? "Enter a replacement key" : "Paste your key"
-            }
-            type="password"
-            value={secret}
-          />
-          <DialogFooter>
-            <Button disabled={busy || !secret.trim()} type="submit">
-              {connected ? "Replace key" : "Connect"}
-            </Button>
-          </DialogFooter>
-        </form>
-      </DialogContent>
-    </Dialog>
   );
 }
 

@@ -192,12 +192,7 @@ function AgentMessagePart({
             part.state === "approval-responded"
           }
         >
-          <ToolHeader
-            state={part.state}
-            title={part.toolName}
-            toolName={part.toolName}
-            type="dynamic-tool"
-          />
+          <ToolHeader status={part.state} title={part.toolName} />
           <ToolContent>
             <ToolInput input={part.input} />
             <InputRequestActions

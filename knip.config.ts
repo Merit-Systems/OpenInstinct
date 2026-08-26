@@ -8,6 +8,8 @@ export default {
     "evals/**/*.eval.ts",
     "evals/evals.config.ts",
     "foundation.config.ts",
+    "scripts/local-browser-daemon.ts",
+    "scripts/telegram-poller.mjs",
     "taze.config.ts",
   ],
   ignoreDependencies: [

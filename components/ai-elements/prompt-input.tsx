@@ -1,5 +1,7 @@
 "use client";
 
+/* oxlint-disable eslint/no-empty-function, eslint/no-underscore-dangle, jsx-a11y/heading-has-content, merit-core/no-runtime-typeof, typescript/no-confusing-void-expression, typescript/no-deprecated, typescript/no-misused-promises, typescript/no-unnecessary-condition, typescript/no-unnecessary-type-assertion, typescript/no-unsafe-type-assertion, typescript/return-await, unicorn/prefer-add-event-listener -- Preserve the public AI Elements browser and form API for source-compatible consumer migration. */
+
 import {
   Command,
   CommandEmpty,
@@ -41,7 +43,14 @@ import {
 } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import type { ChatStatus, FileUIPart, SourceDocumentUIPart } from "ai";
-import { ArrowUpIcon, ImageIcon, Monitor, PlusIcon, XIcon } from "lucide-react";
+import {
+  CornerDownLeftIcon,
+  ImageIcon,
+  Monitor,
+  PlusIcon,
+  SquareIcon,
+  XIcon,
+} from "lucide-react";
 import { nanoid } from "nanoid";
 import type {
   ChangeEvent,
@@ -59,6 +68,7 @@ import type {
 import {
   Children,
   createContext,
+  type SyntheticEvent,
   useCallback,
   useContext,
   useEffect,
@@ -76,12 +86,9 @@ const convertBlobUrlToDataUrl = async (url: string): Promise<string | null> => {
     const response = await fetch(url);
     const blob = await response.blob();
     // FileReader uses callback-based API, wrapping in Promise is necessary
-    // oxlint-disable-next-line eslint-plugin-promise(avoid-new)
     return new Promise((resolve) => {
       const reader = new FileReader();
-      // oxlint-disable-next-line eslint-plugin-unicorn(prefer-add-event-listener)
       reader.onloadend = () => resolve(reader.result as string);
-      // oxlint-disable-next-line eslint-plugin-unicorn(prefer-add-event-listener)
       reader.onerror = () => resolve(null);
       reader.readAsDataURL(blob);
     });
@@ -112,11 +119,8 @@ const captureScreenshot = async (): Promise<File | null> => {
     video.srcObject = stream;
 
     // Video element uses callback-based API, wrapping in Promise is necessary
-    // oxlint-disable-next-line eslint-plugin-promise(avoid-new)
     await new Promise<void>((resolve, reject) => {
-      // oxlint-disable-next-line eslint-plugin-unicorn(prefer-add-event-listener)
       video.onloadedmetadata = () => resolve();
-      // oxlint-disable-next-line eslint-plugin-unicorn(prefer-add-event-listener)
       video.onerror = () => reject(new Error("Failed to load screen stream"));
     });
 
@@ -138,7 +142,6 @@ const captureScreenshot = async (): Promise<File | null> => {
 
     context.drawImage(video, 0, 0, width, height);
     // canvas.toBlob uses callback-based API, wrapping in Promise is necessary
-    // oxlint-disable-next-line eslint-plugin-promise(avoid-new)
     const blob = await new Promise<Blob | null>((resolve) => {
       canvas.toBlob(resolve, "image/png");
     });
@@ -251,7 +254,6 @@ export const PromptInputProvider = ({
     (FileUIPart & { id: string })[]
   >([]);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
-  // oxlint-disable-next-line eslint(no-empty-function)
   const openRef = useRef<() => void>(() => {});
 
   const add = useCallback((files: File[] | FileList) => {
@@ -407,17 +409,20 @@ export type PromptInputActionAddAttachmentsProps = ComponentProps<
   label?: string;
 };
 
+type DropdownMenuSelectEvent = SyntheticEvent<HTMLDivElement> & {
+  preventBaseUIHandler: () => void;
+  readonly baseUIHandlerPrevented?: boolean;
+};
+
 export const PromptInputActionAddAttachments = ({
   label = "Add photos or files",
   ...props
 }: PromptInputActionAddAttachmentsProps) => {
   const attachments = usePromptInputAttachments();
 
-  const handleSelect = useCallback<
-    NonNullable<PromptInputActionAddAttachmentsProps["onSelect"]>
-  >(
-    (event) => {
-      event.preventDefault();
+  const handleSelect = useCallback(
+    (e: DropdownMenuSelectEvent) => {
+      e.preventDefault();
       attachments.openFileDialog();
     },
     [attachments]
@@ -443,29 +448,29 @@ export const PromptInputActionAddScreenshot = ({
 }: PromptInputActionAddScreenshotProps) => {
   const attachments = usePromptInputAttachments();
 
-  const handleSelect = useCallback<
-    NonNullable<PromptInputActionAddScreenshotProps["onSelect"]>
-  >(
-    async (event) => {
+  const handleSelect = useCallback(
+    (event: DropdownMenuSelectEvent) => {
       onSelect?.(event);
       if (event.defaultPrevented) {
         return;
       }
 
-      try {
-        const screenshot = await captureScreenshot();
-        if (screenshot) {
-          attachments.add([screenshot]);
+      void (async () => {
+        try {
+          const screenshot = await captureScreenshot();
+          if (screenshot) {
+            attachments.add([screenshot]);
+          }
+        } catch (error) {
+          if (
+            error instanceof DOMException &&
+            (error.name === "NotAllowedError" || error.name === "AbortError")
+          ) {
+            return;
+          }
+          throw error;
         }
-      } catch (error) {
-        if (
-          error instanceof DOMException &&
-          (error.name === "NotAllowedError" || error.name === "AbortError")
-        ) {
-          return;
-        }
-        throw error;
-      }
+      })();
     },
     [onSelect, attachments]
   );
@@ -912,16 +917,13 @@ export const PromptInput = ({
         title="Upload files"
         type="file"
       />
-      <form className="w-full" onSubmit={handleSubmit} ref={formRef} {...props}>
-        <InputGroup
-          className={cn(
-            "overflow-hidden rounded-2xl bg-card shadow-sm",
-            "focus-within:border-foreground has-[[data-slot=input-group-control]:focus-visible]:border-foreground",
-            className
-          )}
-        >
-          {children}
-        </InputGroup>
+      <form
+        className={cn("w-full", className)}
+        onSubmit={handleSubmit}
+        ref={formRef}
+        {...props}
+      >
+        <InputGroup className="overflow-hidden">{children}</InputGroup>
       </form>
     </>
   );
@@ -1055,7 +1057,7 @@ export const PromptInputTextarea = ({
 
   return (
     <InputGroupTextarea
-      className={cn("field-sizing-content max-h-48 min-h-18", className)}
+      className={cn("field-sizing-content max-h-48 min-h-16", className)}
       name="message"
       onCompositionEnd={handleCompositionEnd}
       onCompositionStart={handleCompositionStart}
@@ -1227,26 +1229,24 @@ export const PromptInputSubmit = ({
 }: PromptInputSubmitProps) => {
   const isGenerating = status === "submitted" || status === "streaming";
 
-  let Icon = <ArrowUpIcon className="size-4" />;
+  let Icon = <CornerDownLeftIcon className="size-4" />;
 
   if (status === "submitted") {
     Icon = <Spinner />;
   } else if (status === "streaming") {
-    Icon = <span aria-hidden className="size-2.5 rounded-[2px] bg-current" />;
+    Icon = <SquareIcon className="size-4" />;
   } else if (status === "error") {
     Icon = <XIcon className="size-4" />;
   }
 
-  const handleClick = useCallback<
-    NonNullable<PromptInputSubmitProps["onClick"]>
-  >(
-    (event) => {
+  const handleClick = useCallback(
+    (e: React.MouseEvent<HTMLButtonElement>) => {
       if (isGenerating && onStop) {
-        event.preventDefault();
+        e.preventDefault();
         onStop();
         return;
       }
-      onClick?.(event);
+      (onClick as React.MouseEventHandler<HTMLButtonElement> | undefined)?.(e);
     },
     [isGenerating, onStop, onClick]
   );
@@ -1254,7 +1254,7 @@ export const PromptInputSubmit = ({
   return (
     <InputGroupButton
       aria-label={isGenerating ? "Stop" : "Submit"}
-      className={cn("absolute right-2.5 bottom-2.5 rounded-full", className)}
+      className={cn(className)}
       onClick={handleClick}
       size={size}
       type={isGenerating && onStop ? "button" : "submit"}
@@ -1282,7 +1282,7 @@ export const PromptInputSelectTrigger = ({
 }: PromptInputSelectTriggerProps) => (
   <SelectTrigger
     className={cn(
-      "border-none bg-transparent font-medium text-muted-foreground shadow-none transition-colors",
+      "border-none bg-transparent text-muted-foreground shadow-none transition-colors",
       "hover:bg-accent hover:text-foreground aria-expanded:bg-accent aria-expanded:text-foreground",
       className
     )}
@@ -1319,15 +1319,21 @@ export const PromptInputSelectValue = ({
   <SelectValue className={cn(className)} {...props} />
 );
 
-export type PromptInputHoverCardProps = ComponentProps<typeof HoverCard>;
+export type PromptInputHoverCardProps = ComponentProps<typeof HoverCard> & {
+  openDelay?: number;
+  closeDelay?: number;
+};
 
 export const PromptInputHoverCard = ({
-  openDelay = 0,
-  closeDelay = 0,
+  openDelay: _openDelay = 0,
+  closeDelay: _closeDelay = 0,
   ...props
-}: PromptInputHoverCardProps) => (
-  <HoverCard closeDelay={closeDelay} openDelay={openDelay} {...props} />
-);
+}: PromptInputHoverCardProps) => {
+  void _openDelay;
+  void _closeDelay;
+
+  return <HoverCard {...props} />;
+};
 
 export type PromptInputHoverCardTriggerProps = ComponentProps<
   typeof HoverCardTrigger
@@ -1369,12 +1375,8 @@ export const PromptInputTabLabel = ({
   ...props
 }: PromptInputTabLabelProps) => (
   // Content provided via children in props
-  // oxlint-disable-next-line eslint-plugin-jsx-a11y(heading-has-content)
   <h3
-    className={cn(
-      "mb-2 px-3 font-medium text-muted-foreground text-xs",
-      className
-    )}
+    className={cn("mb-2 px-3 type-card-title text-muted-foreground", className)}
     {...props}
   />
 );
@@ -1396,7 +1398,7 @@ export const PromptInputTabItem = ({
 }: PromptInputTabItemProps) => (
   <div
     className={cn(
-      "flex items-center gap-2 px-3 py-2 text-xs hover:bg-accent",
+      "flex items-center gap-2 px-3 py-2 type-caption hover:bg-accent",
       className
     )}
     {...props}

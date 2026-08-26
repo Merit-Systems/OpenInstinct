@@ -4,7 +4,7 @@ import type { UserContent } from "ai";
 import { isTurnFailureEvent } from "eve/client";
 import { useEveAgent } from "eve/react";
 import { AlertCircleIcon, BrainIcon, PlusIcon, SquareIcon } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Conversation,
   ConversationContent,
@@ -20,19 +20,27 @@ import {
 } from "@/components/ai-elements/prompt-input";
 import { Shimmer } from "@/components/ai-elements/shimmer";
 import { Button } from "@/components/ui/button";
+import {
+  formatChatUsage,
+  summarizeChatUsage,
+  type ChatUsage,
+} from "@/lib/chat";
 import { cn } from "@/lib/utils";
 import { AgentMessage } from "./agent-message";
 
 const AGENT_NAME = "Local Vault Assistant";
 
 export function AgentChat({
+  initialUsage,
   sessionId,
   sessionless = false,
 }: {
+  readonly initialUsage?: ChatUsage;
   readonly sessionId?: string;
   readonly sessionless?: boolean;
 }) {
   const [cancellationError, setCancellationError] = useState<string>();
+  const pendingChatTitle = useRef<string | undefined>(undefined);
   const agent = useEveAgent({
     initialSession:
       sessionId === undefined
@@ -44,6 +52,10 @@ export function AgentChat({
     resume: sessionId !== undefined,
     onSessionChange(session) {
       if (sessionId === undefined && session !== undefined) {
+        void saveChat(session.sessionId, pendingChatTitle.current).catch(
+          () => undefined
+        );
+        pendingChatTitle.current = undefined;
         // Next patches window.history to navigate, which would detach the active stream.
         History.prototype.replaceState.call(
           window.history,
@@ -69,11 +81,28 @@ export function AgentChat({
       lastMessage?.role !== "assistant" ||
       isPendingAssistantShell);
   const turnFailure = isBusy ? undefined : getLatestTurnFailure(agent.events);
-  const errorMessage = cancellationError ?? agent.error?.message ?? turnFailure;
+  const errorMessage =
+    cancellationError ??
+    (agent.error ? toErrorMessage(agent.error) : undefined) ??
+    turnFailure;
   const hasConversationContent =
     sessionless || !isEmpty || errorMessage !== undefined;
   const showConversationLayout = isRestoring || hasConversationContent;
   const activeSessionId = sessionId ?? agent.session?.sessionId;
+  const measuredUsage = useMemo(
+    () => summarizeChatUsage(agent.events),
+    [agent.events]
+  );
+  const usage = useMemo(
+    () => preferCompleteUsage(measuredUsage, initialUsage),
+    [initialUsage, measuredUsage]
+  );
+  const latestTerminalTurnAt = agent.events.findLast(
+    (event) =>
+      event.type === "turn.completed" ||
+      event.type === "turn.failed" ||
+      event.type === "turn.cancelled"
+  )?.meta.at;
   const messageTimestamps = useMemo(() => {
     const timestamps = new Map<string, string>();
 
@@ -93,6 +122,14 @@ export function AgentChat({
     return timestamps;
   }, [agent.events]);
 
+  useEffect(() => {
+    if (activeSessionId === undefined || latestTerminalTurnAt === undefined) {
+      return;
+    }
+
+    void saveChat(activeSessionId, undefined, usage).catch(() => undefined);
+  }, [activeSessionId, latestTerminalTurnAt, usage]);
+
   const requestCancellation = () => {
     setCancellationError(undefined);
     void agent.cancel().catch((error: unknown) => {
@@ -107,6 +144,12 @@ export function AgentChat({
 
     setCancellationError(undefined);
     const options = isBusy ? { turnPolicy: "steer" as const } : undefined;
+    const title = chatTitle(message);
+    if (activeSessionId) {
+      void saveChat(activeSessionId).catch(() => undefined);
+    } else {
+      pendingChatTitle.current = title;
+    }
 
     if (message.files.length === 0) {
       await agent.send(text, options);
@@ -155,7 +198,10 @@ export function AgentChat({
   return (
     <main className="relative flex h-full min-h-0 flex-col overflow-hidden bg-background text-foreground">
       {showConversationLayout ? (
-        <ChatHeader canStartNewChat={activeSessionId !== undefined} />
+        <ChatHeader
+          canStartNewChat={activeSessionId !== undefined}
+          usage={usage}
+        />
       ) : null}
 
       {showConversationLayout ? (
@@ -239,15 +285,22 @@ function ErrorMessage({ message }: { readonly message: string }) {
 
 function ChatHeader({
   canStartNewChat,
+  usage,
 }: {
   readonly canStartNewChat: boolean;
+  readonly usage: ChatUsage;
 }) {
   return (
     <header className="pointer-events-none absolute top-0 right-0 left-0 z-20 h-14">
       <div className="relative mx-auto flex h-full w-full max-w-3xl items-center justify-start bg-background px-4">
-        <span className="truncate text-sm text-muted-foreground">
-          {AGENT_NAME}
-        </span>
+        <div className="min-w-0">
+          <span className="block truncate text-sm text-muted-foreground">
+            {AGENT_NAME}
+          </span>
+          <span className="block type-label text-muted-foreground">
+            Usage {formatChatUsage(usage)}
+          </span>
+        </div>
         {canStartNewChat ? (
           <Button
             aria-label="Start a new chat"
@@ -280,9 +333,33 @@ function PendingThinking() {
 }
 
 function toErrorMessage(error: unknown): string {
-  return error instanceof Error
-    ? error.message
-    : "Unable to cancel the response.";
+  if (!(error instanceof Error)) return "Unable to complete the request.";
+  if (/<!doctype html|<html[\s>]/i.test(error.message)) {
+    return "The local agent runtime is unavailable. Restart the local assistant and try again.";
+  }
+  return error.message;
+}
+
+function chatTitle(message: PromptInputMessage) {
+  const text = message.text.trim();
+  if (text) return text.slice(0, 240);
+  return message.files[0]?.filename?.slice(0, 240) ?? "New chat";
+}
+
+function preferCompleteUsage(measured: ChatUsage, initial?: ChatUsage) {
+  if (initial === undefined) return measured;
+
+  const initialTokens = initial.inputTokens + initial.outputTokens;
+  const measuredTokens = measured.inputTokens + measured.outputTokens;
+  return measuredTokens >= initialTokens ? measured : initial;
+}
+
+async function saveChat(sessionId: string, title?: string, usage?: ChatUsage) {
+  await fetch("/api/chats", {
+    body: JSON.stringify({ sessionId, title, usage }),
+    headers: { "Content-Type": "application/json" },
+    method: "POST",
+  });
 }
 
 function getLatestTurnFailure(

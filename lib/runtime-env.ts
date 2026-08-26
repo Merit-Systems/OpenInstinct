@@ -16,11 +16,24 @@ export function getEnv() {
         .min(1)
         .max(20)
         .default(1),
+      DATABASE_URL: optionalValue.refine(
+        (value) =>
+          value === undefined ||
+          value.startsWith("file:") ||
+          value.startsWith("postgres://") ||
+          value.startsWith("postgresql://"),
+        "DATABASE_URL must be a file:, postgres://, or postgresql:// URL"
+      ),
+      EVE_NEXT_PRODUCTION_ORIGIN: optionalValue.refine(
+        (value) => value === undefined || URL.canParse(value),
+        "EVE_NEXT_PRODUCTION_ORIGIN must be an absolute URL"
+      ),
       KERNEL_API_KEY: optionalValue,
       LOCAL_VAULT_ASSISTANT_ALLOW_REMOTE_MANAGER: z
         .enum(["true", "false"])
         .default("false")
         .transform((value) => value === "true"),
+      LOCAL_VAULT_ASSISTANT_BROWSER_EXECUTABLE: optionalValue,
       LOCAL_VAULT_ASSISTANT_DATA_DIR: optionalValue,
       LOCAL_VAULT_ASSISTANT_MANAGER_URL: optionalValue.refine(
         (value) => value === undefined || URL.canParse(value),
@@ -31,6 +44,7 @@ export function getEnv() {
       LOCAL_VAULT_ASSISTANT_MODEL_BASE_URL: optionalValue,
       VERCEL: optionalValue,
       VERCEL_ENV: z.enum(["production", "preview", "development"]).optional(),
+      VERCEL_REGION: optionalValue,
     },
     experimental__runtimeEnv: {},
   });

@@ -1,0 +1,267 @@
+"use client";
+
+import { type FormEvent, useState } from "react";
+import { z } from "zod";
+import { Button } from "@/components/ui/button";
+import {
+  Field,
+  FieldError,
+  FieldGroup,
+  FieldLabel,
+} from "@/components/ui/field";
+import { Input } from "@/components/ui/input";
+import type { ManagerMutation } from "@/lib/manager";
+import { paymentCardBrand, serializePaymentCard } from "@/lib/payment-card";
+
+const paymentCardFormSchema = z.object({
+  billingPostalCode: z.string().trim().min(1, "Enter the billing postal code."),
+  cardNumber: z
+    .string()
+    .transform((value) => value.replaceAll(/\D/gu, ""))
+    .pipe(z.string().regex(/^\d{12,19}$/u, "Enter a valid card number."))
+    .refine(passesLuhnCheck, "Check the card number."),
+  cardholderName: z.string().trim().min(1, "Enter the name on the card."),
+  cvc: z
+    .string()
+    .transform((value) => value.replaceAll(/\D/gu, ""))
+    .pipe(z.string().regex(/^\d{3,4}$/u, "Enter a valid CVC.")),
+  expiration: z
+    .string()
+    .regex(/^(0[1-9]|1[0-2]) \/ \d{2}$/u, "Use MM / YY.")
+    .refine(isCurrentExpiration, "Use a current expiration date."),
+  nickname: z.string().trim().max(120),
+});
+
+export function PaymentCardForm({
+  busy,
+  initialLabel = "",
+  onSaved,
+  onSubmit,
+}: {
+  readonly busy: boolean;
+  readonly initialLabel?: string;
+  readonly onSaved: () => void;
+  readonly onSubmit: (mutation: ManagerMutation) => Promise<boolean>;
+}) {
+  const [attempted, setAttempted] = useState(false);
+  const [form, setForm] = useState({
+    billingPostalCode: "",
+    cardNumber: "",
+    cardholderName: "",
+    cvc: "",
+    expiration: "",
+    nickname: initialLabel,
+  });
+  const result = paymentCardFormSchema.safeParse(form);
+  const errors =
+    attempted && !result.success ? result.error.flatten().fieldErrors : {};
+
+  const submit = async (event: FormEvent) => {
+    event.preventDefault();
+    setAttempted(true);
+    if (!result.success) return;
+
+    const [month, shortYear] = result.data.expiration.split(" / ");
+    if (month === undefined || shortYear === undefined) return;
+
+    const brand = paymentCardBrand(result.data.cardNumber);
+    const lastFour = result.data.cardNumber.slice(-4);
+    const saved = await onSubmit({
+      action: "vault.create",
+      input: {
+        account: `${brand} · •••• ${lastFour}`,
+        kind: "payment",
+        label: result.data.nickname || `${brand} ${lastFour}`,
+        secret: serializePaymentCard({
+          billingPostalCode: result.data.billingPostalCode,
+          cardholderName: result.data.cardholderName,
+          expirationMonth: Number(month),
+          expirationYear: 2000 + Number(shortYear),
+          kind: "payment-card",
+          number: result.data.cardNumber,
+          securityCode: result.data.cvc,
+          version: 1,
+        }),
+      },
+    });
+
+    if (saved) onSaved();
+  };
+
+  return (
+    <form noValidate onSubmit={(event) => void submit(event)}>
+      <FieldGroup className="gap-3">
+        <div className="grid gap-3 sm:grid-cols-2">
+          <CardField
+            autoComplete="cc-name"
+            error={errors.cardholderName?.[0]}
+            id="vault-payment-cardholder"
+            label="Name on card"
+            name="cc-name"
+            onChange={(cardholderName) =>
+              setForm((current) => ({ ...current, cardholderName }))
+            }
+            value={form.cardholderName}
+          />
+          <CardField
+            autoComplete="off"
+            error={errors.nickname?.[0]}
+            id="vault-payment-nickname"
+            label="Nickname (optional)"
+            name="card-nickname"
+            onChange={(nickname) =>
+              setForm((current) => ({ ...current, nickname }))
+            }
+            placeholder="Personal"
+            value={form.nickname}
+          />
+        </div>
+
+        <CardField
+          autoComplete="cc-number"
+          error={errors.cardNumber?.[0]}
+          id="vault-payment-number"
+          inputMode="numeric"
+          label="Card number"
+          maxLength={23}
+          name="cc-number"
+          onChange={(value) =>
+            setForm((current) => ({
+              ...current,
+              cardNumber: formatCardNumber(value),
+            }))
+          }
+          placeholder="1234 5678 9012 3456"
+          value={form.cardNumber}
+        />
+
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-[1fr_1fr_1.4fr]">
+          <CardField
+            autoComplete="cc-exp"
+            error={errors.expiration?.[0]}
+            id="vault-payment-expiration"
+            inputMode="numeric"
+            label="Expiration"
+            maxLength={7}
+            name="cc-exp"
+            onChange={(value) =>
+              setForm((current) => ({
+                ...current,
+                expiration: formatExpiration(value),
+              }))
+            }
+            placeholder="MM / YY"
+            value={form.expiration}
+          />
+          <CardField
+            autoComplete="cc-csc"
+            error={errors.cvc?.[0]}
+            id="vault-payment-cvc"
+            inputMode="numeric"
+            label="CVC"
+            maxLength={4}
+            name="cc-csc"
+            onChange={(value) =>
+              setForm((current) => ({
+                ...current,
+                cvc: value.replaceAll(/\D/gu, "").slice(0, 4),
+              }))
+            }
+            placeholder="123"
+            value={form.cvc}
+          />
+          <CardField
+            autoComplete="postal-code"
+            className="col-span-2 sm:col-span-1"
+            error={errors.billingPostalCode?.[0]}
+            id="vault-payment-postal-code"
+            label="Billing ZIP / postal"
+            maxLength={20}
+            name="postal-code"
+            onChange={(billingPostalCode) =>
+              setForm((current) => ({ ...current, billingPostalCode }))
+            }
+            value={form.billingPostalCode}
+          />
+        </div>
+      </FieldGroup>
+
+      <div className="mt-5 flex justify-end">
+        <Button disabled={busy} type="submit">
+          Save card
+        </Button>
+      </div>
+    </form>
+  );
+}
+
+function CardField({
+  className,
+  error,
+  id,
+  label,
+  onChange,
+  ...inputProps
+}: Omit<React.ComponentProps<typeof Input>, "onChange"> & {
+  readonly error?: string;
+  readonly label: string;
+  readonly onChange: (value: string) => void;
+}) {
+  return (
+    <Field className={className} data-invalid={error ? true : undefined}>
+      <FieldLabel htmlFor={id}>{label}</FieldLabel>
+      <Input
+        {...inputProps}
+        aria-invalid={error ? true : undefined}
+        id={id}
+        onChange={(event) => onChange(event.target.value)}
+      />
+      <FieldError errors={error ? [{ message: error }] : undefined} />
+    </Field>
+  );
+}
+
+function formatCardNumber(value: string) {
+  return value
+    .replaceAll(/\D/gu, "")
+    .slice(0, 19)
+    .replaceAll(/(.{4})/gu, "$1 ")
+    .trim();
+}
+
+function formatExpiration(value: string) {
+  const digits = value.replaceAll(/\D/gu, "").slice(0, 4);
+  return digits.length <= 2
+    ? digits
+    : `${digits.slice(0, 2)} / ${digits.slice(2)}`;
+}
+
+function passesLuhnCheck(number: string) {
+  let sum = 0;
+  let doubleDigit = false;
+
+  for (const character of number.split("").toReversed()) {
+    let digit = Number(character);
+    if (doubleDigit) {
+      digit *= 2;
+      if (digit > 9) digit -= 9;
+    }
+    sum += digit;
+    doubleDigit = !doubleDigit;
+  }
+
+  return sum % 10 === 0;
+}
+
+function isCurrentExpiration(value: string) {
+  const [month, shortYear] = value.split(" / ");
+  if (month === undefined || shortYear === undefined) return false;
+
+  const expirationYear = 2000 + Number(shortYear);
+  const today = new Date();
+  return (
+    expirationYear > today.getFullYear() ||
+    (expirationYear === today.getFullYear() &&
+      Number(month) >= today.getMonth() + 1)
+  );
+}

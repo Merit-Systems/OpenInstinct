@@ -5,8 +5,8 @@ import { getModelSettings } from "../lib/model-config.js";
 export default defineAgent({
   model: defineDynamic({
     events: {
-      "step.started": () => {
-        const modelSettings = getModelSettings();
+      "step.started": async () => {
+        const modelSettings = await getModelSettings();
         if (!modelSettings.baseURL) return modelSettings.modelId;
 
         return createOpenAICompatible({

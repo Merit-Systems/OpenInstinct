@@ -18,6 +18,7 @@ The result is a personal agent with useful browser capabilities and a much small
 
 - A local manager for models, connections, and auth-vault items at `/`
 - A conversational agent at `/chat`
+- A workspace-wide conversation index at `/chats`
 - Recoverable parallel browser jobs with time, outcome, and model-cost tracking at `/tasks`
 - macOS Keychain storage for secret values and a private local database for metadata
 - Local or hosted OpenAI-compatible inference
@@ -31,7 +32,7 @@ curl -fsSL https://raw.githubusercontent.com/Merit-Systems/open-instinct/main/in
 ~/.local/bin/local-vault-assistant
 ```
 
-The installer sets up an isolated Node.js runtime, installs the app, and builds it. The launcher opens the manager at `https://local-vault-assistant.localhost`, where you add your browser connection and choose a hosted or local model. [Portless](https://github.com/vercel-labs/portless) assigns the underlying app port, so the assistant never claims `localhost:3000` and its URL stays stable across restarts.
+The installer sets up an isolated Node.js runtime, installs the app, and builds it. The launcher opens the manager at `https://local-vault-assistant.localhost`, where you choose local or cloud browser execution and a hosted or local model. Local browser execution uses a visible Chrome-compatible browser on the device. Cloud execution is available when the system environment provides `KERNEL_API_KEY`. [Portless](https://github.com/vercel-labs/portless) assigns the underlying app port, so the assistant never claims `localhost:3000` and its URL stays stable across restarts.
 
 Portless may ask for administrator approval on first launch to trust its local HTTPS certificate and bind the standard HTTPS port. The app and its vault still run only on your machine.
 
@@ -56,11 +57,21 @@ LOCAL_VAULT_ASSISTANT_MODEL_BASE_URL=http://127.0.0.1:11434/v1 \
 ./bin/local-assistant
 ```
 
+App metadata defaults to a private SQLite database on this device. To use Neon
+instead, provide its Postgres connection string when starting the app:
+
+```bash
+DATABASE_URL=postgresql://user:password@host/database ./bin/local-assistant
+```
+
+This changes the Drizzle metadata backend; secret values remain in macOS
+Keychain.
+
 ## Implementation details
 
 - [Eve](https://eve.dev) provides durable agent sessions, streaming, tools, and the web conversation protocol.
 - [Kernel](https://kernel.sh) provides cloud browsers, Playwright, computer use, profiles, proxies, and browser execution.
 - Next.js provides the local manager, chat, and batch-runner interfaces.
-- SQLite stores non-secret metadata locally; macOS Keychain stores secret values.
+- Drizzle stores non-secret metadata in local SQLite or Neon Postgres; macOS Keychain stores secret values.
 
 These are replaceable implementation layers. The durable product boundary is the locally owned vault.

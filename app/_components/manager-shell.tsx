@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  HistoryIcon,
   HouseIcon,
   KeyRoundIcon,
   MessageSquareIcon,
@@ -28,6 +29,7 @@ const managerNavigation = [
   { href: "/", icon: PanelsTopLeftIcon, id: "workspace", label: "Workspace" },
   { href: "/vault", icon: KeyRoundIcon, id: "vault", label: "Vault" },
   { href: "/chat", icon: MessageSquareIcon, id: "chat", label: "Chat" },
+  { href: "/chats", icon: HistoryIcon, id: "chats", label: "All chats" },
 ] as const;
 
 const managerSidebarStyle: CSSProperties & { "--sidebar-width": string } = {
@@ -38,7 +40,7 @@ export function ManagerShell({
   active,
   children,
 }: {
-  readonly active: "chat" | "tasks" | "vault" | "workspace";
+  readonly active: "chat" | "chats" | "tasks" | "vault" | "workspace";
   readonly children: ReactNode;
 }) {
   if (active === "tasks") {
@@ -52,14 +54,15 @@ function ManagerAppShell({
   active,
   children,
 }: {
-  readonly active: "chat" | "vault" | "workspace";
+  readonly active: "chat" | "chats" | "vault" | "workspace";
   readonly children: ReactNode;
 }) {
   const { snapshot } = useManager();
-  const kernelConnected = Boolean(
-    snapshot?.connections.some(
-      (connection) => connection.provider === "kernel" && connection.hasSecret
-    )
+  const browserReady = Boolean(
+    snapshot &&
+    (snapshot.browser.mode === "local"
+      ? snapshot.browser.localAvailable
+      : snapshot.browser.cloudAvailable)
   );
 
   const activeItem = managerNavigation.find((item) => item.id === active);
@@ -78,7 +81,7 @@ function ManagerAppShell({
               {managerNavigation.map((item) => {
                 const Icon = item.icon;
                 const isActive = active === item.id;
-                const isDisabled = item.id === "chat" && !kernelConnected;
+                const isDisabled = item.id === "chat" && !browserReady;
                 return (
                   <SidebarMenuItem key={item.id}>
                     <SidebarMenuButton

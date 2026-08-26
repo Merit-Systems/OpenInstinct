@@ -1,29 +1,18 @@
 "use client";
 
+/* oxlint-disable hooks/static-components, typescript/no-unnecessary-condition, typescript/no-unsafe-type-assertion, typescript/restrict-template-expressions -- AI Elements supports a caller-selected intrinsic motion element. */
+
 import { cn } from "@/lib/utils";
-import type { MotionProps } from "motion/react";
-import { motion } from "motion/react";
-import type { CSSProperties, ElementType, JSX } from "react";
-import { memo, useMemo } from "react";
+import { LazyMotion, domAnimation, m } from "motion/react";
+import {
+  type CSSProperties,
+  type ElementType,
+  type JSX,
+  memo,
+  useMemo,
+} from "react";
 
-type MotionHTMLProps = MotionProps & Record<string, unknown>;
-
-// Cache motion components at module level to avoid creating during render
-const motionComponentCache = new Map<
-  keyof JSX.IntrinsicElements,
-  React.ComponentType<MotionHTMLProps>
->();
-
-const getMotionComponent = (element: keyof JSX.IntrinsicElements) => {
-  let component = motionComponentCache.get(element);
-  if (!component) {
-    component = motion.create(element);
-    motionComponentCache.set(element, component);
-  }
-  return component;
-};
-
-export interface TextShimmerProps {
+interface TextShimmerProps {
   children: string;
   as?: ElementType;
   className?: string;
@@ -38,9 +27,7 @@ const ShimmerComponent = ({
   duration = 2,
   spread = 2,
 }: TextShimmerProps) => {
-  const MotionComponent = getMotionComponent(
-    Component as keyof JSX.IntrinsicElements
-  );
+  const MotionComponent = m.create(Component as keyof JSX.IntrinsicElements);
 
   const dynamicSpread = useMemo(
     () => (children?.length ?? 0) * spread,
@@ -48,29 +35,31 @@ const ShimmerComponent = ({
   );
 
   return (
-    <MotionComponent
-      animate={{ backgroundPosition: "0% center" }}
-      className={cn(
-        "relative inline-block bg-[length:250%_100%,auto] bg-clip-text text-transparent",
-        "[--bg:linear-gradient(90deg,#0000_calc(50%-var(--spread)),var(--color-background),#0000_calc(50%+var(--spread)))] [background-repeat:no-repeat,padding-box]",
-        className
-      )}
-      initial={{ backgroundPosition: "100% center" }}
-      style={
-        {
-          "--spread": `${dynamicSpread}px`,
-          backgroundImage:
-            "var(--bg), linear-gradient(var(--color-muted-foreground), var(--color-muted-foreground))",
-        } as CSSProperties
-      }
-      transition={{
-        duration,
-        ease: "linear",
-        repeat: Number.POSITIVE_INFINITY,
-      }}
-    >
-      {children}
-    </MotionComponent>
+    <LazyMotion features={domAnimation}>
+      <MotionComponent
+        animate={{ backgroundPosition: "0% center" }}
+        className={cn(
+          "relative inline-block bg-[length:250%_100%,auto] bg-clip-text text-transparent w-fit",
+          "[--bg:linear-gradient(90deg,#0000_calc(50%-var(--spread)),var(--color-foreground),#0000_calc(50%+var(--spread)))] [background-repeat:no-repeat,padding-box]",
+          className
+        )}
+        initial={{ backgroundPosition: "100% center" }}
+        style={
+          {
+            "--spread": `${dynamicSpread}px`,
+            backgroundImage:
+              "var(--bg), linear-gradient(color-mix(in oklab, var(--color-muted-foreground) 60%, transparent), color-mix(in oklab, var(--color-muted-foreground) 60%, transparent))",
+          } as CSSProperties
+        }
+        transition={{
+          repeat: Number.POSITIVE_INFINITY,
+          duration,
+          ease: "linear",
+        }}
+      >
+        {children}
+      </MotionComponent>
+    </LazyMotion>
   );
 };
 

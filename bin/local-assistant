@@ -114,7 +114,9 @@ if [[ "$mode" == "start" && ! -f .next/BUILD_ID ]]; then
 fi
 
 eve_pid=""
+browser_pid=""
 web_pid=""
+telegram_pid=""
 route_registered=0
 cleanup() {
   if [[ "$route_registered" == "1" ]]; then
@@ -124,6 +126,14 @@ cleanup() {
   if [[ -n "$web_pid" ]] && kill -0 "$web_pid" >/dev/null 2>&1; then
     kill -TERM "$web_pid" >/dev/null 2>&1 || true
     wait "$web_pid" 2>/dev/null || true
+  fi
+  if [[ -n "$telegram_pid" ]] && kill -0 "$telegram_pid" >/dev/null 2>&1; then
+    kill -TERM "$telegram_pid" >/dev/null 2>&1 || true
+    wait "$telegram_pid" 2>/dev/null || true
+  fi
+  if [[ -n "$browser_pid" ]] && kill -0 "$browser_pid" >/dev/null 2>&1; then
+    kill -TERM "$browser_pid" >/dev/null 2>&1 || true
+    wait "$browser_pid" 2>/dev/null || true
   fi
   if [[ -n "$eve_pid" ]] && kill -0 "$eve_pid" >/dev/null 2>&1; then
     kill "$eve_pid" >/dev/null 2>&1 || true
@@ -160,6 +170,30 @@ if [[ "$mode" == "start" ]]; then
   fi
 fi
 
+node --experimental-strip-types scripts/local-browser-daemon.ts &
+browser_pid=$!
+
+browser_ready=0
+for _ in {1..120}; do
+  if ! kill -0 "$browser_pid" >/dev/null 2>&1; then
+    wait "$browser_pid" || true
+    printf 'The local browser service stopped before it became ready.\n' >&2
+    exit 1
+  fi
+  if curl --silent --output /dev/null --request POST \
+    --header 'Content-Type: application/json' --data '{}' \
+    "http://127.0.0.1:4275/action"; then
+    browser_ready=1
+    break
+  fi
+  sleep 0.25
+done
+
+if [[ "$browser_ready" != "1" ]]; then
+  printf 'The local browser service did not become ready on port 4275.\n' >&2
+  exit 1
+fi
+
 app_port="$(
   node -e \
     'const net=require("node:net");const server=net.createServer();server.listen(0,"127.0.0.1",()=>{console.log(server.address().port);server.close()})'
@@ -187,6 +221,9 @@ if [[ "$web_ready" != "1" ]]; then
   printf 'The local manager did not become ready.\n' >&2
   exit 1
 fi
+
+node scripts/telegram-poller.mjs "http://127.0.0.1:$app_port" &
+telegram_pid=$!
 
 "${package_manager[@]}" exec portless alias \
   local-vault-assistant "$app_port"

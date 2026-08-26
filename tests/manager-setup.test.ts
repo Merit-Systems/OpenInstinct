@@ -6,6 +6,7 @@ import {
   managerMutationSchema,
   managerSetupRequestSchema,
 } from "../lib/manager";
+import { serializePaymentCard } from "../lib/payment-card";
 
 describe("local manager setup links", () => {
   it("builds a connection form URL from safe prefill fields", () => {
@@ -57,7 +58,7 @@ describe("local manager setup links", () => {
     });
   });
 
-  it("requires a Kernel API key when saving the browser connection", () => {
+  it("keeps the system Kernel key out of manager mutations", () => {
     const mutation = {
       action: "connection.create",
       input: {
@@ -69,11 +70,49 @@ describe("local manager setup links", () => {
       },
     };
 
-    expect(managerMutationSchema.safeParse(mutation).success).toBe(false);
     expect(
       managerMutationSchema.safeParse({
         ...mutation,
         input: { ...mutation.input, secret: "kernel-key" },
+      }).success
+    ).toBe(false);
+  });
+
+  it("accepts local and cloud browser modes", () => {
+    expect(
+      managerMutationSchema.safeParse({
+        action: "browser.select",
+        mode: "local",
+      }).success
+    ).toBe(true);
+    expect(
+      managerMutationSchema.safeParse({
+        action: "browser.select",
+        mode: "cloud",
+      }).success
+    ).toBe(true);
+  });
+
+  it("requires a BotFather token when connecting Telegram", () => {
+    const mutation = {
+      action: "connection.create",
+      input: {
+        account: "",
+        endpoint: "",
+        label: "Telegram",
+        provider: "telegram",
+        secret: "",
+      },
+    };
+
+    expect(managerMutationSchema.safeParse(mutation).success).toBe(false);
+    expect(
+      managerMutationSchema.safeParse({
+        ...mutation,
+        input: {
+          ...mutation.input,
+          secret: "123456:abcdefghijklmnopqrstuvwxyz",
+        },
       }).success
     ).toBe(true);
   });
@@ -83,6 +122,38 @@ describe("local manager setup links", () => {
       managerMutationSchema.safeParse({
         action: "model.select",
         modelId: "anthropic/claude-sonnet-4.5",
+      }).success
+    ).toBe(true);
+  });
+
+  it("requires complete structured payment-card details", () => {
+    const mutation = {
+      action: "vault.create",
+      input: {
+        account: "Visa · •••• 4242",
+        kind: "payment",
+        label: "Personal",
+        secret: "4242 4242 4242 4242",
+      },
+    };
+
+    expect(managerMutationSchema.safeParse(mutation).success).toBe(false);
+    expect(
+      managerMutationSchema.safeParse({
+        ...mutation,
+        input: {
+          ...mutation.input,
+          secret: serializePaymentCard({
+            billingPostalCode: "11217",
+            cardholderName: "Ada Lovelace",
+            expirationMonth: 12,
+            expirationYear: 2030,
+            kind: "payment-card",
+            number: "4242424242424242",
+            securityCode: "123",
+            version: 1,
+          }),
+        },
       }).success
     ).toBe(true);
   });

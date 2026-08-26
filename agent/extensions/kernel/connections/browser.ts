@@ -1,6 +1,6 @@
 import { defineMcpClientConnection } from "eve/connections";
+import { getBrowserSettings } from "../../../../lib/browser-config.js";
 import { getEnv } from "../../../../lib/runtime-env.js";
-import { readConnectionSecret } from "../../../../lib/server/manager-store.js";
 
 export const kernelToolAllowlist = [
   "manage_browsers",
@@ -21,13 +21,16 @@ export default defineMcpClientConnection({
     "Kernel cloud browser with the complete browser, authentication, networking, observability, pool, and VM execution toolset.",
   auth: {
     getToken: async () => {
-      const token =
-        (await readConnectionSecret("kernel").catch(() => undefined)) ??
-        getEnv().KERNEL_API_KEY;
+      if ((await getBrowserSettings()).mode !== "cloud") {
+        throw new Error(
+          "The local browser is selected. Use the local_browser tool instead."
+        );
+      }
+      const token = getEnv().KERNEL_API_KEY;
 
       if (!token) {
         throw new Error(
-          "Kernel is not connected. Add a Kernel API key in the local manager."
+          "Cloud browser execution requires KERNEL_API_KEY in the system environment."
         );
       }
 

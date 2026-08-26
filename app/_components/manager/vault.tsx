@@ -21,6 +21,7 @@ import type {
   ManagerSnapshot,
   VaultItemKind,
 } from "@/lib/manager";
+import { PaymentCardForm } from "./payment-card-form";
 import { useManager } from "./use-manager";
 
 const categories = [
@@ -251,41 +252,50 @@ function VaultDialog({
             This value is stored locally and is never returned after saving.
           </DialogDescription>
         </DialogHeader>
-        <form className="grid gap-4" onSubmit={(event) => void submit(event)}>
-          <Field
-            id={`vault-${kind}-label`}
-            label="Name"
-            onChange={setLabel}
-            placeholder={fields.labelPlaceholder}
-            value={label}
+        {kind === "payment" ? (
+          <PaymentCardForm
+            busy={busy}
+            initialLabel={label}
+            onSaved={() => setOpen(false)}
+            onSubmit={onSubmit}
           />
-          {fields.accountLabel ? (
+        ) : (
+          <form className="grid gap-4" onSubmit={(event) => void submit(event)}>
             <Field
-              id={`vault-${kind}-account`}
-              label={fields.accountLabel}
-              onChange={setAccount}
-              placeholder={fields.accountPlaceholder}
-              value={account}
+              id={`vault-${kind}-label`}
+              label="Name"
+              onChange={setLabel}
+              placeholder={fields.labelPlaceholder}
+              value={label}
             />
-          ) : null}
-          <Field
-            autoComplete={kind === "login" ? "new-password" : "off"}
-            id={`vault-${kind}-secret`}
-            label={fields.secretLabel}
-            onChange={setSecret}
-            placeholder={fields.secretPlaceholder}
-            type={kind === "login" || kind === "payment" ? "password" : "text"}
-            value={secret}
-          />
-          <DialogFooter>
-            <Button
-              disabled={busy || !label.trim() || !secret.trim()}
-              type="submit"
-            >
-              Save
-            </Button>
-          </DialogFooter>
-        </form>
+            {fields.accountLabel ? (
+              <Field
+                id={`vault-${kind}-account`}
+                label={fields.accountLabel}
+                onChange={setAccount}
+                placeholder={fields.accountPlaceholder}
+                value={account}
+              />
+            ) : null}
+            <Field
+              autoComplete={kind === "login" ? "new-password" : "off"}
+              id={`vault-${kind}-secret`}
+              label={fields.secretLabel}
+              onChange={setSecret}
+              placeholder={fields.secretPlaceholder}
+              type={kind === "login" ? "password" : "text"}
+              value={secret}
+            />
+            <DialogFooter>
+              <Button
+                disabled={busy || !label.trim() || !secret.trim()}
+                type="submit"
+              >
+                Save
+              </Button>
+            </DialogFooter>
+          </form>
+        )}
       </DialogContent>
     </Dialog>
   );
