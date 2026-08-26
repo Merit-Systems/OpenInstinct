@@ -2,7 +2,7 @@
 
 [![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2FMerit-Systems%2Fopen-instinct&project-name=local-vault-assistant&repository-name=local-vault-assistant&env=KERNEL_API_KEY&envDescription=Kernel%20API%20key%20for%20cloud%20browser%20tasks.&envLink=https%3A%2F%2Fwww.kernel.sh%2Fdocs%2Freference%2Fcli%2Fauth)
 
-## Your agent should work for you—not hold the keys to your life
+## Your agent doesn't need root access to your life
 
 Personal agents become dramatically more useful when they can sign in, book, buy, send, and act on your behalf. They also become dramatically more dangerous when every password, payment credential, and identity detail must live in somebody else's cloud.
 
@@ -26,16 +26,27 @@ The result is a personal agent with useful browser capabilities and a much small
 
 ## Run locally
 
-Requires Node.js 24 and macOS for Keychain-backed secrets.
+The fastest path is one installer and one command:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/Merit-Systems/open-instinct/main/install.sh | bash
+~/.local/bin/local-vault-assistant
+```
+
+The installer sets up an isolated Node.js runtime, installs the app, and builds it without requiring admin access. The launcher opens the local setup manager, where you add your browser connection and choose a hosted or local model.
+
+```bash
+~/.local/bin/local-vault-assistant doctor  # Check the installation
+~/.local/bin/local-vault-assistant update  # Download and build the latest version
+```
+
+macOS is currently required for the Keychain-backed vault. To work from a source checkout instead:
 
 ```bash
 git clone https://github.com/Merit-Systems/open-instinct.git
 cd open-instinct
-corepack enable
-./local-assistant
+./local-assistant --dev
 ```
-
-Open [localhost:3000](http://localhost:3000), add your connections, then start chatting.
 
 To configure a local model without the manager:
 

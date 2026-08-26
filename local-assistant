@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+repository_directory="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "$repository_directory"
+
 if command -v pnpm >/dev/null 2>&1; then
   package_manager=(pnpm)
 else
@@ -11,4 +14,76 @@ if [[ ! -d node_modules ]]; then
   "${package_manager[@]}" install
 fi
 
-exec "${package_manager[@]}" dev
+mode="start"
+while (($# > 0)); do
+  case "$1" in
+    --dev)
+      mode="dev"
+      shift
+      ;;
+    --no-open)
+      export LOCAL_VAULT_ASSISTANT_NO_OPEN=1
+      shift
+      ;;
+    doctor)
+      failures=0
+      printf 'Local Vault Assistant\n\n'
+      if [[ "$(uname -s)" == "Darwin" ]]; then
+        printf '✓ macOS\n'
+      else
+        printf '✗ macOS Keychain is unavailable\n'
+        failures=$((failures + 1))
+      fi
+      if [[ "$(node -p 'process.versions.node.split(".")[0]')" == "24" ]]; then
+        printf '✓ Node.js %s\n' "$(node --version)"
+      else
+        printf '✗ Node.js 24 is required\n'
+        failures=$((failures + 1))
+      fi
+      if command -v pnpm >/dev/null 2>&1; then
+        printf '✓ pnpm %s\n' "$(pnpm --version)"
+      else
+        printf '✗ pnpm is unavailable\n'
+        failures=$((failures + 1))
+      fi
+      if [[ -x /usr/bin/security ]]; then
+        printf '✓ macOS Keychain command\n'
+      else
+        printf '✗ macOS Keychain command is unavailable\n'
+        failures=$((failures + 1))
+      fi
+      if [[ -f .next/BUILD_ID ]]; then
+        printf '✓ Production build\n'
+      else
+        printf '• Production build will be created on first launch\n'
+      fi
+      exit "$failures"
+      ;;
+    update)
+      exec "$repository_directory/install.sh"
+      ;;
+    *)
+      break
+      ;;
+  esac
+done
+
+if [[ "$mode" == "start" && ! -f .next/BUILD_ID ]]; then
+  "${package_manager[@]}" build
+fi
+
+if [[ "${LOCAL_VAULT_ASSISTANT_NO_OPEN:-0}" != "1" ]] && \
+  command -v open >/dev/null 2>&1; then
+  port="${PORT:-3000}"
+  (
+    for _ in {1..60}; do
+      if curl --silent --fail "http://localhost:$port" >/dev/null 2>&1; then
+        open "http://localhost:$port"
+        exit
+      fi
+      sleep 0.25
+    done
+  ) >/dev/null 2>&1 &
+fi
+
+exec "${package_manager[@]}" "$mode" "$@"

@@ -210,8 +210,7 @@ export function LocalVaultAssistantManager() {
                 value={snapshot?.secretStore.kind ?? "Checking…"}
               />
               <p className="type-supporting-body text-muted-foreground sm:col-span-2">
-                Restart the local service after changing the active model
-                connection.
+                New model settings apply to the next agent step.
               </p>
             </CardContent>
           </Card>
