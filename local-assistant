@@ -101,7 +101,12 @@ if [[ "$mode" == "dev" ]]; then
 fi
 
 eve_pid=""
+web_pid=""
 cleanup() {
+  if [[ -n "$web_pid" ]] && kill -0 "$web_pid" >/dev/null 2>&1; then
+    kill -TERM "$web_pid" >/dev/null 2>&1 || true
+    wait "$web_pid" 2>/dev/null || true
+  fi
   if [[ -n "$eve_pid" ]] && kill -0 "$eve_pid" >/dev/null 2>&1; then
     kill "$eve_pid" >/dev/null 2>&1 || true
     wait "$eve_pid" 2>/dev/null || true
@@ -135,6 +140,32 @@ if [[ "$eve_ready" != "1" ]]; then
   exit 1
 fi
 
+forward_interrupt() {
+  if [[ -n "$web_pid" ]] && kill -0 "$web_pid" >/dev/null 2>&1; then
+    kill -INT "$web_pid" >/dev/null 2>&1 || true
+  fi
+}
+
+forward_termination() {
+  if [[ -n "$web_pid" ]] && kill -0 "$web_pid" >/dev/null 2>&1; then
+    kill -TERM "$web_pid" >/dev/null 2>&1 || true
+  fi
+}
+
+trap forward_interrupt INT
+trap forward_termination TERM
+
 "${package_manager[@]}" exec portless run \
   --name local-vault-assistant \
-  "$repository_directory/scripts/run-local-app" start "$@"
+  "$repository_directory/scripts/run-local-app" start "$@" &
+web_pid=$!
+
+set +e
+while kill -0 "$web_pid" >/dev/null 2>&1; do
+  wait "$web_pid"
+  web_status=$?
+done
+set -e
+
+trap - INT TERM
+exit "${web_status:-0}"
