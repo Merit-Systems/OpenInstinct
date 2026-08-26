@@ -1,99 +1,151 @@
+"use client";
+
 import {
-  BotIcon,
-  BoxesIcon,
-  LayoutDashboardIcon,
+  HouseIcon,
+  KeyRoundIcon,
   MessageSquareIcon,
+  PanelsTopLeftIcon,
 } from "lucide-react";
 import Link from "next/link";
-import type { ReactNode } from "react";
+import type { CSSProperties, ReactNode } from "react";
 import { buttonVariants } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
+import { Logo } from "@/components/ui/logo";
+import {
+  Sidebar,
+  SidebarContent,
+  SidebarGroup,
+  SidebarHeader,
+  SidebarInset,
+  SidebarMenu,
+  SidebarMenuButton,
+  SidebarMenuItem,
+  SidebarProvider,
+  SidebarTrigger,
+} from "@/components/ui/sidebar";
+import { useManager } from "./manager/use-manager";
 
-const navigation = [
-  { href: "/", icon: LayoutDashboardIcon, id: "manager", label: "Manager" },
-  { href: "/tasks", icon: BoxesIcon, id: "tasks", label: "Browser jobs" },
+const managerNavigation = [
+  { href: "/", icon: PanelsTopLeftIcon, id: "workspace", label: "Workspace" },
+  { href: "/vault", icon: KeyRoundIcon, id: "vault", label: "Vault" },
+  { href: "/chat", icon: MessageSquareIcon, id: "chat", label: "Chat" },
 ] as const;
+
+const managerSidebarStyle: CSSProperties & { "--sidebar-width": string } = {
+  "--sidebar-width": "12rem",
+};
 
 export function ManagerShell({
   active,
   children,
 }: {
-  readonly active: (typeof navigation)[number]["id"];
+  readonly active: "chat" | "tasks" | "vault" | "workspace";
   readonly children: ReactNode;
 }) {
+  if (active === "tasks") {
+    return <TaskShell>{children}</TaskShell>;
+  }
+
+  return <ManagerAppShell active={active}>{children}</ManagerAppShell>;
+}
+
+function ManagerAppShell({
+  active,
+  children,
+}: {
+  readonly active: "chat" | "vault" | "workspace";
+  readonly children: ReactNode;
+}) {
+  const { snapshot } = useManager();
+  const kernelConnected = Boolean(
+    snapshot?.connections.some(
+      (connection) => connection.provider === "kernel" && connection.hasSecret
+    )
+  );
+
+  const activeItem = managerNavigation.find((item) => item.id === active);
+
+  return (
+    <SidebarProvider style={managerSidebarStyle}>
+      <Sidebar>
+        <SidebarHeader className="border-b border-sidebar-border px-4 py-4">
+          <Link aria-label="Workspace" className="w-fit" href="/">
+            <Logo className="size-7" />
+          </Link>
+        </SidebarHeader>
+        <SidebarContent>
+          <SidebarGroup>
+            <SidebarMenu>
+              {managerNavigation.map((item) => {
+                const Icon = item.icon;
+                const isActive = active === item.id;
+                const isDisabled = item.id === "chat" && !kernelConnected;
+                return (
+                  <SidebarMenuItem key={item.id}>
+                    <SidebarMenuButton
+                      aria-disabled={isDisabled}
+                      disabled={isDisabled}
+                      isActive={isActive}
+                      render={
+                        isDisabled ? undefined : <Link href={item.href} />
+                      }
+                    >
+                      <Icon />
+                      <span>{item.label}</span>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                );
+              })}
+            </SidebarMenu>
+          </SidebarGroup>
+        </SidebarContent>
+      </Sidebar>
+      <SidebarInset className="h-svh overflow-hidden">
+        <header className="flex h-12 items-center gap-2 border-b border-border/50 px-4 md:hidden">
+          <SidebarTrigger />
+          <span className="type-label">{activeItem?.label}</span>
+        </header>
+        {active === "chat" ? (
+          children
+        ) : (
+          <div className="mx-auto w-full max-w-4xl px-4 py-6 sm:px-6 sm:py-8">
+            {children}
+          </div>
+        )}
+      </SidebarInset>
+    </SidebarProvider>
+  );
+}
+
+function TaskShell({ children }: { readonly children: ReactNode }) {
   return (
     <div className="min-h-dvh bg-background text-foreground">
       <header className="sticky top-0 z-20 border-b border-border/40 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80">
         <div className="flex w-full items-center gap-4 px-4 py-3">
-          <Link className="flex shrink-0 items-center gap-2" href="/">
-            <span className="flex size-7 items-center justify-center rounded-full bg-primary text-primary-foreground">
-              <BotIcon className="size-3.5" />
-            </span>
-            <span className="type-product-title">Local Vault</span>
+          <Link aria-label="Workspace" href="/">
+            <Logo className="size-7" />
           </Link>
-
           <nav
-            aria-label="Manager navigation"
-            className="ml-auto flex items-center gap-1 sm:ml-4"
+            aria-label="Task navigation"
+            className="ml-auto flex items-center gap-1"
           >
-            {navigation.map((item) => {
-              const Icon = item.icon;
-              return (
-                <Link
-                  aria-current={active === item.id ? "page" : undefined}
-                  className={cn(
-                    buttonVariants({
-                      size: "sm",
-                      variant: active === item.id ? "subtle" : "quiet",
-                    }),
-                    "hidden sm:inline-flex"
-                  )}
-                  href={item.href}
-                  key={item.id}
-                >
-                  <Icon />
-                  {item.label}
-                </Link>
-              );
-            })}
+            <Link
+              className={buttonVariants({ size: "sm", variant: "quiet" })}
+              href="/"
+            >
+              <HouseIcon />
+              Home
+            </Link>
+            <Link
+              className={buttonVariants({ size: "sm", variant: "default" })}
+              href="/chat"
+            >
+              <MessageSquareIcon />
+              Chat
+            </Link>
           </nav>
-
-          <Link
-            className={buttonVariants({ size: "sm", variant: "default" })}
-            href="/chat"
-          >
-            <MessageSquareIcon />
-            <span className="hidden sm:inline">Open chat</span>
-            <span className="sm:hidden">Chat</span>
-          </Link>
         </div>
-        <nav
-          aria-label="Manager navigation on small screens"
-          className="flex gap-1 border-t border-border/40 px-3 py-1 sm:hidden"
-        >
-          {navigation.map((item) => {
-            const Icon = item.icon;
-            return (
-              <Link
-                aria-current={active === item.id ? "page" : undefined}
-                className={cn(
-                  buttonVariants({
-                    size: "sm",
-                    variant: active === item.id ? "subtle" : "quiet",
-                  }),
-                  "flex-1"
-                )}
-                href={item.href}
-                key={item.id}
-              >
-                <Icon />
-                {item.label}
-              </Link>
-            );
-          })}
-        </nav>
       </header>
-      <div className="mx-auto flex w-full max-w-3xl flex-col px-4 py-10 sm:py-12">
+      <div className="mx-auto flex w-full max-w-3xl flex-col px-4 py-6 sm:py-8">
         {children}
       </div>
     </div>

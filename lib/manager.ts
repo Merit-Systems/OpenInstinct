@@ -3,7 +3,7 @@ import { z } from "zod";
 export const DEFAULT_LOCAL_MANAGER_URL =
   "https://local-vault-assistant.localhost";
 
-export const connectionProviderSchema = z.enum([
+const connectionProviderSchema = z.enum([
   "kernel",
   "local-model",
   "email",
@@ -21,9 +21,11 @@ const managerConnectionSchema = z.object({
   updatedAt: z.string(),
 });
 
-export const vaultItemKindSchema = z.enum([
+const vaultItemKindSchema = z.enum([
   "login",
   "payment",
+  "address",
+  "phone",
   "identity",
   "token",
 ]);
@@ -43,6 +45,7 @@ export const managerSnapshotSchema = z.object({
   runtime: z.object({
     inference: z.string(),
     mode: z.literal("local-first"),
+    source: z.enum(["gateway", "local"]),
   }),
   secretStore: z.object({
     available: z.boolean(),
@@ -52,13 +55,23 @@ export const managerSnapshotSchema = z.object({
   vaultItems: z.array(managerVaultItemSchema),
 });
 
-const connectionInputSchema = z.object({
-  account: z.string().trim().max(200).default(""),
-  endpoint: z.string().trim().max(2_000).default(""),
-  label: z.string().trim().min(1).max(120),
-  provider: connectionProviderSchema,
-  secret: z.string().max(20_000).default(""),
-});
+const connectionInputSchema = z
+  .object({
+    account: z.string().trim().max(200).default(""),
+    endpoint: z.string().trim().max(2_000).default(""),
+    label: z.string().trim().min(1).max(120),
+    provider: connectionProviderSchema,
+    secret: z.string().max(20_000).default(""),
+  })
+  .superRefine((input, context) => {
+    if (input.provider === "kernel" && input.secret.trim().length === 0) {
+      context.addIssue({
+        code: "custom",
+        message: "A Kernel API key is required.",
+        path: ["secret"],
+      });
+    }
+  });
 
 const vaultItemInputSchema = z.object({
   account: z.string().trim().max(200).default(""),
@@ -94,6 +107,10 @@ export const managerMutationSchema = z.discriminatedUnion("action", [
     input: connectionInputSchema,
   }),
   z.object({ action: z.literal("connection.delete"), id: z.string().min(1) }),
+  z.object({
+    action: z.literal("model.select"),
+    modelId: z.string().trim().min(1).max(300),
+  }),
   z.object({ action: z.literal("vault.create"), input: vaultItemInputSchema }),
   z.object({ action: z.literal("vault.delete"), id: z.string().min(1) }),
 ]);
@@ -108,7 +125,7 @@ export function createManagerSetupUrl(
   baseUrl: string,
   request: ManagerSetupRequest
 ) {
-  const url = new URL("/", baseUrl);
+  const url = new URL(request.target === "vault" ? "/vault" : "/", baseUrl);
   url.searchParams.set("setup", request.target);
   if (request.account) url.searchParams.set("account", request.account);
   if (request.label) url.searchParams.set("label", request.label);
@@ -121,4 +138,68 @@ export function createManagerSetupUrl(
   }
 
   return url.toString();
+}
+
+export function isLocalManagerHostname(hostname: string) {
+  return (
+    hostname === "localhost" ||
+    hostname.endsWith(".localhost") ||
+    hostname === "127.0.0.1" ||
+    hostname === "[::1]" ||
+    hostname === "::1"
+  );
+}
+
+export function isAllowedManagerMutationOrigin({
+  forwardedHost,
+  forwardedProto,
+  host,
+  origin,
+  requestUrl,
+}: {
+  forwardedHost: string | null;
+  forwardedProto: string | null;
+  host: string | null;
+  origin: string | null;
+  requestUrl: string;
+}) {
+  if (!origin) return true;
+
+  let parsedOrigin: URL;
+  try {
+    parsedOrigin = new URL(origin);
+  } catch {
+    return false;
+  }
+  if (!isLocalManagerHostname(parsedOrigin.hostname)) return false;
+
+  const request = new URL(requestUrl);
+  const allowedOrigins = new Set([request.origin]);
+  const protocol = firstForwardedValue(forwardedProto) ?? request.protocol;
+
+  for (const candidateHost of [forwardedHost, host]) {
+    const candidate = firstForwardedValue(candidateHost);
+    if (!candidate) continue;
+    try {
+      const candidateUrl = new URL(
+        `${normalizeProtocol(protocol)}//${candidate}`
+      );
+      if (isLocalManagerHostname(candidateUrl.hostname)) {
+        allowedOrigins.add(candidateUrl.origin);
+      }
+    } catch {
+      continue;
+    }
+  }
+
+  return allowedOrigins.has(parsedOrigin.origin);
+}
+
+function firstForwardedValue(value: string | null) {
+  const first = value?.split(",", 1)[0]?.trim();
+  return first?.length ? first : undefined;
+}
+
+function normalizeProtocol(protocol: string) {
+  return protocol.endsWith(":") ? protocol : `${protocol}:`;
 }

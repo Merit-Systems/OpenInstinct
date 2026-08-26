@@ -153,7 +153,7 @@ export function AgentChat({
   );
 
   return (
-    <main className="flex h-dvh flex-col overflow-hidden bg-background text-foreground">
+    <main className="relative flex h-full min-h-0 flex-col overflow-hidden bg-background text-foreground">
       {showConversationLayout ? (
         <ChatHeader canStartNewChat={activeSessionId !== undefined} />
       ) : null}
@@ -201,13 +201,13 @@ export function AgentChat({
         className={cn(
           "mx-auto w-full px-4 sm:px-6",
           showConversationLayout
-            ? "fixed bottom-0 left-1/2 z-20 max-w-3xl -translate-x-1/2 bg-gradient-to-t from-background via-background to-transparent pt-4 pb-6"
+            ? "absolute bottom-0 left-1/2 z-20 max-w-3xl -translate-x-1/2 bg-gradient-to-t from-background via-background to-transparent pt-4 pb-6"
             : "flex max-w-xl flex-1 flex-col items-center justify-center gap-8 pb-[10vh]"
         )}
       >
         {showConversationLayout ? null : (
-          <div className="flex flex-col items-center gap-3 text-center">
-            <h1 className="font-medium text-5xl tracking-tighter">
+          <div className="flex flex-col items-start gap-3">
+            <h1 className="text-5xl font-medium tracking-tighter">
               {AGENT_NAME}
             </h1>
           </div>
@@ -243,15 +243,15 @@ function ChatHeader({
   readonly canStartNewChat: boolean;
 }) {
   return (
-    <header className="pointer-events-none fixed top-0 right-0 left-0 z-20 h-14">
-      <div className="relative mx-auto flex h-full w-full max-w-3xl items-center justify-center bg-background px-24">
-        <span className="truncate text-muted-foreground text-sm">
+    <header className="pointer-events-none absolute top-0 right-0 left-0 z-20 h-14">
+      <div className="relative mx-auto flex h-full w-full max-w-3xl items-center justify-start bg-background px-4">
+        <span className="truncate text-sm text-muted-foreground">
           {AGENT_NAME}
         </span>
         {canStartNewChat ? (
           <Button
             aria-label="Start a new chat"
-            className="pointer-events-auto fixed top-2 right-6"
+            className="pointer-events-auto absolute top-2 right-6"
             onClick={() => window.location.assign("/chat")}
             size="sm"
             type="button"
@@ -270,7 +270,7 @@ function PendingThinking() {
   return (
     <Message aria-live="polite" from="assistant">
       <MessageContent>
-        <div className="mb-4 flex w-full items-center gap-2 text-muted-foreground text-sm">
+        <div className="mb-4 flex w-full items-center gap-2 text-sm text-muted-foreground">
           <BrainIcon className="size-4" />
           <Shimmer duration={1}>Thinking</Shimmer>
         </div>

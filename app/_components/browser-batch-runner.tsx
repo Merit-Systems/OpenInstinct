@@ -52,7 +52,7 @@ export function BrowserBatchRunner() {
       <header className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="max-w-2xl">
           <h1 className="type-page-title">Browser jobs</h1>
-          <p className="mt-2 type-supporting-body text-muted-foreground">
+          <p className="type-supporting-body mt-2 text-muted-foreground">
             Create recoverable task groups and monitor every browser job from
             one persistent dashboard.
           </p>

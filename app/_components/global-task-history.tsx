@@ -122,7 +122,7 @@ export function GlobalTaskHistory({
           <h2 className="type-card-title" id="all-tasks-heading">
             Every task ever run
           </h2>
-          <p className="mt-1 type-supporting-body text-muted-foreground">
+          <p className="type-supporting-body mt-1 text-muted-foreground">
             Durable project-wide history across browsers and sessions. Load
             older pages to walk the complete run ledger.
           </p>

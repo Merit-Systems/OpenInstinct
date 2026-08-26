@@ -48,6 +48,7 @@
     "oxlint": "1.78.0",
     "oxlint-tsgolint": "7.0.2001",
     "portless": "0.15.6",
+    "shadcn": "4.13.1",
     "taze": "19.16.0",
     "turbo": "2.10.5",
     "typescript": "6.0.3",

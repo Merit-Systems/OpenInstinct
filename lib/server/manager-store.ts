@@ -82,11 +82,13 @@ export async function readManagerSnapshot() {
       ),
     ]);
 
+    const modelSettings = getModelSettings();
     return managerSnapshotSchema.parse({
       connections,
       runtime: {
-        inference: getModelSettings().modelId,
+        inference: modelSettings.modelId,
         mode: "local-first",
+        source: modelSettings.source,
       },
       secretStore: secretStoreStatus(),
       vaultItems,
@@ -103,6 +105,9 @@ export async function applyManagerMutation(mutation: ManagerMutation) {
       break;
     case "connection.delete":
       await removeRecord("connections", "connection", mutation.id);
+      break;
+    case "model.select":
+      selectGatewayModel(mutation.modelId);
       break;
     case "vault.create":
       await createVaultItem(mutation.input);
@@ -143,6 +148,7 @@ async function createConnection(
 ) {
   const id = randomUUID();
   const now = new Date().toISOString();
+  const replacedIds: string[] = [];
 
   if (input.secret) {
     await writeSecret({ id, namespace: "connection", value: input.secret });
@@ -150,25 +156,85 @@ async function createConnection(
 
   const database = openDatabase();
   try {
-    database
-      .prepare(
-        "INSERT INTO connections (id, provider, label, endpoint, account, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)"
-      )
-      .run(
-        id,
-        input.provider,
-        input.label,
-        input.endpoint,
-        input.account,
-        now,
-        now
+    if (input.provider === "kernel") {
+      replacedIds.push(
+        ...z
+          .array(connectionRowSchema.pick({ id: true }))
+          .parse(
+            database
+              .prepare("SELECT id FROM connections WHERE provider = ?")
+              .all(input.provider)
+          )
+          .map((row) => row.id)
       );
+    }
+
+    database.exec("BEGIN IMMEDIATE");
+    try {
+      database
+        .prepare(
+          "INSERT INTO connections (id, provider, label, endpoint, account, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)"
+        )
+        .run(
+          id,
+          input.provider,
+          input.label,
+          input.endpoint,
+          input.account,
+          now,
+          now
+        );
+
+      if (input.provider === "kernel") {
+        database
+          .prepare("DELETE FROM connections WHERE provider = ? AND id <> ?")
+          .run(input.provider, id);
+      }
+      if (input.provider === "local-model") {
+        writeSetting(database, "model_source", "local");
+      }
+      database.exec("COMMIT");
+    } catch (error) {
+      database.exec("ROLLBACK");
+      throw error;
+    }
   } catch (error) {
     await deleteSecret({ id, namespace: "connection" });
     throw error;
   } finally {
     database.close();
   }
+
+  await Promise.all(
+    replacedIds.map((replacedId) =>
+      deleteSecret({ id: replacedId, namespace: "connection" })
+    )
+  );
+}
+
+function selectGatewayModel(modelId: string) {
+  const database = openDatabase();
+  try {
+    database.exec("BEGIN IMMEDIATE");
+    try {
+      writeSetting(database, "gateway_model", modelId);
+      writeSetting(database, "model_source", "gateway");
+      database.exec("COMMIT");
+    } catch (error) {
+      database.exec("ROLLBACK");
+      throw error;
+    }
+  } finally {
+    database.close();
+  }
+}
+
+function writeSetting(database: DatabaseSync, key: string, value: string) {
+  database
+    .prepare(
+      "INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value"
+    )
+    .run(key, value);
 }
 
 async function createVaultItem(
@@ -231,6 +297,10 @@ function openDatabase() {
       account TEXT NOT NULL,
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS settings (
+      key TEXT PRIMARY KEY,
+      value TEXT NOT NULL
     );
   `);
   return database;

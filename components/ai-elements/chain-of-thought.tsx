@@ -140,7 +140,7 @@ export const ChainOfThoughtStep = memo(
       <div className="flex-1 space-y-2 overflow-hidden">
         <div>{label}</div>
         {description && (
-          <div className="text-muted-foreground text-xs">{description}</div>
+          <div className="text-xs text-muted-foreground">{description}</div>
         )}
         {children}
       </div>
@@ -208,7 +208,7 @@ export const ChainOfThoughtImage = memo(
       <div className="relative flex max-h-[22rem] items-center justify-center overflow-hidden rounded-lg bg-muted p-3">
         {children}
       </div>
-      {caption && <p className="text-muted-foreground text-xs">{caption}</p>}
+      {caption && <p className="text-xs text-muted-foreground">{caption}</p>}
     </div>
   )
 );

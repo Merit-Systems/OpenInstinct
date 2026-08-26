@@ -14,15 +14,27 @@ const localModelRowSchema = z
   })
   .nullish();
 
+const settingRowsSchema = z.array(
+  z.object({ key: z.string(), value: z.string() })
+);
+
 export function getModelSettings() {
   const env = getEnv();
   const storedModel = readStoredLocalModel();
+  const storedSettings = readStoredSettings();
   const configuredBaseURL = env.LOCAL_VAULT_ASSISTANT_MODEL_BASE_URL?.trim();
-  const usesStoredModel = !configuredBaseURL && Boolean(storedModel?.endpoint);
-  const baseURL = configuredBaseURL ?? normalize(storedModel?.endpoint);
+  const usesStoredModel =
+    !configuredBaseURL &&
+    storedSettings.model_source !== "gateway" &&
+    Boolean(storedModel?.endpoint);
+  const baseURL =
+    configuredBaseURL ??
+    (usesStoredModel ? normalize(storedModel?.endpoint) : undefined);
   const configuredModel =
     env.LOCAL_VAULT_ASSISTANT_MODEL?.trim() ??
-    (usesStoredModel ? normalize(storedModel?.account) : undefined);
+    (usesStoredModel
+      ? normalize(storedModel?.account)
+      : normalize(storedSettings.gateway_model));
   const modelId =
     configuredModel && configuredModel.length > 0
       ? configuredModel
@@ -38,7 +50,33 @@ export function getModelSettings() {
         : undefined),
     baseURL,
     modelId,
+    source: baseURL ? ("local" as const) : ("gateway" as const),
   };
+}
+
+function readStoredSettings() {
+  const filename = join(getLocalDataDirectory(), "manager.sqlite");
+  if (!existsSync(filename)) return {};
+
+  let database: DatabaseSync | undefined;
+  try {
+    database = new DatabaseSync(filename, { readOnly: true });
+    return Object.fromEntries(
+      settingRowsSchema
+        .parse(
+          database
+            .prepare(
+              "SELECT key, value FROM settings WHERE key IN ('gateway_model', 'model_source')"
+            )
+            .all()
+        )
+        .map((row) => [row.key, row.value])
+    );
+  } catch {
+    return {};
+  } finally {
+    database?.close();
+  }
 }
 
 function readStoredLocalModel() {

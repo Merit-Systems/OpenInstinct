@@ -1,7 +1,5 @@
 # Local Vault Assistant
 
-[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2FMerit-Systems%2Fopen-instinct&project-name=local-vault-assistant&repository-name=local-vault-assistant&env=KERNEL_API_KEY&envDescription=Kernel%20API%20key%20for%20cloud%20browser%20tasks.&envLink=https%3A%2F%2Fwww.kernel.sh%2Fdocs%2Freference%2Fcli%2Fauth)
-
 ## Your agent doesn't need root access to your life
 
 Personal agents become dramatically more useful when they can sign in, book, buy, send, and act on your behalf. They also become dramatically more dangerous when every password, payment credential, and identity detail must live in somebody else's cloud.
@@ -56,16 +54,6 @@ To configure a local model without the manager:
 LOCAL_VAULT_ASSISTANT_MODEL=qwen3.5:27b \
 LOCAL_VAULT_ASSISTANT_MODEL_BASE_URL=http://127.0.0.1:11434/v1 \
 ./bin/local-assistant
-```
-
-## Deploy on Vercel
-
-The button at the top deploys the hosted chat and browser-task surfaces. It asks for a Kernel API key; Vercel AI Gateway supplies the default model through project OIDC.
-
-The vault and connection manager remain device-only. Hosted deployments open with a manager companion that links to `https://local-vault-assistant.localhost` and explains how to start the device runtime. The hosted surface does not receive Keychain-backed credentials.
-
-```bash
-pnpm exec eve deploy --project local-vault-assistant --non-interactive --yes
 ```
 
 ## Implementation details

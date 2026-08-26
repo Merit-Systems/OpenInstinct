@@ -1,4 +1,5 @@
 import { AgentChat } from "@/app/_components/agent-chat";
+import { ManagerShell } from "@/app/_components/manager-shell";
 
 export default async function ChatSessionPage({
   params,
@@ -6,5 +7,9 @@ export default async function ChatSessionPage({
   readonly params: Promise<{ readonly sessionId: string }>;
 }) {
   const { sessionId } = await params;
-  return <AgentChat sessionId={sessionId} />;
+  return (
+    <ManagerShell active="chat">
+      <AgentChat sessionId={sessionId} />
+    </ManagerShell>
+  );
 }

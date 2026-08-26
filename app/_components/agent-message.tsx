@@ -265,7 +265,7 @@ function QuestionRequest({
               <span>
                 <span className="block">{option.label}</span>
                 {option.description ? (
-                  <span className="block font-normal text-xs opacity-70">
+                  <span className="block text-xs font-normal opacity-70">
                     {option.description}
                   </span>
                 ) : null}
@@ -376,12 +376,12 @@ function AuthorizationPrompt({
           <Icon className="size-4" />
         </span>
         <div className="min-w-0 flex-1 space-y-2">
-          <p className="font-medium text-sm">{authorizationTitle(part)}</p>
-          <p className="text-muted-foreground text-sm">
+          <p className="text-sm font-medium">{authorizationTitle(part)}</p>
+          <p className="text-sm text-muted-foreground">
             {authorizationDescription(part)}
           </p>
           {shouldShowInstructions ? (
-            <p className="text-muted-foreground text-sm">{instructions}</p>
+            <p className="text-sm text-muted-foreground">{instructions}</p>
           ) : null}
           {part.state === "required" && part.authorization?.userCode ? (
             <div className="flex flex-wrap items-center gap-2 text-sm">
@@ -484,9 +484,9 @@ function InputRequestActions({
 
   return (
     <div className="space-y-3 rounded-md border border-yellow-500/30 bg-yellow-500/5 p-3">
-      <p className="text-muted-foreground text-sm">{inputRequest.prompt}</p>
+      <p className="text-sm text-muted-foreground">{inputRequest.prompt}</p>
       {inputResponse ? (
-        <p className="font-medium text-sm">
+        <p className="text-sm font-medium">
           Responded:{" "}
           {selectedOption?.label ??
             inputResponse.text ??

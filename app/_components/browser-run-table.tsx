@@ -48,7 +48,7 @@ export function BrowserRunTable({
           <div>
             <PlayIcon className="mx-auto mb-3 size-5" />
             <p className="type-label">{emptyTitle}</p>
-            <p className="mt-1 type-supporting-body">{emptyDescription}</p>
+            <p className="type-supporting-body mt-1">{emptyDescription}</p>
           </div>
         </div>
       ) : (

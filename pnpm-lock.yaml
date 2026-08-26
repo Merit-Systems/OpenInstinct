@@ -162,6 +162,9 @@ importers:
       portless:
         specifier: 0.15.6
         version: 0.15.6
+      shadcn:
+        specifier: 4.13.1
+        version: 4.13.1(@cfworker/json-schema@4.1.1)(typescript@6.0.3)
       taze:
         specifier: 19.16.0
         version: 19.16.0

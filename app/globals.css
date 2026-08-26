@@ -7,15 +7,15 @@
 @source "../node_modules/streamdown/dist/*.js";
 
 :root {
-  --primary: oklch(0.5946 0.1624 144.21);
-  --primary-foreground: oklch(1 0 0);
-  --ring: var(--primary);
+  --primary: oklch(0.88 0.008 85);
+  --primary-foreground: oklch(0.18 0.008 85);
+  --ring: oklch(0.5 0.008 85);
 }
 
 .dark {
-  --primary: oklch(0.6731 0.1624 144.21);
-  --primary-foreground: oklch(1 0 0);
-  --ring: var(--primary);
+  --primary: oklch(0.82 0.008 85);
+  --primary-foreground: oklch(0.16 0.008 85);
+  --ring: oklch(0.68 0.008 85);
 }
 
 * {

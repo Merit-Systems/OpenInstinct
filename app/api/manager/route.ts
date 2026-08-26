@@ -1,4 +1,8 @@
-import { managerMutationSchema } from "@/lib/manager";
+import {
+  isAllowedManagerMutationOrigin,
+  isLocalManagerHostname,
+  managerMutationSchema,
+} from "@/lib/manager";
 import { getEnv } from "@/lib/runtime-env";
 import {
   applyManagerMutation,
@@ -43,13 +47,7 @@ function denyNonLocalRequest(request: Request, mutation = false) {
   if (getEnv().LOCAL_VAULT_ASSISTANT_ALLOW_REMOTE_MANAGER) return;
 
   const url = new URL(request.url);
-  const isLoopback =
-    url.hostname === "localhost" ||
-    url.hostname === "127.0.0.1" ||
-    url.hostname === "[::1]" ||
-    url.hostname === "::1";
-
-  if (!isLoopback) {
+  if (!isLocalManagerHostname(url.hostname)) {
     return Response.json(
       { error: "The local manager is available only on this device." },
       { status: 403 }
@@ -57,8 +55,15 @@ function denyNonLocalRequest(request: Request, mutation = false) {
   }
 
   if (mutation) {
-    const origin = request.headers.get("origin");
-    if (origin && origin !== url.origin) {
+    if (
+      !isAllowedManagerMutationOrigin({
+        forwardedHost: request.headers.get("x-forwarded-host"),
+        forwardedProto: request.headers.get("x-forwarded-proto"),
+        host: request.headers.get("host"),
+        origin: request.headers.get("origin"),
+        requestUrl: request.url,
+      })
+    ) {
       return Response.json(
         { error: "Cross-origin manager writes are blocked." },
         { status: 403 }

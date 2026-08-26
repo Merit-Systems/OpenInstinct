@@ -1,5 +1,5 @@
 import { ManagerShell } from "@/app/_components/manager-shell";
-import { WorkspaceManager } from "@/app/_components/manager/workspace";
+import { VaultManager } from "@/app/_components/manager/vault";
 import { managerSetupRequestSchema } from "@/lib/manager";
 
 export default async function Page({
@@ -12,18 +12,16 @@ export default async function Page({
   const query = await searchParams;
   const requestedSetup = managerSetupRequestSchema.safeParse({
     account: firstQueryValue(query.account),
-    endpoint: firstQueryValue(query.endpoint),
     kind: firstQueryValue(query.kind),
     label: firstQueryValue(query.label),
-    provider: firstQueryValue(query.provider),
     target: firstQueryValue(query.setup),
   });
 
   return (
-    <ManagerShell active="workspace">
-      <WorkspaceManager
+    <ManagerShell active="vault">
+      <VaultManager
         initialSetup={
-          requestedSetup.success && requestedSetup.data.target === "connection"
+          requestedSetup.success && requestedSetup.data.target === "vault"
             ? requestedSetup.data
             : undefined
         }

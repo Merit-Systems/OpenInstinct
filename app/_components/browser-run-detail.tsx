@@ -75,10 +75,10 @@ export function BrowserRunDetail({ groupId }: { readonly groupId: string }) {
     return (
       <main className="flex min-h-64 items-center justify-center text-foreground">
         <div className="max-w-md text-center">
-          <h1 className="font-medium text-3xl tracking-tight">
+          <h1 className="text-3xl font-medium tracking-tight">
             Group not found
           </h1>
-          <p className="mt-2 type-supporting-body text-muted-foreground">
+          <p className="type-supporting-body mt-2 text-muted-foreground">
             This group is not saved in this browser.
           </p>
           <Button
@@ -117,7 +117,7 @@ export function BrowserRunDetail({ groupId }: { readonly groupId: string }) {
               {isActive ? "running" : "saved"}
             </Badge>
           </div>
-          <p className="mt-2 type-supporting-body text-muted-foreground">
+          <p className="type-supporting-body mt-2 text-muted-foreground">
             Created {formatGroupTimestamp(group.createdAt)} · concurrency{" "}
             {String(group.concurrency)} · refresh-safe recovery
           </p>
@@ -137,7 +137,7 @@ export function BrowserRunDetail({ groupId }: { readonly groupId: string }) {
             <h2 className="type-card-title" id="group-results-heading">
               Group tasks
             </h2>
-            <p className="mt-1 type-supporting-body text-muted-foreground">
+            <p className="type-supporting-body mt-1 text-muted-foreground">
               Reloading reconnects running session IDs and rebuilds results from
               their durable event streams.
             </p>
