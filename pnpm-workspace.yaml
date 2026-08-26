@@ -16,6 +16,7 @@ minimumReleaseAgeExclude:
   - picomatch
   - systeminformation
 allowBuilds:
+  better-sqlite3: true
   cbor-extract: false
   esbuild: true
   sharp: true
