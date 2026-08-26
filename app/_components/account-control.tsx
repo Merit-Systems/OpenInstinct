@@ -1,23 +1,35 @@
 "use client";
 
 import { LogOutIcon } from "lucide-react";
-import { signOut, useSession } from "next-auth/react";
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
+import { authClient } from "@/lib/auth-client";
 
 export function AccountControl() {
-  const { data: session } = useSession();
+  const [authRequired, setAuthRequired] = useState(false);
+  useEffect(() => {
+    setAuthRequired(document.body.dataset.authRequired === "true");
+  }, []);
+
+  return authRequired ? <HostedAccountControl /> : null;
+}
+
+function HostedAccountControl() {
+  const { data: session } = authClient.useSession();
   if (!session?.user) return null;
 
   return (
     <div className="flex items-center gap-2 border-t border-sidebar-border px-3 py-3">
       <span className="min-w-0 flex-1 truncate type-label text-muted-foreground">
-        {session.user.email ?? session.user.name ?? "Signed in"}
+        {maskPhoneNumber(session.user.phoneNumber)}
       </span>
       <Button
         aria-label="Sign out"
         onClick={() => {
           clearWorkspaceBrowserData();
-          void signOut({ redirectTo: "/sign-in" });
+          void authClient.signOut().finally(() => {
+            window.location.assign("/sign-in");
+          });
         }}
         size="icon-sm"
         type="button"
@@ -27,6 +39,11 @@ export function AccountControl() {
       </Button>
     </div>
   );
+}
+
+function maskPhoneNumber(phoneNumber: string | null | undefined) {
+  if (!phoneNumber) return "Signed in";
+  return `Phone ending in ${phoneNumber.slice(-4)}`;
 }
 
 function clearWorkspaceBrowserData() {

@@ -21,7 +21,7 @@ The result is a personal agent with useful browser capabilities and a much small
 - Recoverable parallel browser jobs with time, outcome, and model-cost tracking at `/tasks`
 - macOS Keychain storage for secret values and a private local database for metadata
 - Local or hosted OpenAI-compatible inference
-- Optional hosted mode with GitHub sign-in and isolated personal workspaces
+- Optional hosted mode with phone sign-in, SMS 2FA, and isolated personal workspaces
 
 ## Run locally
 
@@ -63,24 +63,27 @@ Keychain.
 
 ## Run for multiple users
 
-Hosted mode requires GitHub OAuth, Postgres, and an application encryption key.
-Each authenticated GitHub account receives a stable personal workspace. Manager
+Hosted mode requires Better Auth, Better Auth Infra SMS, Postgres, and an
+application encryption key. Each authenticated phone account receives a stable
+personal workspace. Manager
 settings, connections, vault metadata, encrypted secrets, agent sessions, and
 task history are scoped to that workspace.
 
 ```bash
 LOCAL_VAULT_ASSISTANT_MODE=hosted
-AUTH_GITHUB_ID=your-github-oauth-client-id
-AUTH_GITHUB_SECRET=your-github-oauth-client-secret
-AUTH_SECRET="$(openssl rand -base64 32)"
+BETTER_AUTH_SECRET="$(openssl rand -base64 32)"
+BETTER_AUTH_URL=https://your-host
+BETTER_AUTH_INFRA_API_KEY=your-better-auth-infra-key
 DATABASE_URL=postgresql://user:password@host/database
 HOSTED_SECRET_ENCRYPTION_KEY="$(openssl rand -base64 32)"
 ```
 
-Set the GitHub OAuth callback URL to
-`https://your-host/api/auth/callback/github`. On Vercel, hosted mode is selected
-automatically; setting `LOCAL_VAULT_ASSISTANT_MODE=local` keeps the no-login
-experience for an explicitly local deployment.
+The hosted UI exposes phone number plus password as the first factor and a
+one-time SMS code as the required second factor. Phone numbers must use E.164
+format. Better Auth tables are migrated automatically when the hosted auth
+surface is first used. On Vercel, hosted mode is selected automatically;
+setting `LOCAL_VAULT_ASSISTANT_MODE=local` keeps the no-login experience for an
+explicitly local deployment and does not contact Better Auth or the SMS service.
 
 Hosted secrets are encrypted with AES-256-GCM before being written to Postgres.
 Treat `HOSTED_SECRET_ENCRYPTION_KEY` as production key material: store it in the

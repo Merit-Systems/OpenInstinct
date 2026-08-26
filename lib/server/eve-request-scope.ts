@@ -1,5 +1,3 @@
-import { getToken } from "next-auth/jwt";
-import { z } from "zod";
 import {
   accessScopeForUser,
   type AccessScope,
@@ -7,7 +5,7 @@ import {
 } from "../access-scope";
 import { getDeploymentMode } from "../deployment-mode";
 import { isLocalManagerHostname } from "../manager";
-import { getEnv } from "../runtime-env";
+import { getHostedAuthSession } from "./auth-session";
 
 export async function requestScopeFromRequest(
   request: Request
@@ -18,18 +16,8 @@ export async function requestScopeFromRequest(
       : undefined;
   }
 
-  const secret = getEnv().AUTH_SECRET;
-  if (!secret) {
-    throw new Error("AUTH_SECRET is required in hosted mode.");
-  }
-
-  const forwardedProtocol = request.headers
-    .get("x-forwarded-proto")
-    ?.split(",")[0]
-    ?.trim();
-  const secureCookie =
-    forwardedProtocol === "https" || new URL(request.url).protocol === "https:";
-  const token = await getToken({ req: request, secret, secureCookie });
-  const userId = z.string().min(1).safeParse(token?.appUserId);
-  return userId.success ? accessScopeForUser(userId.data) : undefined;
+  const session = await getHostedAuthSession(request.headers);
+  return session
+    ? accessScopeForUser(`better-auth:${session.user.id}`)
+    : undefined;
 }

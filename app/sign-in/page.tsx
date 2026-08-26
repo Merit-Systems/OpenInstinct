@@ -1,12 +1,23 @@
 import { redirect } from "next/navigation";
-import { auth, signIn } from "@/auth";
-import { Button } from "@/components/ui/button";
+import { headers } from "next/headers";
+import { PhoneAuthForm } from "@/app/sign-in/phone-auth-form";
 import { Logo } from "@/components/ui/logo";
 import { getDeploymentMode } from "@/lib/deployment-mode";
+import { getHostedAuthSession } from "@/lib/server/auth-session";
 
-export default async function SignInPage() {
+export default async function SignInPage({
+  searchParams,
+}: {
+  readonly searchParams: Promise<{ callbackUrl?: string }>;
+}) {
   if (getDeploymentMode() === "local") redirect("/");
-  if ((await auth())?.user) redirect("/");
+  if (await getHostedAuthSession(await headers())) redirect("/");
+
+  const requestedCallback = (await searchParams).callbackUrl;
+  const callbackUrl =
+    requestedCallback?.startsWith("/") && !requestedCallback.startsWith("//")
+      ? requestedCallback
+      : "/";
 
   return (
     <main className="flex min-h-svh items-center justify-center bg-background px-4 text-foreground">
@@ -17,17 +28,7 @@ export default async function SignInPage() {
           Your conversations, connections, and vault stay isolated from every
           other account.
         </p>
-        <form
-          action={async () => {
-            "use server";
-            await signIn("github", { redirectTo: "/" });
-          }}
-          className="mt-6"
-        >
-          <Button className="w-full" type="submit">
-            Continue with GitHub
-          </Button>
-        </form>
+        <PhoneAuthForm callbackUrl={callbackUrl} />
       </section>
     </main>
   );

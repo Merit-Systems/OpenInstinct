@@ -1,10 +1,10 @@
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
-import { auth } from "@/auth";
-import { AuthProvider } from "@/app/_components/auth-provider";
+import { headers } from "next/headers";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { accessScopeForUser, localAccessScope } from "@/lib/access-scope";
 import { getDeploymentMode } from "@/lib/deployment-mode";
+import { getHostedAuthSession } from "@/lib/server/auth-session";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -19,20 +19,22 @@ export default async function RootLayout({
   readonly children: ReactNode;
 }) {
   const mode = getDeploymentMode();
-  const session = mode === "hosted" ? await auth() : null;
+  const session =
+    mode === "hosted" ? await getHostedAuthSession(await headers()) : null;
   const workspaceId =
     mode === "local"
       ? localAccessScope.workspaceId
       : session?.user?.id
-        ? accessScopeForUser(session.user.id).workspaceId
+        ? accessScopeForUser(`better-auth:${session.user.id}`).workspaceId
         : undefined;
 
   return (
     <html lang="en">
-      <body data-workspace-id={workspaceId}>
-        <AuthProvider session={session}>
-          <TooltipProvider>{children}</TooltipProvider>
-        </AuthProvider>
+      <body
+        data-auth-required={mode === "hosted" ? "true" : "false"}
+        data-workspace-id={workspaceId}
+      >
+        <TooltipProvider>{children}</TooltipProvider>
       </body>
     </html>
   );

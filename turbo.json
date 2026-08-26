@@ -1,9 +1,9 @@
 {
   "$schema": "https://turborepo.dev/schema.json",
   "globalEnv": [
-    "AUTH_GITHUB_ID",
-    "AUTH_GITHUB_SECRET",
-    "AUTH_SECRET",
+    "BETTER_AUTH_INFRA_API_KEY",
+    "BETTER_AUTH_SECRET",
+    "BETTER_AUTH_URL",
     "DATABASE_URL",
     "HOSTED_SECRET_ENCRYPTION_KEY",
     "KERNEL_API_KEY",

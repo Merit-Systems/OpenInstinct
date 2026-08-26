@@ -9,9 +9,12 @@ const optionalValue = z
 export function getEnv() {
   return createEnv({
     server: {
-      AUTH_GITHUB_ID: optionalValue,
-      AUTH_GITHUB_SECRET: optionalValue,
-      AUTH_SECRET: optionalValue,
+      BETTER_AUTH_INFRA_API_KEY: optionalValue,
+      BETTER_AUTH_SECRET: optionalValue,
+      BETTER_AUTH_URL: optionalValue.refine(
+        (value) => value === undefined || URL.canParse(value),
+        "BETTER_AUTH_URL must be an absolute URL"
+      ),
       BROWSER_BENCH_LABEL: z.string().min(1).optional(),
       BROWSER_BENCH_REPETITIONS: z.coerce
         .number()
