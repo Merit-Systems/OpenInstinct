@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+if command -v pnpm >/dev/null 2>&1; then
+  package_manager=(pnpm)
+else
+  package_manager=(corepack pnpm)
+fi
+
+if [[ ! -d node_modules ]]; then
+  "${package_manager[@]}" install
+fi
+
+exec "${package_manager[@]}" dev

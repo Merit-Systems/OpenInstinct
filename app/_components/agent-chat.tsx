@@ -23,7 +23,7 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { AgentMessage } from "./agent-message";
 
-const AGENT_NAME = "eve-kernel";
+const AGENT_NAME = "Local Vault Assistant";
 
 export function AgentChat({
   sessionId,
@@ -49,7 +49,7 @@ export function AgentChat({
           window.history,
           window.history.state,
           "",
-          `/s/${encodeURIComponent(session.sessionId)}`
+          `/chat/${encodeURIComponent(session.sessionId)}`
         );
       }
     },
@@ -252,7 +252,7 @@ function ChatHeader({
           <Button
             aria-label="Start a new chat"
             className="pointer-events-auto fixed top-2 right-6"
-            onClick={() => window.location.assign("/s")}
+            onClick={() => window.location.assign("/chat")}
             size="sm"
             type="button"
             variant="ghost"

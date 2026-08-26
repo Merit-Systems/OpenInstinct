@@ -4,9 +4,9 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Browser Batch Runner · Eve Kernel",
+  title: "Local Vault Assistant",
   description:
-    "Run and compare concurrent browser-agent tasks with live timing and cost.",
+    "A local-first personal agent with private connections, credentials, and Kernel-powered browser execution.",
 };
 
 export default function RootLayout({

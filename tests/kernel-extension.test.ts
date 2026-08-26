@@ -9,7 +9,6 @@ describe("Kernel Eve extension", () => {
       "computer_action",
       "browser_curl",
       "manage_auth_connections",
-      "manage_credentials",
       "manage_profiles",
       "manage_proxies",
       "manage_replays",

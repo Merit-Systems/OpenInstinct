@@ -1,9 +1,17 @@
 {
   "$schema": "https://turborepo.dev/schema.json",
+  "globalEnv": [
+    "KERNEL_API_KEY",
+    "LOCAL_VAULT_ASSISTANT_ALLOW_REMOTE_MANAGER",
+    "LOCAL_VAULT_ASSISTANT_DATA_DIR",
+    "LOCAL_VAULT_ASSISTANT_MODEL",
+    "LOCAL_VAULT_ASSISTANT_MODEL_API_KEY",
+    "LOCAL_VAULT_ASSISTANT_MODEL_BASE_URL",
+    "VERCEL"
+  ],
   "tasks": {
     "build:app": {
       "dependsOn": ["^build:app"],
-      "env": ["KERNEL_API_KEY"],
       "outputs": [".next/**", "!.next/cache/**"]
     },
     "dev:app": {

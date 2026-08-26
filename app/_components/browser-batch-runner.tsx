@@ -1,6 +1,7 @@
 "use client";
 
-import { ExternalLinkIcon, PlayIcon, RotateCcwIcon } from "lucide-react";
+import { MessageSquareIcon, PlayIcon, RotateCcwIcon } from "lucide-react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 import { GlobalTaskHistory } from "@/app/_components/global-task-history";
@@ -58,7 +59,7 @@ export function BrowserBatchRunner() {
       <div className="mx-auto flex w-full max-w-7xl flex-col gap-6 px-4 py-6 sm:px-6 lg:px-8 lg:py-10">
         <header className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div className="max-w-2xl">
-            <p className="type-label text-primary">eve-kernel</p>
+            <p className="type-label text-primary">Local Vault Assistant</p>
             <h1 className="mt-1 font-medium text-4xl tracking-tight">
               Browser batch runner
             </h1>
@@ -67,13 +68,9 @@ export function BrowserBatchRunner() {
               one persistent dashboard.
             </p>
           </div>
-          <Button
-            onClick={() => window.location.assign("/s")}
-            type="button"
-            variant="outline"
-          >
-            Open single task
-            <ExternalLinkIcon data-icon="inline-end" />
+          <Button render={<Link href="/chat" />} variant="outline">
+            Open chat
+            <MessageSquareIcon data-icon="inline-end" />
           </Button>
         </header>
 

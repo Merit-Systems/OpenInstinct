@@ -35,10 +35,13 @@ export type BrowserRunTaskUpdate = Partial<
 
 export const browserRunStoreEvent = "eve-browser-runs-changed";
 
-const browserRunStoreKey = "eve-kernel:browser-runs:v1";
+const browserRunStoreKey = "local-vault-assistant:browser-runs:v1";
+const legacyBrowserRunStoreKey = "eve-kernel:browser-runs:v1";
 
 export function readBrowserRunGroups() {
-  const serialized = window.localStorage.getItem(browserRunStoreKey);
+  const serialized =
+    window.localStorage.getItem(browserRunStoreKey) ??
+    window.localStorage.getItem(legacyBrowserRunStoreKey);
   if (!serialized) return [];
 
   try {

@@ -126,7 +126,7 @@ export function BrowserRunDetail({ groupId }: { readonly groupId: string }) {
             </p>
           </div>
           <Button
-            onClick={() => window.location.assign("/s")}
+            onClick={() => window.location.assign("/chat")}
             type="button"
             variant="outline"
           >

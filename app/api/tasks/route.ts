@@ -9,7 +9,7 @@ const workflowName = "workflow//eve//workflowEntry";
 export async function GET(request: Request) {
   const cursor = new URL(request.url).searchParams.get("cursor") ?? undefined;
   const world = createWorld({
-    headers: { "User-Agent": "eve-kernel/task-history" },
+    headers: { "User-Agent": "local-vault-assistant/task-history" },
   });
 
   try {

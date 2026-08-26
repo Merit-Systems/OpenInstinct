@@ -122,7 +122,7 @@ export function BrowserRunTable({
                         aria-label="Open task session"
                         onClick={() =>
                           window.open(
-                            `/s/${encodeURIComponent(task.sessionId ?? "")}`,
+                            `/chat/${encodeURIComponent(task.sessionId ?? "")}`,
                             "_blank",
                             "noopener,noreferrer"
                           )

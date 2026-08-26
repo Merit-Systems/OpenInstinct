@@ -1,55 +1,65 @@
-# Eve Kernel
+# Local Vault Assistant
 
-An experimental [Eve](https://eve.dev) agent with the default Web Chat UI and Kernel's official [`@onkernel/eve-extension`](https://www.kernel.sh/docs/integrations/vercel/eve-extension).
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2FMerit-Systems%2Fopen-instinct&project-name=local-vault-assistant&repository-name=local-vault-assistant&env=KERNEL_API_KEY&envDescription=Kernel%20API%20key%20for%20cloud%20browser%20tasks.&envLink=https%3A%2F%2Fwww.kernel.sh%2Fdocs%2Freference%2Fcli%2Fauth)
 
-The extension mounts Kernel's hosted MCP server and maintained `browse` skill. The agent has the complete Kernel MCP toolset: browser lifecycle, Playwright, computer controls, browser curl, managed authentication and credentials, profiles, proxies, replays, browser pools, and VM command execution.
+## Your agent should work for you—not hold the keys to your life
 
-## Browser request compiler experiment
+Personal agents become dramatically more useful when they can sign in, book, buy, send, and act on your behalf. They also become dramatically more dangerous when every password, payment credential, and identity detail must live in somebody else's cloud.
 
-Eve can learn a repeatable read task from a Kernel browser trace and replay the useful network request without repeating the UI navigation. Ask it to compile a task, for example:
+Local Vault Assistant keeps that trust boundary on your device:
 
-> Find coffee shops in Boston in the browser, learn the task, then test the compiled version with Chicago.
+- Raw secrets live in your operating system's keychain—not in browser storage, chat history, or a hosted agent database.
+- Models receive safe metadata and opaque handles instead of a downloadable copy of your vault.
+- You can change models, agent runtimes, and browser providers without migrating ownership of your credentials.
+- Local inference is optional, so both the reasoning layer and the vault can remain on-device.
+- Remote access to the manager is blocked by default.
 
-The agent enables Kernel telemetry, performs the first task normally, selects an observed JSON API request, replaces the concrete input with a named parameter, and verifies a second call through Kernel browser curl. The compiled request still inherits the live browser's cookies, TLS identity, and proxy, but skips page navigation and visual reasoning.
+The result is a personal agent with useful browser capabilities and a much smaller trust surface.
 
-This first version intentionally compiles only successful JSON `GET` fetch/XHR requests. Parameterization uses exact examples from the observed request, compiled artifacts live only in the current Eve chat session, and captured headers, cookies, credentials, request bodies, and response bodies are never persisted in the artifact.
+## What you get
 
-## Getting started
+- A local manager for models, connections, and auth-vault items at `/`
+- A conversational agent at `/chat`
+- Recoverable parallel browser jobs with time, outcome, and model-cost tracking at `/tasks`
+- macOS Keychain storage for secret values and a private local database for metadata
+- Local or hosted OpenAI-compatible inference
 
-Install dependencies, configure Kernel, and run the development server:
+## Run locally
+
+Requires Node.js 24 and macOS for Keychain-backed secrets.
 
 ```bash
-pnpm install
-cp .env.example .env.local
-pnpm dev
+git clone https://github.com/Merit-Systems/open-instinct.git
+cd open-instinct
+corepack enable
+./local-assistant
 ```
 
-Set `KERNEL_API_KEY` in `.env.local`, then open the local Next.js URL to use the chat UI. The deployed agent uses the shared Kernel API key configured in Vercel.
+Open [localhost:3000](http://localhost:3000), add your connections, then start chatting.
 
-For Eve's terminal interface, run:
+To configure a local model without the manager:
 
 ```bash
-pnpm dev:eve
+LOCAL_VAULT_ASSISTANT_MODEL=qwen3.5:27b \
+LOCAL_VAULT_ASSISTANT_MODEL_BASE_URL=http://127.0.0.1:11434/v1 \
+./local-assistant
 ```
-
-Start by editing `agent/instructions.md` to define the agent's identity, purpose, tone, and response guidelines. Configure its model and runtime behavior in `agent/agent.ts`.
-
-Add capabilities under `agent/`, including tools, connections, channels, skills, subagents, and schedules. eve reloads your changes as you work.
-
-## Learn more
-
-To learn more about eve, explore these resources:
-
-- [eve documentation](https://eve.dev/docs) — learn about eve's features and authoring APIs.
-- [Build an Agent tutorial](https://eve.dev/docs/tutorial/first-agent) — build and deploy an agent step by step.
-- [eve on GitHub](https://github.com/vercel/eve) — view the source and contribute.
 
 ## Deploy on Vercel
 
-Deploy your agent to [Vercel](https://vercel.com) from the project root:
+The button at the top deploys the hosted chat and browser-task surfaces. It asks for a Kernel API key; Vercel AI Gateway supplies the default model through project OIDC.
+
+The vault and connection manager remain device-only. Hosted deployments open at `/chat`; run locally when you need Keychain-backed credentials.
 
 ```bash
-eve deploy
+pnpm exec eve deploy --project local-vault-assistant --non-interactive --yes
 ```
 
-`eve deploy` links a Vercel project if needed and deploys the agent to production. See the [eve deployment documentation](https://eve.dev/docs/guides/deployment/vercel) for authentication, environment variables, and deployment options.
+## Implementation details
+
+- [Eve](https://eve.dev) provides durable agent sessions, streaming, tools, and the web conversation protocol.
+- [Kernel](https://kernel.sh) provides cloud browsers, Playwright, computer use, profiles, proxies, and browser execution.
+- Next.js provides the local manager, chat, and batch-runner interfaces.
+- SQLite stores non-secret metadata locally; macOS Keychain stores secret values.
+
+These are replaceable implementation layers. The durable product boundary is the locally owned vault.
