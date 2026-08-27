@@ -6,7 +6,7 @@ import {
 } from "eve/channels/auth";
 import { isSessionOwned } from "@/db/services/sessions";
 import { accessScopeForUser, type AccessScope } from "@/lib/access-scope";
-import { getAuthSession } from "@/lib/auth/session";
+import { getAuthSession } from "@/auth/session";
 
 function applicationAuth(): AuthFn {
   return async (request) => {

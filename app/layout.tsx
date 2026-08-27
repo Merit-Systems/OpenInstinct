@@ -3,7 +3,7 @@ import type { ReactNode } from "react";
 import { headers } from "next/headers";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { accessScopeForUser } from "@/lib/access-scope";
-import { getAuthSession } from "@/lib/auth/session";
+import { getAuthSession } from "@/auth/session";
 import "./globals.css";
 
 export const metadata: Metadata = {

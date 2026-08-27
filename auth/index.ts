@@ -5,7 +5,7 @@ import { phoneNumber } from "better-auth/plugins/phone-number";
 import { getToken } from "@vercel/connect";
 import { account, db, session, user, verification } from "@/db";
 import { env, localPhoneAuthBypassEnabled } from "@/lib/env";
-import { isE164PhoneNumber } from "@/lib/auth/phone-number";
+import { isE164PhoneNumber } from "./phone-number";
 
 const LINQ_MESSAGES_URL = "https://api.linqapp.com/api/partner/v3/messages";
 export const auth = betterAuth({

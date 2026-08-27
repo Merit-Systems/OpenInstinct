@@ -3,8 +3,8 @@ import { connectLinqCredentials } from "@vercel/connect/eve";
 import { defaultLinqAuth, linqChannel } from "eve/channels/linq";
 import { z } from "zod";
 import { auth } from "@/auth";
+import { normalizeAuthPhoneNumber } from "@/auth/phone-number";
 import { accessScopeForUser } from "@/lib/access-scope";
-import { normalizeAuthPhoneNumber } from "@/lib/auth/phone-number";
 import { env } from "@/lib/env";
 
 const verifiedPhoneUserSchema = z.object({
