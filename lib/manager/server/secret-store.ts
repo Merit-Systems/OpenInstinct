@@ -1,7 +1,11 @@
 import { createCipheriv, createDecipheriv, randomBytes } from "node:crypto";
-import type { AccessScope } from "../access-scope";
+import {
+  deleteEncryptedSecret,
+  readEncryptedSecret,
+  writeEncryptedSecret,
+} from "@/db/services/secrets";
+import type { AccessScope } from "../../access-scope";
 import { env } from "@/lib/env";
-import { getAppStore } from "./app-store";
 
 export function secretStoreStatus() {
   return {
@@ -22,9 +26,7 @@ export async function writeSecret({
   readonly scope: AccessScope;
   readonly value: string;
 }) {
-  await (
-    await getAppStore()
-  ).writeEncryptedSecret(scope, id, encryptSecret(scope, id, value));
+  await writeEncryptedSecret(scope, id, encryptSecret(scope, id, value));
 }
 
 export async function readSecret({
@@ -35,7 +37,7 @@ export async function readSecret({
   readonly namespace: "vault";
   readonly scope: AccessScope;
 }) {
-  const encrypted = await (await getAppStore()).readEncryptedSecret(scope, id);
+  const encrypted = await readEncryptedSecret(scope, id);
   return encrypted ? decryptSecret(scope, id, encrypted) : undefined;
 }
 
@@ -47,9 +49,7 @@ export async function hasSecret({
   readonly namespace: "vault";
   readonly scope: AccessScope;
 }) {
-  return (
-    (await (await getAppStore()).readEncryptedSecret(scope, id)) !== undefined
-  );
+  return (await readEncryptedSecret(scope, id)) !== undefined;
 }
 
 export async function deleteSecret({
@@ -60,7 +60,7 @@ export async function deleteSecret({
   readonly namespace: "vault";
   readonly scope: AccessScope;
 }) {
-  await (await getAppStore()).deleteEncryptedSecret(scope, id);
+  await deleteEncryptedSecret(scope, id);
 }
 
 function encryptSecret(scope: AccessScope, id: string, value: string) {

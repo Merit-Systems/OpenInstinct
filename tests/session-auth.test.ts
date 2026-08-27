@@ -1,9 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { accessScopeForUser } from "../lib/access-scope";
-import { isFullyAuthenticatedUser } from "../lib/auth-user";
 import { isLocalPhoneAuthBypassEnabled } from "../lib/env";
-import { sessionIdFromPath } from "../lib/eve-session-path";
-import { normalizeAuthPhoneNumber } from "../lib/phone-number";
+import { normalizeAuthPhoneNumber } from "../lib/auth/phone-number";
 
 describe("multi-user request identity", () => {
   it("derives stable personal workspaces without exposing provider ids", () => {
@@ -13,36 +11,6 @@ describe("multi-user request identity", () => {
     expect(first).toEqual(accessScopeForUser("better-auth:123"));
     expect(first.workspaceId).not.toBe(second.workspaceId);
     expect(first.workspaceId).not.toContain("better-auth:123");
-  });
-
-  it("extracts ownership ids from every Eve session route", () => {
-    expect(sessionIdFromPath("/eve/v1/session/session%2Fone/stream")).toBe(
-      "session/one"
-    );
-    expect(sessionIdFromPath("/eve/v1/session/session-two/cancel")).toBe(
-      "session-two"
-    );
-    expect(sessionIdFromPath("/eve/v1/session")).toBeUndefined();
-  });
-
-  it("accepts only users with a verified phone number", () => {
-    expect(
-      isFullyAuthenticatedUser({
-        phoneNumber: "+12025550123",
-        phoneNumberVerified: true,
-      })
-    ).toBe(true);
-    expect(
-      isFullyAuthenticatedUser({
-        phoneNumber: "+12025550123",
-        phoneNumberVerified: false,
-      })
-    ).toBe(false);
-    expect(
-      isFullyAuthenticatedUser({
-        phoneNumberVerified: true,
-      })
-    ).toBe(false);
   });
 
   it("defaults phone numbers to the +1 country code", () => {

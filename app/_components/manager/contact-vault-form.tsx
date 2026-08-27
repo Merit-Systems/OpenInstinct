@@ -5,7 +5,7 @@ import { z } from "zod";
 import { Button } from "@/components/ui/button";
 import { FieldGroup } from "@/components/ui/field";
 import type { ManagerMutation } from "@/lib/manager";
-import { serializeContactVaultPayload } from "@/lib/vault-payload";
+import { serializeContactVaultPayload } from "@/lib/manager/vault-payload";
 import { VaultFormField } from "./vault-form-field";
 
 const contactFormSchema = z

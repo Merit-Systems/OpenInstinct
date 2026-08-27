@@ -1,5 +1,5 @@
 import type { MessageStreamEvent } from "eve/client";
-import { taskCompletionSchema } from "./task-completion";
+import { taskCompletionSchema } from "../task-completion";
 
 export function measureBrowserTask(
   events: readonly MessageStreamEvent[],
@@ -32,20 +32,6 @@ export function measureBrowserTask(
         ? elapsedMs(start, terminal)
         : Math.max(0, fallbackDurationMs),
   };
-}
-
-export function didCompleteKernelBrowserAction(
-  events: readonly MessageStreamEvent[]
-) {
-  return events.some(
-    (event) =>
-      event.type === "action.result" &&
-      event.data.status === "completed" &&
-      event.data.result.kind === "tool-result" &&
-      (event.data.result.toolName.endsWith("__execute_playwright_code") ||
-        event.data.result.toolName.endsWith("__computer_action") ||
-        event.data.result.toolName.endsWith("__browser_curl"))
-  );
 }
 
 export function terminalBrowserMessage(

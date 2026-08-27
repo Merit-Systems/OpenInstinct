@@ -5,11 +5,11 @@ import {
   managerMutationSchema,
   managerSetupRequestSchema,
 } from "../lib/manager";
-import { serializePaymentCard } from "../lib/payment-card";
+import { serializePaymentCard } from "../lib/manager/payment-card";
 import {
   serializeContactVaultPayload,
   serializeLoginVaultPayload,
-} from "../lib/vault-payload";
+} from "../lib/manager/vault-payload";
 
 describe("self-hosted manager", () => {
   it("builds a vault form URL without accepting a secret", () => {

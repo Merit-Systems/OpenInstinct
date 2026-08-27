@@ -10,12 +10,12 @@ import {
   computerActionInputSchema,
   executePlaywrightInputSchema,
   manageBrowsersInputSchema,
-} from "@/lib/kernel-browser-contract";
+} from "@/agent/extensions/kernel/browser-contract";
 import {
   executeOwnedKernelComputerAction,
   executeOwnedKernelPlaywright,
   manageOwnedKernelBrowsers,
-} from "@/lib/server/kernel-browser";
+} from "@/agent/extensions/kernel/browser-runtime";
 
 const computerResultSchema = z.object({
   data: z.unknown().optional(),

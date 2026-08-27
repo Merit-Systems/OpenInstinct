@@ -1,16 +1,16 @@
 import { MessageSquareIcon, PlusIcon } from "lucide-react";
 import Link from "next/link";
 import { ManagerShell } from "@/app/_components/manager-shell";
+import { combineChatUsage, formatChatUsage } from "@/app/_lib/chat-usage";
 import { Button } from "@/components/ui/button";
-import { combineChatUsage, formatChatUsage } from "@/lib/chat";
-import { getAppStore } from "@/lib/server/app-store";
-import { requireRequestScope } from "@/lib/server/request-scope";
+import { listChats } from "@/db/services/chats";
+import { requireRequestScope } from "@/app/_lib/server/request-scope";
 
 export const dynamic = "force-dynamic";
 
 export default async function AllChatsPage() {
   const scope = await requireRequestScope();
-  const chats = await (await getAppStore()).listChats(scope);
+  const chats = await listChats(scope);
   const totalUsage = combineChatUsage(chats.map((chat) => chat.usage));
 
   return (

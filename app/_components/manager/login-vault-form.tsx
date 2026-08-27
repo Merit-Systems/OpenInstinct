@@ -15,7 +15,7 @@ import type { ManagerMutation } from "@/lib/manager";
 import {
   loginIdentifierTypeSchema,
   serializeLoginVaultPayload,
-} from "@/lib/vault-payload";
+} from "@/lib/manager/vault-payload";
 import { VaultFormField } from "./vault-form-field";
 
 const loginFormSchema = z

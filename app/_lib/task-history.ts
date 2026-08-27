@@ -4,7 +4,7 @@ import {
   measureBrowserTask,
   readTaskCompletion,
   terminalBrowserMessage,
-} from "./browser-benchmark";
+} from "@/lib/browser/benchmark";
 import type { BrowserRunTask } from "./browser-run-store";
 
 export const taskHistoryPageSchema = z.object({

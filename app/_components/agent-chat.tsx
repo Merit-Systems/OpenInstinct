@@ -20,11 +20,8 @@ import {
 } from "@/components/ai-elements/prompt-input";
 import { Shimmer } from "@/components/ai-elements/shimmer";
 import { Button } from "@/components/ui/button";
-import {
-  formatChatUsage,
-  summarizeChatUsage,
-  type ChatUsage,
-} from "@/lib/chat";
+import { formatChatUsage, summarizeChatUsage } from "@/app/_lib/chat-usage";
+import type { ChatUsage } from "@/lib/chat";
 import { cn } from "@/lib/utils";
 import { AgentMessage } from "./agent-message";
 

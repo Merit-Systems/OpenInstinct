@@ -1,6 +1,6 @@
 import { headers } from "next/headers";
 import { accessScopeForUser, type AccessScope } from "@/lib/access-scope";
-import { getAuthSession } from "@/lib/server/auth-session";
+import { getAuthSession } from "@/lib/auth/session";
 
 export async function requireRequestScope(): Promise<AccessScope> {
   const session = await getAuthSession(await headers());

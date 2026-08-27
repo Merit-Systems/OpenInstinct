@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { modelCatalogSchema } from "@/lib/model-catalog";
+import { modelCatalogSchema } from "@/app/_lib/model-catalog";
 
 const gatewayResponseSchema = z.object({
   data: z.array(

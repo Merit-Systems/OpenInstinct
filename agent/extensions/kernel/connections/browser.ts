@@ -1,8 +1,6 @@
 import { defineMcpClientConnection } from "eve/connections";
 import { env } from "@/lib/env";
 
-export const kernelToolAllowlist: string[] = [];
-
 export default defineMcpClientConnection({
   url: "https://mcp.onkernel.com/mcp",
   description: "Reserved browser integration.",
@@ -14,5 +12,5 @@ export default defineMcpClientConnection({
       return { token: env.KERNEL_API_KEY };
     },
   },
-  tools: { allow: kernelToolAllowlist },
+  tools: { allow: [] },
 });
