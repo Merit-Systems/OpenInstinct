@@ -1,9 +1,20 @@
-import { neon, type NeonQueryFunction } from "@neondatabase/serverless";
+import { and, desc, eq } from "drizzle-orm";
 import { z } from "zod";
+import {
+  agentSessions,
+  browserSessions,
+  chats,
+  db,
+  type Database,
+  encryptedSecrets,
+  settings,
+  vaultItems,
+  workspaceMemberships,
+  workspaces,
+} from "@/db";
 import type { AccessScope } from "../access-scope";
 import { chatListSchema, type ChatSummary, type SaveChat } from "../chat";
 import { vaultItemKindSchema } from "../manager";
-import { getEnv } from "../runtime-env";
 
 const vaultRecordSchema = z.object({
   account: z.string(),
@@ -43,7 +54,6 @@ interface AppStore {
   deleteEncryptedSecret(scope: AccessScope, id: string): Promise<void>;
   deleteVaultItem(scope: AccessScope, id: string): Promise<boolean>;
   ensureScope(scope: AccessScope): Promise<void>;
-  initialize(): Promise<void>;
   isSessionOwned(scope: AccessScope, sessionId: string): Promise<boolean>;
   listBrowserSessions(
     scope: AccessScope
@@ -76,113 +86,136 @@ export function getAppStore() {
   return storePromise;
 }
 
-async function createAppStore() {
-  const databaseUrl = getEnv().DATABASE_URL;
-  if (
-    !databaseUrl?.startsWith("postgres://") &&
-    !databaseUrl?.startsWith("postgresql://")
-  ) {
-    throw new Error("A Postgres DATABASE_URL is required.");
-  }
-
-  const store = createPostgresStore(databaseUrl);
-  await store.initialize();
-  return store;
+export async function createAppStore(database = db) {
+  return createPostgresStore(database);
 }
 
-function createPostgresStore(databaseUrl: string): AppStore {
-  const sql = neon(databaseUrl);
-  const query = (text: string, parameters: readonly unknown[] = []) =>
-    sql.query(text, [...parameters]);
+function createPostgresStore(database: Database): AppStore {
+  async function ensureScope(scope: AccessScope) {
+    const now = new Date().toISOString();
+    await database.batch([
+      database
+        .insert(workspaces)
+        .values({ createdAt: now, id: scope.workspaceId })
+        .onConflictDoNothing({ target: workspaces.id }),
+      database
+        .insert(workspaceMemberships)
+        .values({
+          createdAt: now,
+          role: "owner",
+          userId: scope.userId,
+          workspaceId: scope.workspaceId,
+        })
+        .onConflictDoNothing({
+          target: [
+            workspaceMemberships.workspaceId,
+            workspaceMemberships.userId,
+          ],
+        }),
+    ]);
+  }
 
   return {
     async claimSession(scope, sessionId) {
-      await query(
-        "INSERT INTO agent_sessions (session_id, workspace_id, created_by_user_id, created_at) VALUES ($1, $2, $3, $4) ON CONFLICT (session_id) DO NOTHING",
-        [sessionId, scope.workspaceId, scope.userId, new Date().toISOString()]
-      );
+      await database
+        .insert(agentSessions)
+        .values({
+          createdAt: new Date().toISOString(),
+          createdByUserId: scope.userId,
+          sessionId,
+          workspaceId: scope.workspaceId,
+        })
+        .onConflictDoNothing({ target: agentSessions.sessionId });
     },
     async createBrowserSession(scope, record) {
-      await query(
-        "INSERT INTO browser_sessions (session_id, workspace_id, created_by_user_id, created_at) VALUES ($1, $2, $3, $4)",
-        [record.sessionId, scope.workspaceId, scope.userId, record.createdAt]
-      );
+      await database.insert(browserSessions).values({
+        createdAt: record.createdAt,
+        createdByUserId: scope.userId,
+        sessionId: record.sessionId,
+        workspaceId: scope.workspaceId,
+      });
     },
     async createVaultItem(scope, record) {
-      await query(
-        "INSERT INTO vault_items (id, workspace_id, kind, label, account, created_at, updated_at) VALUES ($1, $2, $3, $4, $5, $6, $7)",
-        [
-          record.id,
-          scope.workspaceId,
-          record.kind,
-          record.label,
-          record.account,
-          record.createdAt,
-          record.updatedAt,
-        ]
-      );
+      await database.insert(vaultItems).values({
+        account: record.account,
+        createdAt: record.createdAt,
+        id: record.id,
+        kind: record.kind,
+        label: record.label,
+        updatedAt: record.updatedAt,
+        workspaceId: scope.workspaceId,
+      });
     },
     async deleteBrowserSession(scope, sessionId) {
-      const rows = await query(
-        "DELETE FROM browser_sessions WHERE workspace_id = $1 AND session_id = $2 RETURNING session_id",
-        [scope.workspaceId, sessionId]
-      );
+      const rows = await database
+        .delete(browserSessions)
+        .where(
+          and(
+            eq(browserSessions.workspaceId, scope.workspaceId),
+            eq(browserSessions.sessionId, sessionId)
+          )
+        )
+        .returning({ sessionId: browserSessions.sessionId });
       return rows.length > 0;
     },
     async deleteEncryptedSecret(scope, id) {
-      await query(
-        "DELETE FROM encrypted_secrets WHERE workspace_id = $1 AND namespace = 'vault' AND id = $2",
-        [scope.workspaceId, id]
-      );
+      await database
+        .delete(encryptedSecrets)
+        .where(
+          and(
+            eq(encryptedSecrets.workspaceId, scope.workspaceId),
+            eq(encryptedSecrets.namespace, "vault"),
+            eq(encryptedSecrets.id, id)
+          )
+        );
     },
     async deleteVaultItem(scope, id) {
-      const rows = await query(
-        "DELETE FROM vault_items WHERE workspace_id = $1 AND id = $2 RETURNING id",
-        [scope.workspaceId, id]
-      );
+      const rows = await database
+        .delete(vaultItems)
+        .where(
+          and(
+            eq(vaultItems.workspaceId, scope.workspaceId),
+            eq(vaultItems.id, id)
+          )
+        )
+        .returning({ id: vaultItems.id });
       return rows.length > 0;
     },
-    async ensureScope(scope) {
-      const now = new Date().toISOString();
-      await sql.transaction((transaction) => [
-        transaction.query(
-          "INSERT INTO workspaces (id, created_at) VALUES ($1, $2) ON CONFLICT (id) DO NOTHING",
-          [scope.workspaceId, now]
-        ),
-        transaction.query(
-          "INSERT INTO workspace_memberships (workspace_id, user_id, role, created_at) VALUES ($1, $2, 'owner', $3) ON CONFLICT (workspace_id, user_id) DO NOTHING",
-          [scope.workspaceId, scope.userId, now]
-        ),
-      ]);
-    },
-    async initialize() {
-      await initializePostgres(sql);
-    },
+    ensureScope,
     async isSessionOwned(scope, sessionId) {
-      const rows = await query(
-        "SELECT 1 FROM agent_sessions WHERE workspace_id = $1 AND session_id = $2 LIMIT 1",
-        [scope.workspaceId, sessionId]
-      );
+      const rows = await database
+        .select({ sessionId: agentSessions.sessionId })
+        .from(agentSessions)
+        .where(
+          and(
+            eq(agentSessions.workspaceId, scope.workspaceId),
+            eq(agentSessions.sessionId, sessionId)
+          )
+        )
+        .limit(1);
       return rows.length > 0;
     },
     async listBrowserSessions(scope) {
-      return browserSessionRecordSchema
-        .array()
-        .parse(
-          await query(
-            'SELECT created_at AS "createdAt", session_id AS "sessionId" FROM browser_sessions WHERE workspace_id = $1 ORDER BY created_at DESC',
-            [scope.workspaceId]
-          )
-        );
+      return browserSessionRecordSchema.array().parse(
+        await database
+          .select({
+            createdAt: browserSessions.createdAt,
+            sessionId: browserSessions.sessionId,
+          })
+          .from(browserSessions)
+          .where(eq(browserSessions.workspaceId, scope.workspaceId))
+          .orderBy(desc(browserSessions.createdAt))
+      );
     },
     async listChats(scope) {
       const rows = chatRowSchema
         .array()
         .parse(
-          await query(
-            'SELECT cost_usd AS "costUsd", created_at AS "createdAt", input_tokens AS "inputTokens", output_tokens AS "outputTokens", session_id AS "sessionId", title, updated_at AS "updatedAt" FROM chats WHERE workspace_id = $1 ORDER BY updated_at DESC',
-            [scope.workspaceId]
-          )
+          await database
+            .select()
+            .from(chats)
+            .where(eq(chats.workspaceId, scope.workspaceId))
+            .orderBy(desc(chats.updatedAt))
         );
       return chatListSchema.parse(
         rows.map(({ costUsd, inputTokens, outputTokens, ...chat }) => ({
@@ -195,110 +228,150 @@ function createPostgresStore(databaseUrl: string): AppStore {
       const rows = z
         .array(z.object({ sessionId: z.string() }))
         .parse(
-          await query(
-            'SELECT session_id AS "sessionId" FROM agent_sessions WHERE workspace_id = $1',
-            [scope.workspaceId]
-          )
+          await database
+            .select({ sessionId: agentSessions.sessionId })
+            .from(agentSessions)
+            .where(eq(agentSessions.workspaceId, scope.workspaceId))
         );
       return new Set(rows.map((row) => row.sessionId));
     },
     async listVaultItems(scope) {
-      return vaultRecordSchema
-        .array()
-        .parse(
-          await query(
-            'SELECT account, created_at AS "createdAt", id, kind, label, updated_at AS "updatedAt" FROM vault_items WHERE workspace_id = $1 ORDER BY updated_at DESC',
-            [scope.workspaceId]
-          )
-        );
+      return vaultRecordSchema.array().parse(
+        await database
+          .select({
+            account: vaultItems.account,
+            createdAt: vaultItems.createdAt,
+            id: vaultItems.id,
+            kind: vaultItems.kind,
+            label: vaultItems.label,
+            updatedAt: vaultItems.updatedAt,
+          })
+          .from(vaultItems)
+          .where(eq(vaultItems.workspaceId, scope.workspaceId))
+          .orderBy(desc(vaultItems.updatedAt))
+      );
     },
     async readBrowserSession(scope, sessionId) {
-      const rows = await query(
-        'SELECT created_at AS "createdAt", session_id AS "sessionId" FROM browser_sessions WHERE workspace_id = $1 AND session_id = $2 LIMIT 1',
-        [scope.workspaceId, sessionId]
-      );
+      const rows = await database
+        .select({
+          createdAt: browserSessions.createdAt,
+          sessionId: browserSessions.sessionId,
+        })
+        .from(browserSessions)
+        .where(
+          and(
+            eq(browserSessions.workspaceId, scope.workspaceId),
+            eq(browserSessions.sessionId, sessionId)
+          )
+        )
+        .limit(1);
       return browserSessionRecordSchema.optional().parse(rows[0]);
     },
     async readEncryptedSecret(scope, id) {
-      const rows = await query(
-        "SELECT encrypted_value AS \"encryptedValue\" FROM encrypted_secrets WHERE workspace_id = $1 AND namespace = 'vault' AND id = $2",
-        [scope.workspaceId, id]
-      );
+      const rows = await database
+        .select({ encryptedValue: encryptedSecrets.encryptedValue })
+        .from(encryptedSecrets)
+        .where(
+          and(
+            eq(encryptedSecrets.workspaceId, scope.workspaceId),
+            eq(encryptedSecrets.namespace, "vault"),
+            eq(encryptedSecrets.id, id)
+          )
+        )
+        .limit(1);
       return z.object({ encryptedValue: z.string() }).optional().parse(rows[0])
         ?.encryptedValue;
     },
     async readGatewayModel(scope) {
-      const rows = await query(
-        "SELECT value FROM settings WHERE workspace_id = $1 AND key = 'gateway_model' LIMIT 1",
-        [scope.workspaceId]
-      );
+      const rows = await database
+        .select({ value: settings.value })
+        .from(settings)
+        .where(
+          and(
+            eq(settings.workspaceId, scope.workspaceId),
+            eq(settings.key, "gateway_model")
+          )
+        )
+        .limit(1);
       return z.object({ value: z.string() }).optional().parse(rows[0])?.value;
     },
     async saveChat(scope, chat) {
+      await ensureScope(scope);
       const now = new Date().toISOString();
-      const existing = await query(
-        "SELECT session_id FROM chats WHERE workspace_id = $1 AND session_id = $2",
-        [scope.workspaceId, chat.sessionId]
-      );
-      if (existing.length === 0) {
-        await query(
-          "INSERT INTO chats (session_id, workspace_id, title, created_at, updated_at, input_tokens, output_tokens, cost_usd) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)",
-          [
-            chat.sessionId,
-            scope.workspaceId,
-            chat.title ?? "New chat",
-            now,
-            now,
-            chat.usage?.inputTokens ?? 0,
-            chat.usage?.outputTokens ?? 0,
-            chat.usage?.costUsd ?? null,
-          ]
+      const existing = await database
+        .select({ sessionId: chats.sessionId })
+        .from(chats)
+        .where(
+          and(
+            eq(chats.workspaceId, scope.workspaceId),
+            eq(chats.sessionId, chat.sessionId)
+          )
         );
+      if (existing.length === 0) {
+        await database.insert(chats).values({
+          costUsd: chat.usage?.costUsd ?? null,
+          createdAt: now,
+          inputTokens: chat.usage?.inputTokens ?? 0,
+          outputTokens: chat.usage?.outputTokens ?? 0,
+          sessionId: chat.sessionId,
+          title: chat.title ?? "New chat",
+          updatedAt: now,
+          workspaceId: scope.workspaceId,
+        });
         return;
       }
-      await query(
-        "UPDATE chats SET title = COALESCE($1, title), updated_at = $2, input_tokens = COALESCE($3, input_tokens), output_tokens = COALESCE($4, output_tokens), cost_usd = CASE WHEN $5 THEN $6 ELSE cost_usd END WHERE workspace_id = $7 AND session_id = $8",
-        [
-          chat.title ?? null,
-          now,
-          chat.usage?.inputTokens ?? null,
-          chat.usage?.outputTokens ?? null,
-          chat.usage !== undefined,
-          chat.usage?.costUsd ?? null,
-          scope.workspaceId,
-          chat.sessionId,
-        ]
-      );
+      await database
+        .update(chats)
+        .set({
+          ...(chat.title === undefined ? {} : { title: chat.title }),
+          ...(chat.usage === undefined
+            ? {}
+            : {
+                costUsd: chat.usage.costUsd,
+                inputTokens: chat.usage.inputTokens,
+                outputTokens: chat.usage.outputTokens,
+              }),
+          updatedAt: now,
+        })
+        .where(
+          and(
+            eq(chats.workspaceId, scope.workspaceId),
+            eq(chats.sessionId, chat.sessionId)
+          )
+        );
     },
     async selectGatewayModel(scope, modelId) {
-      await sql.query(
-        "INSERT INTO settings (workspace_id, key, value) VALUES ($1, 'gateway_model', $2) ON CONFLICT (workspace_id, key) DO UPDATE SET value = EXCLUDED.value",
-        [scope.workspaceId, modelId]
-      );
+      await database
+        .insert(settings)
+        .values({
+          key: "gateway_model",
+          value: modelId,
+          workspaceId: scope.workspaceId,
+        })
+        .onConflictDoUpdate({
+          target: [settings.workspaceId, settings.key],
+          set: { value: modelId },
+        });
     },
     async writeEncryptedSecret(scope, id, encryptedValue) {
-      await query(
-        "INSERT INTO encrypted_secrets (workspace_id, namespace, id, encrypted_value, updated_at) VALUES ($1, 'vault', $2, $3, $4) ON CONFLICT (workspace_id, namespace, id) DO UPDATE SET encrypted_value = EXCLUDED.encrypted_value, updated_at = EXCLUDED.updated_at",
-        [scope.workspaceId, id, encryptedValue, new Date().toISOString()]
-      );
+      const updatedAt = new Date().toISOString();
+      await database
+        .insert(encryptedSecrets)
+        .values({
+          encryptedValue,
+          id,
+          namespace: "vault",
+          updatedAt,
+          workspaceId: scope.workspaceId,
+        })
+        .onConflictDoUpdate({
+          target: [
+            encryptedSecrets.workspaceId,
+            encryptedSecrets.namespace,
+            encryptedSecrets.id,
+          ],
+          set: { encryptedValue, updatedAt },
+        });
     },
   };
-}
-
-async function initializePostgres(sql: NeonQueryFunction<false, false>) {
-  const statements = [
-    `CREATE TABLE IF NOT EXISTS workspaces (id TEXT PRIMARY KEY, created_at TEXT NOT NULL)`,
-    `CREATE TABLE IF NOT EXISTS workspace_memberships (workspace_id TEXT NOT NULL, user_id TEXT NOT NULL, role TEXT NOT NULL, created_at TEXT NOT NULL, PRIMARY KEY (workspace_id, user_id))`,
-    `CREATE TABLE IF NOT EXISTS vault_items (id TEXT PRIMARY KEY, workspace_id TEXT NOT NULL, kind TEXT NOT NULL, label TEXT NOT NULL, account TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL)`,
-    `CREATE TABLE IF NOT EXISTS settings (workspace_id TEXT NOT NULL, key TEXT NOT NULL, value TEXT NOT NULL, PRIMARY KEY (workspace_id, key))`,
-    `CREATE TABLE IF NOT EXISTS agent_sessions (session_id TEXT PRIMARY KEY, workspace_id TEXT NOT NULL, created_by_user_id TEXT NOT NULL, created_at TEXT NOT NULL)`,
-    `CREATE TABLE IF NOT EXISTS browser_sessions (session_id TEXT PRIMARY KEY, workspace_id TEXT NOT NULL, created_by_user_id TEXT NOT NULL, created_at TEXT NOT NULL)`,
-    `CREATE TABLE IF NOT EXISTS chats (session_id TEXT PRIMARY KEY, workspace_id TEXT NOT NULL, title TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, input_tokens INTEGER NOT NULL DEFAULT 0, output_tokens INTEGER NOT NULL DEFAULT 0, cost_usd DOUBLE PRECISION)`,
-    `CREATE TABLE IF NOT EXISTS encrypted_secrets (workspace_id TEXT NOT NULL, namespace TEXT NOT NULL, id TEXT NOT NULL, encrypted_value TEXT NOT NULL, updated_at TEXT NOT NULL, PRIMARY KEY (workspace_id, namespace, id))`,
-    `CREATE INDEX IF NOT EXISTS vault_items_workspace_updated_idx ON vault_items (workspace_id, updated_at DESC)`,
-    `CREATE INDEX IF NOT EXISTS chats_workspace_updated_idx ON chats (workspace_id, updated_at DESC)`,
-    `CREATE INDEX IF NOT EXISTS agent_sessions_workspace_idx ON agent_sessions (workspace_id, created_at DESC)`,
-    `CREATE INDEX IF NOT EXISTS browser_sessions_workspace_idx ON browser_sessions (workspace_id, created_at DESC)`,
-  ];
-  for (const statement of statements) await sql.query(statement);
 }

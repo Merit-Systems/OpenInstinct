@@ -1,10 +1,10 @@
 import { defineEval } from "eve/evals";
 import { includes } from "eve/evals/expect";
-import { getEnv } from "../../lib/runtime-env.js";
-import { didCompleteKernelBrowserAction } from "../../lib/browser-benchmark.js";
-import { browserBenchmarkTasks } from "../../lib/browser-benchmark-tasks.js";
+import { browserBenchmarkTasks } from "@/lib/browser-benchmark-tasks";
+import { didCompleteKernelBrowserAction } from "@/lib/browser-benchmark";
+import { env } from "@/lib/env";
 
-const repetitions = getEnv().BROWSER_BENCH_REPETITIONS;
+const repetitions = env.BROWSER_BENCH_REPETITIONS;
 
 export default browserBenchmarkTasks.flatMap((task) =>
   Array.from({ length: repetitions }, (_, repetitionIndex) =>

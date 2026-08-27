@@ -15,6 +15,15 @@
       "dependsOn": ["^build:app"],
       "outputs": [".next/**", "!.next/cache/**"]
     },
+    "build:vercel": {
+      "dependsOn": ["db:migrate"],
+      "outputs": [".next/**", "!.next/cache/**"]
+    },
+    "db:migrate": {
+      "cache": false,
+      "env": ["DATABASE_URL_UNPOOLED"],
+      "inputs": ["$TURBO_DEFAULT$", ".env*"]
+    },
     "dev:app": {
       "cache": false,
       "persistent": true

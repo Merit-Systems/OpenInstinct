@@ -1,6 +1,6 @@
 import { defineAgent, defineDynamic } from "eve";
-import { getModelSettings } from "../lib/model-config.js";
-import { scopeFromPrincipal } from "../lib/access-scope.js";
+import { scopeFromPrincipal } from "@/lib/access-scope";
+import { getModelSettings } from "@/lib/model-config";
 
 export default defineAgent({
   experimental: {

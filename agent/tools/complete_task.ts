@@ -1,5 +1,5 @@
 import { defineTool } from "eve/tools";
-import { taskCompletionSchema } from "../../lib/task-completion.js";
+import { taskCompletionSchema } from "@/lib/task-completion";
 
 export default defineTool({
   description:

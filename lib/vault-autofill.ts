@@ -1,11 +1,11 @@
 import { z } from "zod";
-import type { VaultItemKind } from "./manager";
-import { parsePaymentCardSecret } from "./payment-card.ts";
+import type { VaultItemKind } from "@/lib/manager";
+import { parsePaymentCardSecret } from "@/lib/payment-card";
 import {
   parseAddressVaultPayload,
   parseContactVaultPayload,
   parseLoginVaultPayload,
-} from "./vault-payload.ts";
+} from "@/lib/vault-payload";
 
 export const vaultAutofillFieldSchema = z.enum([
   "username",

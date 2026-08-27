@@ -1,20 +1,10 @@
 import { readFileSync } from "node:fs";
-import { afterEach, describe, expect, it, vi } from "vitest";
-import {
-  getKernelSystemToken,
-  kernelToolAllowlist,
-} from "../agent/extensions/kernel/connections/browser";
-
-afterEach(() => vi.unstubAllEnvs());
+import { describe, expect, it } from "vitest";
+import { kernelToolAllowlist } from "../agent/extensions/kernel/connections/browser";
 
 describe("Kernel Eve extension", () => {
   it("does not expose a second backend-specific browser toolset", () => {
     expect(kernelToolAllowlist).toEqual([]);
-  });
-
-  it("uses the system Kernel key for cloud execution", () => {
-    vi.stubEnv("KERNEL_API_KEY", "system-kernel-key");
-    expect(getKernelSystemToken()).toBe("system-kernel-key");
   });
 
   it("keeps executor selection out of model instructions", () => {

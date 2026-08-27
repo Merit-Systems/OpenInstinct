@@ -1,11 +1,11 @@
 import Kernel from "@onkernel/sdk";
 import { defineTool } from "eve/tools";
 import { z } from "zod";
-import { scopeFromPrincipal } from "../../lib/access-scope.js";
-import { getEnv } from "../../lib/runtime-env.js";
-import { requireOwnedBrowserSession } from "../../lib/server/kernel-browser.js";
-import { prepareVaultAutofill } from "../../lib/server/vault-autofill.js";
-import { vaultAutofillRequestSchema } from "../../lib/vault-autofill.js";
+import { scopeFromPrincipal } from "@/lib/access-scope";
+import { env } from "@/lib/env";
+import { requireOwnedBrowserSession } from "@/lib/server/kernel-browser";
+import { prepareVaultAutofill } from "@/lib/server/vault-autofill";
+import { vaultAutofillRequestSchema } from "@/lib/vault-autofill";
 
 const outputSchema = z.object({
   filledFields: z.array(z.string()),
@@ -71,15 +71,12 @@ async function fillKernelBrowser({
   >["fields"][number] & { readonly value: string })[];
   readonly signal?: AbortSignal;
 }) {
-  const apiKey = getEnv().KERNEL_API_KEY;
-  if (!apiKey) {
-    throw new Error("The browser runtime is unavailable.");
-  }
-
   const code = createVaultAutofillCode({ expectedOrigin, fields });
 
   try {
-    const result = await new Kernel({ apiKey }).browsers.playwright.execute(
+    const result = await new Kernel({
+      apiKey: env.KERNEL_API_KEY,
+    }).browsers.playwright.execute(
       browserSessionId,
       { code, timeout_sec: 30 },
       { signal }

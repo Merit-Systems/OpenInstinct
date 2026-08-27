@@ -5,12 +5,9 @@ import { phoneNumber } from "better-auth/plugins/phone-number";
 import { Pool } from "pg";
 import { z } from "zod";
 import { isE164PhoneNumber } from "@/lib/phone-number";
-import { getEnv } from "@/lib/runtime-env";
+import { env, isLocalPhoneAuthBypassEnabled } from "@/lib/env";
 import { sendLinqText } from "@/lib/server/linq";
 
-const FALLBACK_DATABASE_URL =
-  "postgresql://unconfigured:unconfigured@127.0.0.1:1/unconfigured";
-const FALLBACK_AUTH_SECRET = "local-vault-assistant-auth-is-unconfigured";
 const AUTH_MIGRATION_LOCK_ID = 1_972_040_815;
 const AUTH_TABLE_NAMES = [
   "account",
@@ -20,12 +17,8 @@ const AUTH_TABLE_NAMES = [
 ] as const;
 const authSchemaReadinessSchema = z.object({ ready: z.boolean() });
 
-const env = getEnv();
-const databaseUrl =
-  env.DATABASE_URL?.startsWith("postgres://") ||
-  env.DATABASE_URL?.startsWith("postgresql://")
-    ? withExplicitVerifiedSsl(env.DATABASE_URL)
-    : FALLBACK_DATABASE_URL;
+const databaseUrl = withExplicitVerifiedSsl(env.DATABASE_URL);
+const localPhoneAuthBypass = isLocalPhoneAuthBypassEnabled(env);
 
 const authPool = new Pool({ connectionString: databaseUrl, max: 5 });
 
@@ -44,7 +37,7 @@ function withExplicitVerifiedSsl(value: string) {
 
 export const auth = betterAuth({
   appName: "Local Vault Assistant",
-  baseURL: env.BETTER_AUTH_URL ?? "http://auth-disabled.localhost",
+  baseURL: env.BETTER_AUTH_URL,
   database: authPool,
   disabledPaths: [
     "/change-email",
@@ -63,7 +56,9 @@ export const auth = betterAuth({
       expiresIn: 300,
       phoneNumberValidator: isE164PhoneNumber,
       requireVerification: true,
-      sendOTP: ({ code, phoneNumber: to }) => sendPhoneCode({ code, to }),
+      sendOTP: localPhoneAuthBypass
+        ? () => undefined
+        : ({ code, phoneNumber: to }) => sendPhoneCode({ code, to }),
       signUpOnVerification: {
         getTempEmail: (phoneNumberValue) =>
           `phone-${createHash("sha256")
@@ -71,16 +66,17 @@ export const auth = betterAuth({
             .digest("hex")}@local-vault.invalid`,
         getTempName: () => "Phone user",
       },
+      verifyOTP: localPhoneAuthBypass
+        ? ({ phoneNumber: value }) => isE164PhoneNumber(value)
+        : undefined,
     }),
   ],
-  secret: env.BETTER_AUTH_SECRET ?? FALLBACK_AUTH_SECRET,
+  secret: env.BETTER_AUTH_SECRET,
 });
 
 let migrationPromise: Promise<void> | undefined;
 
 export async function ensureAuthDatabase() {
-  requireAuthConfiguration();
-
   const currentMigration = (migrationPromise ??= prepareAuthDatabase());
   try {
     await currentMigration;
@@ -131,23 +127,7 @@ async function runAuthMigrations() {
   }
 }
 
-function requireAuthConfiguration() {
-  if (
-    !env.DATABASE_URL?.startsWith("postgres://") &&
-    !env.DATABASE_URL?.startsWith("postgresql://")
-  ) {
-    throw new Error("A Postgres DATABASE_URL is required.");
-  }
-  if (!env.BETTER_AUTH_SECRET) {
-    throw new Error("BETTER_AUTH_SECRET is required.");
-  }
-  if (!env.BETTER_AUTH_URL) {
-    throw new Error("BETTER_AUTH_URL is required.");
-  }
-}
-
 async function sendPhoneCode({ code, to }: { code: string; to: string }) {
-  requireAuthConfiguration();
   await sendLinqText({
     idempotencyKey: `auth-otp-${createHash("sha256")
       .update(`${to}\u0000${code}`)

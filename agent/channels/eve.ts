@@ -4,10 +4,10 @@ import {
   UnauthenticatedError,
   type AuthFn,
 } from "eve/channels/auth";
-import type { AccessScope } from "../../lib/access-scope.js";
-import { sessionIdFromPath } from "../../lib/eve-session-path.js";
-import { getAppStore } from "../../lib/server/app-store.js";
-import { requestScopeFromRequest } from "../../lib/server/eve-request-scope.js";
+import type { AccessScope } from "@/lib/access-scope";
+import { sessionIdFromPath } from "@/lib/eve-session-path";
+import { getAppStore } from "@/lib/server/app-store";
+import { requestScopeFromRequest } from "@/lib/server/eve-request-scope";
 
 function applicationAuth(): AuthFn {
   return async (request) => {

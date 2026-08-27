@@ -3,7 +3,6 @@ import type { AccessScope } from "../access-scope";
 import type { ManagerMutation } from "../manager";
 import { getModelSettings } from "../model-config";
 import { parsePaymentCardSecret, paymentCardBrand } from "../payment-card";
-import { getEnv } from "../runtime-env";
 import { loginAccountHint, parseLoginVaultPayload } from "../vault-payload";
 import { getAppStore } from "./app-store";
 import {
@@ -32,7 +31,7 @@ export async function readManagerSnapshot(scope: AccessScope) {
   );
 
   return {
-    browser: { available: Boolean(getEnv().KERNEL_API_KEY) },
+    browser: { available: true },
     runtime: { inference: modelSettings.modelId },
     secretStore: secretStoreStatus(),
     vaultItems,
