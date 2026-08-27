@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { createSMSSender, type SMSTemplateId } from "@better-auth/infra";
+import { createSMSSender, dash, type SMSTemplateId } from "@better-auth/infra";
 import { betterAuth } from "better-auth";
 import { getMigrations } from "better-auth/db/migration";
 import { phoneNumber } from "better-auth/plugins/phone-number";
@@ -22,6 +22,8 @@ const AUTH_TABLE_NAMES = [
 const authSchemaReadinessSchema = z.object({ ready: z.boolean() });
 
 const env = getEnv();
+const betterAuthApiKey =
+  env.BETTER_AUTH_API_KEY ?? env.BETTER_AUTH_INFRA_API_KEY;
 const databaseUrl =
   env.DATABASE_URL?.startsWith("postgres://") ||
   env.DATABASE_URL?.startsWith("postgresql://")
@@ -46,6 +48,7 @@ export const auth = betterAuth({
     "/verify-email",
   ],
   plugins: [
+    dash({ apiKey: betterAuthApiKey }),
     phoneNumber({
       allowedAttempts: 3,
       expiresIn: 300,
@@ -131,8 +134,8 @@ function requireHostedAuthConfiguration() {
   if (!env.BETTER_AUTH_SECRET) {
     throw new Error("BETTER_AUTH_SECRET is required in hosted mode.");
   }
-  if (!env.BETTER_AUTH_INFRA_API_KEY) {
-    throw new Error("BETTER_AUTH_INFRA_API_KEY is required in hosted mode.");
+  if (!betterAuthApiKey) {
+    throw new Error("BETTER_AUTH_API_KEY is required in hosted mode.");
   }
   if (!env.BETTER_AUTH_URL) {
     throw new Error("BETTER_AUTH_URL is required in hosted mode.");
@@ -153,7 +156,7 @@ async function sendPhoneCode({
   }
   requireHostedAuthConfiguration();
   const result = await createSMSSender({
-    apiKey: env.BETTER_AUTH_INFRA_API_KEY,
+    apiKey: betterAuthApiKey,
   }).send({ code, template, to });
   if (!result.success) {
     throw new Error(

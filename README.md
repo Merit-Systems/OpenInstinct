@@ -83,7 +83,7 @@ task history are scoped to that workspace.
 LOCAL_VAULT_ASSISTANT_MODE=hosted
 BETTER_AUTH_SECRET="$(openssl rand -base64 32)"
 BETTER_AUTH_URL=https://your-host
-BETTER_AUTH_INFRA_API_KEY=your-better-auth-infra-key
+BETTER_AUTH_API_KEY=your-better-auth-infra-key
 DATABASE_URL=postgresql://user:password@host/database
 HOSTED_SECRET_ENCRYPTION_KEY="$(openssl rand -base64 32)"
 ```

@@ -1,6 +1,7 @@
 {
   "$schema": "https://turborepo.dev/schema.json",
   "globalEnv": [
+    "BETTER_AUTH_API_KEY",
     "BETTER_AUTH_INFRA_API_KEY",
     "BETTER_AUTH_SECRET",
     "BETTER_AUTH_URL",

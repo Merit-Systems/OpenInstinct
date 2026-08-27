@@ -9,6 +9,7 @@ const optionalValue = z
 export function getEnv() {
   return createEnv({
     server: {
+      BETTER_AUTH_API_KEY: optionalValue,
       BETTER_AUTH_INFRA_API_KEY: optionalValue,
       BETTER_AUTH_SECRET: optionalValue,
       BETTER_AUTH_URL: optionalValue.refine(
