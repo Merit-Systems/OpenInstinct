@@ -57,31 +57,38 @@ type EveFilePart = Extract<EveMessagePart, { type: "file" }>;
 
 export function AgentMessage({
   canRespond,
+  deliveredAssistantMessages,
   isStreaming,
   message,
   onInputResponses,
   timestamp,
+  userVisibleOnly = false,
 }: {
   readonly canRespond: boolean;
+  readonly deliveredAssistantMessages?: ReadonlyMap<number, readonly string[]>;
   readonly isStreaming: boolean;
   readonly message: EveMessage;
   readonly onInputResponses: (
     responses: readonly AgentInputResponse[]
   ) => void | Promise<void>;
   readonly timestamp?: string;
+  readonly userVisibleOnly?: boolean;
 }) {
   const [optimisticTimestamp] = useState(() => new Date().toISOString());
   const displayedTimestamp =
     timestamp ?? (message.role === "user" ? optimisticTimestamp : undefined);
-  const lastTextIndex = message.parts.reduce(
+  const visibleParts = userVisibleOnly
+    ? userVisibleParts(message, deliveredAssistantMessages)
+    : message.parts;
+  const lastTextIndex = visibleParts.reduce(
     (last, part, index) => (part.type === "text" ? index : last),
     -1
   );
   const hasAssistantText =
     message.role === "assistant" &&
-    message.parts.some((part) => part.type === "text" && part.text.length > 0);
+    visibleParts.some((part) => part.type === "text" && part.text.length > 0);
 
-  if (message.parts.length === 0) return null;
+  if (visibleParts.length === 0) return null;
 
   return (
     <Message
@@ -89,7 +96,7 @@ export function AgentMessage({
       from={message.role}
     >
       <MessageContent>
-        {message.parts.map((part, index) =>
+        {visibleParts.map((part, index) =>
           hasAssistantText && part.type === "reasoning" ? null : (
             <AgentMessagePart
               canRespond={canRespond}
@@ -101,6 +108,7 @@ export function AgentMessage({
                 message.role === "assistant" &&
                 index === lastTextIndex
               }
+              userVisibleOnly={userVisibleOnly}
             />
           )
         )}
@@ -121,6 +129,40 @@ export function AgentMessage({
       ) : null}
     </Message>
   );
+}
+
+function userVisibleParts(
+  message: EveMessage,
+  deliveredAssistantMessages?: ReadonlyMap<number, readonly string[]>
+) {
+  if (message.role === "user")
+    return message.parts.filter(
+      (part) => part.type === "text" || part.type === "file"
+    );
+
+  const remainingDeliveries = new Map(
+    [...(deliveredAssistantMessages ?? [])].map(([stepIndex, messages]) => [
+      stepIndex,
+      [...messages],
+    ])
+  );
+
+  return message.parts.filter((part) => {
+    if (part.type === "text" && part.stepIndex !== undefined) {
+      const deliveries = remainingDeliveries.get(part.stepIndex);
+      const deliveryIndex = deliveries?.indexOf(part.text) ?? -1;
+      if (deliveryIndex < 0 || !deliveries) return false;
+      deliveries.splice(deliveryIndex, 1);
+      return true;
+    }
+
+    if (part.type === "authorization") return true;
+
+    return (
+      part.type === "dynamic-tool" &&
+      part.toolMetadata?.eve?.inputRequest !== undefined
+    );
+  });
 }
 
 const timestampFormatter = new Intl.DateTimeFormat(undefined, {
@@ -146,6 +188,7 @@ function AgentMessagePart({
   onInputResponses,
   part,
   showCaret,
+  userVisibleOnly,
 }: {
   readonly canRespond: boolean;
   readonly onInputResponses: (
@@ -153,6 +196,7 @@ function AgentMessagePart({
   ) => void | Promise<void>;
   readonly part: EveMessagePart;
   readonly showCaret: boolean;
+  readonly userVisibleOnly: boolean;
 }) {
   switch (part.type) {
     case "step-start":
@@ -182,6 +226,16 @@ function AgentMessagePart({
             canRespond={canRespond}
             inputRequest={inputRequest}
             inputResponse={part.toolMetadata?.eve?.inputResponse}
+            onInputResponses={onInputResponses}
+          />
+        );
+      }
+
+      if (userVisibleOnly && inputRequest) {
+        return (
+          <InputRequestActions
+            canRespond={canRespond}
+            part={part}
             onInputResponses={onInputResponses}
           />
         );

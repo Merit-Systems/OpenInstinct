@@ -20,6 +20,7 @@ import {
 } from "@/components/ai-elements/prompt-input";
 import { Shimmer } from "@/components/ai-elements/shimmer";
 import { Button } from "@/components/ui/button";
+import { ButtonGroup } from "@/components/ui/button-group";
 import { formatChatUsage, summarizeChatUsage } from "@/app/_lib/chat-usage";
 import type { ChatUsage } from "@/lib/chat";
 import { cn } from "@/lib/utils";
@@ -37,6 +38,7 @@ export function AgentChat({
   readonly sessionless?: boolean;
 }) {
   const [cancellationError, setCancellationError] = useState<string>();
+  const [traceView, setTraceView] = useState<"imessage" | "trace">("trace");
   const pendingChatTitle = useRef<string | undefined>(undefined);
   const agent = useEveAgent({
     initialSession:
@@ -73,7 +75,8 @@ export function AgentChat({
     lastMessage.parts.every((part) => part.type === "step-start");
   const showPendingThinking =
     isBusy &&
-    (agent.status === "submitted" ||
+    (traceView === "imessage" ||
+      agent.status === "submitted" ||
       lastMessage?.role !== "assistant" ||
       isPendingAssistantShell);
   const turnFailure =
@@ -117,6 +120,29 @@ export function AgentChat({
     }
 
     return timestamps;
+  }, [agent.events]);
+  const deliveredAssistantMessages = useMemo(() => {
+    const deliveriesByMessage = new Map<string, Map<number, string[]>>();
+
+    for (const event of agent.events) {
+      if (
+        event.type !== "message.completed" ||
+        event.data.finishReason === "tool-calls" ||
+        !event.data.message?.trim()
+      ) {
+        continue;
+      }
+
+      const messageId = `${event.data.turnId}:assistant`;
+      const deliveries =
+        deliveriesByMessage.get(messageId) ?? new Map<number, string[]>();
+      const messages = deliveries.get(event.data.stepIndex) ?? [];
+      messages.push(event.data.message);
+      deliveries.set(event.data.stepIndex, messages);
+      deliveriesByMessage.set(messageId, deliveries);
+    }
+
+    return deliveriesByMessage;
   }, [agent.events]);
 
   useEffect(() => {
@@ -197,6 +223,8 @@ export function AgentChat({
       {showConversationLayout ? (
         <ChatHeader
           canStartNewChat={activeSessionId !== undefined}
+          onTraceViewChange={setTraceView}
+          traceView={traceView}
           usage={usage}
         />
       ) : null}
@@ -219,6 +247,9 @@ export function AgentChat({
               message.id === lastMessage.id ? null : (
                 <AgentMessage
                   canRespond={!isBusy && !isRestoring}
+                  deliveredAssistantMessages={deliveredAssistantMessages.get(
+                    message.id
+                  )}
                   isStreaming={
                     agent.status === "streaming" &&
                     index === agent.data.messages.length - 1
@@ -230,6 +261,7 @@ export function AgentChat({
                     return agent.respond(inputResponses);
                   }}
                   timestamp={messageTimestamps.get(message.id)}
+                  userVisibleOnly={traceView === "imessage"}
                 />
               )
             )}
@@ -282,9 +314,13 @@ function ErrorMessage({ message }: { readonly message: string }) {
 
 function ChatHeader({
   canStartNewChat,
+  onTraceViewChange,
+  traceView,
   usage,
 }: {
   readonly canStartNewChat: boolean;
+  readonly onTraceViewChange: (view: "imessage" | "trace") => void;
+  readonly traceView: "imessage" | "trace";
   readonly usage: ChatUsage;
 }) {
   return (
@@ -298,19 +334,40 @@ function ChatHeader({
             Usage {formatChatUsage(usage)}
           </span>
         </div>
-        {canStartNewChat ? (
-          <Button
-            aria-label="Start a new chat"
-            className="pointer-events-auto absolute top-2 right-6"
-            onClick={() => window.location.assign("/chat")}
-            size="sm"
-            type="button"
-            variant="ghost"
-          >
-            <PlusIcon className="size-4" />
-            <span className="hidden sm:inline">New chat</span>
-          </Button>
-        ) : null}
+        <div className="pointer-events-auto ml-auto flex items-center gap-2">
+          <ButtonGroup aria-label="Trace view">
+            <Button
+              aria-pressed={traceView === "imessage"}
+              onClick={() => onTraceViewChange("imessage")}
+              size="sm"
+              type="button"
+              variant={traceView === "imessage" ? "secondary" : "outline"}
+            >
+              iMessage
+            </Button>
+            <Button
+              aria-pressed={traceView === "trace"}
+              onClick={() => onTraceViewChange("trace")}
+              size="sm"
+              type="button"
+              variant={traceView === "trace" ? "secondary" : "outline"}
+            >
+              Full trace
+            </Button>
+          </ButtonGroup>
+          {canStartNewChat ? (
+            <Button
+              aria-label="Start a new chat"
+              onClick={() => window.location.assign("/chat")}
+              size="sm"
+              type="button"
+              variant="ghost"
+            >
+              <PlusIcon className="size-4" />
+              <span className="hidden sm:inline">New chat</span>
+            </Button>
+          ) : null}
+        </div>
       </div>
     </header>
   );
