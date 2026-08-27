@@ -45,10 +45,6 @@ import {
   ToolOutput,
 } from "@/components/ai-elements/tool";
 import { Button } from "@/components/ui/button";
-import {
-  conversationMessageFromOutput,
-  SEND_MESSAGE_TOOL_NAME,
-} from "@/lib/conversation-message";
 import { cn } from "@/lib/utils";
 
 export type AgentInputResponse = {
@@ -61,41 +57,29 @@ type EveFilePart = Extract<EveMessagePart, { type: "file" }>;
 
 export function AgentMessage({
   canRespond,
+  deliveredAssistantMessages,
   isStreaming,
   message,
   onInputResponses,
   timestamp,
+  userVisibleOnly = false,
 }: {
   readonly canRespond: boolean;
+  readonly deliveredAssistantMessages?: ReadonlyMap<number, readonly string[]>;
   readonly isStreaming: boolean;
   readonly message: EveMessage;
   readonly onInputResponses: (
     responses: readonly AgentInputResponse[]
   ) => void | Promise<void>;
   readonly timestamp?: string;
+  readonly userVisibleOnly?: boolean;
 }) {
   const [optimisticTimestamp] = useState(() => new Date().toISOString());
   const displayedTimestamp =
     timestamp ?? (message.role === "user" ? optimisticTimestamp : undefined);
-  const conversationMessages = new Set<string>();
-  const visibleParts = message.parts.filter((part) => {
-    if (message.role === "assistant" && part.type === "text") return false;
-    if (part.type !== "dynamic-tool") return true;
-    if (part.toolName !== SEND_MESSAGE_TOOL_NAME) return true;
-
-    const conversationMessage = conversationMessageFromOutput(
-      part.toolName,
-      part.output
-    );
-    if (
-      conversationMessage === undefined ||
-      conversationMessages.has(conversationMessage)
-    )
-      return false;
-
-    conversationMessages.add(conversationMessage);
-    return true;
-  });
+  const visibleParts = userVisibleOnly
+    ? userVisibleParts(message, deliveredAssistantMessages)
+    : message.parts;
   const lastTextIndex = visibleParts.reduce(
     (last, part, index) => (part.type === "text" ? index : last),
     -1
@@ -124,6 +108,7 @@ export function AgentMessage({
                 message.role === "assistant" &&
                 index === lastTextIndex
               }
+              userVisibleOnly={userVisibleOnly}
             />
           )
         )}
@@ -144,6 +129,40 @@ export function AgentMessage({
       ) : null}
     </Message>
   );
+}
+
+function userVisibleParts(
+  message: EveMessage,
+  deliveredAssistantMessages?: ReadonlyMap<number, readonly string[]>
+) {
+  if (message.role === "user")
+    return message.parts.filter(
+      (part) => part.type === "text" || part.type === "file"
+    );
+
+  const remainingDeliveries = new Map(
+    [...(deliveredAssistantMessages ?? [])].map(([stepIndex, messages]) => [
+      stepIndex,
+      [...messages],
+    ])
+  );
+
+  return message.parts.filter((part) => {
+    if (part.type === "text" && part.stepIndex !== undefined) {
+      const deliveries = remainingDeliveries.get(part.stepIndex);
+      const deliveryIndex = deliveries?.indexOf(part.text) ?? -1;
+      if (deliveryIndex < 0 || !deliveries) return false;
+      deliveries.splice(deliveryIndex, 1);
+      return true;
+    }
+
+    if (part.type === "authorization") return true;
+
+    return (
+      part.type === "dynamic-tool" &&
+      part.toolMetadata?.eve?.inputRequest !== undefined
+    );
+  });
 }
 
 const timestampFormatter = new Intl.DateTimeFormat(undefined, {
@@ -169,6 +188,7 @@ function AgentMessagePart({
   onInputResponses,
   part,
   showCaret,
+  userVisibleOnly,
 }: {
   readonly canRespond: boolean;
   readonly onInputResponses: (
@@ -176,6 +196,7 @@ function AgentMessagePart({
   ) => void | Promise<void>;
   readonly part: EveMessagePart;
   readonly showCaret: boolean;
+  readonly userVisibleOnly: boolean;
 }) {
   switch (part.type) {
     case "step-start":
@@ -198,16 +219,6 @@ function AgentMessagePart({
     case "authorization":
       return <AuthorizationPrompt part={part} />;
     case "dynamic-tool": {
-      const conversationMessage = conversationMessageFromOutput(
-        part.toolName,
-        part.output
-      );
-      if (part.toolName === SEND_MESSAGE_TOOL_NAME) {
-        return conversationMessage ? (
-          <MessageResponse>{conversationMessage}</MessageResponse>
-        ) : null;
-      }
-
       const inputRequest = part.toolMetadata?.eve?.inputRequest;
       if (inputRequest?.kind === "question") {
         return (
@@ -215,6 +226,16 @@ function AgentMessagePart({
             canRespond={canRespond}
             inputRequest={inputRequest}
             inputResponse={part.toolMetadata?.eve?.inputResponse}
+            onInputResponses={onInputResponses}
+          />
+        );
+      }
+
+      if (userVisibleOnly && inputRequest) {
+        return (
+          <InputRequestActions
+            canRespond={canRespond}
+            part={part}
             onInputResponses={onInputResponses}
           />
         );
