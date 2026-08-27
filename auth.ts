@@ -1,5 +1,4 @@
 import { createHash } from "node:crypto";
-import { createSMSSender, dash, type SMSTemplateId } from "@better-auth/infra";
 import { betterAuth } from "better-auth";
 import { getMigrations } from "better-auth/db/migration";
 import { phoneNumber } from "better-auth/plugins/phone-number";
@@ -20,10 +19,12 @@ const AUTH_TABLE_NAMES = [
   "verification",
 ] as const;
 const authSchemaReadinessSchema = z.object({ ready: z.boolean() });
+const textbeltResponseSchema = z.discriminatedUnion("success", [
+  z.object({ success: z.literal(true) }),
+  z.object({ error: z.string().optional(), success: z.literal(false) }),
+]);
 
 const env = getEnv();
-const betterAuthApiKey =
-  env.BETTER_AUTH_API_KEY ?? env.BETTER_AUTH_INFRA_API_KEY;
 const databaseUrl =
   env.DATABASE_URL?.startsWith("postgres://") ||
   env.DATABASE_URL?.startsWith("postgresql://")
@@ -48,14 +49,12 @@ export const auth = betterAuth({
     "/verify-email",
   ],
   plugins: [
-    dash({ apiKey: betterAuthApiKey }),
     phoneNumber({
       allowedAttempts: 3,
       expiresIn: 300,
       phoneNumberValidator: isE164PhoneNumber,
       requireVerification: true,
-      sendOTP: ({ code, phoneNumber: to }) =>
-        sendPhoneCode({ code, template: "sign-in-otp", to }),
+      sendOTP: ({ code, phoneNumber: to }) => sendPhoneCode({ code, to }),
       signUpOnVerification: {
         getTempEmail: (phoneNumberValue) =>
           `phone-${createHash("sha256")
@@ -134,33 +133,38 @@ function requireHostedAuthConfiguration() {
   if (!env.BETTER_AUTH_SECRET) {
     throw new Error("BETTER_AUTH_SECRET is required in hosted mode.");
   }
-  if (!betterAuthApiKey) {
-    throw new Error("BETTER_AUTH_API_KEY is required in hosted mode.");
+  if (!env.TEXTBELT_API_KEY) {
+    throw new Error("TEXTBELT_API_KEY is required in hosted mode.");
   }
   if (!env.BETTER_AUTH_URL) {
     throw new Error("BETTER_AUTH_URL is required in hosted mode.");
   }
 }
 
-async function sendPhoneCode({
-  code,
-  template,
-  to,
-}: {
-  code: string;
-  template: SMSTemplateId;
-  to: string;
-}) {
+async function sendPhoneCode({ code, to }: { code: string; to: string }) {
   if (getDeploymentMode() === "local") {
     throw new Error("Phone authentication is disabled in local mode.");
   }
   requireHostedAuthConfiguration();
-  const result = await createSMSSender({
-    apiKey: betterAuthApiKey,
-  }).send({ code, template, to });
+  const response = await fetch("https://textbelt.com/text", {
+    body: JSON.stringify({
+      key: env.TEXTBELT_API_KEY,
+      message: `Eve sign-in code: ${code}. Expires in 5 minutes.`,
+      phone: to,
+      sender: "Eve",
+    }),
+    headers: { "Content-Type": "application/json" },
+    method: "POST",
+  });
+  if (!response.ok) {
+    throw new Error(
+      `Textbelt SMS failed with HTTP ${String(response.status)}.`
+    );
+  }
+  const result = textbeltResponseSchema.parse(await response.json());
   if (!result.success) {
     throw new Error(
-      `Better Auth Infra SMS failed: ${result.error ?? "Unknown provider error"}`
+      `Textbelt SMS failed: ${result.error ?? "Unknown provider error"}`
     );
   }
 }

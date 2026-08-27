@@ -1,8 +1,6 @@
 {
   "$schema": "https://turborepo.dev/schema.json",
   "globalEnv": [
-    "BETTER_AUTH_API_KEY",
-    "BETTER_AUTH_INFRA_API_KEY",
     "BETTER_AUTH_SECRET",
     "BETTER_AUTH_URL",
     "DATABASE_URL",
@@ -16,6 +14,7 @@
     "LOCAL_VAULT_ASSISTANT_MODEL_API_KEY",
     "LOCAL_VAULT_ASSISTANT_MODEL_BASE_URL",
     "LOCAL_VAULT_ASSISTANT_MODE",
+    "TEXTBELT_API_KEY",
     "VERCEL",
     "VERCEL_REGION"
   ],

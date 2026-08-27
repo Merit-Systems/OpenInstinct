@@ -9,8 +9,6 @@ const optionalValue = z
 export function getEnv() {
   return createEnv({
     server: {
-      BETTER_AUTH_API_KEY: optionalValue,
-      BETTER_AUTH_INFRA_API_KEY: optionalValue,
       BETTER_AUTH_SECRET: optionalValue,
       BETTER_AUTH_URL: optionalValue.refine(
         (value) => value === undefined || URL.canParse(value),
@@ -51,6 +49,7 @@ export function getEnv() {
       LOCAL_VAULT_ASSISTANT_MODEL_API_KEY: optionalValue,
       LOCAL_VAULT_ASSISTANT_MODEL_BASE_URL: optionalValue,
       LOCAL_VAULT_ASSISTANT_MODE: z.enum(["hosted", "local"]).optional(),
+      TEXTBELT_API_KEY: optionalValue,
       VERCEL: optionalValue,
       VERCEL_ENV: z.enum(["production", "preview", "development"]).optional(),
       VERCEL_REGION: optionalValue,

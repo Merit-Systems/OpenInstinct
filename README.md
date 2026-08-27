@@ -73,7 +73,7 @@ Keychain.
 
 ## Run for multiple users
 
-Hosted mode requires Better Auth, Better Auth Infra SMS, Postgres, and an
+Hosted mode requires Better Auth, Textbelt SMS, Postgres, and an
 application encryption key. Each authenticated phone account receives a stable
 personal workspace. Manager
 settings, connections, vault metadata, encrypted secrets, agent sessions, and
@@ -83,7 +83,7 @@ task history are scoped to that workspace.
 LOCAL_VAULT_ASSISTANT_MODE=hosted
 BETTER_AUTH_SECRET="$(openssl rand -base64 32)"
 BETTER_AUTH_URL=https://your-host
-BETTER_AUTH_API_KEY=your-better-auth-infra-key
+TEXTBELT_API_KEY=your-textbelt-api-key
 DATABASE_URL=postgresql://user:password@host/database
 HOSTED_SECRET_ENCRYPTION_KEY="$(openssl rand -base64 32)"
 ```
