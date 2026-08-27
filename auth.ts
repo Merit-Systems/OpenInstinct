@@ -27,10 +27,23 @@ const env = getEnv();
 const databaseUrl =
   env.DATABASE_URL?.startsWith("postgres://") ||
   env.DATABASE_URL?.startsWith("postgresql://")
-    ? env.DATABASE_URL
+    ? withExplicitVerifiedSsl(env.DATABASE_URL)
     : FALLBACK_DATABASE_URL;
 
 const authPool = new Pool({ connectionString: databaseUrl, max: 5 });
+
+function withExplicitVerifiedSsl(value: string) {
+  const url = new URL(value);
+  const sslMode = url.searchParams.get("sslmode");
+  if (
+    sslMode === "prefer" ||
+    sslMode === "require" ||
+    sslMode === "verify-ca"
+  ) {
+    url.searchParams.set("sslmode", "verify-full");
+  }
+  return url.toString();
+}
 
 export const auth = betterAuth({
   appName: "Local Vault Assistant",
