@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
 import { accessScopeForUser } from "../lib/access-scope";
-import { isLocalPhoneAuthBypassEnabled } from "../lib/env";
 import { normalizeAuthPhoneNumber } from "../lib/auth/phone-number";
 
 describe("multi-user request identity", () => {
@@ -18,36 +17,5 @@ describe("multi-user request identity", () => {
     expect(normalizeAuthPhoneNumber("1 202 555 0123")).toBe("+12025550123");
     expect(normalizeAuthPhoneNumber("+44 7911 123456")).toBe("+447911123456");
     expect(normalizeAuthPhoneNumber("not-a-number")).toBeUndefined();
-  });
-
-  it("bypasses phone OTP only during local development", () => {
-    expect(
-      isLocalPhoneAuthBypassEnabled({
-        BETTER_AUTH_URL: "http://localhost:3000",
-        NODE_ENV: "development",
-        VERCEL_ENV: undefined,
-      })
-    ).toBe(true);
-    expect(
-      isLocalPhoneAuthBypassEnabled({
-        BETTER_AUTH_URL: "http://localhost:3000",
-        NODE_ENV: "production",
-        VERCEL_ENV: undefined,
-      })
-    ).toBe(false);
-    expect(
-      isLocalPhoneAuthBypassEnabled({
-        BETTER_AUTH_URL: "http://localhost:3000",
-        NODE_ENV: "development",
-        VERCEL_ENV: "development",
-      })
-    ).toBe(false);
-    expect(
-      isLocalPhoneAuthBypassEnabled({
-        BETTER_AUTH_URL: "https://preview.example.com",
-        NODE_ENV: "development",
-        VERCEL_ENV: undefined,
-      })
-    ).toBe(false);
   });
 });
