@@ -9,12 +9,15 @@ import {
   summarizeBrowserRunTasks,
 } from "@/app/_components/browser-run-table";
 import { Button } from "@/components/ui/button";
-import type { BrowserRunGroup, BrowserRunTask } from "@/lib/browser-run-store";
+import type {
+  BrowserRunGroup,
+  BrowserRunTask,
+} from "@/app/_lib/browser-run-store";
 import {
   taskFromHistoryRun,
   taskHistoryPageSchema,
   type TaskHistoryRun,
-} from "@/lib/task-history";
+} from "@/app/_lib/task-history";
 
 async function fetchTaskHistoryPage(pageCursor?: string) {
   const search = pageCursor ? `?cursor=${encodeURIComponent(pageCursor)}` : "";

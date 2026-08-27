@@ -11,7 +11,10 @@ import {
 } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import type { ManagerMutation } from "@/lib/manager";
-import { paymentCardBrand, serializePaymentCard } from "@/lib/payment-card";
+import {
+  paymentCardBrand,
+  serializePaymentCard,
+} from "@/lib/manager/payment-card";
 
 const paymentCardFormSchema = z.object({
   billingPostalCode: z.string().trim().min(1, "Enter the billing postal code."),

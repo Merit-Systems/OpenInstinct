@@ -17,11 +17,11 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { browserBenchmarkTasks } from "@/lib/browser-benchmark-tasks";
+import { browserBenchmarkTasks } from "@/lib/browser/benchmark-tasks";
 import {
   createBrowserRunGroup,
   saveBrowserRunGroup,
-} from "@/lib/browser-run-store";
+} from "@/app/_lib/browser-run-store";
 
 const starterTasks = browserBenchmarkTasks
   .map((task) => task.prompt)

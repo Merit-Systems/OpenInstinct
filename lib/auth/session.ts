@@ -1,5 +1,16 @@
 import { auth, ensureAuthDatabase } from "@/auth";
-import { isFullyAuthenticatedUser } from "@/lib/auth-user";
+
+function isFullyAuthenticatedUser(
+  user:
+    | {
+        phoneNumber?: string | null;
+        phoneNumberVerified?: boolean | null;
+      }
+    | null
+    | undefined
+) {
+  return Boolean(user?.phoneNumber && user.phoneNumberVerified === true);
+}
 
 export async function getAuthSession(headers: Headers) {
   await ensureAuthDatabase();

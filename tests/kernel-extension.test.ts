@@ -1,10 +1,10 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { kernelToolAllowlist } from "../agent/extensions/kernel/connections/browser";
+import kernelConnection from "../agent/extensions/kernel/connections/browser";
 
 describe("Kernel Eve extension", () => {
   it("does not expose a second backend-specific browser toolset", () => {
-    expect(kernelToolAllowlist).toEqual([]);
+    expect(kernelConnection.tools).toEqual({ allow: [] });
   });
 
   it("keeps executor selection out of model instructions", () => {

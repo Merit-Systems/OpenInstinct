@@ -1,7 +1,7 @@
 import { defineTool } from "eve/tools";
 import { z } from "zod";
 import { scopeFromPrincipal } from "@/lib/access-scope";
-import { readManagerSnapshot } from "@/lib/server/manager-store";
+import { readManagerSnapshot } from "@/lib/manager/server/store";
 
 export default defineTool({
   description:

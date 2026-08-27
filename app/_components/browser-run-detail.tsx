@@ -17,13 +17,13 @@ import {
   measureBrowserTask,
   readTaskCompletion,
   terminalBrowserMessage,
-} from "@/lib/browser-benchmark";
+} from "@/lib/browser/benchmark";
 import {
   type BrowserRunGroup,
   type BrowserRunTask,
   type BrowserRunTaskUpdate,
   updateBrowserRunTask,
-} from "@/lib/browser-run-store";
+} from "@/app/_lib/browser-run-store";
 
 const taskTimeoutMs = 15 * 60_000;
 

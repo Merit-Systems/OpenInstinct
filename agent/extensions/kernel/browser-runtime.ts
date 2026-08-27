@@ -11,12 +11,12 @@ import {
   listBrowserSessions,
   readBrowserSession,
 } from "@/db/services/browsers";
-import type { AccessScope } from "../access-scope";
+import type { AccessScope } from "@/lib/access-scope";
 import type {
   computerActionInputSchema,
   executePlaywrightInputSchema,
   manageBrowsersInputSchema,
-} from "../kernel-browser-contract";
+} from "./browser-contract";
 import { env } from "@/lib/env";
 
 type ManageBrowsersInput = z.infer<typeof manageBrowsersInputSchema>;
