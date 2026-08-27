@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { headers } from "next/headers";
 import { PhoneAuthForm } from "@/app/sign-in/phone-auth-form";
+import { Logo } from "@/components/ui/logo";
 import { getDeploymentMode } from "@/lib/deployment-mode";
 import { getHostedAuthSession } from "@/lib/server/auth-session";
 
@@ -21,7 +22,8 @@ export default async function SignInPage({
   return (
     <main className="flex min-h-svh items-center justify-center bg-background px-4 text-foreground">
       <section className="w-full max-w-sm">
-        <h1 className="type-page-title">Sign in</h1>
+        <Logo className="size-9" />
+        <h1 className="type-page-title mt-6">Sign in</h1>
         <PhoneAuthForm callbackUrl={callbackUrl} />
       </section>
     </main>
