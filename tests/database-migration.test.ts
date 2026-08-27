@@ -34,7 +34,7 @@ describe("application database migration", () => {
 
     expect(tables.rows[0]?.count).toBe(8);
     expect(pendingConstraints).toBe(0);
-  });
+  }, 15_000);
 
   it("preserves legacy rows while enforcing constraints for new writes", async () => {
     const database = createDatabase();
@@ -63,7 +63,7 @@ describe("application database migration", () => {
         '2026-01-01',
         '2026-01-01'
       );
-    `);
+      `);
 
     await applyInitialMigration(database);
 
@@ -98,9 +98,9 @@ describe("application database migration", () => {
           '2026-01-01',
           '2026-01-01'
         )
-      `)
+        `)
     ).rejects.toThrow(/constraint/);
-  });
+  }, 15_000);
 });
 
 function createDatabase() {

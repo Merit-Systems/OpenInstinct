@@ -9,7 +9,7 @@ import {
   MessageSquareIcon,
 } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import {
   ModelSelector as ModelSelectorRoot,
   ModelSelectorContent,
@@ -185,8 +185,9 @@ function ModelSelector({
     );
   }, [models]);
 
-  useEffect(() => {
-    if (!open || models.length > 0 || loading) return;
+  const handleOpenChange = (nextOpen: boolean) => {
+    setOpen(nextOpen);
+    if (!nextOpen || models.length > 0 || loading) return;
     setLoading(true);
     setCatalogError(undefined);
     void fetch("/api/models", { cache: "no-store" })
@@ -203,7 +204,7 @@ function ModelSelector({
         );
       })
       .finally(() => setLoading(false));
-  }, [loading, models.length, open]);
+  };
 
   const select = async (selectedModelId: string) => {
     const saved = await onSubmit({
@@ -214,7 +215,7 @@ function ModelSelector({
   };
 
   return (
-    <ModelSelectorRoot onOpenChange={setOpen} open={open}>
+    <ModelSelectorRoot onOpenChange={handleOpenChange} open={open}>
       <ModelSelectorTrigger
         render={
           <Button disabled={busy} size="sm" type="button" variant="outline" />
