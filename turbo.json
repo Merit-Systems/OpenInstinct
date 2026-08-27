@@ -9,6 +9,8 @@
 
     "EVE_NEXT_PRODUCTION_ORIGIN",
     "GOOGLE_CONNECTOR_UID",
+    "LINQ_API_KEY",
+    "LINQ_WEBHOOK_SECRET",
     "VERCEL_ENV"
   ],
   "tasks": {

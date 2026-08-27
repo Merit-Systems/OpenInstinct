@@ -18,7 +18,13 @@ const verifiedPhoneUserSchema = z.object({
 });
 
 export default linqChannel({
-  credentials: connectLinqCredentials(LINQ_CONNECTOR),
+  credentials:
+    env.LINQ_API_KEY && env.LINQ_WEBHOOK_SECRET
+      ? {
+          apiKey: env.LINQ_API_KEY,
+          signingSecret: env.LINQ_WEBHOOK_SECRET,
+        }
+      : connectLinqCredentials(LINQ_CONNECTOR),
   async onMessage(context, message) {
     if (message.author.isBot) return null;
 
