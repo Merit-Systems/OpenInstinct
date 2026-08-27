@@ -77,13 +77,25 @@ export function AgentMessage({
   const [optimisticTimestamp] = useState(() => new Date().toISOString());
   const displayedTimestamp =
     timestamp ?? (message.role === "user" ? optimisticTimestamp : undefined);
-  const visibleParts = message.parts.filter(
-    (part) =>
-      (message.role !== "assistant" || part.type !== "text") &&
-      (part.type !== "dynamic-tool" ||
-        part.toolName !== SEND_MESSAGE_TOOL_NAME ||
-        conversationMessageFromOutput(part.toolName, part.output) !== undefined)
-  );
+  const conversationMessages = new Set<string>();
+  const visibleParts = message.parts.filter((part) => {
+    if (message.role === "assistant" && part.type === "text") return false;
+    if (part.type !== "dynamic-tool") return true;
+    if (part.toolName !== SEND_MESSAGE_TOOL_NAME) return true;
+
+    const conversationMessage = conversationMessageFromOutput(
+      part.toolName,
+      part.output
+    );
+    if (
+      conversationMessage === undefined ||
+      conversationMessages.has(conversationMessage)
+    )
+      return false;
+
+    conversationMessages.add(conversationMessage);
+    return true;
+  });
   const lastTextIndex = visibleParts.reduce(
     (last, part, index) => (part.type === "text" ? index : last),
     -1

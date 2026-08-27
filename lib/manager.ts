@@ -10,6 +10,13 @@ export const vaultItemKindSchema = z.enum([
   "token",
 ]);
 
+const vaultSetupKindSchema = vaultItemKindSchema.extract([
+  "login",
+  "payment",
+  "address",
+  "phone",
+]);
+
 const managerVaultItemSchema = z.object({
   account: z.string(),
   createdAt: z.string(),
@@ -54,7 +61,7 @@ const vaultItemInputSchema = z
 export const managerSetupRequestSchema = z
   .object({
     account: z.string().trim().max(200).optional(),
-    kind: vaultItemKindSchema,
+    kind: vaultSetupKindSchema,
     label: z.string().trim().max(120).optional(),
     target: z.literal("vault"),
   })

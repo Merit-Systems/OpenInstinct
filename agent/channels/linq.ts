@@ -2,16 +2,27 @@
 import { connectLinqCredentials } from "@vercel/connect/eve";
 import { defaultLinqAuth, linqChannel } from "eve/channels/linq";
 import { accessScopeForUser } from "../../lib/access-scope.js";
-import { conversationMessageFromActionResult } from "../../lib/conversation-message.js";
+import {
+  claimConversationMessageRelay,
+  conversationMessageFromActionResult,
+} from "../../lib/conversation-message.js";
 
 export default linqChannel({
   credentials: connectLinqCredentials("linq/eve-kernel"),
   events: {
-    async "action.result"(event, channel) {
+    async "action.result"(event, channel, ctx) {
       const message = conversationMessageFromActionResult(event.result);
-      if (message && channel.thread) {
-        await channel.thread.post({ markdown: message });
-      }
+      if (!message || !channel.thread) return;
+      if (
+        !claimConversationMessageRelay(
+          channel.state,
+          ctx.session.turn.id,
+          message
+        )
+      )
+        return;
+
+      await channel.thread.post({ markdown: message });
     },
     "message.appended"() {
       return undefined;

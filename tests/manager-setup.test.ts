@@ -16,6 +16,19 @@ describe("self-hosted manager", () => {
         target: "vault",
       }).success
     ).toBe(false);
+    expect(
+      managerSetupRequestSchema.safeParse({
+        kind: "identity",
+        target: "vault",
+      }).success
+    ).toBe(false);
+    expect(
+      managerSetupRequestSchema.safeParse({
+        email: "person@example.com",
+        kind: "login",
+        target: "vault",
+      }).success
+    ).toBe(false);
 
     const url = new URL(
       createManagerSetupUrl("https://assistant.example.com", {

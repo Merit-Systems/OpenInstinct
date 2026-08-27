@@ -6,7 +6,7 @@ export default defineDynamic({
     "step.started": () =>
       defineTool({
         description:
-          "Send one user-visible message to the current conversation. Only the root conversational agent may call this. Use it for direct answers, questions, acknowledgements, progress updates, blockers, and final results.",
+          "Send one user-visible message to the current conversation. Only the root conversational agent may call this. Use it for direct answers, questions, acknowledgements, progress updates, blockers, and final results. A successful call completes that update: never repeat the same message in the same turn.",
         inputSchema: conversationMessageSchema,
         outputSchema: conversationMessageSchema,
         execute(message, ctx) {
@@ -16,6 +16,13 @@ export default defineDynamic({
             );
           }
           return message;
+        },
+        toModelOutput() {
+          return {
+            type: "text",
+            value:
+              "Message delivered. Do not call sendMessage again unless you have distinct new information for the user. End the turn without ordinary assistant text when the update is complete.",
+          };
         },
       }),
   },
