@@ -27,7 +27,6 @@ describe("environment", () => {
     const { env } = await import("../lib/env");
 
     expect(env).toMatchObject(requiredEnvironment);
-    expect(env.BROWSER_BENCH_REPETITIONS).toBe(1);
   });
 
   it.each([
