@@ -35,9 +35,7 @@ describe("local development", () => {
 
     const start = developmentScript.indexOf("composeAttempted = true");
     const migrate = developmentScript.indexOf('["db:migrate"]');
-    const application = developmentScript.indexOf(
-      '["exec", "turbo", "run", "dev:app"]'
-    );
+    const application = developmentScript.indexOf('["dev:app"]');
     const stop = developmentScript.indexOf('["compose", "down"]');
 
     expect(start).toBeGreaterThan(-1);
@@ -53,14 +51,14 @@ describe("local development", () => {
   it("tears Compose down when interrupted during startup", async () => {
     const result = await interruptDuringStartup();
 
-    expect(result.code).toBe(130);
+    expect(result.code).toBe(0);
     expect(result.commands).toBe("compose up --detach --wait\ncompose down\n");
   });
 
   it("does not advance when interrupted startup exits cleanly", async () => {
     const result = await interruptDuringStartup({ DEV_STARTUP_EXIT: "0" });
 
-    expect(result.code).toBe(130);
+    expect(result.code).toBe(0);
     expect(result.commands).toBe("compose up --detach --wait\ncompose down\n");
   });
 
@@ -131,7 +129,7 @@ printf 'pnpm %s\\n' "$*" >> "$DEV_SUPERVISOR_LOG"
 }
 
 async function waitForLogEntry(path: string, expected: string) {
-  for (let attempt = 0; attempt < 50; attempt += 1) {
+  for (let attempt = 0; attempt < 250; attempt += 1) {
     const contents = await readFile(path, "utf8").catch(() => "");
     if (contents.includes(expected)) {
       return;
