@@ -20,12 +20,8 @@ describe("database services", () => {
     await applyInitialMigration(client);
 
     const pgliteDatabase = drizzle(client, { schema });
-    Object.assign(pgliteDatabase, {
-      batch: async (queries: readonly { execute(): Promise<unknown> }[]) =>
-        await Promise.all(queries.map(async (query) => await query.execute())),
-    });
-    // Production uses Neon's Drizzle adapter. PGlite exposes compatible
-    // PostgreSQL query builders and this test supplies Neon's batch hook.
+    // PGlite exposes the PostgreSQL query builders and transaction behavior
+    // used by the production node-postgres adapter.
     // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- adapter-compatible integration test double
     const database = pgliteDatabase as unknown as Database;
     vi.doMock("@/db", () => ({ ...schema, db: database }));

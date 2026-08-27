@@ -1,14 +1,14 @@
 import { connect, type EveAuthorizationOptions } from "@vercel/connect/eve";
 import type { ToolContext } from "eve/tools";
 import type { output, ZodType } from "zod";
+import { env } from "@/lib/env";
 import {
-  GOOGLE_WORKSPACE_CONNECTOR,
   googleWorkspaceSubject,
   GOOGLE_WORKSPACE_SCOPES,
 } from "@/lib/google-workspace/config";
 
 export const googleWorkspaceAuthOptions = {
-  connector: GOOGLE_WORKSPACE_CONNECTOR,
+  connector: env.GOOGLE_CONNECTOR_UID,
   createSubject(principal) {
     if (principal.type !== "user") {
       throw new Error(

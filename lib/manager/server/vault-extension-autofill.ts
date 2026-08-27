@@ -11,10 +11,13 @@ import {
 } from "../vault-autofill-protocol";
 import { env } from "../../env";
 
-const publicKeySchema = z.object({
-  e: z.string().min(1),
-  kty: z.literal("RSA"),
-  n: z.string().min(1),
+const keyExchangeSchema = z.object({
+  browserNow: z.number().int().nonnegative(),
+  publicKey: z.object({
+    e: z.string().min(1),
+    kty: z.literal("RSA"),
+    n: z.string().min(1),
+  }),
 });
 
 export async function inspectWithVaultExtension({
@@ -46,15 +49,19 @@ export async function fillWithVaultExtension({
   readonly signal?: AbortSignal;
   readonly surfaceId: string;
 }) {
-  const publicKeyResult = await executeExtensionOperation(
-    browserSessionId,
-    "getPublicKey",
-    undefined,
-    signal
+  const keyExchange = keyExchangeSchema.parse(
+    await executeExtensionOperation(
+      browserSessionId,
+      "getPublicKey",
+      undefined,
+      signal
+    )
   );
-  const publicJwk = publicKeySchema.parse(publicKeyResult);
-  const publicKey = await importJWK(publicJwk as JWK, "RSA-OAEP-256");
-  const now = Date.now();
+  const publicKey = await importJWK(
+    keyExchange.publicKey as JWK,
+    "RSA-OAEP-256"
+  );
+  const now = keyExchange.browserNow;
   const command: VaultAutofillCommand = {
     claims: [...claims],
     expectedOrigin,
@@ -112,24 +119,57 @@ export function extensionRuntimeCode(
   argument?: string
 ) {
   const serializedArgument = JSON.stringify(argument);
+  const operationExpression = `globalThis.vaultAutofillContentRuntime[${JSON.stringify(operation)}](${serializedArgument})`;
+  const runtimeExpression =
+    operation === "getPublicKey"
+      ? `Promise.resolve(${operationExpression}).then((publicKey) => ({ browserNow: Date.now(), publicKey }))`
+      : operationExpression;
   return `
-const workers = context.serviceWorkers();
-let vaultWorker;
-for (const candidate of workers) {
-  const ready = await candidate.evaluate(() => {
-    const runtime = globalThis.eveVaultAutofillRuntime;
-    return Boolean(runtime && typeof runtime.${operation} === "function");
-  }).catch(() => false);
-  if (ready) {
-    vaultWorker = candidate;
-    break;
+const activePage = context.pages().at(-1);
+if (!activePage) {
+  throw new Error("No active browser tab was found.");
+}
+const cdpSession = await context.newCDPSession(activePage);
+try {
+  const executionContexts = [];
+  cdpSession.on("Runtime.executionContextCreated", ({ context: executionContext }) => {
+    if (executionContext.auxData?.type === "isolated") {
+      executionContexts.push(executionContext);
+    }
+  });
+  await cdpSession.send("Runtime.enable");
+
+  let runtimeContext;
+  for (const executionContext of executionContexts) {
+    const probe = await cdpSession.send("Runtime.evaluate", {
+      contextId: executionContext.id,
+      expression: "Boolean(globalThis.vaultAutofillContentRuntime)",
+      returnByValue: true,
+    }).catch(() => undefined);
+    if (probe?.result.value === true) {
+      runtimeContext = executionContext;
+      break;
+    }
   }
-}
-if (!vaultWorker) {
-  throw new Error("The vault autofill extension is not active.");
-}
-return vaultWorker.evaluate(
-  (argument) => globalThis.eveVaultAutofillRuntime.${operation}(argument),
-  ${serializedArgument},
-);`;
+
+  if (!runtimeContext) {
+    throw new Error("The vault autofill extension is not active.");
+  }
+  const response = await cdpSession.send("Runtime.evaluate", {
+    awaitPromise: true,
+    contextId: runtimeContext.id,
+    expression: ${JSON.stringify(runtimeExpression)},
+    returnByValue: true,
+  });
+  if (response.exceptionDetails) {
+    throw new Error(
+      response.exceptionDetails.exception?.description ??
+        response.exceptionDetails.text ??
+        "The vault autofill extension did not respond."
+    );
+  }
+  return response.result.value;
+} finally {
+  await cdpSession.detach().catch(() => undefined);
+}`;
 }

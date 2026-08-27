@@ -3,9 +3,9 @@ import { connectLinqCredentials } from "@vercel/connect/eve";
 import { defaultLinqAuth, linqChannel } from "eve/channels/linq";
 import { z } from "zod";
 import { auth } from "@/auth";
+import { normalizeAuthPhoneNumber } from "@/auth/phone-number";
 import { accessScopeForUser } from "@/lib/access-scope";
-import { LINQ_CONNECTOR } from "@/lib/linq";
-import { normalizeAuthPhoneNumber } from "@/lib/auth/phone-number";
+import { env } from "@/lib/env";
 
 const verifiedPhoneUserSchema = z.object({
   id: z.string().min(1),
@@ -13,7 +13,7 @@ const verifiedPhoneUserSchema = z.object({
 });
 
 export default linqChannel({
-  credentials: connectLinqCredentials(LINQ_CONNECTOR),
+  credentials: connectLinqCredentials(env.LINQ_CONNECTOR_UID),
   async onMessage(_context, message) {
     if (message.author.isBot) return null;
 

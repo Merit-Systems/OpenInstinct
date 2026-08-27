@@ -3,14 +3,13 @@ import { browser } from "wxt/browser";
 import { defineBackground } from "wxt/utils/define-background";
 import type {
   AutofillClaim,
-  AutofillInspection,
   AutofillSurfaceKind,
   VaultAutofillCommand,
   VaultAutofillExtensionResult,
   VaultAutofillFrameInspection,
 } from "../../lib/manager/vault-autofill-protocol";
 import { vaultAutofillCommandSchema } from "../../lib/manager/vault-autofill-protocol";
-import { sendMessage } from "../lib/messaging";
+import { onMessage, sendMessage } from "../lib/messaging";
 
 const paymentFrameHosts = [
   "adyen.com",
@@ -27,39 +26,21 @@ const paymentFrameHosts = [
   "worldpay.com",
 ] as const;
 
-interface AutofillRuntime {
-  fill(envelope: string): Promise<VaultAutofillExtensionResult>;
-  getPublicKey(): Promise<JsonWebKey>;
-  inspect(): Promise<AutofillInspection>;
-}
-
-declare global {
-  // Kernel Playwright calls this private service-worker capability directly.
-  // It is never published into a merchant page.
-  var eveVaultAutofillRuntime: AutofillRuntime | undefined;
-}
-
 export default defineBackground(() => {
   const keys = generateKeyPair("RSA-OAEP-256", { extractable: true });
   const consumedNonces = new Map<string, number>();
 
-  globalThis.eveVaultAutofillRuntime = {
-    async getPublicKey() {
-      return exportJWK((await keys).publicKey);
-    },
-    async inspect() {
-      return inspectActiveTab();
-    },
-    async fill(envelope) {
-      const { plaintext } = await compactDecrypt(
-        envelope,
-        (await keys).privateKey
-      );
-      const command = parseCommand(new TextDecoder().decode(plaintext));
-      consumeNonce(command, consumedNonces);
-      return executeCommand(command);
-    },
-  };
+  onMessage("getPublicKey", async () => exportJWK((await keys).publicKey));
+  onMessage("inspect", () => inspectActiveTab());
+  onMessage("fill", async ({ data: envelope }) => {
+    const { plaintext } = await compactDecrypt(
+      envelope,
+      (await keys).privateKey
+    );
+    const command = parseCommand(new TextDecoder().decode(plaintext));
+    consumeNonce(command, consumedNonces);
+    return executeCommand(command);
+  });
 });
 
 async function executeCommand(
@@ -256,13 +237,18 @@ function exactOrigin(url: string | undefined) {
 function parseCommand(value: string) {
   const command = vaultAutofillCommandSchema.parse(JSON.parse(value));
   const now = Date.now();
-  if (
-    new URL(command.expectedOrigin).origin !== command.expectedOrigin ||
-    command.issuedAt > now + 5_000 ||
-    command.expiresAt < now ||
-    command.expiresAt - command.issuedAt > 30_000
-  ) {
-    throw new Error("The vault autofill command is invalid or expired.");
+  if (new URL(command.expectedOrigin).origin !== command.expectedOrigin) {
+    throw new Error("The vault autofill command origin is invalid.");
+  }
+  if (command.issuedAt > now + 5_000) {
+    throw new Error("The vault autofill command was issued in the future.");
+  }
+  if (command.expiresAt < now) {
+    throw new Error("The vault autofill command has expired.");
+  }
+  const lifetime = command.expiresAt - command.issuedAt;
+  if (lifetime <= 0 || lifetime > 30_000) {
+    throw new Error("The vault autofill command lifetime is invalid.");
   }
   return command;
 }

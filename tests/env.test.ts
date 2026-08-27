@@ -15,7 +15,6 @@ describe("environment", () => {
     for (const [name, value] of Object.entries(requiredEnvironment)) {
       vi.stubEnv(name, value);
     }
-    vi.stubEnv("HOSTED_SECRET_ENCRYPTION_KEY", "");
   });
 
   afterEach(() => {
@@ -27,8 +26,69 @@ describe("environment", () => {
     const { env } = await import("../lib/env");
 
     expect(env).toMatchObject(requiredEnvironment);
-    expect(env.BROWSER_BENCH_REPETITIONS).toBe(1);
   });
+
+  it("provides connector defaults", async () => {
+    vi.stubEnv("GOOGLE_CONNECTOR_UID", "");
+    vi.stubEnv("LINQ_CONNECTOR_UID", "");
+
+    const { env } = await import("../lib/env");
+
+    expect(env.GOOGLE_CONNECTOR_UID).toBe("google/open-instinct");
+    expect(env.LINQ_CONNECTOR_UID).toBe("linq/eve-kernel");
+  });
+
+  it("provides stable auth and encryption defaults in local development", async () => {
+    vi.stubEnv("BETTER_AUTH_SECRET", "");
+    vi.stubEnv("BETTER_AUTH_URL", "");
+    vi.stubEnv("SECRET_ENCRYPTION_KEY", "");
+    vi.stubEnv("NODE_ENV", "development");
+    vi.stubEnv("VERCEL_ENV", undefined);
+
+    const { env, localPhoneAuthBypassEnabled } = await import("../lib/env");
+
+    expect(env).toMatchObject({
+      BETTER_AUTH_SECRET: "openinstinct-local-auth-development-secret",
+      BETTER_AUTH_URL: "http://localhost:3000",
+      SECRET_ENCRYPTION_KEY: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
+    });
+    expect(localPhoneAuthBypassEnabled).toBe(true);
+  });
+
+  it("accepts connector overrides", async () => {
+    vi.stubEnv("GOOGLE_CONNECTOR_UID", "google/custom");
+    vi.stubEnv("LINQ_CONNECTOR_UID", "linq/custom");
+
+    const { env } = await import("../lib/env");
+
+    expect(env.GOOGLE_CONNECTOR_UID).toBe("google/custom");
+    expect(env.LINQ_CONNECTOR_UID).toBe("linq/custom");
+  });
+
+  it("does not provide local defaults in a Vercel development environment", async () => {
+    vi.stubEnv("BETTER_AUTH_SECRET", "");
+    vi.stubEnv("BETTER_AUTH_URL", "");
+    vi.stubEnv("SECRET_ENCRYPTION_KEY", "");
+    vi.stubEnv("NODE_ENV", "development");
+    vi.stubEnv("VERCEL_ENV", "development");
+
+    await expect(import("../lib/env")).rejects.toThrow(
+      "Invalid environment variables"
+    );
+  });
+
+  it.each(["DATABASE_URL", "KERNEL_API_KEY"])(
+    "keeps %s required in local development",
+    async (name) => {
+      vi.stubEnv(name, "");
+      vi.stubEnv("NODE_ENV", "development");
+      vi.stubEnv("VERCEL_ENV", undefined);
+
+      await expect(import("../lib/env")).rejects.toThrow(
+        "Invalid environment variables"
+      );
+    }
+  );
 
   it.each([
     requiredEnvironment.SECRET_ENCRYPTION_KEY.slice(0, -1),
@@ -45,7 +105,7 @@ describe("environment", () => {
     ["BETTER_AUTH_URL", "Invalid environment variables"],
     ["DATABASE_URL", "Invalid environment variables"],
     ["KERNEL_API_KEY", "Invalid environment variables"],
-    ["SECRET_ENCRYPTION_KEY", "SECRET_ENCRYPTION_KEY is required"],
+    ["SECRET_ENCRYPTION_KEY", "Invalid environment variables"],
   ])(
     "rejects a missing required %s value during import",
     async (name, errorMessage) => {
@@ -54,6 +114,14 @@ describe("environment", () => {
       await expect(import("../lib/env")).rejects.toThrow(errorMessage);
     }
   );
+
+  it("rejects an encryption key that does not decode to 32 bytes", async () => {
+    vi.stubEnv("SECRET_ENCRYPTION_KEY", Buffer.alloc(31, 1).toString("base64"));
+
+    await expect(import("../lib/env")).rejects.toThrow(
+      "Invalid environment variables"
+    );
+  });
 
   it("rejects a non-Postgres database URL", async () => {
     vi.stubEnv("DATABASE_URL", "https://example.com/database");

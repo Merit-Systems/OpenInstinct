@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { authClient } from "@/app/_lib/auth-client";
-import { normalizeAuthPhoneNumber } from "@/lib/auth/phone-number";
+import { normalizeAuthPhoneNumber } from "@/auth/phone-number";
 
 type AuthStep = "phone-number" | "verification-code";
 

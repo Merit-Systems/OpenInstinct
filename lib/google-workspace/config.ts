@@ -1,6 +1,5 @@
 import type { ConnectTokenParams, ConnectTokenSubject } from "@vercel/connect";
 import { z } from "zod";
-import { env } from "@/lib/env";
 
 export const GOOGLE_WORKSPACE_SCOPES = [
   "openid",
@@ -11,9 +10,6 @@ export const GOOGLE_WORKSPACE_SCOPES = [
   "https://www.googleapis.com/auth/calendar.freebusy",
   "https://www.googleapis.com/auth/contacts.readonly",
 ] as const;
-
-export const GOOGLE_WORKSPACE_CONNECTOR =
-  env.GOOGLE_CONNECTOR_UID ?? "google/open-instinct";
 
 export const googleWorkspaceActionSchema = z.enum(["connect", "disconnect"]);
 

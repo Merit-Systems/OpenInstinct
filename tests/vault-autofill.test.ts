@@ -226,9 +226,17 @@ describe("vault browser autofill", () => {
   it("sends only an encrypted envelope through Kernel Playwright", () => {
     const code = extensionRuntimeCode("fill", "encrypted-envelope");
 
-    expect(code).toContain("context.serviceWorkers()");
-    expect(code).toContain("eveVaultAutofillRuntime.fill");
+    expect(code).toContain('cdpSession.send("Runtime.enable")');
+    expect(code).toContain("vaultAutofillContentRuntime");
     expect(code).toContain("encrypted-envelope");
     expect(code).not.toContain("4242424242424242");
+    expect(code).not.toContain("context.serviceWorkers()");
+  });
+
+  it("timestamps commands with the browser clock", () => {
+    const code = extensionRuntimeCode("getPublicKey");
+
+    expect(code).toContain("browserNow: Date.now()");
+    expect(code).toContain("publicKey");
   });
 });
