@@ -28,6 +28,68 @@ describe("environment", () => {
     expect(env).toMatchObject(requiredEnvironment);
   });
 
+  it("provides connector defaults", async () => {
+    vi.stubEnv("GOOGLE_CONNECTOR_UID", "");
+    vi.stubEnv("LINQ_CONNECTOR_UID", "");
+
+    const { env } = await import("../lib/env");
+
+    expect(env.GOOGLE_CONNECTOR_UID).toBe("google/open-instinct");
+    expect(env.LINQ_CONNECTOR_UID).toBe("linq/eve-kernel");
+  });
+
+  it("provides stable auth and encryption defaults in local development", async () => {
+    vi.stubEnv("BETTER_AUTH_SECRET", "");
+    vi.stubEnv("BETTER_AUTH_URL", "");
+    vi.stubEnv("SECRET_ENCRYPTION_KEY", "");
+    vi.stubEnv("NODE_ENV", "development");
+    vi.stubEnv("VERCEL_ENV", undefined);
+
+    const { env, localPhoneAuthBypassEnabled } = await import("../lib/env");
+
+    expect(env).toMatchObject({
+      BETTER_AUTH_SECRET: "openinstinct-local-auth-development-secret",
+      BETTER_AUTH_URL: "http://localhost:3000",
+      SECRET_ENCRYPTION_KEY: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
+    });
+    expect(localPhoneAuthBypassEnabled).toBe(true);
+  });
+
+  it("accepts connector overrides", async () => {
+    vi.stubEnv("GOOGLE_CONNECTOR_UID", "google/custom");
+    vi.stubEnv("LINQ_CONNECTOR_UID", "linq/custom");
+
+    const { env } = await import("../lib/env");
+
+    expect(env.GOOGLE_CONNECTOR_UID).toBe("google/custom");
+    expect(env.LINQ_CONNECTOR_UID).toBe("linq/custom");
+  });
+
+  it("does not provide local defaults in a Vercel development environment", async () => {
+    vi.stubEnv("BETTER_AUTH_SECRET", "");
+    vi.stubEnv("BETTER_AUTH_URL", "");
+    vi.stubEnv("SECRET_ENCRYPTION_KEY", "");
+    vi.stubEnv("NODE_ENV", "development");
+    vi.stubEnv("VERCEL_ENV", "development");
+
+    await expect(import("../lib/env")).rejects.toThrow(
+      "Invalid environment variables"
+    );
+  });
+
+  it.each(["DATABASE_URL", "KERNEL_API_KEY"])(
+    "keeps %s required in local development",
+    async (name) => {
+      vi.stubEnv(name, "");
+      vi.stubEnv("NODE_ENV", "development");
+      vi.stubEnv("VERCEL_ENV", undefined);
+
+      await expect(import("../lib/env")).rejects.toThrow(
+        "Invalid environment variables"
+      );
+    }
+  );
+
   it.each([
     requiredEnvironment.SECRET_ENCRYPTION_KEY.slice(0, -1),
     Buffer.alloc(32, 255).toString("base64url"),

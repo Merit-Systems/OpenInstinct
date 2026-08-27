@@ -1,23 +1,32 @@
 {
   "$schema": "https://turborepo.dev/schema.json",
-  "globalEnv": [
-    "BETTER_AUTH_SECRET",
-    "BETTER_AUTH_URL",
-    "DATABASE_URL",
-    "KERNEL_API_KEY",
-    "SECRET_ENCRYPTION_KEY",
-
-    "EVE_NEXT_PRODUCTION_ORIGIN",
-    "GOOGLE_CONNECTOR_UID",
-    "VERCEL_ENV"
-  ],
   "tasks": {
     "build:app": {
       "dependsOn": ["^build:app"],
+      "env": [
+        "BETTER_AUTH_*",
+        "DATABASE_URL",
+        "EVE_NEXT_*",
+        "*_CONNECTOR_UID",
+        "KERNEL_*",
+        "NODE_ENV",
+        "SECRET_ENCRYPTION_KEY",
+        "VERCEL_ENV"
+      ],
       "outputs": [".next/**", "!.next/cache/**", "next-env.d.ts"]
     },
     "build:vercel": {
       "dependsOn": ["db:migrate"],
+      "env": [
+        "BETTER_AUTH_*",
+        "DATABASE_URL",
+        "*_CONNECTOR_UID",
+        "KERNEL_*",
+        "NODE_ENV",
+        "SECRET_ENCRYPTION_KEY",
+        "VERCEL",
+        "VERCEL_ENV"
+      ],
       "outputs": [".next/**", "!.next/cache/**", "next-env.d.ts"]
     },
     "db:migrate": {
@@ -27,6 +36,15 @@
     },
     "dev:app": {
       "cache": false,
+      "passThroughEnv": [
+        "BETTER_AUTH_*",
+        "DATABASE_URL",
+        "*_CONNECTOR_UID",
+        "KERNEL_*",
+        "NODE_ENV",
+        "SECRET_ENCRYPTION_KEY",
+        "VERCEL_ENV"
+      ],
       "persistent": true
     },
     "deploy:app": {
@@ -43,6 +61,15 @@
     },
     "start:app": {
       "cache": false,
+      "passThroughEnv": [
+        "BETTER_AUTH_*",
+        "DATABASE_URL",
+        "*_CONNECTOR_UID",
+        "KERNEL_*",
+        "NODE_ENV",
+        "SECRET_ENCRYPTION_KEY",
+        "VERCEL_ENV"
+      ],
       "persistent": true
     },
     "test:app": {

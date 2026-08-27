@@ -2,29 +2,54 @@ import { createEnv } from "@t3-oss/env-nextjs";
 import { z } from "zod";
 import { databaseUrlSchema } from "../db/env/utils";
 
+const localDevelopment =
+  process.env.NODE_ENV === "development" &&
+  process.env.VERCEL_ENV === undefined;
+
 const requiredValue = z
   .string()
   .refine((value) => value.trim().length > 0, "Required");
+
+const betterAuthUrlSchema = requiredValue.refine(
+  (value) => URL.canParse(value),
+  "BETTER_AUTH_URL must be an absolute URL"
+);
 
 const secretEncryptionKeySchema = requiredValue.refine(
   (value) => Buffer.from(value, "base64").length === 32,
   "SECRET_ENCRYPTION_KEY must be a base64-encoded 32-byte key."
 );
 
-const optionalValue = z.string().optional();
+function requiredValueWithLocalDefault<T extends z.ZodType<string, string>>(
+  schema: T,
+  localDefault: z.util.NoUndefined<z.output<T>>
+) {
+  return localDevelopment ? schema.default(localDefault) : schema;
+}
 
 export const env = createEnv({
   server: {
-    BETTER_AUTH_SECRET: requiredValue,
-    BETTER_AUTH_URL: requiredValue.refine(
-      (value) => URL.canParse(value),
-      "BETTER_AUTH_URL must be an absolute URL"
-    ),
+    // Required
     DATABASE_URL: databaseUrlSchema,
     KERNEL_API_KEY: requiredValue,
-    SECRET_ENCRYPTION_KEY: secretEncryptionKeySchema,
 
-    GOOGLE_CONNECTOR_UID: optionalValue,
+    // Required with local defaults
+    BETTER_AUTH_SECRET: requiredValueWithLocalDefault(
+      requiredValue,
+      "openinstinct-local-auth-development-secret"
+    ),
+    BETTER_AUTH_URL: requiredValueWithLocalDefault(
+      betterAuthUrlSchema,
+      "http://localhost:3000"
+    ),
+    SECRET_ENCRYPTION_KEY: requiredValueWithLocalDefault(
+      secretEncryptionKeySchema,
+      "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
+    ),
+
+    // Optional
+    GOOGLE_CONNECTOR_UID: requiredValue.default("google/open-instinct"),
+    LINQ_CONNECTOR_UID: requiredValue.default("linq/eve-kernel"),
     NODE_ENV: z
       .enum(["development", "production", "test"])
       .default("production"),
@@ -37,8 +62,7 @@ export const env = createEnv({
 const authHostname = new URL(env.BETTER_AUTH_URL).hostname;
 
 export const localPhoneAuthBypassEnabled =
-  env.NODE_ENV === "development" &&
-  env.VERCEL_ENV === undefined &&
+  localDevelopment &&
   (authHostname === "localhost" ||
     authHostname === "127.0.0.1" ||
     authHostname === "[::1]");

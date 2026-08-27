@@ -122,7 +122,9 @@ stops and removes the PostgreSQL container; its data remains in the
 using an externally managed database instead.
 
 Local development otherwise uses the same vault, Kernel browser, and AI Gateway
-path as the Vercel deployment.
+path as the Vercel deployment. Better Auth and vault encryption use stable
+local-only defaults when their variables are unset; deployments still require
+explicit secrets.
 
 > [!WARNING]
 > This is not software intended for production use.
