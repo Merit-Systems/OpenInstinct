@@ -159,7 +159,7 @@ export function BrowserRunDetail({ groupId }: { readonly groupId: string }) {
         <BrowserRunTable
           emptyDescription="This group has no tasks."
           emptyTitle="No group tasks"
-          groups={[group]}
+          rows={group.tasks.map((task) => ({ group, task }))}
         />
       </section>
     </main>

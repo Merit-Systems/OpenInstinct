@@ -2,7 +2,7 @@ import { readFile } from "node:fs/promises";
 import { PGlite } from "@electric-sql/pglite";
 import { drizzle } from "drizzle-orm/pglite";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { Database } from "@/db";
+import type { db } from "@/db";
 import * as schema from "../db/schema";
 
 const databases: PGlite[] = [];
@@ -23,7 +23,7 @@ describe("database services", () => {
     // PGlite exposes the PostgreSQL query builders and transaction behavior
     // used by the production node-postgres adapter.
     // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- adapter-compatible integration test double
-    const database = pgliteDatabase as unknown as Database;
+    const database = pgliteDatabase as unknown as typeof db;
     vi.doMock("@/db", () => ({ ...schema, db: database }));
 
     const [browsers, chats, secrets, sessions, settings, scope, vault] =

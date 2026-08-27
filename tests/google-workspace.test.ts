@@ -1,12 +1,11 @@
 import {
+  getTokenResponse,
   NoValidTokenError,
-  type ConnectAuthorizationOptions,
-  type ConnectAuthorizationResponse,
-  type ConnectOptions,
-  type ConnectTokenParams,
   type ConnectTokenResponse,
+  startAuthorization,
 } from "@vercel/connect";
-import { describe, expect, it } from "vitest";
+import type * as VercelConnect from "@vercel/connect";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { parseCalendarAvailability } from "@/agent/lib/google-workspace/calendar";
 import { googleWorkspaceAuthOptions } from "@/agent/lib/google-workspace/client";
 import { gmailUpdateLabels } from "@/agent/lib/google-workspace/gmail";
@@ -19,8 +18,15 @@ import {
 import {
   getGoogleWorkspaceConnection,
   startGoogleWorkspaceAuthorization,
-  type GoogleWorkspaceClient,
 } from "@/lib/google-workspace/server";
+
+vi.mock("@vercel/connect", async (importOriginal) => ({
+  ...(await importOriginal<typeof VercelConnect>()),
+  getTokenResponse: vi.fn<typeof getTokenResponse>(),
+  startAuthorization: vi.fn<typeof startAuthorization>(),
+}));
+
+afterEach(() => vi.clearAllMocks());
 
 const scope = {
   userId: "better-auth:user-123",
@@ -56,62 +62,49 @@ describe("Google Workspace connection", () => {
       expiresAt: Date.now() + 60_000,
       token: "must-not-leak",
     };
-    let capturedOptions: ConnectOptions | undefined;
-    const client = fakeClient(response);
-    client.getTokenResponse = async (_connector, _params, options) => {
-      capturedOptions = options;
-      return response;
-    };
+    vi.mocked(getTokenResponse).mockResolvedValue(response);
 
-    await expect(getGoogleWorkspaceConnection(scope, client)).resolves.toEqual({
+    await expect(getGoogleWorkspaceConnection(scope)).resolves.toEqual({
       accountLabel: "person@example.com",
       state: "connected",
     });
-    expect(capturedOptions).toEqual({ forceRefresh: true });
+    expect(getTokenResponse).toHaveBeenCalledWith(
+      expect.any(String),
+      googleWorkspaceTokenParams(scope.userId),
+      { forceRefresh: true }
+    );
   });
 
   it("reports a missing user grant as disconnected", async () => {
-    const client = fakeClient(
+    vi.mocked(getTokenResponse).mockRejectedValue(
       new NoValidTokenError("No Google grant for this user.")
     );
-    await expect(getGoogleWorkspaceConnection(scope, client)).resolves.toEqual({
+    await expect(getGoogleWorkspaceConnection(scope)).resolves.toEqual({
       accountLabel: null,
       state: "disconnected",
     });
   });
 
   it("starts authorization with the canonical subject and scopes", async () => {
-    const calls: {
-      connector: string;
-      options?: ConnectAuthorizationOptions;
-      params: ConnectTokenParams;
-    }[] = [];
-    const client = fakeClient({
-      connector: { id: "connector-id", type: "oauth", uid: "google/test" },
-      expiresAt: Date.now() + 60_000,
-      token: "token",
+    vi.mocked(startAuthorization).mockResolvedValue({
+      request: "request",
+      url: "https://connect.vercel.com/request",
+      verifier: "verifier",
     });
-    client.startAuthorization = async (connector, params, options) => {
-      calls.push({ connector, options, params });
-      return {
-        request: "request",
-        url: "https://connect.vercel.com/request",
-        verifier: "verifier",
-      };
-    };
 
     await expect(
       startGoogleWorkspaceAuthorization(
         scope,
-        "https://openinstinct.example/?google=connected",
-        client
+        "https://openinstinct.example/?google=connected"
       )
     ).resolves.toBe("https://connect.vercel.com/request");
-    expect(calls).toHaveLength(1);
-    expect(calls[0]?.options?.callbackUrl).toBe(
-      "https://openinstinct.example/?google=connected"
+    expect(startAuthorization).toHaveBeenCalledWith(
+      expect.any(String),
+      googleWorkspaceTokenParams(scope.userId),
+      expect.objectContaining({
+        callbackUrl: "https://openinstinct.example/?google=connected",
+      })
     );
-    expect(calls[0]?.params).toEqual(googleWorkspaceTokenParams(scope.userId));
   });
 
   it("maps reversible Gmail actions to system labels", () => {
@@ -171,22 +164,3 @@ describe("Google Workspace connection", () => {
     });
   });
 });
-
-function fakeClient(
-  result: ConnectTokenResponse | Error
-): GoogleWorkspaceClient {
-  return {
-    async getTokenResponse() {
-      if (result instanceof Error) throw result;
-      return result;
-    },
-    revokeToken: () => Promise.resolve(),
-    async startAuthorization(): Promise<ConnectAuthorizationResponse> {
-      return {
-        request: "request",
-        url: "https://connect.vercel.com/request",
-        verifier: "verifier",
-      };
-    },
-  };
-}

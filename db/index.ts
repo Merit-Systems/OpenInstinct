@@ -8,4 +8,3 @@ export * from "./schema";
 const pool = new Pool({ connectionString: env.DATABASE_URL });
 
 export const db = drizzle({ client: pool, schema });
-export type Database = typeof db;
