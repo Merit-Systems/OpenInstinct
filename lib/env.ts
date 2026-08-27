@@ -43,7 +43,7 @@ export const env = createEnv({
     KERNEL_API_KEY: requiredValue,
     SECRET_ENCRYPTION_KEY: requiredValueWithLocalDefault(
       secretEncryptionKeySchema,
-      "b3Blbmluc3RpbmN0LWxvY2FsLWRldmVsb3BtZW50ISE="
+      "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
     ),
 
     GOOGLE_CONNECTOR_UID: optionalValue,

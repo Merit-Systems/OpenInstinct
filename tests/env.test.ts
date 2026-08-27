@@ -40,7 +40,7 @@ describe("environment", () => {
     expect(env).toMatchObject({
       BETTER_AUTH_SECRET: "openinstinct-local-auth-development-secret",
       BETTER_AUTH_URL: "http://localhost:3000",
-      SECRET_ENCRYPTION_KEY: "b3Blbmluc3RpbmN0LWxvY2FsLWRldmVsb3BtZW50ISE=",
+      SECRET_ENCRYPTION_KEY: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
     });
     expect(localPhoneAuthBypassEnabled).toBe(true);
   });
