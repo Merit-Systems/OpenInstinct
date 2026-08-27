@@ -6,6 +6,10 @@ import {
   managerSetupRequestSchema,
 } from "../lib/manager";
 import { serializePaymentCard } from "../lib/payment-card";
+import {
+  serializeContactVaultPayload,
+  serializeLoginVaultPayload,
+} from "../lib/vault-payload";
 
 describe("self-hosted manager", () => {
   it("builds a vault form URL without accepting a secret", () => {
@@ -97,6 +101,52 @@ describe("self-hosted manager", () => {
             kind: "payment-card",
             number: "4242424242424242",
             securityCode: "123",
+            version: 1,
+          }),
+        },
+      }).success
+    ).toBe(true);
+  });
+
+  it("requires versioned login and contact payloads", () => {
+    expect(
+      managerMutationSchema.safeParse({
+        action: "vault.create",
+        input: {
+          account: "ada@example.com",
+          kind: "login",
+          label: "GitHub",
+          secret: "plain password",
+        },
+      }).success
+    ).toBe(false);
+    expect(
+      managerMutationSchema.safeParse({
+        action: "vault.create",
+        input: {
+          account: "",
+          kind: "login",
+          label: "GitHub",
+          secret: serializeLoginVaultPayload({
+            authentication: { password: "secret", type: "password" },
+            identifier: { type: "email", value: "ada@example.com" },
+            kind: "login",
+            version: 1,
+          }),
+        },
+      }).success
+    ).toBe(true);
+    expect(
+      managerMutationSchema.safeParse({
+        action: "vault.create",
+        input: {
+          account: "",
+          kind: "contact",
+          label: "Checkout",
+          secret: serializeContactVaultPayload({
+            email: "ada@example.com",
+            kind: "contact",
+            phone: "+15555550100",
             version: 1,
           }),
         },

@@ -7,7 +7,7 @@ import { getEnv } from "../../lib/runtime-env.js";
 
 export default defineTool({
   description:
-    "Create a safe link for adding one supported secret to the self-hosted vault. Supported kinds are login (username/email and password), payment (card details), address (one complete address), and phone (one phone number). The only safe prefill inputs are kind, label, and account; never invent or request other vault fields. Use ordinary non-secret contact details directly when the user supplied them in chat.",
+    "Create a safe link for adding one supported item to the self-hosted vault. Supported kinds are login (email, phone, or username with a password or one-time-code method), payment (card details), address (structured delivery or billing address), and contact (name, email, and phone). The only safe prefill inputs are kind, label, and account; never invent or request other vault fields. Use ordinary non-secret contact details directly when the user supplied them in chat.",
   inputSchema: managerSetupRequestSchema,
   execute(request) {
     const baseUrl = getEnv().BETTER_AUTH_URL;

@@ -2,6 +2,11 @@ import { describe, expect, it } from "vitest";
 import { createVaultAutofillCode } from "../agent/tools/fill_from_vault";
 import { serializePaymentCard } from "../lib/payment-card";
 import { resolveVaultAutofillValues } from "../lib/vault-autofill";
+import {
+  serializeAddressVaultPayload,
+  serializeContactVaultPayload,
+  serializeLoginVaultPayload,
+} from "../lib/vault-payload";
 
 describe("vault browser autofill", () => {
   it("resolves a login without returning unrequested values", () => {
@@ -36,6 +41,92 @@ describe("vault browser autofill", () => {
       { field: "expiration", value: "03/31" },
       { field: "cvc", value: "123" },
       { field: "billing_postal_code", value: "11217" },
+    ]);
+  });
+
+  it("resolves structured password and passwordless logins", () => {
+    const passwordLogin = serializeLoginVaultPayload({
+      authentication: { password: "correct horse", type: "password" },
+      identifier: { type: "phone", value: "+15555550100" },
+      kind: "login",
+      version: 1,
+    });
+    const otpLogin = serializeLoginVaultPayload({
+      authentication: { type: "email_otp" },
+      identifier: { type: "email", value: "ada@example.com" },
+      kind: "login",
+      version: 1,
+    });
+
+    expect(
+      resolveVaultAutofillValues(
+        { account: "Phone · •••• 0100", kind: "login" },
+        passwordLogin,
+        ["username", "phone", "password"]
+      )
+    ).toEqual([
+      { field: "username", value: "+15555550100" },
+      { field: "phone", value: "+15555550100" },
+      { field: "password", value: "correct horse" },
+    ]);
+    expect(
+      resolveVaultAutofillValues(
+        { account: "a•••@example.com", kind: "login" },
+        otpLogin,
+        ["email"]
+      )
+    ).toEqual([{ field: "email", value: "ada@example.com" }]);
+    expect(() =>
+      resolveVaultAutofillValues(
+        { account: "a•••@example.com", kind: "login" },
+        otpLogin,
+        ["password"]
+      )
+    ).toThrow("does not provide password");
+  });
+
+  it("resolves structured checkout profiles field by field", () => {
+    const address = serializeAddressVaultPayload({
+      city: "London",
+      countryCode: "GB",
+      kind: "address",
+      line1: "12 St James's Square",
+      postalCode: "SW1Y 4LB",
+      recipientName: "Ada Lovelace",
+      region: "London",
+      version: 1,
+    });
+    const contact = serializeContactVaultPayload({
+      email: "ada@example.com",
+      fullName: "Ada Lovelace",
+      kind: "contact",
+      phone: "+442079460000",
+      version: 1,
+    });
+
+    expect(
+      resolveVaultAutofillValues({ account: "", kind: "address" }, address, [
+        "full_name",
+        "address_line1",
+        "address_city",
+        "address_postal_code",
+      ])
+    ).toEqual([
+      { field: "full_name", value: "Ada Lovelace" },
+      { field: "address_line1", value: "12 St James's Square" },
+      { field: "address_city", value: "London" },
+      { field: "address_postal_code", value: "SW1Y 4LB" },
+    ]);
+    expect(
+      resolveVaultAutofillValues({ account: "", kind: "contact" }, contact, [
+        "full_name",
+        "email",
+        "phone",
+      ])
+    ).toEqual([
+      { field: "full_name", value: "Ada Lovelace" },
+      { field: "email", value: "ada@example.com" },
+      { field: "phone", value: "+442079460000" },
     ]);
   });
 

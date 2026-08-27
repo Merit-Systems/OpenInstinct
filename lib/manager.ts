@@ -1,20 +1,26 @@
 import { z } from "zod";
 import { paymentCardSecretStringSchema } from "./payment-card";
+import {
+  addressVaultPayloadStringSchema,
+  contactVaultPayloadStringSchema,
+  loginVaultPayloadStringSchema,
+} from "./vault-payload";
 
 export const vaultItemKindSchema = z.enum([
   "login",
   "payment",
   "address",
+  "contact",
   "phone",
   "identity",
   "token",
 ]);
 
-const vaultSetupKindSchema = vaultItemKindSchema.extract([
+const vaultCreateItemKindSchema = vaultItemKindSchema.extract([
   "login",
   "payment",
   "address",
-  "phone",
+  "contact",
 ]);
 
 const managerVaultItemSchema = z.object({
@@ -41,18 +47,21 @@ export const managerSnapshotSchema = z.object({
 const vaultItemInputSchema = z
   .object({
     account: z.string().trim().max(200).default(""),
-    kind: vaultItemKindSchema,
+    kind: vaultCreateItemKindSchema,
     label: z.string().trim().min(1).max(120),
     secret: z.string().min(1).max(20_000),
   })
   .superRefine((input, context) => {
-    if (
-      input.kind === "payment" &&
-      !paymentCardSecretStringSchema.safeParse(input.secret).success
-    ) {
+    const secretSchema = {
+      address: addressVaultPayloadStringSchema,
+      contact: contactVaultPayloadStringSchema,
+      login: loginVaultPayloadStringSchema,
+      payment: paymentCardSecretStringSchema,
+    }[input.kind];
+    if (!secretSchema.safeParse(input.secret).success) {
       context.addIssue({
         code: "custom",
-        message: "Complete the card details before saving.",
+        message: `Complete the ${input.kind} details before saving.`,
         path: ["secret"],
       });
     }
@@ -61,7 +70,7 @@ const vaultItemInputSchema = z
 export const managerSetupRequestSchema = z
   .object({
     account: z.string().trim().max(200).optional(),
-    kind: vaultSetupKindSchema,
+    kind: vaultCreateItemKindSchema,
     label: z.string().trim().max(120).optional(),
     target: z.literal("vault"),
   })
@@ -80,6 +89,7 @@ export type ManagerMutation = z.infer<typeof managerMutationSchema>;
 export type ManagerSetupRequest = z.infer<typeof managerSetupRequestSchema>;
 export type ManagerSnapshot = z.infer<typeof managerSnapshotSchema>;
 export type VaultItemKind = z.infer<typeof vaultItemKindSchema>;
+export type VaultCreateItemKind = z.infer<typeof vaultCreateItemKindSchema>;
 
 export function createManagerSetupUrl(
   baseUrl: string,

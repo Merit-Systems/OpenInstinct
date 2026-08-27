@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-const paymentCardSecretSchema = z.object({
+export const paymentCardSecretSchema = z.object({
   billingPostalCode: z.string().trim().min(1).max(20),
   cardholderName: z.string().trim().min(1).max(200),
   expirationMonth: z.number().int().min(1).max(12),

@@ -1,26 +1,26 @@
 "use client";
 
 import { KeyRoundIcon, PlusIcon, Trash2Icon } from "lucide-react";
-import { type FormEvent, useState } from "react";
+import { useState } from "react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
   DialogDescription,
-  DialogFooter,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import type {
   ManagerMutation,
   ManagerSetupRequest,
   ManagerSnapshot,
-  VaultItemKind,
+  VaultCreateItemKind,
 } from "@/lib/manager";
+import { AddressVaultForm } from "./address-vault-form";
+import { ContactVaultForm } from "./contact-vault-form";
+import { LoginVaultForm } from "./login-vault-form";
 import { PaymentCardForm } from "./payment-card-form";
 import { useManager } from "./use-manager";
 
@@ -41,9 +41,9 @@ const categories = [
     title: "Addresses",
   },
   {
-    addLabel: "Add phone",
-    kind: "phone",
-    title: "Phones",
+    addLabel: "Add contact",
+    kind: "contact",
+    title: "Contact info",
   },
 ] as const;
 
@@ -55,7 +55,10 @@ export function VaultManager({
   const { busy, error, mutate, snapshot } = useManager();
   const legacyItems =
     snapshot?.vaultItems.filter(
-      (item) => item.kind === "identity" || item.kind === "token"
+      (item) =>
+        item.kind === "identity" ||
+        item.kind === "token" ||
+        item.kind === "phone"
     ) ?? [];
 
   return (
@@ -126,7 +129,7 @@ function VaultCategory({
   readonly busy: boolean;
   readonly initialSetup?: Extract<ManagerSetupRequest, { target: "vault" }>;
   readonly items: ManagerSnapshot["vaultItems"];
-  readonly kind: "address" | "login" | "payment" | "phone";
+  readonly kind: VaultCreateItemKind;
   readonly onDelete: (mutation: ManagerMutation) => Promise<boolean>;
   readonly onSubmit: (mutation: ManagerMutation) => Promise<boolean>;
   readonly title: string;
@@ -207,29 +210,11 @@ function VaultDialog({
   readonly addLabel: string;
   readonly busy: boolean;
   readonly initialSetup?: Extract<ManagerSetupRequest, { target: "vault" }>;
-  readonly kind: "address" | "login" | "payment" | "phone";
+  readonly kind: VaultCreateItemKind;
   readonly onSubmit: (mutation: ManagerMutation) => Promise<boolean>;
 }) {
   const [open, setOpen] = useState(Boolean(initialSetup));
-  const [label, setLabel] = useState(initialSetup?.label ?? "");
-  const [account, setAccount] = useState(initialSetup?.account ?? "");
-  const [secret, setSecret] = useState("");
-
-  const submit = async (event: FormEvent) => {
-    event.preventDefault();
-    const saved = await onSubmit({
-      action: "vault.create",
-      input: { account, kind, label, secret },
-    });
-    if (saved) {
-      setAccount("");
-      setLabel("");
-      setSecret("");
-      setOpen(false);
-    }
-  };
-
-  const fields = fieldPresentation(kind);
+  const onSaved = () => setOpen(false);
 
   return (
     <Dialog onOpenChange={setOpen} open={open}>
@@ -249,131 +234,47 @@ function VaultDialog({
         <DialogHeader>
           <DialogTitle>{addLabel}</DialogTitle>
           <DialogDescription>
-            This value is stored locally and is never returned after saving.
+            Sensitive values are encrypted before database storage and are never
+            returned after saving.
           </DialogDescription>
         </DialogHeader>
-        {kind === "payment" ? (
-          <PaymentCardForm
-            busy={busy}
-            initialLabel={label}
-            onSaved={() => setOpen(false)}
-            onSubmit={onSubmit}
-          />
-        ) : (
-          <form className="grid gap-4" onSubmit={(event) => void submit(event)}>
-            <Field
-              id={`vault-${kind}-label`}
-              label="Name"
-              onChange={setLabel}
-              placeholder={fields.labelPlaceholder}
-              value={label}
-            />
-            {fields.accountLabel ? (
-              <Field
-                id={`vault-${kind}-account`}
-                label={fields.accountLabel}
-                onChange={setAccount}
-                placeholder={fields.accountPlaceholder}
-                value={account}
-              />
-            ) : null}
-            <Field
-              autoComplete={kind === "login" ? "new-password" : "off"}
-              id={`vault-${kind}-secret`}
-              label={fields.secretLabel}
-              onChange={setSecret}
-              placeholder={fields.secretPlaceholder}
-              type={kind === "login" ? "password" : "text"}
-              value={secret}
-            />
-            <DialogFooter>
-              <Button
-                disabled={busy || !label.trim() || !secret.trim()}
-                type="submit"
-              >
-                Save
-              </Button>
-            </DialogFooter>
-          </form>
-        )}
+        {renderVaultForm({
+          busy,
+          initialAccount: initialSetup?.account,
+          initialLabel: initialSetup?.label,
+          kind,
+          onSaved,
+          onSubmit,
+        })}
       </DialogContent>
     </Dialog>
   );
 }
 
-function fieldPresentation(kind: VaultItemKind) {
+function renderVaultForm({
+  busy,
+  initialAccount,
+  initialLabel,
+  kind,
+  onSaved,
+  onSubmit,
+}: {
+  readonly busy: boolean;
+  readonly initialAccount?: string;
+  readonly initialLabel?: string;
+  readonly kind: VaultCreateItemKind;
+  readonly onSaved: () => void;
+  readonly onSubmit: (mutation: ManagerMutation) => Promise<boolean>;
+}) {
+  const common = { busy, initialLabel, onSaved, onSubmit };
   switch (kind) {
     case "login":
-      return {
-        accountLabel: "Username or email",
-        accountPlaceholder: "name@example.com",
-        labelPlaceholder: "GitHub",
-        secretLabel: "Password",
-        secretPlaceholder: "Password",
-      };
+      return <LoginVaultForm {...common} initialIdentifier={initialAccount} />;
     case "payment":
-      return {
-        accountLabel: "Cardholder or last four",
-        accountPlaceholder: "Personal · 4242",
-        labelPlaceholder: "Personal Visa",
-        secretLabel: "Card details",
-        secretPlaceholder: "Card number and expiration",
-      };
+      return <PaymentCardForm {...common} />;
     case "address":
-      return {
-        accountLabel: undefined,
-        accountPlaceholder: undefined,
-        labelPlaceholder: "Home",
-        secretLabel: "Address",
-        secretPlaceholder: "Street, city, region, and postal code",
-      };
-    case "phone":
-      return {
-        accountLabel: undefined,
-        accountPlaceholder: undefined,
-        labelPlaceholder: "Mobile",
-        secretLabel: "Phone number",
-        secretPlaceholder: "+1 555 555 5555",
-      };
-    default:
-      return {
-        accountLabel: "Account hint",
-        accountPlaceholder: undefined,
-        labelPlaceholder: "Credential",
-        secretLabel: "Value",
-        secretPlaceholder: "Stored in encrypted vault",
-      };
+      return <AddressVaultForm {...common} />;
+    case "contact":
+      return <ContactVaultForm {...common} />;
   }
-}
-
-function Field({
-  autoComplete,
-  id,
-  label,
-  onChange,
-  placeholder,
-  type = "text",
-  value,
-}: {
-  readonly autoComplete?: string;
-  readonly id: string;
-  readonly label: string;
-  readonly onChange: (value: string) => void;
-  readonly placeholder?: string;
-  readonly type?: "password" | "text";
-  readonly value: string;
-}) {
-  return (
-    <div className="grid gap-2">
-      <Label htmlFor={id}>{label}</Label>
-      <Input
-        autoComplete={autoComplete}
-        id={id}
-        onChange={(event) => onChange(event.target.value)}
-        placeholder={placeholder}
-        type={type}
-        value={value}
-      />
-    </div>
-  );
 }

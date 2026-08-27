@@ -2,7 +2,9 @@ import { randomUUID } from "node:crypto";
 import type { AccessScope } from "../access-scope";
 import type { ManagerMutation } from "../manager";
 import { getModelSettings } from "../model-config";
+import { parsePaymentCardSecret, paymentCardBrand } from "../payment-card";
 import { getEnv } from "../runtime-env";
+import { loginAccountHint, parseLoginVaultPayload } from "../vault-payload";
 import { getAppStore } from "./app-store";
 import {
   deleteSecret,
@@ -71,7 +73,7 @@ async function createVaultItem(
     await (
       await getAppStore()
     ).createVaultItem(scope, {
-      account: input.account,
+      account: vaultAccountHint(input),
       createdAt: now,
       id,
       kind: input.kind,
@@ -81,6 +83,26 @@ async function createVaultItem(
   } catch (error) {
     await deleteSecret({ id, namespace: "vault", scope });
     throw error;
+  }
+}
+
+function vaultAccountHint(
+  input: Extract<ManagerMutation, { action: "vault.create" }>["input"]
+) {
+  switch (input.kind) {
+    case "login": {
+      const payload = parseLoginVaultPayload(input.secret);
+      if (!payload)
+        throw new Error("The saved login is incomplete or invalid.");
+      return loginAccountHint(payload.identifier);
+    }
+    case "payment": {
+      const card = parsePaymentCardSecret(input.secret);
+      return `${paymentCardBrand(card.number)} · •••• ${card.number.slice(-4)}`;
+    }
+    case "address":
+    case "contact":
+      return "";
   }
 }
 
