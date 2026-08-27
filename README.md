@@ -2,6 +2,8 @@
 
 # OpenInstinct
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-lightgrey.svg)](LICENSE)
+
 **A personal iMessage assistant that can use a browser like you.**
 
 It can do your chores, book you movie tickets, or handle your groceries.
