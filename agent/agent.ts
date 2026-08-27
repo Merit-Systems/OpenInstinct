@@ -11,7 +11,10 @@ export default defineAgent({
       "step.started": async (_event, ctx) => {
         const caller = ctx.session.auth.current ?? ctx.session.auth.initiator;
         if (!caller) throw new Error("An authenticated user is required.");
-        return (await getModelSettings(scopeFromPrincipal(caller))).modelId;
+        const { model, modelContextWindowTokens } = await getModelSettings(
+          scopeFromPrincipal(caller)
+        );
+        return { model, modelContextWindowTokens };
       },
     },
   }),

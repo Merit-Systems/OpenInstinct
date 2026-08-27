@@ -36,6 +36,11 @@ const runtimeEnv = createEnv({
     HOSTED_SECRET_ENCRYPTION_KEY: optionalValue,
     SECRET_ENCRYPTION_KEY: optionalValue,
     KERNEL_API_KEY: requiredValue,
+    TRUSTEDROUTER_API_KEY: optionalValue,
+    TRUSTEDROUTER_BASE_URL: optionalValue.refine(
+      (value) => value === undefined || URL.canParse(value),
+      "TRUSTEDROUTER_BASE_URL must be an absolute URL"
+    ),
     VERCEL_ENV: z.enum(["production", "preview", "development"]).optional(),
   },
   experimental__runtimeEnv: {},

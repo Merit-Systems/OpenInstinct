@@ -1,5 +1,9 @@
 import { z } from "zod";
 import { modelCatalogSchema } from "@/lib/model-catalog";
+import {
+  fetchTrustedRouterCatalog,
+  getTrustedRouterConfig,
+} from "@/lib/trustedrouter";
 
 const gatewayResponseSchema = z.object({
   data: z.array(
@@ -24,6 +28,16 @@ export const dynamic = "force-dynamic";
 
 export async function GET() {
   try {
+    const trustedRouter = getTrustedRouterConfig();
+    if (trustedRouter) {
+      return Response.json(
+        modelCatalogSchema.parse(
+          await fetchTrustedRouterCatalog(trustedRouter)
+        ),
+        { headers: { "Cache-Control": "no-store" } }
+      );
+    }
+
     const response = await fetch("https://ai-gateway.vercel.sh/v1/models", {
       cache: "no-store",
       headers: { Accept: "application/json" },

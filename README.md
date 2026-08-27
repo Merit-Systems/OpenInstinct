@@ -38,6 +38,20 @@ DATABASE_URL=postgresql://user:password@host/database
 SECRET_ENCRYPTION_KEY="$(openssl rand -base64 32)"
 ```
 
+### Use TrustedRouter instead of the AI Gateway
+
+Inference defaults to the Vercel AI Gateway. Set a
+[TrustedRouter](https://trustedrouter.com) key to route the model catalog and
+every model call through its OpenAI-compatible endpoint instead:
+
+```bash
+TRUSTEDROUTER_API_KEY=your-key
+```
+
+The model picker then lists TrustedRouter's catalog, and the default model
+becomes `trustedrouter/auto`. `TRUSTEDROUTER_BASE_URL` overrides the endpoint,
+which defaults to `https://api.trustedrouter.com/v1`.
+
 Treat `SECRET_ENCRYPTION_KEY` as production key material — back it up
 separately; rotating it requires re-encrypting existing values.
 
