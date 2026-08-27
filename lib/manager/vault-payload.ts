@@ -10,6 +10,11 @@ const optionalBoundedValue = z
 
 export const loginIdentifierTypeSchema = z.enum(["email", "phone", "username"]);
 
+export const loginOriginSchema = z.url().refine((value) => {
+  const url = new URL(value);
+  return ["http:", "https:"].includes(url.protocol) && url.origin === value;
+}, "Enter a website origin such as https://www.ubereats.com.");
+
 const loginIdentifierSchema = z.object({
   type: loginIdentifierTypeSchema,
   value: z.string().trim().min(1).max(300),
@@ -24,45 +29,65 @@ const loginAuthenticationSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("sms_otp") }),
 ]);
 
-export const loginVaultPayloadSchema = z
-  .object({
-    authentication: loginAuthenticationSchema,
-    identifier: loginIdentifierSchema,
-    kind: z.literal("login"),
+const loginVaultPayloadBaseSchema = z.object({
+  authentication: loginAuthenticationSchema,
+  identifier: loginIdentifierSchema,
+  kind: z.literal("login"),
+});
+
+const legacyLoginVaultPayloadSchema = loginVaultPayloadBaseSchema
+  .extend({
     version: z.literal(1),
   })
-  .superRefine((payload, context) => {
-    if (
-      payload.identifier.type === "email" &&
-      !z.email().safeParse(payload.identifier.value).success
-    ) {
-      context.addIssue({
-        code: "custom",
-        message: "Enter a valid email identifier.",
-        path: ["identifier", "value"],
-      });
-    }
-    if (
-      payload.authentication.type === "email_otp" &&
-      payload.identifier.type !== "email"
-    ) {
-      context.addIssue({
-        code: "custom",
-        message: "Email OTP requires an email identifier.",
-        path: ["identifier", "type"],
-      });
-    }
-    if (
-      payload.authentication.type === "sms_otp" &&
-      payload.identifier.type !== "phone"
-    ) {
-      context.addIssue({
-        code: "custom",
-        message: "SMS OTP requires a phone identifier.",
-        path: ["identifier", "type"],
-      });
-    }
-  });
+  .superRefine(validateLoginVaultPayload);
+
+export const loginVaultPayloadSchema = loginVaultPayloadBaseSchema
+  .extend({
+    origin: loginOriginSchema,
+    version: z.literal(2),
+  })
+  .superRefine(validateLoginVaultPayload);
+
+const readableLoginVaultPayloadSchema = z.union([
+  loginVaultPayloadSchema,
+  legacyLoginVaultPayloadSchema,
+]);
+
+function validateLoginVaultPayload(
+  payload: z.infer<typeof loginVaultPayloadBaseSchema>,
+  context: z.RefinementCtx
+) {
+  if (
+    payload.identifier.type === "email" &&
+    !z.email().safeParse(payload.identifier.value).success
+  ) {
+    context.addIssue({
+      code: "custom",
+      message: "Enter a valid email identifier.",
+      path: ["identifier", "value"],
+    });
+  }
+  if (
+    payload.authentication.type === "email_otp" &&
+    payload.identifier.type !== "email"
+  ) {
+    context.addIssue({
+      code: "custom",
+      message: "Email OTP requires an email identifier.",
+      path: ["identifier", "type"],
+    });
+  }
+  if (
+    payload.authentication.type === "sms_otp" &&
+    payload.identifier.type !== "phone"
+  ) {
+    context.addIssue({
+      code: "custom",
+      message: "SMS OTP requires a phone identifier.",
+      path: ["identifier", "type"],
+    });
+  }
+}
 
 export const addressVaultPayloadSchema = z.object({
   city: boundedValue,
@@ -135,7 +160,7 @@ export function serializeContactVaultPayload(
 }
 
 export function parseLoginVaultPayload(value: string) {
-  return parseSerializedPayload(loginVaultPayloadSchema, value);
+  return parseSerializedPayload(readableLoginVaultPayloadSchema, value);
 }
 
 export function parseAddressVaultPayload(value: string) {
@@ -147,19 +172,25 @@ export function parseContactVaultPayload(value: string) {
 }
 
 export function loginAccountHint(
-  identifier: z.infer<typeof loginIdentifierSchema>
+  identifier: z.infer<typeof loginIdentifierSchema>,
+  origin?: string
 ) {
-  switch (identifier.type) {
-    case "email": {
-      const [localPart, domain] = identifier.value.split("@", 2);
-      if (!localPart || !domain) return "Saved email";
-      return `${localPart.slice(0, 1)}•••@${domain}`;
+  const identifierHint = (() => {
+    switch (identifier.type) {
+      case "email": {
+        const [localPart, domain] = identifier.value.split("@", 2);
+        if (!localPart || !domain) return "Saved email";
+        return `${localPart.slice(0, 1)}•••@${domain}`;
+      }
+      case "phone":
+        return `Phone · •••• ${lastCharacters(identifier.value, 4)}`;
+      case "username":
+        return `Username · ${identifier.value.slice(0, 2)}•••`;
     }
-    case "phone":
-      return `Phone · •••• ${lastCharacters(identifier.value, 4)}`;
-    case "username":
-      return `Username · ${identifier.value.slice(0, 2)}•••`;
-  }
+  })();
+  return origin
+    ? `${new URL(origin).hostname} · ${identifierHint}`
+    : identifierHint;
 }
 
 function lastCharacters(value: string, count: number) {

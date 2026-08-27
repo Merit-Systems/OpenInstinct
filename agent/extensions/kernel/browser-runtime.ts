@@ -304,7 +304,7 @@ function lifecycleResult(browser: KernelBrowser) {
     next_actions: [
       `Use execute_playwright_code with session_id "${value.session_id}" for deterministic browser automation.`,
       `Use computer_action with session_id "${value.session_id}" for visual browser control.`,
-      "If a human action blocks progress, keep this browser open and share browser.browser_live_view_url with the user.",
+      "Keep this browser open while human input is pending. Share browser.browser_live_view_url only when the user explicitly asks for browser access.",
       `Use manage_browsers with action "delete" and session_id "${value.session_id}" when finished.`,
     ],
   };

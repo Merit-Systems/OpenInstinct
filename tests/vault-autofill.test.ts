@@ -69,7 +69,18 @@ beforeEach(() => {
     label: "Primary login",
     updatedAt: "2026-01-01T00:00:00.000Z",
   });
-  mocks.readSecret.mockResolvedValue("correct horse battery staple");
+  mocks.readSecret.mockResolvedValue(
+    serializeLoginVaultPayload({
+      authentication: {
+        password: "correct horse battery staple",
+        type: "password",
+      },
+      identifier: { type: "email", value: "ada@example.com" },
+      kind: "login",
+      origin: "https://checkout.example",
+      version: 2,
+    })
+  );
   mocks.requireOwnedBrowserSession.mockResolvedValue(undefined);
 });
 
@@ -100,6 +111,47 @@ describe("vault browser autofill", () => {
     expect(options?.signal).toBe(toolContext.abortSignal);
   });
 
+  it("rejects a login outside its saved origin before calling Kernel", async () => {
+    await expect(
+      fillFromVault.execute(
+        {
+          browserSessionId: "browser-1",
+          expectedOrigin: "https://attacker.example",
+          fields: [{ field: "username", selector: "#username" }],
+          vaultItemId: VAULT_ITEM_ID,
+        },
+        toolContext
+      )
+    ).rejects.toThrow("restricted to https://checkout.example");
+
+    expect(mocks.executePlaywright).not.toHaveBeenCalled();
+  });
+
+  it("refuses legacy logins that have no saved origin", async () => {
+    mocks.readSecret.mockResolvedValue(
+      JSON.stringify({
+        authentication: { password: "correct horse", type: "password" },
+        identifier: { type: "email", value: "ada@example.com" },
+        kind: "login",
+        version: 1,
+      })
+    );
+
+    await expect(
+      fillFromVault.execute(
+        {
+          browserSessionId: "browser-1",
+          expectedOrigin: "https://checkout.example",
+          fields: [{ field: "username", selector: "#username" }],
+          vaultItemId: VAULT_ITEM_ID,
+        },
+        toolContext
+      )
+    ).rejects.toThrow("not assigned to a website");
+
+    expect(mocks.executePlaywright).not.toHaveBeenCalled();
+  });
+
   it("resolves structured password and passwordless logins", async () => {
     mocks.readVaultItem.mockResolvedValue({
       account: "Phone · •••• 0100",
@@ -114,7 +166,8 @@ describe("vault browser autofill", () => {
         authentication: { password: "correct horse", type: "password" },
         identifier: { type: "phone", value: "+15555550100" },
         kind: "login",
-        version: 1,
+        origin: "https://checkout.example",
+        version: 2,
       })
     );
 
@@ -142,7 +195,8 @@ describe("vault browser autofill", () => {
         authentication: { type: "email_otp" },
         identifier: { type: "email", value: "ada@example.com" },
         kind: "login",
-        version: 1,
+        origin: "https://checkout.example",
+        version: 2,
       })
     );
     await expect(

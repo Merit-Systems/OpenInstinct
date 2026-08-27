@@ -67,7 +67,7 @@ const outputSchema = z.object({
 
 export default defineTool({
   description:
-    "Fill supported saved fields in the active browser directly from an opaque local-vault handle without requesting another approval. Valid field names are username, password, cardholder_name, card_number, expiration, expiration_month, expiration_year, cvc, billing_postal_code, address, address_line1, address_line2, address_city, address_region, address_postal_code, address_country, full_name, email, phone, identity, and token. Passwordless login items provide their email or phone identifier but never an OTP. Never invent field names. Secret values are read inside trusted device code and entered with Chrome-native card autofill when possible, then verified keyboard entry for unsupported or masked controls. Values and acceptance checks are never returned to the model. Inspect the page first, pass the exact current origin, browser session ID, and precise CSS selectors. Never use this to expose, inspect, or copy a secret.",
+    "Fill supported saved fields in the active browser directly from an opaque local-vault handle without requesting another approval. Valid field names are username, password, cardholder_name, card_number, expiration, expiration_month, expiration_year, cvc, billing_postal_code, address, address_line1, address_line2, address_city, address_region, address_postal_code, address_country, full_name, email, phone, identity, and token. A saved login works only on its bound origin; passwordless login items provide their email or phone identifier but never an OTP. Never invent field names. Secret values are read inside trusted device code and entered with Chrome-native card autofill when possible, then verified keyboard entry for unsupported or masked controls. Values and acceptance checks are never returned to the model. Inspect the page first, pass the exact current origin, browser session ID, and precise CSS selectors. Never use this to expose, inspect, or copy a secret.",
   inputSchema: vaultAutofillRequestSchema,
   outputSchema,
   async execute(input, context) {
@@ -84,6 +84,7 @@ export default defineTool({
     const resolved = await prepareVaultAutofill(
       scope,
       input.vaultItemId,
+      input.expectedOrigin,
       input.fields.map(({ field }) => field)
     );
     const fields = input.fields.map((target, index) => {
@@ -113,6 +114,7 @@ export default defineTool({
 async function prepareVaultAutofill(
   scope: AccessScope,
   vaultItemId: string,
+  expectedOrigin: string,
   fields: Parameters<typeof resolveVaultAutofillValues>[2]
 ) {
   const item = await readVaultItem(scope, vaultItemId);
@@ -122,7 +124,7 @@ async function prepareVaultAutofill(
   if (secret === undefined) {
     throw new Error("The selected vault item no longer has a secret value.");
   }
-  return resolveVaultAutofillValues(item, secret, fields);
+  return resolveVaultAutofillValues(item, secret, fields, expectedOrigin);
 }
 
 async function fillKernelBrowser({
@@ -372,9 +374,10 @@ function resolveVaultAutofillValues(
     readonly kind: VaultItemKind;
   },
   secret: string,
-  fields: readonly z.infer<typeof vaultAutofillFieldSchema>[]
+  fields: readonly z.infer<typeof vaultAutofillFieldSchema>[],
+  expectedOrigin: string
 ) {
-  const values = vaultValues(item, secret);
+  const values = vaultValues(item, secret, expectedOrigin);
 
   return fields.map((field) => {
     const value = values.get(field);
@@ -392,17 +395,21 @@ function vaultValues(
     readonly account: string;
     readonly kind: VaultItemKind;
   },
-  secret: string
+  secret: string,
+  expectedOrigin: string
 ) {
   const values = new Map<z.infer<typeof vaultAutofillFieldSchema>, string>();
 
   switch (item.kind) {
     case "login": {
       const payload = parseLoginVaultPayload(secret);
-      if (!payload) {
-        values.set("username", item.account);
-        values.set("password", secret);
-        break;
+      if (!payload || !("origin" in payload)) {
+        throw new Error(
+          "This saved login is not assigned to a website. Re-save it before autofill."
+        );
+      }
+      if (payload.origin !== expectedOrigin) {
+        throw new Error(`This saved login is restricted to ${payload.origin}.`);
       }
       values.set("username", payload.identifier.value);
       if (payload.identifier.type === "email") {

@@ -33,6 +33,7 @@ describe("self-hosted manager", () => {
         identifierType: "email",
         kind: "login",
         label: "Personal login",
+        origin: "https://auth.uber.com",
         target: "vault",
       }).success
     ).toBe(false);
@@ -40,6 +41,7 @@ describe("self-hosted manager", () => {
       managerSetupRequestSchema.safeParse({
         kind: "login",
         label: "Personal login",
+        origin: "https://auth.uber.com",
         target: "vault",
       }).success
     ).toBe(false);
@@ -49,6 +51,7 @@ describe("self-hosted manager", () => {
         identifierType: "email",
         kind: "login",
         label: "Personal login",
+        origin: "https://auth.uber.com",
         target: "vault",
       })
     );
@@ -58,6 +61,7 @@ describe("self-hosted manager", () => {
       identifier_type: "email",
       kind: "login",
       label: "Personal login",
+      origin: "https://auth.uber.com",
       setup: "vault",
     });
 
@@ -172,7 +176,8 @@ describe("self-hosted manager", () => {
             authentication: { password: "secret", type: "password" },
             identifier: { type: "email", value: "ada@example.com" },
             kind: "login",
-            version: 1,
+            origin: "https://github.com",
+            version: 2,
           }),
         },
       }).success

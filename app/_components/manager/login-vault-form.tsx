@@ -14,6 +14,7 @@ import {
 import type { ManagerMutation } from "@/lib/manager";
 import {
   loginIdentifierTypeSchema,
+  loginOriginSchema,
   serializeLoginVaultPayload,
 } from "@/lib/manager/vault-payload";
 import { VaultFormField } from "./vault-form-field";
@@ -23,6 +24,11 @@ const loginFormSchema = z
     identifier: z.string().trim().min(1, "Enter the sign-in identifier."),
     identifierType: loginIdentifierTypeSchema,
     nickname: z.string().trim().min(1, "Enter a name for this login.").max(120),
+    origin: z
+      .string()
+      .trim()
+      .transform(normalizeLoginOrigin)
+      .pipe(loginOriginSchema),
     password: z.string().max(20_000),
   })
   .superRefine((form, context) => {
@@ -39,12 +45,14 @@ export function LoginVaultForm({
   busy,
   initialIdentifierType,
   initialLabel = "",
+  initialOrigin = "",
   onSaved,
   onSubmit,
 }: {
   readonly busy: boolean;
   readonly initialIdentifierType?: z.infer<typeof loginIdentifierTypeSchema>;
   readonly initialLabel?: string;
+  readonly initialOrigin?: string;
   readonly onSaved: () => void;
   readonly onSubmit: (mutation: ManagerMutation) => Promise<boolean>;
 }) {
@@ -53,6 +61,7 @@ export function LoginVaultForm({
     identifier: "",
     identifierType: initialIdentifierType ?? "email",
     nickname: initialLabel,
+    origin: initialOrigin,
     password: "",
   });
   const result = loginFormSchema.safeParse(form);
@@ -78,7 +87,8 @@ export function LoginVaultForm({
             value: result.data.identifier,
           },
           kind: "login",
-          version: 1,
+          origin: result.data.origin,
+          version: 2,
         }),
       },
     });
@@ -102,6 +112,17 @@ export function LoginVaultForm({
             value={form.nickname}
           />
         )}
+        <VaultFormField
+          autoComplete="url"
+          error={errors.origin?.[0]}
+          id="vault-login-origin"
+          inputMode="url"
+          label="Website"
+          onChange={(origin) => setForm((current) => ({ ...current, origin }))}
+          placeholder="https://www.ubereats.com"
+          type="url"
+          value={form.origin}
+        />
         <div
           className={
             initialIdentifierType
@@ -203,4 +224,13 @@ function loginAuthentication(form: z.output<typeof loginFormSchema>) {
   if (form.identifierType === "email") return { type: "email_otp" as const };
   if (form.identifierType === "phone") return { type: "sms_otp" as const };
   throw new Error("Username logins require a password.");
+}
+
+function normalizeLoginOrigin(value: string) {
+  const candidate = value.includes("://") ? value : `https://${value}`;
+  try {
+    return new URL(candidate).origin;
+  } catch {
+    return value;
+  }
 }

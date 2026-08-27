@@ -4,6 +4,7 @@ import {
   addressVaultPayloadStringSchema,
   contactVaultPayloadStringSchema,
   loginIdentifierTypeSchema,
+  loginOriginSchema,
   loginVaultPayloadStringSchema,
 } from "./vault-payload";
 
@@ -77,6 +78,7 @@ const loginManagerSetupRequestSchema = z
     identifierType: loginIdentifierTypeSchema,
     kind: z.literal("login"),
     label: z.string().trim().min(1).max(120),
+    origin: loginOriginSchema,
     target: z.literal("vault"),
   })
   .strict();
@@ -113,6 +115,7 @@ export function parseManagerSetupSearchParams(
   query: Record<string, string | readonly string[] | undefined>
 ) {
   const identifierType = firstQueryValue(query.identifier_type);
+  const origin = firstQueryValue(query.origin);
   const input = {
     kind: firstQueryValue(query.kind),
     label: firstQueryValue(query.label),
@@ -120,7 +123,9 @@ export function parseManagerSetupSearchParams(
   };
 
   return managerSetupRequestSchema.safeParse(
-    identifierType === undefined ? input : { ...input, identifierType }
+    identifierType === undefined && origin === undefined
+      ? input
+      : { ...input, identifierType, origin }
   );
 }
 
@@ -134,6 +139,7 @@ export function createManagerSetupUrl(
   url.searchParams.set("kind", request.kind);
   if (request.kind === "login") {
     url.searchParams.set("identifier_type", request.identifierType);
+    url.searchParams.set("origin", request.origin);
   }
   return url.toString();
 }

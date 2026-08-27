@@ -18,13 +18,15 @@ describe("versioned vault payloads", () => {
       authentication: { password: "correct horse", type: "password" },
       identifier: { type: "email", value: "ada@example.com" },
       kind: "login",
-      version: 1,
+      origin: "https://www.ubereats.com",
+      version: 2,
     });
     const otpLogin = serializeLoginVaultPayload({
       authentication: { type: "sms_otp" },
       identifier: { type: "phone", value: "+15555550100" },
       kind: "login",
-      version: 1,
+      origin: "https://auth.uber.com",
+      version: 2,
     });
 
     expect(loginVaultPayloadStringSchema.safeParse(passwordLogin).success).toBe(
@@ -41,9 +43,22 @@ describe("versioned vault payloads", () => {
         authentication: { type: "sms_otp" },
         identifier: { type: "email", value: "ada@example.com" },
         kind: "login",
-        version: 1,
+        origin: "https://auth.uber.com",
+        version: 2,
       })
     ).toThrow("SMS OTP");
+  });
+
+  it("reads legacy logins but does not accept them for new writes", () => {
+    const legacy = JSON.stringify({
+      authentication: { password: "correct horse", type: "password" },
+      identifier: { type: "email", value: "ada@example.com" },
+      kind: "login",
+      version: 1,
+    });
+
+    expect(parseLoginVaultPayload(legacy)?.version).toBe(1);
+    expect(loginVaultPayloadStringSchema.safeParse(legacy).success).toBe(false);
   });
 
   it("stores addresses and contacts as structured encrypted payloads", () => {
@@ -82,5 +97,11 @@ describe("versioned vault payloads", () => {
     expect(loginAccountHint({ type: "phone", value: "+15555550100" })).toBe(
       "Phone · •••• 0100"
     );
+    expect(
+      loginAccountHint(
+        { type: "email", value: "ada@example.com" },
+        "https://www.ubereats.com"
+      )
+    ).toBe("www.ubereats.com · a•••@example.com");
   });
 });

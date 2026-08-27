@@ -82,7 +82,10 @@ function vaultAccountHint(
       const payload = parseLoginVaultPayload(input.secret);
       if (!payload)
         throw new Error("The saved login is incomplete or invalid.");
-      return loginAccountHint(payload.identifier);
+      return loginAccountHint(
+        payload.identifier,
+        "origin" in payload ? payload.origin : undefined
+      );
     }
     case "payment": {
       const card = parsePaymentCardSecret(input.secret);

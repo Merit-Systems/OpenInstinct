@@ -164,7 +164,7 @@ function VaultCategory({
           initialSetup
             ? `setup:${initialSetup.kind}:${initialSetup.label ?? ""}:${
                 initialSetup.kind === "login" ? initialSetup.identifierType : ""
-              }`
+              }:${initialSetup.kind === "login" ? initialSetup.origin : ""}`
             : "manual"
         }
         kind={kind}
@@ -257,6 +257,8 @@ function VaultDialog({
               ? initialSetup.identifierType
               : undefined,
           initialLabel: initialSetup?.label,
+          initialOrigin:
+            initialSetup?.kind === "login" ? initialSetup.origin : undefined,
           kind,
           onSaved,
           onSubmit,
@@ -270,6 +272,7 @@ function renderVaultForm({
   busy,
   initialIdentifierType,
   initialLabel,
+  initialOrigin,
   kind,
   onSaved,
   onSubmit,
@@ -277,6 +280,7 @@ function renderVaultForm({
   readonly busy: boolean;
   readonly initialIdentifierType?: "email" | "phone" | "username";
   readonly initialLabel?: string;
+  readonly initialOrigin?: string;
   readonly kind: VaultCreateItemKind;
   readonly onSaved: () => void;
   readonly onSubmit: (mutation: ManagerMutation) => Promise<boolean>;
@@ -288,6 +292,7 @@ function renderVaultForm({
         <LoginVaultForm
           {...common}
           initialIdentifierType={initialIdentifierType}
+          initialOrigin={initialOrigin}
         />
       );
     case "payment":
