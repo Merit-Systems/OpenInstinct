@@ -30,6 +30,7 @@ const runtimeEnv = createEnv({
       (value) => value === undefined || URL.canParse(value),
       "EVE_NEXT_PRODUCTION_ORIGIN must be an absolute URL"
     ),
+    GOOGLE_CONNECTOR_UID: optionalValue,
     HOSTED_SECRET_ENCRYPTION_KEY: optionalValue,
     SECRET_ENCRYPTION_KEY: optionalValue,
     KERNEL_API_KEY: requiredValue,

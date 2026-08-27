@@ -24,7 +24,7 @@ import {
 } from "@/components/ai-elements/model-selector";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
-import type { ManagerMutation } from "@/lib/manager";
+import type { ManagerMutation, ManagerSnapshot } from "@/lib/manager";
 import type { ModelCatalogItem } from "@/app/_lib/model-catalog";
 import { modelCatalogSchema } from "@/app/_lib/model-catalog";
 import { useManager } from "./use-manager";
@@ -38,7 +38,11 @@ const priceFormatter = new Intl.NumberFormat("en-US", {
 
 const LINQ_PHONE_NUMBER = "+12052611117";
 
-export function WorkspaceManager() {
+export function WorkspaceManager({
+  googleNotice,
+}: {
+  readonly googleNotice?: "unavailable";
+}) {
   const { busy, error, mutate, snapshot } = useManager();
   const browserReady = snapshot?.browser.available === true;
 
@@ -54,7 +58,19 @@ export function WorkspaceManager() {
         </Alert>
       ) : null}
 
+      {googleNotice === "unavailable" ? (
+        <Alert>
+          <MailIcon />
+          <AlertTitle>Google Workspace unavailable</AlertTitle>
+          <AlertDescription>
+            This deployment does not have a working Google OAuth connector yet.
+          </AlertDescription>
+        </Alert>
+      ) : null}
+
       <ChannelsSection browserReady={browserReady} />
+
+      <GoogleWorkspaceSection connection={snapshot?.googleWorkspace} />
 
       <section aria-labelledby="connectors-heading" className="space-y-3">
         <h2 className="type-section-title" id="connectors-heading">
@@ -88,6 +104,61 @@ export function WorkspaceManager() {
         </div>
       </section>
     </main>
+  );
+}
+
+function GoogleWorkspaceSection({
+  connection,
+}: {
+  readonly connection?: ManagerSnapshot["googleWorkspace"];
+}) {
+  const state = connection?.state;
+  const description =
+    state === "connected"
+      ? (connection?.accountLabel ?? "Gmail, Calendar, and Contacts connected.")
+      : state === "unavailable"
+        ? "Attach a Vercel Connect Google OAuth connector to enable this."
+        : "Gmail, Calendar, and Contacts through your Google account.";
+
+  return (
+    <section aria-labelledby="connections-heading" className="space-y-3">
+      <h2 className="type-section-title" id="connections-heading">
+        Connections
+      </h2>
+      <div className="divide-y divide-border/50 border-y border-border/50">
+        <ConnectorRow
+          action={<GoogleWorkspaceAction state={state} />}
+          description={description}
+          icon={<MailIcon />}
+          label="Google Workspace"
+        />
+      </div>
+    </section>
+  );
+}
+
+function GoogleWorkspaceAction({
+  state,
+}: {
+  readonly state?: ManagerSnapshot["googleWorkspace"]["state"];
+}) {
+  if (!state) {
+    return <span className="type-caption text-muted-foreground">Loading…</span>;
+  }
+  if (state === "unavailable") {
+    return (
+      <span className="type-caption text-muted-foreground">Setup required</span>
+    );
+  }
+
+  const action = state === "connected" ? "disconnect" : "connect";
+  return (
+    <form action="/api/connectors/google" method="post">
+      <input name="action" type="hidden" value={action} />
+      <Button size="sm" type="submit" variant="outline">
+        {state === "connected" ? "Disconnect" : "Connect"}
+      </Button>
+    </form>
   );
 }
 
