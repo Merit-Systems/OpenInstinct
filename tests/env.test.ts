@@ -54,4 +54,12 @@ describe("environment", () => {
       await expect(import("../lib/env")).rejects.toThrow(errorMessage);
     }
   );
+
+  it("rejects a non-Postgres database URL", async () => {
+    vi.stubEnv("DATABASE_URL", "https://example.com/database");
+
+    await expect(import("../lib/env")).rejects.toThrow(
+      "Invalid environment variables"
+    );
+  });
 });

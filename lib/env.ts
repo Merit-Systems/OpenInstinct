@@ -1,5 +1,6 @@
 import { createEnv } from "@t3-oss/env-nextjs";
 import { z } from "zod";
+import { databaseUrlSchema } from "../db/env/utils";
 
 const optionalValue = z
   .string()
@@ -24,11 +25,7 @@ const runtimeEnv = createEnv({
       .min(1)
       .max(20)
       .default(1),
-    DATABASE_URL: requiredValue.refine(
-      (value) =>
-        value.startsWith("postgres://") || value.startsWith("postgresql://"),
-      "DATABASE_URL must be a postgres:// or postgresql:// URL"
-    ),
+    DATABASE_URL: databaseUrlSchema,
     EVE_NEXT_PRODUCTION_ORIGIN: optionalValue.refine(
       (value) => value === undefined || URL.canParse(value),
       "EVE_NEXT_PRODUCTION_ORIGIN must be an absolute URL"
