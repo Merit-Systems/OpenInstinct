@@ -1,37 +1,10 @@
 import { ManagerShell } from "@/app/_components/manager-shell";
 import { WorkspaceManager } from "@/app/_components/manager/workspace";
-import { managerSetupRequestSchema } from "@/lib/manager";
 
-export default async function Page({
-  searchParams,
-}: {
-  readonly searchParams: Promise<
-    Record<string, string | readonly string[] | undefined>
-  >;
-}) {
-  const query = await searchParams;
-  const requestedSetup = managerSetupRequestSchema.safeParse({
-    account: firstQueryValue(query.account),
-    endpoint: firstQueryValue(query.endpoint),
-    kind: firstQueryValue(query.kind),
-    label: firstQueryValue(query.label),
-    provider: firstQueryValue(query.provider),
-    target: firstQueryValue(query.setup),
-  });
-
+export default function Page() {
   return (
     <ManagerShell active="workspace">
-      <WorkspaceManager
-        initialSetup={
-          requestedSetup.success && requestedSetup.data.target === "connection"
-            ? requestedSetup.data
-            : undefined
-        }
-      />
+      <WorkspaceManager />
     </ManagerShell>
   );
-}
-
-function firstQueryValue(value: string | readonly string[] | undefined) {
-  return Array.isArray(value) ? value[0] : value;
 }

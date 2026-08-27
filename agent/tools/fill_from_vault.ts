@@ -2,8 +2,6 @@ import Kernel from "@onkernel/sdk";
 import { defineTool } from "eve/tools";
 import { z } from "zod";
 import { scopeFromPrincipal } from "../../lib/access-scope.js";
-import { getBrowserSettings } from "../../lib/browser-config.js";
-import { runLocalVaultAutofill } from "../../lib/local-browser.js";
 import { getEnv } from "../../lib/runtime-env.js";
 import { requireOwnedBrowserSession } from "../../lib/server/kernel-browser.js";
 import { prepareVaultAutofill } from "../../lib/server/vault-autofill.js";
@@ -25,7 +23,6 @@ export default defineTool({
       context.session.auth.current ?? context.session.auth.initiator;
     if (!caller) throw new Error("An authenticated user is required.");
     const scope = scopeFromPrincipal(caller);
-    const browser = await getBrowserSettings(scope);
     if (!input.browserSessionId) {
       throw new Error(
         "A browser session ID is required for secure vault autofill."
@@ -45,20 +42,13 @@ export default defineTool({
       return { ...target, value };
     });
 
-    if (browser.mode === "local") {
-      await runLocalVaultAutofill(
-        { expectedOrigin: input.expectedOrigin, fields },
-        context.abortSignal
-      );
-    } else {
-      await requireOwnedBrowserSession(scope, input.browserSessionId);
-      await fillKernelBrowser({
-        browserSessionId: input.browserSessionId,
-        expectedOrigin: input.expectedOrigin,
-        fields,
-        signal: context.abortSignal,
-      });
-    }
+    await requireOwnedBrowserSession(scope, input.browserSessionId);
+    await fillKernelBrowser({
+      browserSessionId: input.browserSessionId,
+      expectedOrigin: input.expectedOrigin,
+      fields,
+      signal: context.abortSignal,
+    });
 
     return {
       filledFields: resolved.map(({ field }) => field),

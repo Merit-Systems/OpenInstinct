@@ -1,16 +1,9 @@
 import { headers } from "next/headers";
-import {
-  accessScopeForUser,
-  type AccessScope,
-  localAccessScope,
-} from "@/lib/access-scope";
-import { getDeploymentMode } from "@/lib/deployment-mode";
-import { getHostedAuthSession } from "@/lib/server/auth-session";
+import { accessScopeForUser, type AccessScope } from "@/lib/access-scope";
+import { getAuthSession } from "@/lib/server/auth-session";
 
 export async function requireRequestScope(): Promise<AccessScope> {
-  if (getDeploymentMode() === "local") return localAccessScope;
-
-  const session = await getHostedAuthSession(await headers());
+  const session = await getAuthSession(await headers());
   if (!session) throw new UnauthenticatedError();
   return accessScopeForUser(`better-auth:${session.user.id}`);
 }

@@ -4,7 +4,7 @@ import {
   UnauthenticatedError,
   type AuthFn,
 } from "eve/channels/auth";
-import { type AccessScope, localAccessScope } from "../../lib/access-scope.js";
+import type { AccessScope } from "../../lib/access-scope.js";
 import { sessionIdFromPath } from "../../lib/eve-session-path.js";
 import { getAppStore } from "../../lib/server/app-store.js";
 import { requestScopeFromRequest } from "../../lib/server/eve-request-scope.js";
@@ -25,9 +25,8 @@ function applicationAuth(): AuthFn {
     }
 
     return {
-      attributes: { mode: scope.mode, workspaceId: scope.workspaceId },
-      authenticator:
-        scope.userId === localAccessScope.userId ? "local" : "authjs",
+      attributes: { workspaceId: scope.workspaceId },
+      authenticator: "authjs",
       principalId: scope.userId,
       principalType: "user",
     };

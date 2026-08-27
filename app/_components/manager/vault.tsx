@@ -341,7 +341,7 @@ function fieldPresentation(kind: VaultItemKind) {
         accountPlaceholder: undefined,
         labelPlaceholder: "Credential",
         secretLabel: "Value",
-        secretPlaceholder: "Stored in Keychain",
+        secretPlaceholder: "Stored in encrypted vault",
       };
   }
 }

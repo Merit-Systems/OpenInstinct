@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { accessScopeForUser } from "../lib/access-scope";
 import { isFullyAuthenticatedUser } from "../lib/auth-user";
-import { getDeploymentMode } from "../lib/deployment-mode";
 import { sessionIdFromPath } from "../lib/eve-session-path";
 import { normalizeAuthPhoneNumber } from "../lib/phone-number";
 
@@ -13,11 +12,6 @@ describe("multi-user request identity", () => {
     expect(first).toEqual(accessScopeForUser("better-auth:123"));
     expect(first.workspaceId).not.toBe(second.workspaceId);
     expect(first.workspaceId).not.toContain("better-auth:123");
-  });
-
-  it("defaults local machines and Vercel deployments safely", () => {
-    expect(getDeploymentMode({})).toBe("local");
-    expect(getDeploymentMode({ VERCEL: "1" })).toBe("hosted");
   });
 
   it("extracts ownership ids from every Eve session route", () => {

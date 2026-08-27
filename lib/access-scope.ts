@@ -5,21 +5,13 @@ import { z } from "zod";
 
 const principalScopeSchema = z.object({
   attributes: z.object({
-    mode: z.enum(["hosted", "local"]),
     workspaceId: z.string().min(1),
   }),
   id: z.string().min(1).optional(),
   principalId: z.string().min(1).optional(),
 });
 
-export const localAccessScope = {
-  mode: "local",
-  userId: "local:user",
-  workspaceId: "local:personal",
-} as const satisfies AccessScope;
-
 export interface AccessScope {
-  readonly mode: "hosted" | "local";
   readonly userId: string;
   readonly workspaceId: string;
 }
@@ -29,7 +21,6 @@ export function accessScopeForUser(userId: string): AccessScope {
   if (!normalizedUserId) throw new Error("An authenticated user is required.");
 
   return {
-    mode: "hosted",
     userId: normalizedUserId,
     workspaceId: `personal:${createHash("sha256")
       .update(normalizedUserId)
@@ -48,7 +39,6 @@ export function scopeFromPrincipal(
   }
 
   return {
-    mode: principal.attributes.mode,
     userId,
     workspaceId: principal.attributes.workspaceId,
   } satisfies AccessScope;

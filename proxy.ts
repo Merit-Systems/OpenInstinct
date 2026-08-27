@@ -1,10 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { getDeploymentMode } from "@/lib/deployment-mode";
-import { getHostedAuthSession } from "@/lib/server/auth-session";
+import { getAuthSession } from "@/lib/server/auth-session";
 
 export async function proxy(request: NextRequest) {
-  if (getDeploymentMode() === "local") return NextResponse.next();
-
   const pathname = request.nextUrl.pathname;
   if (
     pathname === "/sign-in" ||
@@ -14,7 +11,7 @@ export async function proxy(request: NextRequest) {
     return NextResponse.next();
   }
 
-  if (await getHostedAuthSession(request.headers)) return NextResponse.next();
+  if (await getAuthSession(request.headers)) return NextResponse.next();
 
   const signInUrl = new URL("/sign-in", request.url);
   signInUrl.searchParams.set(

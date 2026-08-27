@@ -4,13 +4,12 @@ import { getMigrations } from "better-auth/db/migration";
 import { phoneNumber } from "better-auth/plugins/phone-number";
 import { Pool } from "pg";
 import { z } from "zod";
-import { getDeploymentMode } from "@/lib/deployment-mode";
 import { isE164PhoneNumber } from "@/lib/phone-number";
 import { getEnv } from "@/lib/runtime-env";
 
-const LOCAL_UNUSED_DATABASE_URL =
-  "postgresql://local:local@127.0.0.1:1/local_unused";
-const LOCAL_UNUSED_SECRET = "local-vault-assistant-auth-is-disabled-locally";
+const FALLBACK_DATABASE_URL =
+  "postgresql://unconfigured:unconfigured@127.0.0.1:1/unconfigured";
+const FALLBACK_AUTH_SECRET = "local-vault-assistant-auth-is-unconfigured";
 const AUTH_MIGRATION_LOCK_ID = 1_972_040_815;
 const AUTH_TABLE_NAMES = [
   "account",
@@ -29,7 +28,7 @@ const databaseUrl =
   env.DATABASE_URL?.startsWith("postgres://") ||
   env.DATABASE_URL?.startsWith("postgresql://")
     ? env.DATABASE_URL
-    : LOCAL_UNUSED_DATABASE_URL;
+    : FALLBACK_DATABASE_URL;
 
 const authPool = new Pool({ connectionString: databaseUrl, max: 5 });
 
@@ -64,14 +63,13 @@ export const auth = betterAuth({
       },
     }),
   ],
-  secret: env.BETTER_AUTH_SECRET ?? LOCAL_UNUSED_SECRET,
+  secret: env.BETTER_AUTH_SECRET ?? FALLBACK_AUTH_SECRET,
 });
 
 let migrationPromise: Promise<void> | undefined;
 
 export async function ensureAuthDatabase() {
-  if (getDeploymentMode() === "local") return;
-  requireHostedAuthConfiguration();
+  requireAuthConfiguration();
 
   const currentMigration = (migrationPromise ??= prepareAuthDatabase());
   try {
@@ -123,29 +121,26 @@ async function runAuthMigrations() {
   }
 }
 
-function requireHostedAuthConfiguration() {
+function requireAuthConfiguration() {
   if (
     !env.DATABASE_URL?.startsWith("postgres://") &&
     !env.DATABASE_URL?.startsWith("postgresql://")
   ) {
-    throw new Error("A Postgres DATABASE_URL is required in hosted mode.");
+    throw new Error("A Postgres DATABASE_URL is required.");
   }
   if (!env.BETTER_AUTH_SECRET) {
-    throw new Error("BETTER_AUTH_SECRET is required in hosted mode.");
+    throw new Error("BETTER_AUTH_SECRET is required.");
   }
   if (!env.TEXTBELT_API_KEY) {
-    throw new Error("TEXTBELT_API_KEY is required in hosted mode.");
+    throw new Error("TEXTBELT_API_KEY is required.");
   }
   if (!env.BETTER_AUTH_URL) {
-    throw new Error("BETTER_AUTH_URL is required in hosted mode.");
+    throw new Error("BETTER_AUTH_URL is required.");
   }
 }
 
 async function sendPhoneCode({ code, to }: { code: string; to: string }) {
-  if (getDeploymentMode() === "local") {
-    throw new Error("Phone authentication is disabled in local mode.");
-  }
-  requireHostedAuthConfiguration();
+  requireAuthConfiguration();
   const response = await fetch("https://textbelt.com/text", {
     body: JSON.stringify({
       key: env.TEXTBELT_API_KEY,

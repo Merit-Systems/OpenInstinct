@@ -32,7 +32,7 @@ export async function GET(request: Request) {
       const page = await world.runs.list({
         pagination: {
           cursor: nextCursor,
-          limit: scope.mode === "hosted" ? pageSize - runs.length : pageSize,
+          limit: pageSize - runs.length,
           sortOrder: "desc",
         },
         resolveData: "none",
@@ -42,7 +42,7 @@ export async function GET(request: Request) {
         ...page.data.filter(
           (run) =>
             run.attributes["$eve.type"] === "session" &&
-            (scope.mode === "local" || ownedSessionIds.has(run.runId))
+            ownedSessionIds.has(run.runId)
         )
       );
       nextCursor = page.cursor ?? undefined;

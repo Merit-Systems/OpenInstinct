@@ -9,8 +9,6 @@ export default {
     "evals/**/*.eval.ts",
     "evals/evals.config.ts",
     "foundation.config.ts",
-    "scripts/local-browser-daemon.ts",
-    "scripts/telegram-poller.mjs",
     "taze.config.ts",
   ],
   ignoreDependencies: [
@@ -22,8 +20,6 @@ export default {
     "@merit-systems/oxlint-config",
     "next-themes",
     "sonner",
-    // Executed by the local shell launcher rather than imported by TypeScript.
-    "portless",
   ],
   ignoreIssues: {
     // Eve AI Elements and Foundation registry primitives intentionally expose

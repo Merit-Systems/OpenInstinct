@@ -2,16 +2,14 @@ import { redirect } from "next/navigation";
 import { headers } from "next/headers";
 import { PhoneAuthForm } from "@/app/sign-in/phone-auth-form";
 import { Logo } from "@/components/ui/logo";
-import { getDeploymentMode } from "@/lib/deployment-mode";
-import { getHostedAuthSession } from "@/lib/server/auth-session";
+import { getAuthSession } from "@/lib/server/auth-session";
 
 export default async function SignInPage({
   searchParams,
 }: {
   readonly searchParams: Promise<{ callbackUrl?: string }>;
 }) {
-  if (getDeploymentMode() === "local") redirect("/");
-  if (await getHostedAuthSession(await headers())) redirect("/");
+  if (await getAuthSession(await headers())) redirect("/");
 
   const requestedCallback = (await searchParams).callbackUrl;
   const callbackUrl =

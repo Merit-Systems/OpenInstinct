@@ -1,37 +1,13 @@
 import { describe, expect, it } from "vitest";
 import {
   createManagerSetupUrl,
-  isAllowedManagerMutationOrigin,
   isAllowedMutationOrigin,
-  isLocalManagerHostname,
   managerMutationSchema,
   managerSetupRequestSchema,
 } from "../lib/manager";
 import { serializePaymentCard } from "../lib/payment-card";
 
-describe("local manager setup links", () => {
-  it("builds a connection form URL from safe prefill fields", () => {
-    const url = new URL(
-      createManagerSetupUrl("http://localhost:3000", {
-        account: "qwen3.5:27b",
-        endpoint: "http://127.0.0.1:11434/v1",
-        label: "Ollama",
-        provider: "local-model",
-        target: "connection",
-      })
-    );
-
-    expect(url.origin).toBe("http://localhost:3000");
-    expect(url.pathname).toBe("/");
-    expect(Object.fromEntries(url.searchParams)).toEqual({
-      account: "qwen3.5:27b",
-      endpoint: "http://127.0.0.1:11434/v1",
-      label: "Ollama",
-      provider: "local-model",
-      setup: "connection",
-    });
-  });
-
+describe("self-hosted manager", () => {
   it("builds a vault form URL without accepting a secret", () => {
     expect(
       managerSetupRequestSchema.safeParse({
@@ -42,7 +18,7 @@ describe("local manager setup links", () => {
     ).toBe(false);
 
     const url = new URL(
-      createManagerSetupUrl("http://localhost:3000", {
+      createManagerSetupUrl("https://assistant.example.com", {
         account: "person@example.com",
         kind: "login",
         label: "Personal login",
@@ -59,65 +35,6 @@ describe("local manager setup links", () => {
     });
   });
 
-  it("keeps the system Kernel key out of manager mutations", () => {
-    const mutation = {
-      action: "connection.create",
-      input: {
-        account: "",
-        endpoint: "",
-        label: "Kernel browser",
-        provider: "kernel",
-        secret: "",
-      },
-    };
-
-    expect(
-      managerMutationSchema.safeParse({
-        ...mutation,
-        input: { ...mutation.input, secret: "kernel-key" },
-      }).success
-    ).toBe(false);
-  });
-
-  it("accepts local and cloud browser modes", () => {
-    expect(
-      managerMutationSchema.safeParse({
-        action: "browser.select",
-        mode: "local",
-      }).success
-    ).toBe(true);
-    expect(
-      managerMutationSchema.safeParse({
-        action: "browser.select",
-        mode: "cloud",
-      }).success
-    ).toBe(true);
-  });
-
-  it("requires a BotFather token when connecting Telegram", () => {
-    const mutation = {
-      action: "connection.create",
-      input: {
-        account: "",
-        endpoint: "",
-        label: "Telegram",
-        provider: "telegram",
-        secret: "",
-      },
-    };
-
-    expect(managerMutationSchema.safeParse(mutation).success).toBe(false);
-    expect(
-      managerMutationSchema.safeParse({
-        ...mutation,
-        input: {
-          ...mutation.input,
-          secret: "123456:abcdefghijklmnopqrstuvwxyz",
-        },
-      }).success
-    ).toBe(true);
-  });
-
   it("accepts a selected gateway model", () => {
     expect(
       managerMutationSchema.safeParse({
@@ -125,6 +42,27 @@ describe("local manager setup links", () => {
         modelId: "anthropic/claude-sonnet-4.5",
       }).success
     ).toBe(true);
+  });
+
+  it("does not expose removed runtime mutations", () => {
+    expect(
+      managerMutationSchema.safeParse({
+        action: "browser.select",
+        mode: "local",
+      }).success
+    ).toBe(false);
+    expect(
+      managerMutationSchema.safeParse({
+        action: "connection.create",
+        input: {
+          account: "qwen3.5:27b",
+          endpoint: "http://127.0.0.1:11434/v1",
+          label: "Local model",
+          provider: "local-model",
+          secret: "",
+        },
+      }).success
+    ).toBe(false);
   });
 
   it("requires complete structured payment-card details", () => {
@@ -159,35 +97,7 @@ describe("local manager setup links", () => {
     ).toBe(true);
   });
 
-  it("accepts the Portless manager hostname as local", () => {
-    expect(isLocalManagerHostname("local-vault-assistant.localhost")).toBe(
-      true
-    );
-    expect(isLocalManagerHostname("manager.example.com")).toBe(false);
-  });
-
-  it("accepts writes forwarded through the local HTTPS proxy", () => {
-    expect(
-      isAllowedManagerMutationOrigin({
-        forwardedHost: "local-vault-assistant.localhost",
-        forwardedProto: "https",
-        host: "127.0.0.1:62650",
-        origin: "https://local-vault-assistant.localhost",
-        requestUrl: "http://127.0.0.1:62650/api/manager",
-      })
-    ).toBe(true);
-    expect(
-      isAllowedManagerMutationOrigin({
-        forwardedHost: "local-vault-assistant.localhost",
-        forwardedProto: "https",
-        host: "127.0.0.1:62650",
-        origin: "https://evil.localhost",
-        requestUrl: "http://127.0.0.1:62650/api/manager",
-      })
-    ).toBe(false);
-  });
-
-  it("allows only same-origin writes in hosted mode", () => {
+  it("allows only same-origin writes", () => {
     const request = {
       forwardedHost: "assistant.example.com",
       forwardedProto: "https",

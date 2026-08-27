@@ -1,20 +1,10 @@
 "use client";
 
 import { LogOutIcon } from "lucide-react";
-import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { authClient } from "@/lib/auth-client";
 
 export function AccountControl() {
-  const [authRequired, setAuthRequired] = useState(false);
-  useEffect(() => {
-    setAuthRequired(document.body.dataset.authRequired === "true");
-  }, []);
-
-  return authRequired ? <HostedAccountControl /> : null;
-}
-
-function HostedAccountControl() {
   const { data: session } = authClient.useSession();
   if (!session?.user) return null;
 

@@ -4,15 +4,12 @@ import {
   BotIcon,
   ChevronsUpDownIcon,
   CloudIcon,
-  ExternalLinkIcon,
   KeyRoundIcon,
-  LaptopIcon,
   MailIcon,
   MessageSquareIcon,
-  SendIcon,
 } from "lucide-react";
 import Link from "next/link";
-import { type FormEvent, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import {
   ModelSelector as ModelSelectorRoot,
   ModelSelectorContent,
@@ -27,23 +24,7 @@ import {
 } from "@/components/ai-elements/model-selector";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import type {
-  ManagerMutation,
-  ManagerSetupRequest,
-  ManagerSnapshot,
-} from "@/lib/manager";
+import type { ManagerMutation } from "@/lib/manager";
 import type { ModelCatalogItem } from "@/lib/model-catalog";
 import { modelCatalogSchema } from "@/lib/model-catalog";
 import { useManager } from "./use-manager";
@@ -55,26 +36,9 @@ const priceFormatter = new Intl.NumberFormat("en-US", {
   currency: "USD",
 });
 
-export function WorkspaceManager({
-  initialSetup,
-}: {
-  readonly initialSetup?: Extract<
-    ManagerSetupRequest,
-    { target: "connection" }
-  >;
-}) {
+export function WorkspaceManager() {
   const { busy, error, mutate, snapshot } = useManager();
-  const telegram = snapshot?.connections.find(
-    (connection) => connection.provider === "telegram"
-  );
-  const telegramSetup =
-    initialSetup?.provider === "telegram" ? initialSetup : undefined;
-  const browserReady = Boolean(
-    snapshot &&
-    (snapshot.browser.mode === "local"
-      ? snapshot.browser.localAvailable
-      : snapshot.browser.cloudAvailable)
-  );
+  const browserReady = snapshot?.browser.available === true;
 
   return (
     <main className="flex min-w-0 flex-col gap-8">
@@ -88,56 +52,36 @@ export function WorkspaceManager({
         </Alert>
       ) : null}
 
-      <ChannelsSection
-        busy={busy}
-        browserReady={browserReady}
-        initialSetup={telegramSetup}
-        onSubmit={mutate}
-        telegram={telegram}
-      />
+      <ChannelsSection browserReady={browserReady} />
 
       <section aria-labelledby="connectors-heading" className="space-y-3">
         <h2 className="type-section-title" id="connectors-heading">
-          Connectors
+          Infrastructure
         </h2>
         <div className="divide-y divide-border/50 border-y border-border/50">
           <ConnectorRow
             action={
-              snapshot ? (
-                <BrowserModeControl
-                  busy={busy}
-                  browser={snapshot.browser}
-                  onSubmit={mutate}
-                />
-              ) : null
+              <span className="type-caption text-muted-foreground">
+                {browserReady ? "Connected" : "Unavailable"}
+              </span>
             }
-            description={
-              snapshot?.browser.mode === "cloud"
-                ? "Run disposable browsers in Kernel."
-                : "Run a private browser on this device."
-            }
-            icon={snapshot?.browser.mode === "cloud" ? CloudIcon : LaptopIcon}
-            label="Browser execution"
+            description="Run isolated browsers in your Kernel account."
+            icon={<CloudIcon />}
+            label="Kernel browser"
           />
           <ConnectorRow
             action={
-              <div className="flex shrink-0 items-center gap-2">
-                <span className="type-caption text-muted-foreground">
-                  {snapshot?.runtime.source === "local" ? "Local" : "Gateway"}
-                </span>
-                <LocalModelDialog busy={busy} onSubmit={mutate} />
-                <ModelSelector
-                  busy={busy}
-                  modelId={snapshot?.runtime.inference}
-                  onSubmit={mutate}
-                />
-              </div>
+              <ModelSelector
+                busy={busy}
+                modelId={snapshot?.runtime.inference}
+                onSubmit={mutate}
+              />
             }
             description={
               snapshot?.runtime.inference ?? "Loading the current model…"
             }
-            icon={BotIcon}
-            label="Model"
+            icon={<BotIcon />}
+            label="AI Gateway model"
           />
         </div>
       </section>
@@ -145,28 +89,13 @@ export function WorkspaceManager({
   );
 }
 
-function ChannelsSection({
-  browserReady,
-  busy,
-  initialSetup,
-  onSubmit,
-  telegram,
-}: {
-  readonly browserReady: boolean;
-  readonly busy: boolean;
-  readonly initialSetup?: Extract<
-    ManagerSetupRequest,
-    { target: "connection" }
-  >;
-  readonly onSubmit: (mutation: ManagerMutation) => Promise<boolean>;
-  readonly telegram?: ManagerSnapshot["connections"][number];
-}) {
+function ChannelsSection({ browserReady }: { readonly browserReady: boolean }) {
   return (
     <section aria-labelledby="channels-heading" className="space-y-3">
       <h2 className="type-section-title" id="channels-heading">
         Channels
       </h2>
-      <div className="grid gap-2 sm:grid-cols-3">
+      <div className="grid gap-2 sm:grid-cols-2">
         {browserReady ? (
           <Button
             className="h-11 justify-start"
@@ -186,291 +115,40 @@ function ChannelsSection({
           <MailIcon />
           iMessage
         </Button>
-        <TelegramDialog
-          busy={busy}
-          initialSetup={initialSetup}
-          onSubmit={onSubmit}
-          telegram={telegram}
-        />
       </div>
-      {!browserReady ? (
-        <p className="type-caption text-muted-foreground">
-          Select an available browser to enable WebChat. Cloud mode requires
-          KERNEL_API_KEY in the system environment.
-        </p>
-      ) : (
-        <p className="type-caption text-muted-foreground">
-          Telegram messages are received directly by this device. iMessage is
-          not yet available.
-        </p>
-      )}
+      <p className="type-caption text-muted-foreground">
+        {browserReady
+          ? "WebChat is ready. iMessage is not yet available."
+          : "KERNEL_API_KEY is required to enable WebChat."}
+      </p>
     </section>
-  );
-}
-
-function BrowserModeControl({
-  browser,
-  busy,
-  onSubmit,
-}: {
-  readonly browser: ManagerSnapshot["browser"];
-  readonly busy: boolean;
-  readonly onSubmit: (mutation: ManagerMutation) => Promise<boolean>;
-}) {
-  return (
-    <Tabs
-      onValueChange={(value) => {
-        if (value === "local" || value === "cloud") {
-          void onSubmit({ action: "browser.select", mode: value });
-        }
-      }}
-      value={browser.mode}
-    >
-      <TabsList aria-label="Browser execution">
-        <TabsTrigger disabled={busy || !browser.localAvailable} value="local">
-          <LaptopIcon />
-          Local
-        </TabsTrigger>
-        <TabsTrigger disabled={busy || !browser.cloudAvailable} value="cloud">
-          <CloudIcon />
-          Cloud
-        </TabsTrigger>
-      </TabsList>
-    </Tabs>
-  );
-}
-
-function TelegramDialog({
-  busy,
-  initialSetup,
-  onSubmit,
-  telegram,
-}: {
-  readonly busy: boolean;
-  readonly initialSetup?: Extract<
-    ManagerSetupRequest,
-    { target: "connection" }
-  >;
-  readonly onSubmit: (mutation: ManagerMutation) => Promise<boolean>;
-  readonly telegram?: ManagerSnapshot["connections"][number];
-}) {
-  const [open, setOpen] = useState(Boolean(initialSetup));
-  const [token, setToken] = useState("");
-  const connected = Boolean(telegram?.hasSecret);
-
-  const submit = async (event: FormEvent) => {
-    event.preventDefault();
-    const saved = await onSubmit({
-      action: "connection.create",
-      input: {
-        account: "",
-        endpoint: "",
-        label: initialSetup?.label ?? "Telegram",
-        provider: "telegram",
-        secret: token,
-      },
-    });
-    if (saved) {
-      setToken("");
-      setOpen(false);
-    }
-  };
-
-  return (
-    <Dialog onOpenChange={setOpen} open={open}>
-      <DialogTrigger
-        render={
-          <Button
-            className="h-11 min-w-0 justify-start"
-            type="button"
-            variant="outline"
-          />
-        }
-      >
-        <SendIcon />
-        <span className="truncate">Telegram</span>
-        {connected && telegram?.account ? (
-          <span className="ml-auto truncate type-caption text-muted-foreground">
-            @{telegram.account}
-          </span>
-        ) : null}
-      </DialogTrigger>
-      <DialogContent className="sm:max-w-lg">
-        <DialogHeader>
-          <DialogTitle>
-            {connected ? "Telegram connected" : "Connect Telegram"}
-          </DialogTitle>
-          <DialogDescription>
-            Your bot token stays in macOS Keychain. This device polls Telegram
-            directly, so setup does not need a public webhook or tunnel.
-          </DialogDescription>
-        </DialogHeader>
-
-        <div className="grid gap-3 rounded-lg border border-border bg-muted/40 p-3">
-          <p className="type-supporting-body">
-            1. Open BotFather, send <code>/newbot</code>, and follow its naming
-            prompts.
-          </p>
-          <p className="type-supporting-body">
-            2. Copy the bot token BotFather gives you and paste it below.
-          </p>
-          <Button
-            nativeButton={false}
-            render={
-              <a
-                href="https://t.me/BotFather"
-                rel="noreferrer"
-                target="_blank"
-              />
-            }
-            type="button"
-            variant="outline"
-          >
-            Open BotFather
-            <ExternalLinkIcon />
-          </Button>
-        </div>
-
-        {connected && telegram?.endpoint ? (
-          <Button
-            nativeButton={false}
-            render={
-              <a href={telegram.endpoint} rel="noreferrer" target="_blank" />
-            }
-            type="button"
-            variant="secondary"
-          >
-            Open @{telegram.account}
-            <ExternalLinkIcon />
-          </Button>
-        ) : null}
-
-        <form className="grid gap-4" onSubmit={(event) => void submit(event)}>
-          <Field
-            autoComplete="off"
-            id="telegram-bot-token"
-            label={connected ? "Replacement bot token" : "Bot token"}
-            onChange={setToken}
-            placeholder="123456789:AA…"
-            type="password"
-            value={token}
-          />
-          <DialogFooter>
-            <Button disabled={busy || !token.trim()} type="submit">
-              {connected ? "Replace bot" : "Connect bot"}
-            </Button>
-          </DialogFooter>
-        </form>
-      </DialogContent>
-    </Dialog>
   );
 }
 
 function ConnectorRow({
   action,
   description,
-  icon: Icon,
+  icon,
   label,
 }: {
-  readonly action: React.ReactNode;
+  readonly action: ReactNode;
   readonly description: string;
-  readonly icon: typeof BotIcon;
+  readonly icon: ReactNode;
   readonly label: string;
 }) {
   return (
-    <div className="flex min-w-0 items-center gap-3 py-3">
-      <span className="flex size-9 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground">
-        <Icon className="size-4" />
-      </span>
+    <div className="flex items-center gap-3 py-4">
+      <div className="flex size-9 shrink-0 items-center justify-center rounded-md border border-border bg-muted/50 text-muted-foreground">
+        {icon}
+      </div>
       <div className="min-w-0 flex-1">
         <p className="type-label">{label}</p>
-        <p className="type-supporting-body truncate text-muted-foreground">
+        <p className="truncate type-caption text-muted-foreground">
           {description}
         </p>
       </div>
       {action}
     </div>
-  );
-}
-
-function LocalModelDialog({
-  busy,
-  onSubmit,
-}: {
-  readonly busy: boolean;
-  readonly onSubmit: (mutation: ManagerMutation) => Promise<boolean>;
-}) {
-  const [open, setOpen] = useState(false);
-  const [modelId, setModelId] = useState("");
-  const [endpoint, setEndpoint] = useState("");
-  const [secret, setSecret] = useState("");
-
-  const submit = async (event: FormEvent) => {
-    event.preventDefault();
-    const saved = await onSubmit({
-      action: "connection.create",
-      input: {
-        account: modelId,
-        endpoint,
-        label: "Local model",
-        provider: "local-model",
-        secret,
-      },
-    });
-    if (saved) {
-      setSecret("");
-      setOpen(false);
-    }
-  };
-
-  return (
-    <Dialog onOpenChange={setOpen} open={open}>
-      <DialogTrigger
-        render={<Button size="sm" type="button" variant="quiet" />}
-      >
-        Local
-      </DialogTrigger>
-      <DialogContent className="sm:max-w-lg">
-        <DialogHeader>
-          <DialogTitle>Use a local model</DialogTitle>
-          <DialogDescription>
-            Connect an OpenAI-compatible endpoint running on this device.
-          </DialogDescription>
-        </DialogHeader>
-        <form className="grid gap-4" onSubmit={(event) => void submit(event)}>
-          <Field
-            id="local-model-id"
-            label="Model ID"
-            onChange={setModelId}
-            placeholder="qwen3.5:27b"
-            value={modelId}
-          />
-          <Field
-            id="local-model-endpoint"
-            label="Endpoint"
-            onChange={setEndpoint}
-            placeholder="http://127.0.0.1:11434/v1"
-            value={endpoint}
-          />
-          <Field
-            autoComplete="off"
-            id="local-model-key"
-            label="API key (optional)"
-            onChange={setSecret}
-            type="password"
-            value={secret}
-          />
-          <DialogFooter>
-            <Button
-              disabled={busy || !modelId.trim() || !endpoint.trim()}
-              type="submit"
-            >
-              Use local model
-            </Button>
-          </DialogFooter>
-        </form>
-      </DialogContent>
-    </Dialog>
   );
 }
 
@@ -598,36 +276,4 @@ function formatPricing(model: ModelCatalogItem) {
   return `${priceFormatter.format(model.pricing.input)} / ${priceFormatter.format(
     model.pricing.output
   )} per M`;
-}
-
-function Field({
-  autoComplete,
-  id,
-  label,
-  onChange,
-  placeholder,
-  type = "text",
-  value,
-}: {
-  readonly autoComplete?: string;
-  readonly id: string;
-  readonly label: string;
-  readonly onChange: (value: string) => void;
-  readonly placeholder?: string;
-  readonly type?: "password" | "text";
-  readonly value: string;
-}) {
-  return (
-    <div className="grid gap-2">
-      <Label htmlFor={id}>{label}</Label>
-      <Input
-        autoComplete={autoComplete}
-        id={id}
-        onChange={(event) => onChange(event.target.value)}
-        placeholder={placeholder}
-        type={type}
-        value={value}
-      />
-    </div>
-  );
 }

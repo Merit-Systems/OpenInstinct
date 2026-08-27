@@ -1,10 +1,4 @@
-import {
-  isAllowedManagerMutationOrigin,
-  isAllowedMutationOrigin,
-  isLocalManagerHostname,
-  managerMutationSchema,
-} from "@/lib/manager";
-import { getEnv } from "@/lib/runtime-env";
+import { isAllowedMutationOrigin, managerMutationSchema } from "@/lib/manager";
 import {
   requireRequestScope,
   UnauthenticatedError,
@@ -18,11 +12,9 @@ import {
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
-export async function GET(request: Request) {
+export async function GET() {
   try {
     const scope = await requireRequestScope();
-    const denied = denyRequest(request, scope.mode);
-    if (denied) return denied;
     return Response.json(await readManagerSnapshot(scope), {
       headers: { "Cache-Control": "no-store" },
     });
@@ -37,7 +29,7 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   try {
     const scope = await requireRequestScope();
-    const denied = denyRequest(request, scope.mode, true);
+    const denied = denyCrossOriginMutation(request);
     if (denied) return denied;
     const mutation = managerMutationSchema.parse(await request.json());
     return Response.json(await applyManagerMutation(scope, mutation), {
@@ -51,45 +43,23 @@ export async function POST(request: Request) {
   }
 }
 
-function denyRequest(
-  request: Request,
-  mode: "hosted" | "local",
-  mutation = false
-) {
-  const url = new URL(request.url);
-  const remoteLocalManagerAllowed =
-    mode === "local" && getEnv().LOCAL_VAULT_ASSISTANT_ALLOW_REMOTE_MANAGER;
-  if (
-    mode === "local" &&
-    !remoteLocalManagerAllowed &&
-    !isLocalManagerHostname(url.hostname)
-  ) {
+function denyCrossOriginMutation(request: Request) {
+  if (!isAllowedMutationOrigin(originCheckInput(request))) {
     return Response.json(
-      { error: "The local manager is available only on this device." },
+      { error: "Cross-origin manager writes are blocked." },
       { status: 403 }
     );
   }
+}
 
-  if (mutation) {
-    if (
-      !(
-        mode === "local" && !remoteLocalManagerAllowed
-          ? isAllowedManagerMutationOrigin
-          : isAllowedMutationOrigin
-      )({
-        forwardedHost: request.headers.get("x-forwarded-host"),
-        forwardedProto: request.headers.get("x-forwarded-proto"),
-        host: request.headers.get("host"),
-        origin: request.headers.get("origin"),
-        requestUrl: request.url,
-      })
-    ) {
-      return Response.json(
-        { error: "Cross-origin manager writes are blocked." },
-        { status: 403 }
-      );
-    }
-  }
+function originCheckInput(request: Request) {
+  return {
+    forwardedHost: request.headers.get("x-forwarded-host"),
+    forwardedProto: request.headers.get("x-forwarded-proto"),
+    host: request.headers.get("host"),
+    origin: request.headers.get("origin"),
+    requestUrl: request.url,
+  };
 }
 
 function managerError(message: string) {

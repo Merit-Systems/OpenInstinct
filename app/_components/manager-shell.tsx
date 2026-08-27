@@ -60,12 +60,7 @@ function ManagerAppShell({
   readonly children: ReactNode;
 }) {
   const { snapshot } = useManager();
-  const browserReady = Boolean(
-    snapshot &&
-    (snapshot.browser.mode === "local"
-      ? snapshot.browser.localAvailable
-      : snapshot.browser.cloudAvailable)
-  );
+  const browserReady = Boolean(snapshot?.browser.available);
 
   const activeItem = managerNavigation.find((item) => item.id === active);
 

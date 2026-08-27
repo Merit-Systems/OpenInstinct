@@ -106,35 +106,3 @@ export const computerActionInputSchema = z.object({
   session_id: z.string().min(1),
   actions: z.array(computerActionSchema).min(1),
 });
-
-const browserResponseSchema = z.object({
-  error: z.string().optional(),
-  result: z.unknown().optional(),
-});
-
-type BrowserToolInput =
-  | z.infer<typeof computerActionInputSchema>
-  | z.infer<typeof executePlaywrightInputSchema>
-  | z.infer<typeof manageBrowsersInputSchema>;
-
-export async function runDeviceBrowserTool(
-  tool: "computer_action" | "execute_playwright_code" | "manage_browsers",
-  input: BrowserToolInput,
-  signal?: AbortSignal
-) {
-  let response: Response;
-  try {
-    response = await fetch(`http://127.0.0.1:4275/kernel/${tool}`, {
-      body: JSON.stringify(input),
-      headers: { "Content-Type": "application/json" },
-      method: "POST",
-      signal,
-    });
-  } catch {
-    throw new Error("The browser runtime is unavailable.");
-  }
-
-  const body = browserResponseSchema.parse(await response.json());
-  if (!response.ok) throw new Error(body.error ?? `${tool} failed.`);
-  return body.result;
-}
