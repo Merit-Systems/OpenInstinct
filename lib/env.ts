@@ -13,7 +13,7 @@ const secretEncryptionKeySchema = requiredValue.refine(
 
 const optionalValue = z.string().optional();
 
-const runtimeEnv = createEnv({
+export const env = createEnv({
   server: {
     BETTER_AUTH_SECRET: requiredValue,
     BETTER_AUTH_URL: requiredValue.refine(
@@ -33,8 +33,6 @@ const runtimeEnv = createEnv({
   experimental__runtimeEnv: {},
   emptyStringAsUndefined: true,
 });
-
-export const env = runtimeEnv;
 
 const authHostname = new URL(env.BETTER_AUTH_URL).hostname;
 
