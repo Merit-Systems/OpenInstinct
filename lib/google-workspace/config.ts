@@ -6,10 +6,8 @@ export const GOOGLE_WORKSPACE_SCOPES = [
   "openid",
   "email",
   "profile",
-  "https://www.googleapis.com/auth/gmail.modify",
-  "https://www.googleapis.com/auth/calendar.events",
-  "https://www.googleapis.com/auth/calendar.freebusy",
-  "https://www.googleapis.com/auth/contacts.readonly",
+  "https://mail.google.com/",
+  "https://www.googleapis.com/auth/calendar",
 ] as const;
 
 export const GOOGLE_WORKSPACE_CONNECTOR =

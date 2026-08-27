@@ -4,6 +4,11 @@ import { defaultLinqAuth, linqChannel } from "eve/channels/linq";
 import { z } from "zod";
 import { auth } from "@/auth";
 import { accessScopeForUser } from "@/lib/access-scope";
+import { env } from "@/lib/env";
+import {
+  getGoogleWorkspaceConnection,
+  startGoogleWorkspaceAuthorization,
+} from "@/lib/google-workspace/server";
 import { LINQ_CONNECTOR } from "@/lib/linq";
 import { normalizeAuthPhoneNumber } from "@/lib/auth/phone-number";
 
@@ -14,7 +19,7 @@ const verifiedPhoneUserSchema = z.object({
 
 export default linqChannel({
   credentials: connectLinqCredentials(LINQ_CONNECTOR),
-  async onMessage(_context, message) {
+  async onMessage(context, message) {
     if (message.author.isBot) return null;
 
     const auth = defaultLinqAuth(message);
@@ -30,6 +35,33 @@ export default linqChannel({
       ? `better-auth:${verifiedUserId}`
       : auth.principalId;
     const scope = accessScopeForUser(principalId);
+    const googleWorkspace = await getGoogleWorkspaceConnection(scope);
+    const onboardingContext: string[] = [];
+
+    if (googleWorkspace.state === "disconnected") {
+      try {
+        const callbackUrl = new URL("/google-connected", env.BETTER_AUTH_URL);
+        const authorizationUrl = await startGoogleWorkspaceAuthorization(
+          scope,
+          callbackUrl.toString()
+        );
+        await context.thread.post({
+          markdown: [
+            "Welcome to Mouse! Connect Google Workspace to give me access to your Gmail and Calendar:",
+            authorizationUrl,
+            "The link expires in 10 minutes.",
+          ].join("\n\n"),
+        });
+        onboardingContext.push(
+          "A Google Workspace authorization link was just sent to the user. Do not repeat the link; respond naturally to their message."
+        );
+      } catch {
+        onboardingContext.push(
+          "Google Workspace onboarding is temporarily unavailable. Do not claim that Google is connected."
+        );
+      }
+    }
+
     return {
       auth: {
         ...auth,
@@ -39,6 +71,7 @@ export default linqChannel({
         },
         principalId,
       },
+      context: onboardingContext,
     };
   },
 });

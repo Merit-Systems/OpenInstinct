@@ -28,9 +28,12 @@ const scope = {
 };
 
 describe("Google Workspace connection", () => {
-  it("uses one explicit least-privilege scope set", () => {
+  it("uses one explicit full Gmail and Calendar scope set", () => {
     expect(GOOGLE_WORKSPACE_SCOPES).not.toContain("*");
-    expect(GOOGLE_WORKSPACE_SCOPES).not.toContain("https://mail.google.com/");
+    expect(GOOGLE_WORKSPACE_SCOPES).toContain("https://mail.google.com/");
+    expect(GOOGLE_WORKSPACE_SCOPES).toContain(
+      "https://www.googleapis.com/auth/calendar"
+    );
     expect(googleWorkspaceTokenParams(scope.userId)).toEqual({
       scopes: [...GOOGLE_WORKSPACE_SCOPES],
       subject: googleWorkspaceSubject(scope.userId),
