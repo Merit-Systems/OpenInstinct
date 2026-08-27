@@ -1,7 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
-  ensureAuthDatabase: vi.fn<() => Promise<void>>(),
   getSession: vi.fn<
     (_input: { headers: Headers }) => Promise<{
       user: {
@@ -15,14 +14,12 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock("@/auth", () => ({
   auth: { api: { getSession: mocks.getSession } },
-  ensureAuthDatabase: mocks.ensureAuthDatabase,
 }));
 
 import { getAuthSession } from "../lib/auth/session";
 
 beforeEach(() => {
   vi.clearAllMocks();
-  mocks.ensureAuthDatabase.mockResolvedValue(undefined);
 });
 
 describe("auth session", () => {
@@ -51,6 +48,5 @@ describe("auth session", () => {
     await expect(getAuthSession(headers)).resolves.toBe(verified);
     await expect(getAuthSession(headers)).resolves.toBeNull();
     await expect(getAuthSession(headers)).resolves.toBeNull();
-    expect(mocks.ensureAuthDatabase).toHaveBeenCalledTimes(3);
   });
 });
