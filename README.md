@@ -38,18 +38,24 @@ Kernel and Neon usage are billed to the Vercel account that owns the deployment.
 
 ## Configure authentication
 
-The self-hosted deployment uses Better Auth, Textbelt SMS, Postgres, and an
-application encryption key. Each authenticated phone account receives a stable
-personal workspace. Manager settings, vault metadata, encrypted secrets, agent
-sessions, and task history are scoped to that workspace.
+The self-hosted deployment uses Better Auth, the same Linq line as its iMessage
+channel, Postgres, and an application encryption key. Each authenticated phone
+account receives a stable personal workspace. Manager settings, vault metadata,
+encrypted secrets, agent sessions, and task history are scoped to that
+workspace. Linq credentials remain in Vercel Connect; the app requests a
+short-lived app token when it sends a sign-in code.
 
 ```bash
 BETTER_AUTH_SECRET="$(openssl rand -base64 32)"
 BETTER_AUTH_URL=https://your-host
-TEXTBELT_API_KEY=your-textbelt-api-key
 DATABASE_URL=postgresql://user:password@host/database
 SECRET_ENCRYPTION_KEY="$(openssl rand -base64 32)"
 ```
+
+Link a Linq connector named `linq/eve-kernel` to the Vercel project and assign
+it a sending line. Eve uses that connector for both inbound iMessage
+conversations and outbound sign-in codes; no Linq API key belongs in the
+repository or project environment variables.
 
 The UI asks for a phone number and signs the user in with a one-time SMS code. A
 user's first successful verification creates their account. Phone numbers

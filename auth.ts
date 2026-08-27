@@ -6,6 +6,7 @@ import { Pool } from "pg";
 import { z } from "zod";
 import { isE164PhoneNumber } from "@/lib/phone-number";
 import { getEnv } from "@/lib/runtime-env";
+import { sendLinqText } from "@/lib/server/linq";
 
 const FALLBACK_DATABASE_URL =
   "postgresql://unconfigured:unconfigured@127.0.0.1:1/unconfigured";
@@ -18,10 +19,6 @@ const AUTH_TABLE_NAMES = [
   "verification",
 ] as const;
 const authSchemaReadinessSchema = z.object({ ready: z.boolean() });
-const textbeltResponseSchema = z.discriminatedUnion("success", [
-  z.object({ success: z.literal(true) }),
-  z.object({ error: z.string().optional(), success: z.literal(false) }),
-]);
 
 const env = getEnv();
 const databaseUrl =
@@ -144,9 +141,6 @@ function requireAuthConfiguration() {
   if (!env.BETTER_AUTH_SECRET) {
     throw new Error("BETTER_AUTH_SECRET is required.");
   }
-  if (!env.TEXTBELT_API_KEY) {
-    throw new Error("TEXTBELT_API_KEY is required.");
-  }
   if (!env.BETTER_AUTH_URL) {
     throw new Error("BETTER_AUTH_URL is required.");
   }
@@ -154,25 +148,11 @@ function requireAuthConfiguration() {
 
 async function sendPhoneCode({ code, to }: { code: string; to: string }) {
   requireAuthConfiguration();
-  const response = await fetch("https://textbelt.com/text", {
-    body: JSON.stringify({
-      key: env.TEXTBELT_API_KEY,
-      message: `Local Vault Assistant sign-in code: ${code}. Expires in 5 minutes.`,
-      phone: to,
-      sender: "Vault",
-    }),
-    headers: { "Content-Type": "application/json" },
-    method: "POST",
+  await sendLinqText({
+    idempotencyKey: `auth-otp-${createHash("sha256")
+      .update(`${to}\u0000${code}`)
+      .digest("hex")}`,
+    message: `Local Vault Assistant sign-in code: ${code}. Expires in 5 minutes.`,
+    to,
   });
-  if (!response.ok) {
-    throw new Error(
-      `Textbelt SMS failed with HTTP ${String(response.status)}.`
-    );
-  }
-  const result = textbeltResponseSchema.parse(await response.json());
-  if (!result.success) {
-    throw new Error(
-      `Textbelt SMS failed: ${result.error ?? "Unknown provider error"}`
-    );
-  }
 }
