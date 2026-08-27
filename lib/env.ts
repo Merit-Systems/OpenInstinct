@@ -29,6 +29,11 @@ function requiredValueWithLocalDefault<T extends z.ZodType<string, string>>(
 
 export const env = createEnv({
   server: {
+    // Required
+    DATABASE_URL: databaseUrlSchema,
+    KERNEL_API_KEY: requiredValue,
+
+    // Required with local defaults
     BETTER_AUTH_SECRET: requiredValueWithLocalDefault(
       requiredValue,
       "openinstinct-local-auth-development-secret"
@@ -37,13 +42,12 @@ export const env = createEnv({
       betterAuthUrlSchema,
       "http://localhost:3000"
     ),
-    DATABASE_URL: databaseUrlSchema,
-    KERNEL_API_KEY: requiredValue,
     SECRET_ENCRYPTION_KEY: requiredValueWithLocalDefault(
       secretEncryptionKeySchema,
       "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
     ),
 
+    // Optional
     GOOGLE_CONNECTOR_UID: requiredValue.default("google/open-instinct"),
     LINQ_CONNECTOR_UID: requiredValue.default("linq/eve-kernel"),
     NODE_ENV: z
