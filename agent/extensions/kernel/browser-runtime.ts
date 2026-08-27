@@ -17,6 +17,7 @@ import type {
   executePlaywrightInputSchema,
   manageBrowsersInputSchema,
 } from "./browser-contract";
+import { browserTimeoutFloorSeconds } from "./browser-contract";
 import { env } from "@/lib/env";
 
 type ManageBrowsersInput = z.infer<typeof manageBrowsersInputSchema>;
@@ -31,11 +32,13 @@ export async function manageOwnedKernelBrowsers(
 
   switch (input.action) {
     case "create": {
+      const extensionName = env.KERNEL_VAULT_AUTOFILL_EXTENSION;
       const browser = await client.browsers.create(
         {
+          extensions: extensionName ? [{ name: extensionName }] : undefined,
           start_url: input.start_url,
           stealth: true,
-          timeout_seconds: input.timeout_seconds ?? 900,
+          timeout_seconds: input.timeout_seconds ?? browserTimeoutFloorSeconds,
           viewport: browserViewport(input),
         },
         { signal }

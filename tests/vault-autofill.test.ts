@@ -1,134 +1,183 @@
-import type { ToolContext } from "eve/tools";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
+import { classifyAutofillField } from "../browser-extension/lib/field-detector";
+import { fillCandidates } from "../browser-extension/lib/fill-engine";
+import type { AccessScope } from "../lib/access-scope";
 import type { VaultItemKind } from "../lib/manager";
 import { serializePaymentCard } from "../lib/manager/payment-card";
+import {
+  listAutofillSuggestions,
+  materializeAutofillClaims,
+  type AutofillVaultAdapter,
+} from "../lib/manager/server/vault-autofill";
+import { createVaultAutofillProvider } from "../lib/manager/server/vault-autofill-provider";
+import { extensionRuntimeCode } from "../lib/manager/server/vault-extension-autofill";
+import { vaultAutofillCommandSchema } from "../lib/manager/vault-autofill-protocol";
 import {
   serializeAddressVaultPayload,
   serializeContactVaultPayload,
   serializeLoginVaultPayload,
 } from "../lib/manager/vault-payload";
 
-const VAULT_ITEM_ID = "00000000-0000-4000-8000-000000000001";
+const scope: AccessScope = {
+  userId: "user-1",
+  workspaceId: "workspace-1",
+};
 
-const mocks = vi.hoisted(() => ({
-  executePlaywright:
-    vi.fn<
-      (
-        _sessionId: string,
-        _input: { code: string; timeout_sec: number },
-        _options: { signal?: AbortSignal }
-      ) => Promise<{ success: boolean }>
-    >(),
-  readVaultItem: vi.fn<
-    () => Promise<
-      | {
-          account: string;
-          createdAt: string;
-          id: string;
-          kind: VaultItemKind;
-          label: string;
-          updatedAt: string;
-        }
-      | undefined
-    >
-  >(),
-  readSecret: vi.fn<() => Promise<string | undefined>>(),
-  requireOwnedBrowserSession: vi.fn<() => Promise<void>>(),
-}));
-
-vi.mock("@onkernel/sdk", () => ({
-  default: class {
-    readonly browsers = {
-      playwright: { execute: mocks.executePlaywright },
-    };
-  },
-}));
-
-vi.mock("@/lib/manager/server/secret-store", () => ({
-  readSecret: mocks.readSecret,
-}));
-
-vi.mock("@/db/services/vault", () => ({
-  readVaultItem: mocks.readVaultItem,
-}));
-
-vi.mock("@/agent/extensions/kernel/browser-runtime", () => ({
-  requireOwnedBrowserSession: mocks.requireOwnedBrowserSession,
-}));
-
-import fillFromVault from "../agent/tools/fill_from_vault";
-
-beforeEach(() => {
-  vi.clearAllMocks();
-  mocks.executePlaywright.mockResolvedValue({ success: true });
-  mocks.readVaultItem.mockResolvedValue({
-    account: "ada@example.com",
-    createdAt: "2026-01-01T00:00:00.000Z",
-    id: VAULT_ITEM_ID,
-    kind: "login",
-    label: "Primary login",
-    updatedAt: "2026-01-01T00:00:00.000Z",
-  });
-  mocks.readSecret.mockResolvedValue(
-    serializeLoginVaultPayload({
-      authentication: {
-        password: "correct horse battery staple",
-        type: "password",
-      },
-      identifier: { type: "email", value: "ada@example.com" },
-      kind: "login",
-      origin: "https://checkout.example",
-      version: 2,
-    })
-  );
-  mocks.requireOwnedBrowserSession.mockResolvedValue(undefined);
-});
+const paymentSurface = surface("payment-card", ["cc-number", "cc-exp"]);
+const credentialsSurface = surface("credentials", [
+  "username",
+  "current-password",
+]);
+const contactSurface = surface("contact", ["email", "tel"]);
+const addressSurface = surface("postal-address", [
+  "address-line1",
+  "address-line2",
+  "address-level2",
+  "address-level1",
+  "postal-code",
+  "country",
+]);
 
 describe("vault browser autofill", () => {
-  it("fills only the requested login values through the tool boundary", async () => {
+  it("uses the encrypted local vault instead of a development card fixture", async () => {
+    const card = vaultItem("payment", "Travel card", "Visa · •••• 1111");
+    const provider = providerFor(
+      card,
+      serializePaymentCard({
+        billingPostalCode: "10001",
+        cardholderName: "Grace Hopper",
+        expirationMonth: 9,
+        expirationYear: 2031,
+        kind: "payment-card",
+        number: "4111111111111111",
+        securityCode: "321",
+        version: 1,
+      })
+    );
+
     await expect(
-      fillFromVault.execute(
-        {
-          browserSessionId: "browser-1",
-          expectedOrigin: "https://checkout.example",
-          fields: [{ field: "username", selector: "#username" }],
-          vaultItemId: VAULT_ITEM_ID,
-        },
-        toolContext
+      provider.listSuggestions(
+        scope,
+        "https://merchant.example",
+        paymentSurface
       )
-    ).resolves.toEqual({
-      filledFields: ["username"],
+    ).resolves.toEqual([
+      {
+        candidateId: card.id,
+        label: "Travel card",
+        matchReason: "Saved payment card",
+        summary: "Visa · •••• 1111",
+      },
+    ]);
+
+    const claims = await provider.materializeClaims(scope, card.id, {
+      availableTokens: new Set([
+        "cc-name",
+        "cc-number",
+        "cc-exp",
+        "cc-csc",
+        "postal-code",
+      ]),
+      origin: "https://merchant.example",
+      surface: paymentSurface,
+    });
+    expect(claimValues(claims)).toEqual({
+      "cc-csc": "321",
+      "cc-exp": "09/31",
+      "cc-name": "Grace Hopper",
+      "cc-number": "4111111111111111",
+      "postal-code": "10001",
+    });
+  });
+
+  it("suggests and materializes structured logins only at their bound origin", async () => {
+    const login = vaultItem(
+      "login",
+      "Primary login",
+      "checkout.example · a•••@example.com"
+    );
+    const provider = providerFor(
+      login,
+      serializeLoginVaultPayload({
+        authentication: { password: "correct horse", type: "password" },
+        identifier: { type: "email", value: "ada@example.com" },
+        kind: "login",
+        origin: "https://checkout.example",
+        version: 2,
+      })
+    );
+
+    await expect(
+      provider.listSuggestions(
+        scope,
+        "https://checkout.example",
+        credentialsSurface
+      )
+    ).resolves.toEqual([
+      expect.objectContaining({
+        candidateId: login.id,
+        summary: "checkout.example · a•••@example.com",
+      }),
+    ]);
+    await expect(
+      provider.listSuggestions(
+        scope,
+        "https://attacker.example",
+        credentialsSurface
+      )
+    ).resolves.toEqual([]);
+
+    const claims = await provider.materializeClaims(scope, login.id, {
+      availableTokens: new Set(["username", "current-password"]),
       origin: "https://checkout.example",
-      success: true,
+      surface: credentialsSurface,
+    });
+    expect(claimValues(claims)).toEqual({
+      "current-password": "correct horse",
+      username: "ada@example.com",
     });
 
-    const [sessionId, request, options] =
-      mocks.executePlaywright.mock.calls[0] ?? [];
-    expect(sessionId).toBe("browser-1");
-    expect(request?.timeout_sec).toBe(30);
-    expect(request?.code).toContain("ada@example.com");
-    expect(request?.code).not.toContain("correct horse battery staple");
-    expect(options?.signal).toBe(toolContext.abortSignal);
-  });
-
-  it("rejects a login outside its saved origin before calling Kernel", async () => {
     await expect(
-      fillFromVault.execute(
-        {
-          browserSessionId: "browser-1",
-          expectedOrigin: "https://attacker.example",
-          fields: [{ field: "username", selector: "#username" }],
-          vaultItemId: VAULT_ITEM_ID,
-        },
-        toolContext
-      )
+      provider.materializeClaims(scope, login.id, {
+        availableTokens: new Set(["username"]),
+        origin: "https://attacker.example",
+        surface: credentialsSurface,
+      })
     ).rejects.toThrow("restricted to https://checkout.example");
-
-    expect(mocks.executePlaywright).not.toHaveBeenCalled();
   });
 
-  it("refuses legacy logins that have no saved origin", async () => {
-    mocks.readSecret.mockResolvedValue(
+  it("fills passwordless identifiers but never invents an OTP claim", async () => {
+    const login = vaultItem("login", "Email code", "a•••@example.com");
+    const provider = providerFor(
+      login,
+      serializeLoginVaultPayload({
+        authentication: { type: "email_otp" },
+        identifier: { type: "email", value: "ada@example.com" },
+        kind: "login",
+        origin: "https://checkout.example",
+        version: 2,
+      })
+    );
+
+    await expect(
+      provider.listSuggestions(
+        scope,
+        "https://checkout.example",
+        contactSurface
+      )
+    ).resolves.toHaveLength(1);
+    const claims = await provider.materializeClaims(scope, login.id, {
+      availableTokens: new Set(["email", "one-time-code"]),
+      origin: "https://checkout.example",
+      surface: contactSurface,
+    });
+    expect(claimValues(claims)).toEqual({ email: "ada@example.com" });
+  });
+
+  it("fails closed for legacy logins without an origin", async () => {
+    const login = vaultItem("login", "Legacy", "a•••@example.com");
+    const provider = providerFor(
+      login,
       JSON.stringify({
         authentication: { password: "correct horse", type: "password" },
         identifier: { type: "email", value: "ada@example.com" },
@@ -138,136 +187,60 @@ describe("vault browser autofill", () => {
     );
 
     await expect(
-      fillFromVault.execute(
-        {
-          browserSessionId: "browser-1",
-          expectedOrigin: "https://checkout.example",
-          fields: [{ field: "username", selector: "#username" }],
-          vaultItemId: VAULT_ITEM_ID,
-        },
-        toolContext
+      provider.listSuggestions(
+        scope,
+        "https://checkout.example",
+        credentialsSurface
       )
+    ).resolves.toEqual([]);
+    await expect(
+      provider.materializeClaims(scope, login.id, {
+        availableTokens: new Set(["username"]),
+        origin: "https://checkout.example",
+        surface: credentialsSurface,
+      })
     ).rejects.toThrow("not assigned to a website");
-
-    expect(mocks.executePlaywright).not.toHaveBeenCalled();
   });
 
-  it("resolves structured password and passwordless logins", async () => {
-    mocks.readVaultItem.mockResolvedValue({
-      account: "Phone · •••• 0100",
-      createdAt: "2026-01-01T00:00:00.000Z",
-      id: VAULT_ITEM_ID,
-      kind: "login",
-      label: "Primary login",
-      updatedAt: "2026-01-01T00:00:00.000Z",
-    });
-    mocks.readSecret.mockResolvedValue(
-      serializeLoginVaultPayload({
-        authentication: { password: "correct horse", type: "password" },
-        identifier: { type: "phone", value: "+15555550100" },
-        kind: "login",
-        origin: "https://checkout.example",
-        version: 2,
-      })
-    );
-
-    await expect(
-      fillFromVault.execute(
-        {
-          browserSessionId: "browser-1",
-          expectedOrigin: "https://checkout.example",
-          fields: [
-            { field: "username", selector: "#username" },
-            { field: "phone", selector: "#phone" },
-            { field: "password", selector: "#password" },
-          ],
-          vaultItemId: VAULT_ITEM_ID,
-        },
-        toolContext
-      )
-    ).resolves.toMatchObject({
-      filledFields: ["username", "phone", "password"],
-      success: true,
-    });
-
-    mocks.readSecret.mockResolvedValue(
-      serializeLoginVaultPayload({
-        authentication: { type: "email_otp" },
-        identifier: { type: "email", value: "ada@example.com" },
-        kind: "login",
-        origin: "https://checkout.example",
-        version: 2,
-      })
-    );
-    await expect(
-      fillFromVault.execute(
-        {
-          browserSessionId: "browser-1",
-          expectedOrigin: "https://checkout.example",
-          fields: [{ field: "password", selector: "#password" }],
-          vaultItemId: VAULT_ITEM_ID,
-        },
-        toolContext
-      )
-    ).rejects.toThrow("does not provide password");
-  });
-
-  it("resolves structured checkout profiles field by field", async () => {
-    mocks.readVaultItem.mockResolvedValue({
-      account: "",
-      createdAt: "2026-01-01T00:00:00.000Z",
-      id: VAULT_ITEM_ID,
-      kind: "address",
-      label: "Home",
-      updatedAt: "2026-01-01T00:00:00.000Z",
-    });
-    mocks.readSecret.mockResolvedValue(
+  it("maps structured addresses and contacts to browser-standard tokens", async () => {
+    const address = vaultItem("address", "Home", "");
+    const addressProvider = providerFor(
+      address,
       serializeAddressVaultPayload({
         city: "London",
         countryCode: "GB",
         kind: "address",
         line1: "12 St James's Square",
+        line2: "Floor 2",
         postalCode: "SW1Y 4LB",
         recipientName: "Ada Lovelace",
         region: "London",
         version: 1,
       })
     );
-
-    await expect(
-      fillFromVault.execute(
-        {
-          browserSessionId: "browser-1",
-          expectedOrigin: "https://checkout.example",
-          fields: [
-            { field: "full_name", selector: "#name" },
-            { field: "address_line1", selector: "#address" },
-            { field: "address_city", selector: "#city" },
-            { field: "address_postal_code", selector: "#postal-code" },
-          ],
-          vaultItemId: VAULT_ITEM_ID,
-        },
-        toolContext
-      )
-    ).resolves.toMatchObject({
-      filledFields: [
-        "full_name",
-        "address_line1",
-        "address_city",
-        "address_postal_code",
-      ],
-      success: true,
+    const addressClaims = await addressProvider.materializeClaims(
+      scope,
+      address.id,
+      {
+        availableTokens: new Set(
+          addressSurface.fields.map(({ token }) => token)
+        ),
+        origin: "https://merchant.example",
+        surface: addressSurface,
+      }
+    );
+    expect(claimValues(addressClaims)).toEqual({
+      "address-level1": "London",
+      "address-level2": "London",
+      "address-line1": "12 St James's Square",
+      "address-line2": "Floor 2",
+      country: "GB",
+      "postal-code": "SW1Y 4LB",
     });
 
-    mocks.readVaultItem.mockResolvedValue({
-      account: "",
-      createdAt: "2026-01-01T00:00:00.000Z",
-      id: VAULT_ITEM_ID,
-      kind: "contact",
-      label: "Checkout",
-      updatedAt: "2026-01-01T00:00:00.000Z",
-    });
-    mocks.readSecret.mockResolvedValue(
+    const contact = vaultItem("contact", "Checkout", "");
+    const contactProvider = providerFor(
+      contact,
       serializeContactVaultPayload({
         email: "ada@example.com",
         fullName: "Ada Lovelace",
@@ -276,125 +249,211 @@ describe("vault browser autofill", () => {
         version: 1,
       })
     );
-
-    await expect(
-      fillFromVault.execute(
-        {
-          browserSessionId: "browser-1",
-          expectedOrigin: "https://checkout.example",
-          fields: [
-            { field: "full_name", selector: "#name" },
-            { field: "email", selector: "#email" },
-            { field: "phone", selector: "#phone" },
-          ],
-          vaultItemId: VAULT_ITEM_ID,
-        },
-        toolContext
-      )
-    ).resolves.toMatchObject({
-      filledFields: ["full_name", "email", "phone"],
-      success: true,
+    const contactClaims = await contactProvider.materializeClaims(
+      scope,
+      contact.id,
+      {
+        availableTokens: new Set(["email", "tel"]),
+        origin: "https://merchant.example",
+        surface: contactSurface,
+      }
+    );
+    expect(claimValues(contactClaims)).toEqual({
+      email: "ada@example.com",
+      tel: "+442079460000",
     });
   });
 
-  it("formats payment fields and uses native card autofill with a keyboard fallback", async () => {
-    mocks.readVaultItem.mockResolvedValue({
-      account: "Visa 4242",
-      createdAt: "2026-01-01T00:00:00.000Z",
-      id: VAULT_ITEM_ID,
-      kind: "payment",
-      label: "Primary card",
-      updatedAt: "2026-01-01T00:00:00.000Z",
-    });
-    mocks.readSecret.mockResolvedValue(
-      serializePaymentCard({
-        billingPostalCode: "11217",
-        cardholderName: "Ada Lovelace",
-        expirationMonth: 3,
-        expirationYear: 2031,
-        kind: "payment-card",
-        number: "4242424242424242",
-        securityCode: "123",
+  it("lets a vault-owned adapter supply masked suggestions and claims", async () => {
+    const adapter: AutofillVaultAdapter = {
+      async listSuggestions(_scope, origin, detectedSurface) {
+        expect(origin).toBe("https://merchant.example");
+        expect(detectedSurface.kind).toBe("payment-card");
+        return [
+          {
+            candidateId: "opaque-card",
+            label: "Personal Visa",
+            matchReason: "Preferred payment method",
+            summary: "Visa •••• 4242",
+          },
+        ];
+      },
+      async materializeClaims(_scope, candidateId, target) {
+        expect(candidateId).toBe("opaque-card");
+        expect(target.surface.kind).toBe("payment-card");
+        return [
+          {
+            id: "84e90f49-68d0-45ba-a183-3ca18ef087dc",
+            token: "cc-number",
+            value: "4242424242424242",
+          },
+        ];
+      },
+    };
+
+    await expect(
+      listAutofillSuggestions(
+        scope,
+        "https://merchant.example",
+        paymentSurface,
+        adapter
+      )
+    ).resolves.toEqual([
+      {
+        candidateId: "opaque-card",
+        label: "Personal Visa",
+        matchReason: "Preferred payment method",
+        summary: "Visa •••• 4242",
+      },
+    ]);
+    await expect(
+      materializeAutofillClaims(
+        scope,
+        "opaque-card",
+        {
+          availableTokens: new Set(["cc-number", "cc-exp"]),
+          origin: "https://merchant.example",
+          surface: paymentSurface,
+        },
+        adapter
+      )
+    ).resolves.toEqual([
+      {
+        id: "84e90f49-68d0-45ba-a183-3ca18ef087dc",
+        token: "cc-number",
+        value: "4242424242424242",
+      },
+    ]);
+  });
+
+  it("accepts protocol tokens without defining a vault-field enum", () => {
+    const now = Date.now();
+    expect(
+      vaultAutofillCommandSchema.parse({
+        claims: [
+          {
+            id: "84e90f49-68d0-45ba-a183-3ca18ef087dc",
+            token: "future-browser-token",
+            value: "private value",
+          },
+        ],
+        expectedOrigin: "https://merchant.example",
+        expiresAt: now + 30_000,
+        issuedAt: now,
+        nonce: "a-unique-request-nonce",
+        surfaceId: "future-surface",
         version: 1,
-      })
-    );
-
-    await expect(
-      fillFromVault.execute(
-        {
-          browserSessionId: "browser-1",
-          expectedOrigin: "https://checkout.example",
-          fields: [
-            { field: "cardholder_name", selector: "#cardholder-name" },
-            { field: "card_number", selector: "#card-number" },
-            { field: "expiration", selector: "#expiration" },
-            { field: "cvc", selector: "#cvc" },
-            { field: "billing_postal_code", selector: "#postal-code" },
-          ],
-          vaultItemId: VAULT_ITEM_ID,
-        },
-        toolContext
-      )
-    ).resolves.toEqual({
-      filledFields: [
-        "cardholder_name",
-        "card_number",
-        "expiration",
-        "cvc",
-        "billing_postal_code",
-      ],
-      origin: "https://checkout.example",
-      success: true,
-    });
-
-    const code = mocks.executePlaywright.mock.calls[0]?.[1].code;
-    expect(code).toMatch(
-      /03\/31[\s\S]*context\.newCDPSession\(page\)[\s\S]*Autofill\.trigger[\s\S]*pressSequentially/
-    );
+      }).claims[0]?.token
+    ).toBe("future-browser-token");
   });
 
-  it("rejects fields that do not belong to the selected vault item", async () => {
-    await expect(
-      fillFromVault.execute(
-        {
-          browserSessionId: "browser-1",
-          expectedOrigin: "https://checkout.example",
-          fields: [{ field: "card_number", selector: "#card-number" }],
-          vaultItemId: VAULT_ITEM_ID,
-        },
-        toolContext
-      )
-    ).rejects.toThrow("does not provide card_number");
-    expect(mocks.executePlaywright).not.toHaveBeenCalled();
+  it("prefers browser-standard autocomplete semantics", () => {
+    expect(
+      classifyAutofillField({
+        autocomplete: "billing cc-number",
+        label: "",
+        name: "opaque-provider-field",
+        type: "tel",
+      })
+    ).toEqual({ kind: "payment-card", score: 100, token: "cc-number" });
+    expect(
+      classifyAutofillField({
+        autocomplete: "shipping address-level2",
+        label: "",
+        name: "city",
+        type: "text",
+      })
+    ).toEqual({ kind: "postal-address", score: 100, token: "address-level2" });
+    expect(
+      classifyAutofillField({
+        autocomplete: "country",
+        label: "",
+        name: "country",
+        type: "text",
+      })
+    ).toEqual({ kind: "postal-address", score: 100, token: "country" });
+  });
+
+  it("falls back to labels without model-authored selectors", () => {
+    expect(
+      classifyAutofillField({
+        autocomplete: "off",
+        label: "Security code (CVV)",
+        name: "secure-field",
+        type: "text",
+      })
+    ).toEqual({ kind: "payment-card", score: 70, token: "cc-csc" });
+    expect(
+      classifyAutofillField({
+        autocomplete: "",
+        label: "Apartment or suite",
+        name: "address-line-2",
+        type: "text",
+      })
+    ).toEqual({ kind: "postal-address", score: 70, token: "address-line2" });
+  });
+
+  it("lets masked expiry controls own slash formatting", () => {
+    expect(fillCandidates("09/31", "cc-exp")).toEqual(["09/31", "0931"]);
+    expect(fillCandidates("Grace Hopper", "cc-name")).toEqual(["Grace Hopper"]);
+  });
+
+  it("sends only an encrypted envelope through Kernel Playwright", () => {
+    const code = extensionRuntimeCode("fill", "encrypted-envelope");
+
+    expect(code).toContain('cdpSession.send("Runtime.enable")');
+    expect(code).toContain("vaultAutofillContentRuntime");
+    expect(code).toContain("encrypted-envelope");
+    expect(code).not.toContain("4242424242424242");
+    expect(code).not.toContain("context.serviceWorkers()");
+  });
+
+  it("timestamps commands with the browser clock", () => {
+    const code = extensionRuntimeCode("getPublicKey");
+
+    expect(code).toContain("browserNow: Date.now()");
+    expect(code).toContain("publicKey");
   });
 });
 
-const principal = {
-  attributes: { workspaceId: "workspace:user-1" },
-  authenticator: "test",
-  principalId: "user-1",
-  principalType: "user",
-};
+function surface(kind: string, tokens: readonly string[]) {
+  return {
+    fields: tokens.map((token) => ({ score: 100, token })),
+    id: kind,
+    kind,
+  };
+}
 
-const toolContext = {
-  abortSignal: new AbortController().signal,
-  callId: "call-1",
-  async getSandbox() {
-    throw new Error("No sandbox is needed for this tool test.");
-  },
-  getSkill() {
-    throw new Error("No skill is needed for this tool test.");
-  },
-  async getToken() {
-    throw new Error("No token is needed for this tool test.");
-  },
-  requireAuth() {
-    throw new Error("No authorization is needed for this tool test.");
-  },
-  session: {
-    auth: { current: principal, initiator: principal },
-    id: "session-1",
-    turn: { id: "turn-1", sequence: 0 },
-  },
-  toolName: "fill_from_vault",
-} satisfies ToolContext;
+function vaultItem(kind: VaultItemKind, label: string, account: string) {
+  return {
+    account,
+    createdAt: "2026-08-27T00:00:00.000Z",
+    id: `vault-${kind}`,
+    kind,
+    label,
+    updatedAt: "2026-08-27T00:00:00.000Z",
+  };
+}
+
+function providerFor(item: ReturnType<typeof vaultItem>, secret: string) {
+  return createVaultAutofillProvider({
+    async hasSecret() {
+      return true;
+    },
+    async listVaultItems() {
+      return [item];
+    },
+    async readSecret() {
+      return secret;
+    },
+    async readVaultItem() {
+      return item;
+    },
+  });
+}
+
+function claimValues(
+  claims: readonly { readonly token: string; readonly value: string }[]
+) {
+  return Object.fromEntries(claims.map(({ token, value }) => [token, value]));
+}

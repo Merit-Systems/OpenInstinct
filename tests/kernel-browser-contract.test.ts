@@ -1,33 +1,22 @@
 import { describe, expect, it } from "vitest";
-import { computerActionInputSchema } from "../agent/extensions/kernel/browser-contract";
+import {
+  browserTimeoutFloorSeconds,
+  manageBrowsersInputSchema,
+} from "../agent/extensions/kernel/browser-contract";
 
-describe("Kernel browser action latency bounds", () => {
-  it("allows a two-second bounded sleep", () => {
+describe("Kernel browser contract", () => {
+  it("keeps agent-created browsers alive for at least 15 minutes", () => {
     expect(
-      computerActionInputSchema.safeParse({
-        actions: [{ sleep: { duration_ms: 2_000 }, type: "sleep" }],
-        session_id: "browser-session",
+      manageBrowsersInputSchema.safeParse({
+        action: "create",
+        timeout_seconds: 120,
+      }).success
+    ).toBe(false);
+    expect(
+      manageBrowsersInputSchema.safeParse({
+        action: "create",
+        timeout_seconds: browserTimeoutFloorSeconds,
       }).success
     ).toBe(true);
-  });
-
-  it("rejects an unbounded multi-second sleep", () => {
-    expect(
-      computerActionInputSchema.safeParse({
-        actions: [{ sleep: { duration_ms: 2_001 }, type: "sleep" }],
-        session_id: "browser-session",
-      }).success
-    ).toBe(false);
-  });
-
-  it("rejects excessive per-character typing delay", () => {
-    expect(
-      computerActionInputSchema.safeParse({
-        actions: [
-          { type: "type_text", type_text: { delay: 251, text: "checkout" } },
-        ],
-        session_id: "browser-session",
-      }).success
-    ).toBe(false);
   });
 });

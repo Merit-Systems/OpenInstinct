@@ -1,487 +1,77 @@
-import Kernel from "@onkernel/sdk";
 import { defineTool } from "eve/tools";
 import { z } from "zod";
-import { readVaultItem } from "@/db/services/vault";
-import { scopeFromPrincipal, type AccessScope } from "@/lib/access-scope";
-import { env } from "@/lib/env";
-import type { VaultItemKind } from "@/lib/manager";
-import { parsePaymentCardSecret } from "@/lib/manager/payment-card";
-import { readSecret } from "@/lib/manager/server/secret-store";
-import {
-  parseAddressVaultPayload,
-  parseContactVaultPayload,
-  parseLoginVaultPayload,
-} from "@/lib/manager/vault-payload";
 import { requireOwnedBrowserSession } from "@/agent/extensions/kernel/browser-runtime";
-
-const vaultAutofillFieldSchema = z.enum([
-  "username",
-  "password",
-  "cardholder_name",
-  "card_number",
-  "expiration",
-  "expiration_month",
-  "expiration_year",
-  "cvc",
-  "billing_postal_code",
-  "address",
-  "address_line1",
-  "address_line2",
-  "address_city",
-  "address_region",
-  "address_postal_code",
-  "address_country",
-  "full_name",
-  "email",
-  "phone",
-  "identity",
-  "token",
-]);
-
-const exactOriginSchema = z.url().refine((value) => {
-  const url = new URL(value);
-  return ["http:", "https:"].includes(url.protocol) && url.origin === value;
-}, "Use the exact HTTP(S) origin without a path, query, or trailing slash.");
-
-const vaultAutofillRequestSchema = z.object({
-  browserSessionId: z.string().trim().min(1).max(500).optional(),
-  expectedOrigin: exactOriginSchema,
-  fields: z
-    .array(
-      z.object({
-        field: vaultAutofillFieldSchema,
-        frameSelector: z.string().trim().min(1).max(1_000).optional(),
-        selector: z.string().trim().min(1).max(1_000),
-      })
-    )
-    .min(1)
-    .max(20),
-  vaultItemId: z.uuid(),
-});
+import { scopeFromPrincipal } from "@/lib/access-scope";
+import { materializeAutofillClaims } from "@/lib/manager/server/vault-autofill";
+import { vaultAutofillProvider } from "@/lib/manager/server/vault-autofill-provider";
+import {
+  fillWithVaultExtension,
+  inspectWithVaultExtension,
+} from "@/lib/manager/server/vault-extension-autofill";
+import { fillFromVaultRequestSchema } from "@/lib/manager/vault-autofill";
 
 const outputSchema = z.object({
-  filledFields: z.array(z.string()),
+  filledClaims: z.number().int().nonnegative(),
   origin: z.string(),
   success: z.literal(true),
+  surfaceId: z.string(),
 });
 
 export default defineTool({
   description:
-    "Fill supported saved fields in the active browser directly from an opaque local-vault handle without requesting another approval. Valid field names are username, password, cardholder_name, card_number, expiration, expiration_month, expiration_year, cvc, billing_postal_code, address, address_line1, address_line2, address_city, address_region, address_postal_code, address_country, full_name, email, phone, identity, and token. A saved login works only on its bound origin; passwordless login items provide their email or phone identifier but never an OTP. Never invent field names. Secret values are read inside trusted device code and entered with Chrome-native card autofill when possible, then verified keyboard entry for unsupported or masked controls. Values and acceptance checks are never returned to the model. Inspect the page first, pass the exact current origin, browser session ID, and precise CSS selectors. Never use this to expose, inspect, or copy a secret.",
-  inputSchema: vaultAutofillRequestSchema,
+    "Fill one detected browser form using a candidate returned by inspect_autofill. Pass only its opaque surfaceId and candidateId; never supply vault field names, selectors, frame origins, or secret values. The vault adapter releases the selected item directly to the private extension, which discovers and fills the actual controls across approved frames. Origin-bound logins work only on their saved website, and passwordless logins provide only their durable identifier, never an OTP.",
+  inputSchema: fillFromVaultRequestSchema,
   outputSchema,
   async execute(input, context) {
     const caller =
       context.session.auth.current ?? context.session.auth.initiator;
     if (!caller) throw new Error("An authenticated user is required.");
     const scope = scopeFromPrincipal(caller);
-    if (!input.browserSessionId) {
+
+    await requireOwnedBrowserSession(scope, input.browserSessionId);
+    const inspection = await inspectWithVaultExtension({
+      browserSessionId: input.browserSessionId,
+      signal: context.abortSignal,
+    });
+    const surface = inspection.surfaces.find(
+      ({ id }) => id === input.surfaceId
+    );
+    if (!surface) {
       throw new Error(
-        "A browser session ID is required for secure vault autofill."
+        "The selected autofill surface is no longer present. Inspect the page again."
       );
     }
 
-    const resolved = await prepareVaultAutofill(
+    const claims = await materializeAutofillClaims(
       scope,
-      input.vaultItemId,
-      input.expectedOrigin,
-      input.fields.map(({ field }) => field)
+      input.candidateId,
+      {
+        availableTokens: new Set(surface.fields.map(({ token }) => token)),
+        origin: inspection.origin,
+        surface,
+      },
+      vaultAutofillProvider
     );
-    const fields = input.fields.map((target, index) => {
-      const value = resolved.at(index)?.value;
-      if (value === undefined) {
-        throw new Error("The vault fields could not be prepared.");
-      }
-      return { ...target, value };
-    });
-
-    await requireOwnedBrowserSession(scope, input.browserSessionId);
-    await fillKernelBrowser({
+    const result = await fillWithVaultExtension({
       browserSessionId: input.browserSessionId,
-      expectedOrigin: input.expectedOrigin,
-      fields,
+      claims,
+      expectedOrigin: inspection.origin,
       signal: context.abortSignal,
+      surfaceId: surface.id,
     });
+    if (!result.success) {
+      const counts = { filled: 0, missing: 0, rejected: 0 };
+      for (const { status } of result.claims) counts[status] += 1;
+      throw new Error(
+        `Secure vault autofill was incomplete (${String(counts.filled)} filled, ${String(counts.missing)} missing, ${String(counts.rejected)} rejected).`
+      );
+    }
 
     return {
-      filledFields: resolved.map(({ field }) => field),
-      origin: input.expectedOrigin,
+      filledClaims: result.claims.length,
+      origin: result.origin,
       success: true as const,
+      surfaceId: result.surfaceId,
     };
   },
 });
-
-async function prepareVaultAutofill(
-  scope: AccessScope,
-  vaultItemId: string,
-  expectedOrigin: string,
-  fields: Parameters<typeof resolveVaultAutofillValues>[2]
-) {
-  const item = await readVaultItem(scope, vaultItemId);
-  if (!item) throw new Error("The selected vault item no longer exists.");
-
-  const secret = await readSecret({ id: item.id, namespace: "vault", scope });
-  if (secret === undefined) {
-    throw new Error("The selected vault item no longer has a secret value.");
-  }
-  return resolveVaultAutofillValues(item, secret, fields, expectedOrigin);
-}
-
-async function fillKernelBrowser({
-  browserSessionId,
-  expectedOrigin,
-  fields,
-  signal,
-}: {
-  readonly browserSessionId: string;
-  readonly expectedOrigin: string;
-  readonly fields: readonly (z.infer<
-    typeof vaultAutofillRequestSchema
-  >["fields"][number] & { readonly value: string })[];
-  readonly signal?: AbortSignal;
-}) {
-  const code = createVaultAutofillCode({ expectedOrigin, fields });
-
-  try {
-    const result = await new Kernel({
-      apiKey: env.KERNEL_API_KEY,
-    }).browsers.playwright.execute(
-      browserSessionId,
-      { code, timeout_sec: 30 },
-      { signal }
-    );
-    if (!result.success)
-      throw new Error("The browser rejected vault autofill.");
-  } catch {
-    throw new Error(
-      "Secure vault fill failed. Check that the browser is open on the approved site."
-    );
-  }
-}
-
-function createVaultAutofillCode(payload: {
-  readonly expectedOrigin: string;
-  readonly fields: readonly (z.infer<
-    typeof vaultAutofillRequestSchema
-  >["fields"][number] & { readonly value: string })[];
-}) {
-  return `
-const payload = ${JSON.stringify(payload)};
-const keyboardFields = new Set([
-  "card_number",
-  "expiration",
-  "expiration_month",
-  "expiration_year",
-  "cvc",
-]);
-const nativeCardFields = new Set([
-  "cardholder_name",
-  "card_number",
-  "expiration",
-  "expiration_month",
-  "expiration_year",
-  "cvc",
-]);
-const currentOrigin = new URL(page.url()).origin;
-if (currentOrigin !== payload.expectedOrigin) {
-  throw new Error("The active page does not match the approved origin.");
-}
-
-const fieldByName = new Map(payload.fields.map((field) => [field.field, field]));
-const combinedExpiration = fieldByName.get("expiration")?.value ?? "";
-const expirationDigits = combinedExpiration.replaceAll(/\\D/gu, "");
-const expirationMonth =
-  fieldByName.get("expiration_month")?.value ?? expirationDigits.slice(0, 2);
-const expirationYearValue =
-  fieldByName.get("expiration_year")?.value ?? expirationDigits.slice(2);
-const expirationYear =
-  expirationYearValue.length === 2
-    ? "20" + expirationYearValue
-    : expirationYearValue;
-const nativeCard = {
-  cvc: fieldByName.get("cvc")?.value,
-  expiryMonth: expirationMonth.padStart(2, "0"),
-  expiryYear: expirationYear,
-  name: fieldByName.get("cardholder_name")?.value,
-  number: fieldByName.get("card_number")?.value,
-};
-const nativeAnchor = fieldByName.get("card_number");
-const canUseNativeCardAutofill =
-  nativeAnchor !== undefined &&
-  nativeAnchor.frameSelector === undefined &&
-  Object.values(nativeCard).every(
-    (value) => typeof value === "string" && value.length > 0,
-  );
-
-if (canUseNativeCardAutofill) {
-  for (const field of payload.fields.filter(
-    (candidate) =>
-      candidate.frameSelector === undefined &&
-      nativeCardFields.has(candidate.field),
-  )) {
-    await page.locator(field.selector).first().evaluate((node) => {
-      if (node instanceof HTMLElement) node.dataset.vaultSecret = "true";
-    });
-  }
-
-  let cdp;
-  try {
-    cdp = await context.newCDPSession(page);
-    await cdp.send("DOM.enable");
-    const { root } = await cdp.send("DOM.getDocument", {
-      depth: -1,
-      pierce: true,
-    });
-    const { nodeId } = await cdp.send("DOM.querySelector", {
-      nodeId: root.nodeId,
-      selector: nativeAnchor.selector,
-    });
-    if (nodeId === 0) throw new Error("The card field is unavailable.");
-    const { node } = await cdp.send("DOM.describeNode", { nodeId });
-    await cdp.send("Autofill.trigger", {
-      card: nativeCard,
-      fieldId: node.backendNodeId,
-    });
-  } catch {
-    // Chrome does not classify every merchant form as an autofill form. The
-    // verified keyboard path below remains the compatibility fallback.
-  } finally {
-    if (cdp) await cdp.detach();
-  }
-}
-
-for (const field of payload.fields) {
-  const root = field.frameSelector ? page.frameLocator(field.frameSelector) : page;
-  const element = root.locator(field.selector).first();
-  await element.waitFor({ state: "visible", timeout: 5000 });
-  await element.evaluate((node) => {
-    if (node instanceof HTMLElement) {
-      node.dataset.vaultSecret = "true";
-    }
-  });
-
-  const isSelect = await element.evaluate(
-    (node) => node instanceof HTMLSelectElement,
-  );
-  if (isSelect) {
-    const optionValue = await element.evaluate((node, target) => {
-      if (!(node instanceof HTMLSelectElement)) return null;
-      const expected = target.value;
-      const expectedDigits = expected.replaceAll(/\\D/gu, "");
-      const option = Array.from(node.options).find((candidate) => {
-        if (candidate.value === expected || candidate.label === expected) {
-          return true;
-        }
-        if (expectedDigits.length === 0) return false;
-        return [candidate.value, candidate.label].some((value) => {
-          const digits = value.replaceAll(/\\D/gu, "");
-          if (digits === expectedDigits) return true;
-          if (target.field === "expiration_month") {
-            return Number(digits) === Number(expectedDigits);
-          }
-          if (target.field === "expiration_year") {
-            return (
-              digits.endsWith(expectedDigits) || expectedDigits.endsWith(digits)
-            );
-          }
-          return false;
-        });
-      });
-      return option?.value ?? null;
-    }, { field: field.field, value: field.value });
-    if (optionValue === null) {
-      throw new Error("An approved select target has no matching option.");
-    }
-    await element.selectOption(optionValue);
-    continue;
-  }
-
-  if (!(await element.isEditable())) {
-    throw new Error("An approved target is not editable.");
-  }
-
-  const readValue = () =>
-    element.evaluate((node) => {
-      if (
-        node instanceof HTMLInputElement ||
-        node instanceof HTMLTextAreaElement
-      ) {
-        return node.value;
-      }
-      return node.textContent ?? "";
-    });
-
-  const enterWithKeyboard = async () => {
-    await element.focus();
-    await element.press("ControlOrMeta+A");
-    await element.press("Backspace");
-    await element.pressSequentially(field.value, { delay: 5 });
-  };
-
-  const acceptsValue = (enteredValue) => {
-    const enteredDigits = enteredValue.replaceAll(/\\D/gu, "");
-    const expectedDigits = field.value.replaceAll(/\\D/gu, "");
-    if (field.field === "expiration_month") {
-      return Number(enteredDigits) === Number(expectedDigits);
-    }
-    if (field.field === "expiration_year") {
-      return (
-        enteredDigits.endsWith(expectedDigits) ||
-        expectedDigits.endsWith(enteredDigits)
-      );
-    }
-    if (field.field === "expiration") {
-      return (
-        enteredDigits === expectedDigits ||
-        enteredDigits.endsWith(expectedDigits.slice(-4))
-      );
-    }
-    if (keyboardFields.has(field.field)) {
-      return enteredDigits === expectedDigits;
-    }
-    return enteredValue.length > 0;
-  };
-
-  if (!acceptsValue(await readValue())) {
-    if (keyboardFields.has(field.field)) {
-      await enterWithKeyboard();
-    } else {
-      await element.fill(field.value);
-      if (!acceptsValue(await readValue())) {
-        await enterWithKeyboard();
-      }
-    }
-  }
-
-  await element.dispatchEvent("change");
-  await element.blur();
-
-  const enteredValue = await readValue();
-  if (!acceptsValue(enteredValue)) {
-    throw new Error("An approved target did not accept secure input.");
-  }
-}
-return {
-  filledFields: payload.fields.map(({ field }) => field),
-  origin: currentOrigin,
-  success: true,
-};`;
-}
-
-function resolveVaultAutofillValues(
-  item: {
-    readonly account: string;
-    readonly kind: VaultItemKind;
-  },
-  secret: string,
-  fields: readonly z.infer<typeof vaultAutofillFieldSchema>[],
-  expectedOrigin: string
-) {
-  const values = vaultValues(item, secret, expectedOrigin);
-
-  return fields.map((field) => {
-    const value = values.get(field);
-    if (value === undefined || value.length === 0) {
-      throw new Error(
-        `The selected ${item.kind} vault item does not provide ${field}.`
-      );
-    }
-    return { field, value };
-  });
-}
-
-function vaultValues(
-  item: {
-    readonly account: string;
-    readonly kind: VaultItemKind;
-  },
-  secret: string,
-  expectedOrigin: string
-) {
-  const values = new Map<z.infer<typeof vaultAutofillFieldSchema>, string>();
-
-  switch (item.kind) {
-    case "login": {
-      const payload = parseLoginVaultPayload(secret);
-      if (!payload || !("origin" in payload)) {
-        throw new Error(
-          "This saved login is not assigned to a website. Re-save it before autofill."
-        );
-      }
-      if (payload.origin !== expectedOrigin) {
-        throw new Error(`This saved login is restricted to ${payload.origin}.`);
-      }
-      values.set("username", payload.identifier.value);
-      if (payload.identifier.type === "email") {
-        values.set("email", payload.identifier.value);
-      }
-      if (payload.identifier.type === "phone") {
-        values.set("phone", payload.identifier.value);
-      }
-      if (payload.authentication.type === "password") {
-        values.set("password", payload.authentication.password);
-      }
-      break;
-    }
-    case "payment": {
-      const card = parsePaymentCardSecret(secret);
-      const month = card.expirationMonth.toString().padStart(2, "0");
-      const year = card.expirationYear.toString();
-      values.set("cardholder_name", card.cardholderName);
-      values.set("card_number", card.number);
-      values.set("expiration", `${month}/${year.slice(-2)}`);
-      values.set("expiration_month", month);
-      values.set("expiration_year", year);
-      values.set("cvc", card.securityCode);
-      values.set("billing_postal_code", card.billingPostalCode);
-      break;
-    }
-    case "address": {
-      const payload = parseAddressVaultPayload(secret);
-      if (!payload) {
-        values.set("address", secret);
-        break;
-      }
-      values.set("full_name", payload.recipientName);
-      values.set("address_line1", payload.line1);
-      if (payload.line2) values.set("address_line2", payload.line2);
-      values.set("address_city", payload.city);
-      values.set("address_region", payload.region);
-      values.set("address_postal_code", payload.postalCode);
-      values.set("address_country", payload.countryCode);
-      values.set(
-        "address",
-        [
-          payload.recipientName,
-          payload.line1,
-          payload.line2,
-          `${payload.city}, ${payload.region} ${payload.postalCode}`,
-          payload.countryCode,
-        ]
-          .filter(Boolean)
-          .join("\n")
-      );
-      break;
-    }
-    case "contact": {
-      const payload = parseContactVaultPayload(secret);
-      if (!payload)
-        throw new Error("The saved contact is incomplete or invalid.");
-      if (payload.fullName) values.set("full_name", payload.fullName);
-      if (payload.email) values.set("email", payload.email);
-      if (payload.phone) values.set("phone", payload.phone);
-      break;
-    }
-    case "phone":
-      values.set("phone", secret);
-      break;
-    case "identity":
-      values.set("identity", secret);
-      break;
-    case "token":
-      values.set("token", secret);
-      break;
-  }
-
-  return values;
-}
