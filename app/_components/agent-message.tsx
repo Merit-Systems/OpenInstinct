@@ -45,10 +45,6 @@ import {
   ToolOutput,
 } from "@/components/ai-elements/tool";
 import { Button } from "@/components/ui/button";
-import {
-  conversationMessageFromOutput,
-  SEND_MESSAGE_TOOL_NAME,
-} from "@/lib/conversation-message";
 import { cn } from "@/lib/utils";
 
 export type AgentInputResponse = {
@@ -77,34 +73,15 @@ export function AgentMessage({
   const [optimisticTimestamp] = useState(() => new Date().toISOString());
   const displayedTimestamp =
     timestamp ?? (message.role === "user" ? optimisticTimestamp : undefined);
-  const conversationMessages = new Set<string>();
-  const visibleParts = message.parts.filter((part) => {
-    if (message.role === "assistant" && part.type === "text") return false;
-    if (part.type !== "dynamic-tool") return true;
-    if (part.toolName !== SEND_MESSAGE_TOOL_NAME) return true;
-
-    const conversationMessage = conversationMessageFromOutput(
-      part.toolName,
-      part.output
-    );
-    if (
-      conversationMessage === undefined ||
-      conversationMessages.has(conversationMessage)
-    )
-      return false;
-
-    conversationMessages.add(conversationMessage);
-    return true;
-  });
-  const lastTextIndex = visibleParts.reduce(
+  const lastTextIndex = message.parts.reduce(
     (last, part, index) => (part.type === "text" ? index : last),
     -1
   );
   const hasAssistantText =
     message.role === "assistant" &&
-    visibleParts.some((part) => part.type === "text" && part.text.length > 0);
+    message.parts.some((part) => part.type === "text" && part.text.length > 0);
 
-  if (visibleParts.length === 0) return null;
+  if (message.parts.length === 0) return null;
 
   return (
     <Message
@@ -112,7 +89,7 @@ export function AgentMessage({
       from={message.role}
     >
       <MessageContent>
-        {visibleParts.map((part, index) =>
+        {message.parts.map((part, index) =>
           hasAssistantText && part.type === "reasoning" ? null : (
             <AgentMessagePart
               canRespond={canRespond}
@@ -198,16 +175,6 @@ function AgentMessagePart({
     case "authorization":
       return <AuthorizationPrompt part={part} />;
     case "dynamic-tool": {
-      const conversationMessage = conversationMessageFromOutput(
-        part.toolName,
-        part.output
-      );
-      if (part.toolName === SEND_MESSAGE_TOOL_NAME) {
-        return conversationMessage ? (
-          <MessageResponse>{conversationMessage}</MessageResponse>
-        ) : null;
-      }
-
       const inputRequest = part.toolMetadata?.eve?.inputRequest;
       if (inputRequest?.kind === "question") {
         return (
