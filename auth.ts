@@ -5,7 +5,7 @@ import { phoneNumber } from "better-auth/plugins/phone-number";
 import { Pool } from "pg";
 import { z } from "zod";
 import { isE164PhoneNumber } from "@/lib/phone-number";
-import { getEnv } from "@/lib/runtime-env";
+import { getEnv, isLocalPhoneAuthBypassEnabled } from "@/lib/runtime-env";
 import { sendLinqText } from "@/lib/server/linq";
 
 const FALLBACK_DATABASE_URL =
@@ -21,6 +21,7 @@ const AUTH_TABLE_NAMES = [
 const authSchemaReadinessSchema = z.object({ ready: z.boolean() });
 
 const env = getEnv();
+const localPhoneAuthBypass = isLocalPhoneAuthBypassEnabled(env);
 const databaseUrl =
   env.DATABASE_URL?.startsWith("postgres://") ||
   env.DATABASE_URL?.startsWith("postgresql://")
@@ -63,7 +64,9 @@ export const auth = betterAuth({
       expiresIn: 300,
       phoneNumberValidator: isE164PhoneNumber,
       requireVerification: true,
-      sendOTP: ({ code, phoneNumber: to }) => sendPhoneCode({ code, to }),
+      sendOTP: localPhoneAuthBypass
+        ? () => undefined
+        : ({ code, phoneNumber: to }) => sendPhoneCode({ code, to }),
       signUpOnVerification: {
         getTempEmail: (phoneNumberValue) =>
           `phone-${createHash("sha256")
@@ -71,6 +74,9 @@ export const auth = betterAuth({
             .digest("hex")}@local-vault.invalid`,
         getTempName: () => "Phone user",
       },
+      verifyOTP: localPhoneAuthBypass
+        ? ({ phoneNumber: value }) => isE164PhoneNumber(value)
+        : undefined,
     }),
   ],
   secret: env.BETTER_AUTH_SECRET ?? FALLBACK_AUTH_SECRET,

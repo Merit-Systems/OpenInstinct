@@ -35,8 +35,31 @@ export function getEnv() {
       HOSTED_SECRET_ENCRYPTION_KEY: optionalValue,
       SECRET_ENCRYPTION_KEY: optionalValue,
       KERNEL_API_KEY: optionalValue,
+      NODE_ENV: z
+        .enum(["development", "production", "test"])
+        .default("production"),
       VERCEL_ENV: z.enum(["production", "preview", "development"]).optional(),
     },
     experimental__runtimeEnv: {},
   });
+}
+
+export function isLocalPhoneAuthBypassEnabled(
+  env: Pick<
+    ReturnType<typeof getEnv>,
+    "BETTER_AUTH_URL" | "NODE_ENV" | "VERCEL_ENV"
+  > = getEnv()
+) {
+  if (
+    env.NODE_ENV !== "development" ||
+    env.VERCEL_ENV !== undefined ||
+    !env.BETTER_AUTH_URL
+  ) {
+    return false;
+  }
+
+  const hostname = new URL(env.BETTER_AUTH_URL).hostname;
+  return (
+    hostname === "localhost" || hostname === "127.0.0.1" || hostname === "[::1]"
+  );
 }
