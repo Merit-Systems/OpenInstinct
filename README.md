@@ -36,6 +36,22 @@ Kernel and Neon usage are billed to the Vercel account that owns the deployment.
 - OpenAI-compatible inference through Vercel AI Gateway
 - Passwordless SMS sign-in and isolated personal workspaces
 
+## Browser execution contract
+
+Browser work follows Kernel's current documentation for [creating browser
+sessions](https://kernel.sh/docs/introduction/create), [executing Playwright in
+the browser VM](https://kernel.sh/docs/browsers/playwright-execution),
+[computer controls](https://kernel.sh/docs/browsers/computer-controls), and
+[live view](https://kernel.sh/docs/browsers/live-view).
+
+The agent reuses one browser per assignment, gives each Playwright call a
+30-second ceiling, avoids `networkidle` and fixed multi-second sleeps, and tries
+at most two materially different recovery tactics. An uncomplicated browser job
+targets a 90-second end-to-end budget. For purchases, the agent asks once for
+approval of the exact order and price before filling payment secrets, then
+submits without another confirmation unless the price increases or a material
+order term changes.
+
 ## Configure authentication
 
 The self-hosted deployment uses Better Auth, the same Linq line as its iMessage

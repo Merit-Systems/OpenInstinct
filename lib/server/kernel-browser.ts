@@ -117,7 +117,7 @@ export async function executeOwnedKernelPlaywright(
   await requireOwnedBrowserSession(scope, input.session_id);
   return kernelClient().browsers.playwright.execute(
     input.session_id,
-    { code: input.code, timeout_sec: 60 },
+    { code: input.code, timeout_sec: 30 },
     { signal }
   );
 }
