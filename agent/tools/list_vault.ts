@@ -1,7 +1,7 @@
 import { defineTool } from "eve/tools";
 import { z } from "zod";
 import { scopeFromPrincipal } from "@/lib/access-scope";
-import { readManagerSnapshot } from "@/lib/manager/server/store";
+import { readManagerVaultItems } from "@/lib/manager/server/vault";
 
 export default defineTool({
   description:
@@ -10,15 +10,13 @@ export default defineTool({
   async execute(_input, ctx) {
     const caller = ctx.session.auth.current ?? ctx.session.auth.initiator;
     if (!caller) throw new Error("An authenticated user is required.");
-    const snapshot = await readManagerSnapshot(scopeFromPrincipal(caller));
-    return snapshot.vaultItems.map(
-      ({ account, hasSecret, id, kind, label }) => ({
-        account,
-        available: hasSecret,
-        handle: id,
-        kind,
-        label,
-      })
-    );
+    const items = await readManagerVaultItems(scopeFromPrincipal(caller));
+    return items.map(({ account, hasSecret, id, kind, label }) => ({
+      account,
+      available: hasSecret,
+      handle: id,
+      kind,
+      label,
+    }));
   },
 });

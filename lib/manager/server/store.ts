@@ -4,40 +4,27 @@ import { selectGatewayModel } from "@/db/services/settings";
 import {
   createVaultItem as insertVaultItem,
   deleteVaultItem,
-  listVaultItems,
 } from "@/db/services/vault";
 import type { AccessScope } from "../../access-scope";
+import { getGoogleWorkspaceConnection } from "../../google-workspace/server";
 import { getModelSettings } from "../../model-config";
 import type { ManagerMutation } from "..";
-import {
-  deleteSecret,
-  hasSecret,
-  secretStoreStatus,
-  writeSecret,
-} from "./secret-store";
+import { deleteSecret, secretStoreStatus, writeSecret } from "./secret-store";
+import { readManagerVaultItems } from "./vault";
 
 export async function readManagerSnapshot(scope: AccessScope) {
-  await ensureScope(scope);
-  const [vaultRows, modelSettings] = await Promise.all([
-    listVaultItems(scope),
+  const [googleWorkspace, vaultRows, modelSettings] = await Promise.all([
+    getGoogleWorkspaceConnection(scope),
+    readManagerVaultItems(scope),
     getModelSettings(scope),
   ]);
-  const vaultItems = await Promise.all(
-    vaultRows.map(async (row) => ({
-      ...row,
-      hasSecret: await hasSecret({
-        id: row.id,
-        namespace: "vault",
-        scope,
-      }),
-    }))
-  );
 
   return {
     browser: { available: true },
+    googleWorkspace,
     runtime: { inference: modelSettings.modelId },
     secretStore: secretStoreStatus(),
-    vaultItems,
+    vaultItems: vaultRows,
   };
 }
 
