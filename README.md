@@ -14,6 +14,27 @@ Local Vault Assistant keeps that trust boundary on your device:
 
 The result is a personal agent with useful browser capabilities and a much smaller trust surface.
 
+## Choose how to run it
+
+| Path           | Runs where                | Browser                       | Best for                                      |
+| -------------- | ------------------------- | ----------------------------- | --------------------------------------------- |
+| Fully local    | Your Mac                  | Your isolated local browser   | Maximum local control                         |
+| Personal cloud | Your Vercel account       | Your Kernel resource          | An always-on instance you own                 |
+| Merit cloud    | Merit's shared deployment | Merit-managed Kernel browsers | Using the hosted service without operating it |
+
+### Deploy your own personal cloud
+
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2FMerit-Systems%2Fopen-instinct&project-name=open-instinct&repository-name=open-instinct&products=%5B%7B%22type%22%3A%22integration%22%2C%22protocol%22%3A%22other%22%2C%22productSlug%22%3A%22kernel%22%2C%22integrationSlug%22%3A%22kernel%22%7D%2C%7B%22type%22%3A%22integration%22%2C%22protocol%22%3A%22storage%22%2C%22productSlug%22%3A%22neon%22%2C%22integrationSlug%22%3A%22neon%22%7D%5D)
+
+The deploy flow provisions the Eve runtime in your Vercel project, uses Vercel
+AI Gateway for inference through project OIDC, and requires the Kernel and Neon
+Marketplace resources. Kernel creates the browser account and securely injects
+`KERNEL_API_KEY`. Neon creates a Postgres database and injects `DATABASE_URL`.
+You do not need to create either resource or copy its credentials manually.
+
+This is a personally operated cloud deployment, not the shared Merit instance.
+Kernel and Neon usage are billed to the Vercel account that owns the deployment.
+
 ## What you get
 
 - A local manager for models, connections, and auth-vault items at `/`
@@ -41,7 +62,7 @@ For full browser isolation and visual computer use, start Docker Desktop and run
 ~/.local/bin/local-vault-assistant browser install
 ```
 
-The browser then runs headfully inside a hidden container with a persistent profile; it does not open an extra desktop window. Without the image, the launcher falls back to a limited headless browser. Hosted browser execution uses the system `KERNEL_API_KEY` when configured.
+The browser then runs headfully inside a hidden container with a persistent profile; it does not open an extra desktop window. Without the image, the launcher falls back to a limited headless browser. Hosted browser execution uses the system `KERNEL_API_KEY` when configured. The personal-cloud deploy flow provisions it automatically through the Kernel Marketplace resource.
 
 Portless may ask for administrator approval on first launch to trust its local HTTPS certificate and bind the standard HTTPS port. The app and its vault still run only on your machine.
 
@@ -74,6 +95,8 @@ DATABASE_URL=postgresql://user:password@host/database ./bin/local-assistant
 ```
 
 This changes the metadata backend; secret values remain in macOS Keychain.
+Personal-cloud deployments receive `DATABASE_URL` automatically from the Neon
+Marketplace resource.
 
 Local mode remains the default outside Vercel. It requires no account, creates a
 stable local workspace automatically, and continues to use SQLite plus macOS
