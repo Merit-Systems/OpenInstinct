@@ -6,12 +6,6 @@ const localDevelopment =
   process.env.NODE_ENV === "development" &&
   process.env.VERCEL_ENV === undefined;
 
-const localDevelopmentDefaults = {
-  BETTER_AUTH_SECRET: "openinstinct-local-auth-development-secret",
-  BETTER_AUTH_URL: "http://localhost:3000",
-  SECRET_ENCRYPTION_KEY: "b3Blbmluc3RpbmN0LWxvY2FsLWRldmVsb3BtZW50ISE=",
-} as const;
-
 const requiredValue = z
   .string()
   .refine((value) => value.trim().length > 0, "Required");
@@ -28,21 +22,29 @@ const secretEncryptionKeySchema = requiredValue.refine(
 
 const optionalValue = z.string().optional();
 
+function requiredValueWithLocalDefault<T extends z.ZodType<string, string>>(
+  schema: T,
+  localDefault: z.util.NoUndefined<z.output<T>>
+) {
+  return localDevelopment ? schema.default(localDefault) : schema;
+}
+
 export const env = createEnv({
   server: {
-    BETTER_AUTH_SECRET: localDevelopment
-      ? requiredValue.default(localDevelopmentDefaults.BETTER_AUTH_SECRET)
-      : requiredValue,
-    BETTER_AUTH_URL: localDevelopment
-      ? betterAuthUrlSchema.default(localDevelopmentDefaults.BETTER_AUTH_URL)
-      : betterAuthUrlSchema,
+    BETTER_AUTH_SECRET: requiredValueWithLocalDefault(
+      requiredValue,
+      "openinstinct-local-auth-development-secret"
+    ),
+    BETTER_AUTH_URL: requiredValueWithLocalDefault(
+      betterAuthUrlSchema,
+      "http://localhost:3000"
+    ),
     DATABASE_URL: databaseUrlSchema,
     KERNEL_API_KEY: requiredValue,
-    SECRET_ENCRYPTION_KEY: localDevelopment
-      ? secretEncryptionKeySchema.default(
-          localDevelopmentDefaults.SECRET_ENCRYPTION_KEY
-        )
-      : secretEncryptionKeySchema,
+    SECRET_ENCRYPTION_KEY: requiredValueWithLocalDefault(
+      secretEncryptionKeySchema,
+      "b3Blbmluc3RpbmN0LWxvY2FsLWRldmVsb3BtZW50ISE="
+    ),
 
     GOOGLE_CONNECTOR_UID: optionalValue,
     NODE_ENV: z
