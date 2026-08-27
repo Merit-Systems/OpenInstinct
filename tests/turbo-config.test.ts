@@ -5,7 +5,7 @@ import { z } from "zod";
 const applicationEnvironment = [
   "BETTER_AUTH_*",
   "DATABASE_URL",
-  "GOOGLE_CONNECTOR_UID",
+  "*_CONNECTOR_UID",
   "KERNEL_*",
   "NODE_ENV",
   "SECRET_ENCRYPTION_KEY",

@@ -28,6 +28,16 @@ describe("environment", () => {
     expect(env).toMatchObject(requiredEnvironment);
   });
 
+  it("provides connector defaults", async () => {
+    vi.stubEnv("GOOGLE_CONNECTOR_UID", "");
+    vi.stubEnv("LINQ_CONNECTOR_UID", "");
+
+    const { env } = await import("../lib/env");
+
+    expect(env.GOOGLE_CONNECTOR_UID).toBe("google/open-instinct");
+    expect(env.LINQ_CONNECTOR_UID).toBe("linq/eve-kernel");
+  });
+
   it("provides stable auth and encryption defaults in local development", async () => {
     vi.stubEnv("BETTER_AUTH_SECRET", "");
     vi.stubEnv("BETTER_AUTH_URL", "");
@@ -43,6 +53,16 @@ describe("environment", () => {
       SECRET_ENCRYPTION_KEY: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
     });
     expect(localPhoneAuthBypassEnabled).toBe(true);
+  });
+
+  it("accepts connector overrides", async () => {
+    vi.stubEnv("GOOGLE_CONNECTOR_UID", "google/custom");
+    vi.stubEnv("LINQ_CONNECTOR_UID", "linq/custom");
+
+    const { env } = await import("../lib/env");
+
+    expect(env.GOOGLE_CONNECTOR_UID).toBe("google/custom");
+    expect(env.LINQ_CONNECTOR_UID).toBe("linq/custom");
   });
 
   it("does not provide local defaults in a Vercel development environment", async () => {

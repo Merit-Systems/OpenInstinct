@@ -20,8 +20,6 @@ const secretEncryptionKeySchema = requiredValue.refine(
   "SECRET_ENCRYPTION_KEY must be a base64-encoded 32-byte key."
 );
 
-const optionalValue = z.string().optional();
-
 function requiredValueWithLocalDefault<T extends z.ZodType<string, string>>(
   schema: T,
   localDefault: z.util.NoUndefined<z.output<T>>
@@ -46,7 +44,8 @@ export const env = createEnv({
       "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
     ),
 
-    GOOGLE_CONNECTOR_UID: optionalValue,
+    GOOGLE_CONNECTOR_UID: requiredValue.default("google/open-instinct"),
+    LINQ_CONNECTOR_UID: requiredValue.default("linq/eve-kernel"),
     NODE_ENV: z
       .enum(["development", "production", "test"])
       .default("production"),

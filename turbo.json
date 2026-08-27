@@ -7,7 +7,7 @@
         "BETTER_AUTH_*",
         "DATABASE_URL",
         "EVE_NEXT_*",
-        "GOOGLE_CONNECTOR_UID",
+        "*_CONNECTOR_UID",
         "KERNEL_*",
         "NODE_ENV",
         "SECRET_ENCRYPTION_KEY",
@@ -20,7 +20,7 @@
       "env": [
         "BETTER_AUTH_*",
         "DATABASE_URL",
-        "GOOGLE_CONNECTOR_UID",
+        "*_CONNECTOR_UID",
         "KERNEL_*",
         "NODE_ENV",
         "SECRET_ENCRYPTION_KEY",
@@ -39,7 +39,7 @@
       "passThroughEnv": [
         "BETTER_AUTH_*",
         "DATABASE_URL",
-        "GOOGLE_CONNECTOR_UID",
+        "*_CONNECTOR_UID",
         "KERNEL_*",
         "NODE_ENV",
         "SECRET_ENCRYPTION_KEY",
@@ -64,7 +64,7 @@
       "passThroughEnv": [
         "BETTER_AUTH_*",
         "DATABASE_URL",
-        "GOOGLE_CONNECTOR_UID",
+        "*_CONNECTOR_UID",
         "KERNEL_*",
         "NODE_ENV",
         "SECRET_ENCRYPTION_KEY",

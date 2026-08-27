@@ -12,11 +12,8 @@ import {
   UserAuthorizationRequiredError,
 } from "@vercel/connect";
 import type { AccessScope } from "@/lib/access-scope";
-import {
-  GOOGLE_WORKSPACE_CONNECTOR,
-  googleWorkspaceSubject,
-  googleWorkspaceTokenParams,
-} from "./config";
+import { env } from "@/lib/env";
+import { googleWorkspaceSubject, googleWorkspaceTokenParams } from "./config";
 
 export interface GoogleWorkspaceClient {
   getTokenResponse(
@@ -48,7 +45,7 @@ export async function getGoogleWorkspaceConnection(
 ) {
   try {
     const response = await client.getTokenResponse(
-      GOOGLE_WORKSPACE_CONNECTOR,
+      env.GOOGLE_CONNECTOR_UID,
       googleWorkspaceTokenParams(scope.userId),
       { forceRefresh: true }
     );
@@ -80,7 +77,7 @@ export async function startGoogleWorkspaceAuthorization(
   client: GoogleWorkspaceClient = googleWorkspaceClient
 ) {
   const authorization = await client.startAuthorization(
-    GOOGLE_WORKSPACE_CONNECTOR,
+    env.GOOGLE_CONNECTOR_UID,
     googleWorkspaceTokenParams(scope.userId),
     { callbackUrl, expiresInMs: 10 * 60_000 }
   );
@@ -91,7 +88,7 @@ export async function disconnectGoogleWorkspace(
   scope: AccessScope,
   client: GoogleWorkspaceClient = googleWorkspaceClient
 ) {
-  await client.revokeToken(GOOGLE_WORKSPACE_CONNECTOR, {
+  await client.revokeToken(env.GOOGLE_CONNECTOR_UID, {
     subject: googleWorkspaceSubject(scope.userId),
   });
 }
