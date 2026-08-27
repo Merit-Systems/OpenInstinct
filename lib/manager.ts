@@ -3,6 +3,7 @@ import { paymentCardSecretStringSchema } from "./payment-card";
 import {
   addressVaultPayloadStringSchema,
   contactVaultPayloadStringSchema,
+  loginIdentifierTypeSchema,
   loginVaultPayloadStringSchema,
 } from "./vault-payload";
 
@@ -67,14 +68,27 @@ const vaultItemInputSchema = z
     }
   });
 
-export const managerSetupRequestSchema = z
+const loginManagerSetupRequestSchema = z
   .object({
-    account: z.string().trim().max(200).optional(),
-    kind: vaultCreateItemKindSchema,
-    label: z.string().trim().max(120).optional(),
+    identifierType: loginIdentifierTypeSchema,
+    kind: z.literal("login"),
+    label: z.string().trim().min(1).max(120),
     target: z.literal("vault"),
   })
   .strict();
+
+const nonLoginManagerSetupRequestSchema = z
+  .object({
+    kind: vaultCreateItemKindSchema.exclude(["login"]),
+    label: z.string().trim().min(1).max(120).optional(),
+    target: z.literal("vault"),
+  })
+  .strict();
+
+export const managerSetupRequestSchema = z.union([
+  loginManagerSetupRequestSchema,
+  nonLoginManagerSetupRequestSchema,
+]);
 
 export const managerMutationSchema = z.discriminatedUnion("action", [
   z.object({
@@ -97,9 +111,11 @@ export function createManagerSetupUrl(
 ) {
   const url = new URL("/vault", baseUrl);
   url.searchParams.set("setup", request.target);
-  if (request.account) url.searchParams.set("account", request.account);
   if (request.label) url.searchParams.set("label", request.label);
   url.searchParams.set("kind", request.kind);
+  if (request.kind === "login") {
+    url.searchParams.set("identifier_type", request.identifierType);
+  }
   return url.toString();
 }
 

@@ -11,7 +11,7 @@ export default async function Page({
 }) {
   const query = await searchParams;
   const requestedSetup = managerSetupRequestSchema.safeParse({
-    account: firstQueryValue(query.account),
+    identifierType: firstQueryValue(query.identifier_type),
     kind: firstQueryValue(query.kind),
     label: firstQueryValue(query.label),
     target: firstQueryValue(query.setup),

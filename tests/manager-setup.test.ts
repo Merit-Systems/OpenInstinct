@@ -28,15 +28,24 @@ describe("self-hosted manager", () => {
     ).toBe(false);
     expect(
       managerSetupRequestSchema.safeParse({
-        email: "person@example.com",
+        account: "person@example.com",
+        identifierType: "email",
         kind: "login",
+        label: "Personal login",
+        target: "vault",
+      }).success
+    ).toBe(false);
+    expect(
+      managerSetupRequestSchema.safeParse({
+        kind: "login",
+        label: "Personal login",
         target: "vault",
       }).success
     ).toBe(false);
 
     const url = new URL(
       createManagerSetupUrl("https://assistant.example.com", {
-        account: "person@example.com",
+        identifierType: "email",
         kind: "login",
         label: "Personal login",
         target: "vault",
@@ -45,7 +54,7 @@ describe("self-hosted manager", () => {
 
     expect(url.pathname).toBe("/vault");
     expect(Object.fromEntries(url.searchParams)).toEqual({
-      account: "person@example.com",
+      identifier_type: "email",
       kind: "login",
       label: "Personal login",
       setup: "vault",

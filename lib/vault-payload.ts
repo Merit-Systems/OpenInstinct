@@ -15,12 +15,6 @@ const loginIdentifierSchema = z.object({
   value: z.string().trim().min(1).max(300),
 });
 
-export const loginAuthenticationTypeSchema = z.enum([
-  "password",
-  "email_otp",
-  "sms_otp",
-]);
-
 const loginAuthenticationSchema = z.discriminatedUnion("type", [
   z.object({
     password: z.string().min(1).max(20_000),

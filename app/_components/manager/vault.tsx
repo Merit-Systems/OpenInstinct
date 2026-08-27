@@ -232,15 +232,23 @@ function VaultDialog({
       </DialogTrigger>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle>{addLabel}</DialogTitle>
+          <DialogTitle>
+            {initialSetup?.kind === "login"
+              ? `Add ${initialSetup.label}`
+              : addLabel}
+          </DialogTitle>
           <DialogDescription>
-            Sensitive values are encrypted before database storage and are never
-            returned after saving.
+            {kind === "login"
+              ? "Enter the credentials you use to sign in."
+              : "Sensitive values are encrypted before database storage and are never returned after saving."}
           </DialogDescription>
         </DialogHeader>
         {renderVaultForm({
           busy,
-          initialAccount: initialSetup?.account,
+          initialIdentifierType:
+            initialSetup?.kind === "login"
+              ? initialSetup.identifierType
+              : undefined,
           initialLabel: initialSetup?.label,
           kind,
           onSaved,
@@ -253,14 +261,14 @@ function VaultDialog({
 
 function renderVaultForm({
   busy,
-  initialAccount,
+  initialIdentifierType,
   initialLabel,
   kind,
   onSaved,
   onSubmit,
 }: {
   readonly busy: boolean;
-  readonly initialAccount?: string;
+  readonly initialIdentifierType?: "email" | "phone" | "username";
   readonly initialLabel?: string;
   readonly kind: VaultCreateItemKind;
   readonly onSaved: () => void;
@@ -269,7 +277,12 @@ function renderVaultForm({
   const common = { busy, initialLabel, onSaved, onSubmit };
   switch (kind) {
     case "login":
-      return <LoginVaultForm {...common} initialIdentifier={initialAccount} />;
+      return (
+        <LoginVaultForm
+          {...common}
+          initialIdentifierType={initialIdentifierType}
+        />
+      );
     case "payment":
       return <PaymentCardForm {...common} />;
     case "address":
