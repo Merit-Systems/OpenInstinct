@@ -47,8 +47,12 @@
     "test:app": {
       "outputs": []
     },
+    "types:generate": {
+      "outputs": [".next/types/**", "next-env.d.ts"]
+    },
     "types:check:app": {
-      "outputs": [".next/types/**", "next-env.d.ts", "*.tsbuildinfo"]
+      "dependsOn": ["types:generate"],
+      "outputs": ["*.tsbuildinfo"]
     }
   }
 }
