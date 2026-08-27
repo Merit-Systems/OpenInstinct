@@ -13,6 +13,18 @@ const applicationEnvironment = [
 ];
 
 describe("Turbo configuration", () => {
+  it("includes the Eve service in the local production build", async () => {
+    const packageManifest = z
+      .object({ scripts: z.object({ build: z.string() }) })
+      .parse(
+        JSON.parse(
+          await readFile(new URL("../package.json", import.meta.url), "utf8")
+        )
+      );
+
+    expect(packageManifest.scripts.build).toContain("pnpm build:eve");
+  });
+
   it("scopes application environment variables to their owning tasks", async () => {
     const turbo = z
       .object({

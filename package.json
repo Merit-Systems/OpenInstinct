@@ -68,7 +68,7 @@
     "bench:browser": "eve eval browser",
     "bench:compare": "node --experimental-strip-types scripts/compare-browser-benchmarks.ts",
     "boundaries": "turbo boundaries",
-    "build": "pnpm build:extension && turbo run build:app",
+    "build": "pnpm build:extension && turbo run build:app && pnpm build:eve",
     "build:app": "next build",
     "build:extension": "wxt build .",
     "build:vercel": "next build",

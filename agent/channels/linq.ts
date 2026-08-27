@@ -4,9 +4,9 @@ import { defaultLinqAuth, linqChannel } from "eve/channels/linq";
 import { z } from "zod";
 import { auth } from "@/auth";
 import { normalizeAuthPhoneNumber } from "@/auth/phone-number";
+import { deliverCompletedLinqMessage } from "@/agent/lib/linq-message-delivery";
 import { accessScopeForUser } from "@/lib/access-scope";
 import { env } from "@/lib/env";
-import { deliverCompletedLinqMessage } from "./linq-message-delivery";
 
 const verifiedPhoneUserSchema = z.object({
   id: z.string().min(1),
