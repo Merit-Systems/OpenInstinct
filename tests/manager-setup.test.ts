@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
   createManagerSetupUrl,
-  isAllowedMutationOrigin,
   managerMutationSchema,
   managerSetupRequestSchema,
   parseManagerSetupSearchParams,
 } from "../lib/manager";
+import { isSameOrigin } from "../app/_lib/server/same-origin";
 import { serializePaymentCard } from "../lib/manager/payment-card";
 import {
   serializeContactVaultPayload,
@@ -201,20 +201,24 @@ describe("self-hosted manager", () => {
   });
 
   it("allows only same-origin writes", () => {
-    const request = {
-      forwardedHost: "assistant.example.com",
-      forwardedProto: "https",
+    const headers = {
       host: "internal.example:3000",
       origin: "https://assistant.example.com",
-      requestUrl: "http://internal.example:3000/api/manager",
+      "x-forwarded-host": "assistant.example.com",
+      "x-forwarded-proto": "https",
     };
 
-    expect(isAllowedMutationOrigin(request)).toBe(true);
     expect(
-      isAllowedMutationOrigin({
-        ...request,
-        origin: "https://attacker.example.com",
-      })
+      isSameOrigin(
+        new Request("http://internal.example:3000/api/manager", { headers })
+      )
+    ).toBe(true);
+    expect(
+      isSameOrigin(
+        new Request("http://internal.example:3000/api/manager", {
+          headers: { ...headers, origin: "https://attacker.example.com" },
+        })
+      )
     ).toBe(false);
   });
 });

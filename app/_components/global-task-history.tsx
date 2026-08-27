@@ -141,7 +141,7 @@ export function GlobalTaskHistory({
     () => historyTableGroups(runs, tasks, localGroups),
     [localGroups, runs, tasks]
   );
-  const visibleTasks = tableGroups.flatMap((group) => group.tasks);
+  const visibleTasks = tableGroups.map(({ task }) => task);
   const summary = summarizeBrowserRunTasks(visibleTasks);
 
   return (
@@ -194,7 +194,7 @@ export function GlobalTaskHistory({
             : "Create a group above to start the first task."
         }
         emptyTitle={loading ? "Loading task history" : "No tasks yet"}
-        groups={tableGroups}
+        rows={tableGroups}
         showGroup
       />
 
@@ -247,13 +247,11 @@ function historyTableGroups(
         taskSortTime(left.task, left.group)
     )
     .map(({ group, task }) => ({
-      concurrency: group?.concurrency ?? 1,
-      createdAt:
-        group?.createdAt ?? new Date(task.startedAt ?? 0).toISOString(),
-      id: group?.id ?? "",
-      name: group?.name ?? "Single task",
-      tasks: [task],
-      updatedAt: group?.updatedAt ?? new Date().toISOString(),
+      group: {
+        id: group?.id ?? "",
+        name: group?.name ?? "Single task",
+      },
+      task,
     }));
 }
 

@@ -401,6 +401,7 @@ function browserDescriptor(browser: KernelBrowser) {
   return {
     session_id: browser.session_id,
     status: browser.deleted_at ? "deleted" : "active",
+    stealth: browser.stealth,
     viewport: browser.viewport ?? undefined,
   };
 }
@@ -413,6 +414,9 @@ function lifecycleResult(browser: KernelBrowser) {
       `Use execute_playwright_code with session_id "${value.session_id}" for deterministic browser automation.`,
       `Use computer_action with session_id "${value.session_id}" for visual browser control.`,
       `If the user explicitly asks for browser access, use get_browser_live_view with session_id "${value.session_id}".`,
+      value.stealth
+        ? "Kernel's managed CAPTCHA solver is active. Leave challenges untouched and wait for them to clear."
+        : "This browser does not have Kernel's managed CAPTCHA solver active.",
       `Use manage_browsers with action "delete" and session_id "${value.session_id}" when finished.`,
     ],
   };

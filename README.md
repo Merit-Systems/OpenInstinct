@@ -26,9 +26,10 @@ reading the code!
 
 ## Deployment
 
-The deploy flow provisions everything: [Kernel](https://kernel.sh) for cloud
-browsers, [Neon](https://neon.tech) for Postgres, [Linq](https://linq.app) for
-the iMessage line, and Vercel AI Gateway for inference. Usage is billed to your
+The deploy button provisions [Kernel](https://kernel.sh) for cloud browsers and
+[Neon](https://neon.tech) for Postgres. Vercel AI Gateway handles inference.
+[Linq](https://linq.app) is optional and requires the setup below before
+iMessage or production phone sign-in is available. Usage is billed to your
 Vercel account. Set the remaining auth variables on the deployment:
 
 ```bash
@@ -50,6 +51,34 @@ its separate migration path.
 
 Treat `SECRET_ENCRYPTION_KEY` as production key material — back it up
 separately; rotating it requires re-encrypting existing values.
+
+### Linq iMessage setup
+
+Link the checkout to your Vercel project, create a Linq line, and attach its
+connector for both app tokens and inbound webhook triggers:
+
+```bash
+vercel link
+vercel connect create linq --connection-method line --name open-instinct --json
+vercel connect attach <returned-connector-uid> --project <your-vercel-project> --environment production --triggers --trigger-path /eve/v1/linq --yes
+vercel env add LINQ_CONNECTOR production --value <returned-connector-uid> --yes
+vercel env add LINQ_PHONE_NUMBER production --value <assigned-e164-number> --yes
+vercel deploy --prod
+```
+
+The create command returns the connector UID. Run
+`vercel connect open <returned-connector-uid>`, copy the assigned line from the
+connector dashboard in E.164 format, and use it for `LINQ_PHONE_NUMBER`. Both
+`LINQ_CONNECTOR` and `LINQ_PHONE_NUMBER` must be configured together. Repeat the
+attachment and environment-variable steps for preview or development if those
+environments should use Linq too.
+
+Before signing in, use that connector dashboard to add each user's phone number
+under **Messaging Contacts**. Linq rejects OTP delivery and drops inbound texts
+from contacts that are not on this allowlist. The
+`--triggers --trigger-path /eve/v1/linq` options are also required: attaching a
+connector without them permits outbound token access but does not forward
+incoming messages to OpenInstinct.
 
 ## Google Workspace connection
 

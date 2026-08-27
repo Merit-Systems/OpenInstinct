@@ -1,50 +1,17 @@
 import {
-  ConnectorInstallationRequiredError,
   getTokenResponse,
   NoValidTokenError,
   revokeToken,
   startAuthorization,
-  type ConnectAuthorizationOptions,
-  type ConnectAuthorizationResponse,
-  type ConnectOptions,
-  type ConnectTokenParams,
-  type ConnectTokenResponse,
   UserAuthorizationRequiredError,
 } from "@vercel/connect";
 import type { AccessScope } from "@/lib/access-scope";
 import { env } from "@/lib/env";
 import { googleWorkspaceSubject, googleWorkspaceTokenParams } from "./config";
 
-export interface GoogleWorkspaceClient {
-  getTokenResponse(
-    connector: string,
-    params: ConnectTokenParams,
-    options?: ConnectOptions
-  ): Promise<ConnectTokenResponse>;
-  revokeToken(
-    connector: string,
-    params: { subject: ReturnType<typeof googleWorkspaceSubject> },
-    options?: ConnectOptions
-  ): Promise<void>;
-  startAuthorization(
-    connector: string,
-    params: ConnectTokenParams,
-    options?: ConnectAuthorizationOptions
-  ): Promise<ConnectAuthorizationResponse>;
-}
-
-const googleWorkspaceClient: GoogleWorkspaceClient = {
-  getTokenResponse,
-  revokeToken,
-  startAuthorization,
-};
-
-export async function getGoogleWorkspaceConnection(
-  scope: AccessScope,
-  client: GoogleWorkspaceClient = googleWorkspaceClient
-) {
+export async function getGoogleWorkspaceConnection(scope: AccessScope) {
   try {
-    const response = await client.getTokenResponse(
+    const response = await getTokenResponse(
       env.GOOGLE_CONNECTOR_UID,
       googleWorkspaceTokenParams(scope.userId),
       { forceRefresh: true }
@@ -64,19 +31,15 @@ export async function getGoogleWorkspaceConnection(
     ) {
       return { accountLabel: null, state: "disconnected" as const };
     }
-    if (error instanceof ConnectorInstallationRequiredError) {
-      return { accountLabel: null, state: "unavailable" as const };
-    }
     return { accountLabel: null, state: "unavailable" as const };
   }
 }
 
 export async function startGoogleWorkspaceAuthorization(
   scope: AccessScope,
-  callbackUrl: string,
-  client: GoogleWorkspaceClient = googleWorkspaceClient
+  callbackUrl: string
 ) {
-  const authorization = await client.startAuthorization(
+  const authorization = await startAuthorization(
     env.GOOGLE_CONNECTOR_UID,
     googleWorkspaceTokenParams(scope.userId),
     { callbackUrl, expiresInMs: 10 * 60_000 }
@@ -84,11 +47,8 @@ export async function startGoogleWorkspaceAuthorization(
   return authorization.url;
 }
 
-export async function disconnectGoogleWorkspace(
-  scope: AccessScope,
-  client: GoogleWorkspaceClient = googleWorkspaceClient
-) {
-  await client.revokeToken(env.GOOGLE_CONNECTOR_UID, {
+export async function disconnectGoogleWorkspace(scope: AccessScope) {
+  await revokeToken(env.GOOGLE_CONNECTOR_UID, {
     subject: googleWorkspaceSubject(scope.userId),
   });
 }

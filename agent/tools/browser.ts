@@ -36,7 +36,7 @@ export default defineDynamic({
       return {
         manage_browsers: defineTool({
           description:
-            'Manage browser sessions. Create one browser with at least a 15-minute timeout and reuse it for the assignment; use "list" or "get" to inspect sessions and "delete" when finished. Keep a browser open only for a pending human action or transaction approval.',
+            'Manage browser sessions. New sessions use Kernel stealth mode with its managed CAPTCHA solver. Create one browser with at least a 15-minute timeout and reuse it for the assignment; use "list" or "get" to inspect sessions and "delete" when finished. Keep a browser open only for a pending human action or transaction approval.',
           inputSchema: manageBrowsersInputSchema,
           execute: (input, context) =>
             manageOwnedKernelBrowsers(scope, input, context.abortSignal),
@@ -54,7 +54,7 @@ export default defineDynamic({
         }),
         execute_playwright_code: defineTool({
           description:
-            'Execute Playwright/TypeScript automation code against an existing browser session with a 30-second ceiling. Batch related operations, use "domcontentloaded" or a precise locator with waits of at most five seconds, and never wait for "networkidle" or use fixed multi-second sleeps. Does not create or delete browsers.',
+            'Execute Playwright/TypeScript automation code against an existing browser session with a 30-second ceiling. Batch related operations, use "domcontentloaded" or a precise locator with waits of at most five seconds, except for one managed CAPTCHA state wait of at most 20 seconds, and never wait for "networkidle" or use fixed multi-second sleeps. Does not create or delete browsers.',
           inputSchema: executePlaywrightInputSchema,
           execute: (input, context) =>
             executeOwnedKernelPlaywright(scope, input, context.abortSignal),

@@ -7,6 +7,7 @@ const applicationEnvironment = [
   "DATABASE_URL",
   "*_CONNECTOR_UID",
   "KERNEL_*",
+  "LINQ_*",
   "NODE_ENV",
   "SECRET_ENCRYPTION_KEY",
   "VERCEL_ENV",
