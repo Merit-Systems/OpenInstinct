@@ -35,6 +35,7 @@ export function getEnv() {
       HOSTED_SECRET_ENCRYPTION_KEY: optionalValue,
       SECRET_ENCRYPTION_KEY: optionalValue,
       KERNEL_API_KEY: optionalValue,
+      KERNEL_VAULT_AUTOFILL_EXTENSION: optionalValue,
       VERCEL_ENV: z.enum(["production", "preview", "development"]).optional(),
     },
     experimental__runtimeEnv: {},

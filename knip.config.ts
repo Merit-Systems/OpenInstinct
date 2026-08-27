@@ -6,6 +6,7 @@ export default {
     "agent/extensions/**/*.ts",
     "agent/hooks/**/*.ts",
     "agent/tools/**/*.ts",
+    "browser-extension/entrypoints/**/*.ts",
     "evals/**/*.eval.ts",
     "evals/evals.config.ts",
     "taze.config.ts",
