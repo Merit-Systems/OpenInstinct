@@ -1,12 +1,14 @@
 # Application database
 
-This directory owns the eight application tables used by `getAppStore`.
+This directory owns the eight application tables and their domain query
+services.
 Better Auth continues to own and migrate its tables independently in
 `auth.ts`.
 
 - `schema/` is the Drizzle source of truth.
 - `index.ts` exports the Drizzle client and schema using pooled `DATABASE_URL`
   for request-time access.
+- `services/` owns workspace-scoped application queries by domain.
 - `drizzle.config.ts` uses `DATABASE_URL_UNPOOLED` for migration commands.
 - `migrations/` is generated history. Run `pnpm db:generate` after changing the
   schema and commit the SQL, snapshot, and journal together.

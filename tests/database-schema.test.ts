@@ -139,9 +139,22 @@ describe("migration deployment policy", () => {
       new URL("../db/migrations/0000_fluffy_the_spike.sql", import.meta.url),
       "utf8"
     );
-    const appStore = await readFile(
-      new URL("../lib/server/app-store.ts", import.meta.url),
-      "utf8"
+    const services = await Promise.all(
+      [
+        "browsers",
+        "chats",
+        "scope",
+        "secrets",
+        "sessions",
+        "settings",
+        "vault",
+      ].map(
+        async (name) =>
+          await readFile(
+            new URL(`../db/services/${name}.ts`, import.meta.url),
+            "utf8"
+          )
+      )
     );
 
     expect(migration).toContain('CREATE TABLE IF NOT EXISTS "workspaces"');
@@ -151,7 +164,7 @@ describe("migration deployment policy", () => {
     expect(migration).toContain(
       "ON DELETE cascade ON UPDATE no action NOT VALID"
     );
-    expect(appStore).not.toContain("CREATE TABLE");
-    expect(appStore).not.toContain("initializePostgres");
+    expect(services.join("\n")).not.toContain("CREATE TABLE");
+    expect(services.join("\n")).not.toContain("initializePostgres");
   });
 });
