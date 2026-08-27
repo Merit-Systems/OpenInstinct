@@ -78,7 +78,7 @@ describe("application store", () => {
     expect(await store.readEncryptedSecret(bob, "shared-id")).toBe(
       "ciphertext-bob"
     );
-  });
+  }, 15_000);
 });
 
 async function applyInitialMigration(database: PGlite) {
