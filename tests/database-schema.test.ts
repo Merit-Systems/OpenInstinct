@@ -7,6 +7,7 @@ import {
   browserSessions,
   chats,
   encryptedSecrets,
+  feedbackEntries,
   settings,
   vaultItems,
   workspaceMemberships,
@@ -25,6 +26,7 @@ describe("application database schema", () => {
         browserSessions,
         chats,
         encryptedSecrets,
+        feedbackEntries,
       ].map((table) => getTableConfig(table).name)
     ).toEqual([
       "workspaces",
@@ -35,6 +37,7 @@ describe("application database schema", () => {
       "browser_sessions",
       "chats",
       "encrypted_secrets",
+      "feedback",
     ]);
   });
 
@@ -66,6 +69,7 @@ describe("application database schema", () => {
       settings,
       chats,
       encryptedSecrets,
+      feedbackEntries,
     ]) {
       expect(
         getTableConfig(table).foreignKeys.some((foreignKey) =>
@@ -73,6 +77,20 @@ describe("application database schema", () => {
         )
       ).toBe(true);
     }
+  });
+
+  it("anchors feedback to an owned workspace and claimed session", () => {
+    const foreignKey = getTableConfig(feedbackEntries).foreignKeys.find(
+      (candidate) => candidate.getName() === "feedback_session_id_fkey"
+    );
+    const reference = foreignKey?.reference();
+
+    expect(reference?.columns.map((column) => column.name)).toEqual([
+      "eve_session_id",
+    ]);
+    expect(reference?.foreignColumns.map((column) => column.name)).toEqual([
+      "session_id",
+    ]);
   });
 });
 
@@ -143,6 +161,7 @@ describe("migration deployment policy", () => {
       [
         "browsers",
         "chats",
+        "feedback",
         "scope",
         "secrets",
         "sessions",

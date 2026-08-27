@@ -8,6 +8,7 @@ import {
   pgTable,
   primaryKey,
   text,
+  uniqueIndex,
 } from "drizzle-orm/pg-core";
 
 export const workspaces = pgTable("workspaces", {
@@ -104,6 +105,60 @@ export const agentSessions = pgTable(
       ],
     }).onDelete("cascade"),
     index("agent_sessions_workspace_idx").on(
+      table.workspaceId,
+      table.createdAt.desc().nullsFirst()
+    ),
+  ]
+);
+
+export const feedbackEntries = pgTable(
+  "feedback",
+  {
+    id: text("id").primaryKey(),
+    workspaceId: text("workspace_id").notNull(),
+    createdByUserId: text("created_by_user_id").notNull(),
+    eveSessionId: text("eve_session_id").notNull(),
+    eveTurnId: text("eve_turn_id").notNull(),
+    toolCallId: text("tool_call_id").notNull(),
+    category: text("category").notNull().default("general"),
+    feedback: text("feedback").notNull(),
+    status: text("status").notNull().default("new"),
+    idempotencyKey: text("idempotency_key").notNull(),
+    createdAt: text("created_at").notNull(),
+    updatedAt: text("updated_at").notNull(),
+  },
+  (table) => [
+    foreignKey({
+      name: "feedback_workspace_id_fkey",
+      columns: [table.workspaceId],
+      foreignColumns: [workspaces.id],
+    }).onDelete("cascade"),
+    foreignKey({
+      name: "feedback_session_id_fkey",
+      columns: [table.eveSessionId],
+      foreignColumns: [agentSessions.sessionId],
+    }).onDelete("cascade"),
+    check(
+      "feedback_category_check",
+      sql`${table.category} IN ('general', 'bug', 'idea', 'compliment')`
+    ),
+    check(
+      "feedback_content_check",
+      sql`length(btrim(${table.feedback})) BETWEEN 1 AND 4000`
+    ),
+    check(
+      "feedback_status_check",
+      sql`${table.status} IN ('new', 'reviewed', 'archived')`
+    ),
+    uniqueIndex("feedback_workspace_idempotency_idx").on(
+      table.workspaceId,
+      table.idempotencyKey
+    ),
+    index("feedback_review_queue_idx").on(
+      table.status,
+      table.createdAt.desc().nullsFirst()
+    ),
+    index("feedback_workspace_created_idx").on(
       table.workspaceId,
       table.createdAt.desc().nullsFirst()
     ),

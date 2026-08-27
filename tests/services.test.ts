@@ -1,4 +1,4 @@
-import { readFile } from "node:fs/promises";
+import { readdir, readFile } from "node:fs/promises";
 import { PGlite } from "@electric-sql/pglite";
 import { drizzle } from "drizzle-orm/pglite";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -17,7 +17,7 @@ describe("database services", () => {
   it("preserves workspace ownership across application domains", async () => {
     const client = new PGlite();
     databases.push(client);
-    await applyInitialMigration(client);
+    await applyMigrations(client);
 
     const pgliteDatabase = drizzle(client, { schema });
     Object.assign(pgliteDatabase, {
@@ -30,16 +30,25 @@ describe("database services", () => {
     const database = pgliteDatabase as unknown as Database;
     vi.doMock("@/db", () => ({ ...schema, db: database }));
 
-    const [browsers, chats, secrets, sessions, settings, scope, vault] =
-      await Promise.all([
-        import("@/db/services/browsers"),
-        import("@/db/services/chats"),
-        import("@/db/services/secrets"),
-        import("@/db/services/sessions"),
-        import("@/db/services/settings"),
-        import("@/db/services/scope"),
-        import("@/db/services/vault"),
-      ]);
+    const [
+      browsers,
+      chats,
+      feedback,
+      secrets,
+      sessions,
+      settings,
+      scope,
+      vault,
+    ] = await Promise.all([
+      import("@/db/services/browsers"),
+      import("@/db/services/chats"),
+      import("@/db/services/feedback"),
+      import("@/db/services/secrets"),
+      import("@/db/services/sessions"),
+      import("@/db/services/settings"),
+      import("@/db/services/scope"),
+      import("@/db/services/vault"),
+    ]);
     const alice = { userId: "alice", workspaceId: "workspace:alice" };
     const bob = { userId: "bob", workspaceId: "workspace:bob" };
 
@@ -57,6 +66,37 @@ describe("database services", () => {
     await sessions.claimSession(bob, "session-alice");
     expect(await sessions.isSessionOwned(alice, "session-alice")).toBe(true);
     expect(await sessions.isSessionOwned(bob, "session-alice")).toBe(false);
+
+    const feedbackSubmission = {
+      category: "bug" as const,
+      feedback: "the browser timed out",
+      idempotencyKey: "give-feedback:session-alice:turn-1:digest",
+      sessionId: "session-alice",
+      toolCallId: "call-1",
+      turnId: "turn-1",
+    };
+    const firstFeedback = await feedback.saveFeedback(
+      alice,
+      feedbackSubmission
+    );
+    const replayedFeedback = await feedback.saveFeedback(
+      alice,
+      feedbackSubmission
+    );
+
+    expect(replayedFeedback.id).toBe(firstFeedback.id);
+    expect(firstFeedback).toMatchObject({
+      category: "bug",
+      feedback: "the browser timed out",
+      status: "new",
+    });
+    await expect(
+      feedback.saveFeedback(bob, feedbackSubmission)
+    ).rejects.toThrow(/scope does not match/iu);
+    const persistedFeedback = await client.query<{ count: number }>(
+      "SELECT count(*)::int AS count FROM feedback"
+    );
+    expect(persistedFeedback.rows[0]?.count).toBe(1);
 
     await chats.saveChat(alice, {
       sessionId: "session-alice",
@@ -141,12 +181,15 @@ describe("database services", () => {
   });
 });
 
-async function applyInitialMigration(database: PGlite) {
-  const migration = await readFile(
-    new URL("../db/migrations/0000_fluffy_the_spike.sql", import.meta.url),
-    "utf8"
-  );
-  for (const statement of migration.split("--> statement-breakpoint")) {
-    if (statement.trim()) await database.exec(statement);
+async function applyMigrations(database: PGlite) {
+  const directory = new URL("../db/migrations/", import.meta.url);
+  const migrations = (await readdir(directory))
+    .filter((name) => name.endsWith(".sql"))
+    .sort();
+  for (const migration of migrations) {
+    const sql = await readFile(new URL(migration, directory), "utf8");
+    for (const statement of sql.split("--> statement-breakpoint")) {
+      if (statement.trim()) await database.exec(statement);
+    }
   }
 }
