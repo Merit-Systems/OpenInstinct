@@ -1,5 +1,6 @@
 import { ManagerShell } from "@/app/_components/manager-shell";
 import { WorkspaceManager } from "@/app/_components/manager/workspace";
+import { env } from "@/lib/env";
 
 export default async function Page({
   searchParams,
@@ -11,7 +12,10 @@ export default async function Page({
 
   return (
     <ManagerShell active="workspace">
-      <WorkspaceManager googleNotice={googleNotice} />
+      <WorkspaceManager
+        googleNotice={googleNotice}
+        linqPhoneNumber={env.LINQ_PHONE_NUMBER}
+      />
     </ManagerShell>
   );
 }

@@ -9,6 +9,7 @@
         "EVE_NEXT_*",
         "*_CONNECTOR_UID",
         "KERNEL_*",
+        "LINQ_*",
         "NODE_ENV",
         "SECRET_ENCRYPTION_KEY",
         "VERCEL_ENV"
@@ -22,6 +23,7 @@
         "DATABASE_URL",
         "*_CONNECTOR_UID",
         "KERNEL_*",
+        "LINQ_*",
         "NODE_ENV",
         "SECRET_ENCRYPTION_KEY",
         "VERCEL",
@@ -41,6 +43,7 @@
         "DATABASE_URL",
         "*_CONNECTOR_UID",
         "KERNEL_*",
+        "LINQ_*",
         "NODE_ENV",
         "SECRET_ENCRYPTION_KEY",
         "VERCEL_ENV"
@@ -66,6 +69,7 @@
         "DATABASE_URL",
         "*_CONNECTOR_UID",
         "KERNEL_*",
+        "LINQ_*",
         "NODE_ENV",
         "SECRET_ENCRYPTION_KEY",
         "VERCEL_ENV"

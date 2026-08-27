@@ -1,20 +1,57 @@
 /* oxlint-disable typescript/no-unsafe-call, typescript/no-unsafe-member-access -- Eve's Linq adapter exposes the thread through a transitive Chat SDK type; TypeScript still checks this contextual handler. */
 import { connectLinqCredentials } from "@vercel/connect/eve";
-import { defaultLinqAuth, linqChannel } from "eve/channels/linq";
+import {
+  defaultLinqAuth,
+  linqChannel,
+  type LinqChannelCredentials,
+  type LinqChannelConfig,
+} from "eve/channels/linq";
 import { z } from "zod";
 import { auth } from "@/auth";
 import { normalizeAuthPhoneNumber } from "@/auth/phone-number";
 import { accessScopeForUser } from "@/lib/access-scope";
 import { env } from "@/lib/env";
-import { deliverCompletedLinqMessage } from "./linq-message-delivery";
 
 const verifiedPhoneUserSchema = z.object({
   id: z.string().min(1),
   phoneNumberVerified: z.literal(true),
 });
 
+const credentials: LinqChannelCredentials = env.LINQ_CONNECTOR
+  ? connectLinqCredentials(env.LINQ_CONNECTOR)
+  : {
+      apiKey() {
+        throw new Error(
+          "LINQ_CONNECTOR is not configured for this deployment."
+        );
+      },
+    };
+
+type LinqMessageCompletedHandler = NonNullable<
+  NonNullable<LinqChannelConfig["events"]>["message.completed"]
+>;
+
+export const deliverCompletedLinqMessage: LinqMessageCompletedHandler = async (
+  event,
+  context
+) => {
+  if (event.finishReason === "tool-calls") {
+    context.state.pendingToolCallMessage = event.message
+      ? (firstNonEmptyLine(event.message) ?? null)
+      : null;
+    return;
+  }
+
+  context.state.pendingToolCallMessage = null;
+  if (!event.message || !context.thread) return;
+
+  // Linq/iMessage supports raw text. Passing Markdown through Chat SDK's
+  // converter collapses soft line breaks and can concatenate adjacent lines.
+  await context.thread.post(event.message);
+};
+
 export default linqChannel({
-  credentials: connectLinqCredentials(env.LINQ_CONNECTOR_UID),
+  credentials,
   events: {
     "message.completed": deliverCompletedLinqMessage,
   },
@@ -46,6 +83,13 @@ export default linqChannel({
     };
   },
 });
+
+function firstNonEmptyLine(message: string) {
+  return message
+    .split(/\r?\n/u)
+    .map((line) => line.trim())
+    .find(Boolean);
+}
 
 async function findVerifiedAuthUserIdByPhoneNumber(phoneNumber: string) {
   const context = await auth.$context;

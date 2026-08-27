@@ -15,6 +15,8 @@ describe("environment", () => {
     for (const [name, value] of Object.entries(requiredEnvironment)) {
       vi.stubEnv(name, value);
     }
+    vi.stubEnv("LINQ_CONNECTOR", "");
+    vi.stubEnv("LINQ_PHONE_NUMBER", "");
   });
 
   afterEach(() => {
@@ -28,14 +30,14 @@ describe("environment", () => {
     expect(env).toMatchObject(requiredEnvironment);
   });
 
-  it("provides connector defaults", async () => {
+  it("provides the Google connector default without enabling Linq", async () => {
     vi.stubEnv("GOOGLE_CONNECTOR_UID", "");
-    vi.stubEnv("LINQ_CONNECTOR_UID", "");
 
     const { env } = await import("../lib/env");
 
     expect(env.GOOGLE_CONNECTOR_UID).toBe("google/open-instinct");
-    expect(env.LINQ_CONNECTOR_UID).toBe("linq/eve-kernel");
+    expect(env.LINQ_CONNECTOR).toBeUndefined();
+    expect(env.LINQ_PHONE_NUMBER).toBeUndefined();
   });
 
   it("provides stable auth and encryption defaults in local development", async () => {
@@ -57,12 +59,14 @@ describe("environment", () => {
 
   it("accepts connector overrides", async () => {
     vi.stubEnv("GOOGLE_CONNECTOR_UID", "google/custom");
-    vi.stubEnv("LINQ_CONNECTOR_UID", "linq/custom");
+    vi.stubEnv("LINQ_CONNECTOR", "linq/custom");
+    vi.stubEnv("LINQ_PHONE_NUMBER", "+12025550123");
 
     const { env } = await import("../lib/env");
 
     expect(env.GOOGLE_CONNECTOR_UID).toBe("google/custom");
-    expect(env.LINQ_CONNECTOR_UID).toBe("linq/custom");
+    expect(env.LINQ_CONNECTOR).toBe("linq/custom");
+    expect(env.LINQ_PHONE_NUMBER).toBe("+12025550123");
   });
 
   it("does not provide local defaults in a Vercel development environment", async () => {
@@ -125,6 +129,37 @@ describe("environment", () => {
 
   it("rejects a non-Postgres database URL", async () => {
     vi.stubEnv("DATABASE_URL", "https://example.com/database");
+
+    await expect(import("../lib/env")).rejects.toThrow(
+      "Invalid environment variables"
+    );
+  });
+
+  it("accepts a configured Linq connector and E.164 phone number", async () => {
+    vi.stubEnv("LINQ_CONNECTOR", "linq/open-instinct");
+    vi.stubEnv("LINQ_PHONE_NUMBER", "+12025550123");
+
+    const { env } = await import("../lib/env");
+
+    expect(env.LINQ_CONNECTOR).toBe("linq/open-instinct");
+    expect(env.LINQ_PHONE_NUMBER).toBe("+12025550123");
+  });
+
+  it.each([
+    ["linq/open-instinct", ""],
+    ["", "+12025550123"],
+  ])("rejects partial Linq configuration", async (connector, phoneNumber) => {
+    vi.stubEnv("LINQ_CONNECTOR", connector);
+    vi.stubEnv("LINQ_PHONE_NUMBER", phoneNumber);
+
+    await expect(import("../lib/env")).rejects.toThrow(
+      "LINQ_CONNECTOR and LINQ_PHONE_NUMBER must be configured together"
+    );
+  });
+
+  it("rejects a Linq phone number outside E.164 format", async () => {
+    vi.stubEnv("LINQ_CONNECTOR", "linq/open-instinct");
+    vi.stubEnv("LINQ_PHONE_NUMBER", "(202) 555-0123");
 
     await expect(import("../lib/env")).rejects.toThrow(
       "Invalid environment variables"

@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 import { headers } from "next/headers";
 import { PhoneAuthForm } from "@/app/sign-in/phone-auth-form";
 import { Logo } from "@/components/ui/logo";
-import { localPhoneAuthBypassEnabled } from "@/lib/env";
+import { env, localPhoneAuthBypassEnabled } from "@/lib/env";
 import { getAuthSession } from "@/auth/session";
 
 export default async function SignInPage({
@@ -25,6 +25,7 @@ export default async function SignInPage({
         <h1 className="type-page-title mt-6">Sign in</h1>
         <PhoneAuthForm
           callbackUrl={callbackUrl}
+          linqConfigured={env.LINQ_CONNECTOR !== undefined}
           skipOtp={localPhoneAuthBypassEnabled}
         />
       </section>

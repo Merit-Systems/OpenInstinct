@@ -1,5 +1,6 @@
 import { createEnv } from "@t3-oss/env-nextjs";
 import { z } from "zod";
+import { isE164PhoneNumber } from "../auth/phone-number";
 import { databaseUrlSchema } from "../db/env/utils";
 
 const localDevelopment =
@@ -50,7 +51,13 @@ export const env = createEnv({
 
     // Optional
     GOOGLE_CONNECTOR_UID: requiredValue.default("google/open-instinct"),
-    LINQ_CONNECTOR_UID: requiredValue.default("linq/eve-kernel"),
+    LINQ_CONNECTOR: requiredValue.optional(),
+    LINQ_PHONE_NUMBER: requiredValue
+      .refine(
+        (value) => isE164PhoneNumber(value),
+        "LINQ_PHONE_NUMBER must use E.164 format"
+      )
+      .optional(),
     NODE_ENV: z
       .enum(["development", "production", "test"])
       .default("production"),
@@ -60,6 +67,14 @@ export const env = createEnv({
   emptyStringAsUndefined: true,
 });
 
+if (
+  (env.LINQ_CONNECTOR === undefined) !==
+  (env.LINQ_PHONE_NUMBER === undefined)
+) {
+  throw new Error(
+    "LINQ_CONNECTOR and LINQ_PHONE_NUMBER must be configured together."
+  );
+}
 const authHostname = new URL(env.BETTER_AUTH_URL).hostname;
 
 export const localPhoneAuthBypassEnabled =
