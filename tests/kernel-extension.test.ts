@@ -17,4 +17,20 @@ describe("Kernel Eve extension", () => {
       /cloud browser|local browser|browser mode|browser executor|kernel__browser/i
     );
   });
+
+  it("keeps Kernel's managed CAPTCHA solver enabled and actionable", () => {
+    const instructions = [
+      readFileSync("agent/instructions.md", "utf8"),
+      readFileSync("agent/skills/browser-execution/SKILL.md", "utf8"),
+    ].join("\n");
+    const browserRuntime = readFileSync(
+      "agent/extensions/kernel/browser-runtime.ts",
+      "utf8"
+    );
+
+    expect(browserRuntime).toMatch(/stealth:\s*true/);
+    expect(instructions).toMatch(/managed (?:automatic )?CAPTCHA solver/i);
+    expect(instructions).toMatch(/leave (?:it|challenges) untouched/i);
+    expect(instructions).not.toMatch(/do not bypass[^\n]*CAPTCHAs/i);
+  });
 });
