@@ -2,7 +2,7 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { EveEvalResult, EveEvalRunSummary } from "eve/evals";
 import type { EvalReporter } from "eve/evals/reporters";
-import { env } from "@/lib/env";
+import { browserBenchmarkEnv } from "@/evals/browser/env";
 import {
   measureBrowserTask,
   readTaskCompletion,
@@ -114,7 +114,7 @@ async function buildBenchmark(
   )?.result.runtimeIdentity;
   const gitSha =
     runtimeIdentity?.build?.gitSha ?? (await readCurrentGitSha()) ?? null;
-  const environmentLabel = env.BROWSER_BENCH_LABEL?.trim();
+  const environmentLabel = browserBenchmarkEnv.BROWSER_BENCH_LABEL?.trim();
 
   return {
     completedAt: summary.completedAt,

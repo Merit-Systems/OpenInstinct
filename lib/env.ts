@@ -18,13 +18,6 @@ const runtimeEnv = createEnv({
       (value) => URL.canParse(value),
       "BETTER_AUTH_URL must be an absolute URL"
     ),
-    BROWSER_BENCH_LABEL: z.string().min(1).optional(),
-    BROWSER_BENCH_REPETITIONS: z.coerce
-      .number()
-      .int()
-      .min(1)
-      .max(20)
-      .default(1),
     DATABASE_URL: databaseUrlSchema,
     EVE_NEXT_PRODUCTION_ORIGIN: optionalValue.refine(
       (value) => value === undefined || URL.canParse(value),
