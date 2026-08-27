@@ -1,6 +1,10 @@
 import type { NextConfig } from "next";
 import { withEve } from "eve/next";
 
-const nextConfig: NextConfig = {};
+const nextConfig: NextConfig = {
+  outputFileTracingIncludes: {
+    "/*": [".output/*-chrome.zip"],
+  },
+};
 
 export default withEve(nextConfig);

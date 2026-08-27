@@ -7,6 +7,7 @@ import {
 import { z } from "zod";
 import { scopeFromPrincipal } from "@/lib/access-scope";
 import {
+  browserLiveViewInputSchema,
   computerActionInputSchema,
   executePlaywrightInputSchema,
   manageBrowsersInputSchema,
@@ -14,6 +15,7 @@ import {
 import {
   executeOwnedKernelComputerAction,
   executeOwnedKernelPlaywright,
+  getOwnedKernelBrowserLiveView,
   manageOwnedKernelBrowsers,
 } from "@/agent/extensions/kernel/browser-runtime";
 
@@ -34,10 +36,21 @@ export default defineDynamic({
       return {
         manage_browsers: defineTool({
           description:
-            'Manage browser sessions. Create one browser with at least a 15-minute timeout and reuse it for the assignment; use "list" or "get" to inspect sessions and "delete" when finished. Active browser results include browser_live_view_url. Keep a browser open only for a pending human action or transaction approval, and share that URL only when the user explicitly asks for browser access.',
+            'Manage browser sessions. Create one browser with at least a 15-minute timeout and reuse it for the assignment; use "list" or "get" to inspect sessions and "delete" when finished. Keep a browser open only for a pending human action or transaction approval.',
           inputSchema: manageBrowsersInputSchema,
           execute: (input, context) =>
             manageOwnedKernelBrowsers(scope, input, context.abortSignal),
+        }),
+        get_browser_live_view: defineTool({
+          description:
+            "Get a signed live-view URL for an owned browser only when the user explicitly asks for browser access. Do not call this speculatively or for routine browser work.",
+          inputSchema: browserLiveViewInputSchema,
+          execute: (input, context) =>
+            getOwnedKernelBrowserLiveView(
+              scope,
+              input.session_id,
+              context.abortSignal
+            ),
         }),
         execute_playwright_code: defineTool({
           description:

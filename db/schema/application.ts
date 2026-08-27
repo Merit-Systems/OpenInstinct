@@ -56,7 +56,7 @@ export const vaultItems = pgTable(
     }).onDelete("cascade"),
     check(
       "vault_items_kind_check",
-      sql`${table.kind} IN ('login', 'payment', 'address', 'phone', 'identity', 'token')`
+      sql`${table.kind} IN ('login', 'payment', 'address', 'contact', 'phone', 'identity', 'token')`
     ),
     index("vault_items_workspace_updated_idx").on(
       table.workspaceId,

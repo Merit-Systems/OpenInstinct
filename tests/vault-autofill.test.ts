@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { classifyAutofillField } from "../browser-extension/lib/field-detector";
-import { fillCandidates } from "../browser-extension/lib/fill-engine";
+import {
+  fillAutofillClaims,
+  fillCandidates,
+} from "../browser-extension/lib/fill-engine";
 import type { AccessScope } from "../lib/access-scope";
 import type { VaultItemKind } from "../lib/manager";
 import { serializePaymentCard } from "../lib/manager/payment-card";
@@ -396,6 +399,15 @@ describe("vault browser autofill", () => {
   it("lets masked expiry controls own slash formatting", () => {
     expect(fillCandidates("09/31", "cc-exp")).toEqual(["09/31", "0931"]);
     expect(fillCandidates("Grace Hopper", "cc-name")).toEqual(["Grace Hopper"]);
+  });
+
+  it("rejects a frame that navigated after autofill inspection", async () => {
+    await expect(
+      fillAutofillClaims(
+        { claims: [], expectedOrigin: "https://checkout.example" },
+        () => "https://attacker.example"
+      )
+    ).rejects.toThrow("no longer matches the approved origin");
   });
 
   it("sends only an encrypted envelope through Kernel Playwright", () => {

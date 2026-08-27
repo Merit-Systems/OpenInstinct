@@ -37,7 +37,7 @@ export default defineContentScript({
       surfaces: inspectAutofillSurfaces(),
     }));
     onMessage("fillFrame", async ({ data }) => ({
-      claims: await fillAutofillClaims(data),
+      claims: await fillAutofillClaims(data, () => location.origin),
       origin: location.origin,
     }));
   },

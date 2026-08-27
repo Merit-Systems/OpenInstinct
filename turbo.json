@@ -27,7 +27,12 @@
         "VERCEL",
         "VERCEL_ENV"
       ],
-      "outputs": [".next/**", "!.next/cache/**", "next-env.d.ts"]
+      "outputs": [
+        ".next/**",
+        "!.next/cache/**",
+        ".output/*-chrome.zip",
+        "next-env.d.ts"
+      ]
     },
     "db:migrate": {
       "cache": false,

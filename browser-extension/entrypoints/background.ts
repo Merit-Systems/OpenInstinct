@@ -60,7 +60,10 @@ async function executeCommand(
   const availableTokens = new Set(
     selectedSurface.fields.map(({ token }) => token)
   );
-  const assignments = new Map<number, AutofillClaim[]>();
+  const assignments = new Map<
+    number,
+    { claims: AutofillClaim[]; expectedOrigin: string }
+  >();
   const missing: AutofillClaim[] = [];
 
   for (const claim of command.claims) {
@@ -92,14 +95,17 @@ async function executeCommand(
       missing.push(claim);
       continue;
     }
-    const frameClaims = assignments.get(target.frameId) ?? [];
-    frameClaims.push(claim);
-    assignments.set(target.frameId, frameClaims);
+    const assignment = assignments.get(target.frameId) ?? {
+      claims: [],
+      expectedOrigin: target.origin,
+    };
+    assignment.claims.push(claim);
+    assignments.set(target.frameId, assignment);
   }
 
   const frameResults = await Promise.all(
-    [...assignments.entries()].map(([frameId, claims]) =>
-      sendMessage("fillFrame", { claims }, { tabId, frameId })
+    [...assignments.entries()].map(([frameId, assignment]) =>
+      sendMessage("fillFrame", assignment, { tabId, frameId })
     )
   );
   const claims = [

@@ -74,6 +74,7 @@ export interface VaultAutofillFrameInspection {
 
 export interface VaultAutofillFrameFillRequest {
   readonly claims: readonly AutofillClaim[];
+  readonly expectedOrigin: string;
 }
 
 export interface VaultAutofillFrameFillResult {

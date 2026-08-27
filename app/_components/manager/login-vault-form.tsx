@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/select";
 import type { ManagerMutation } from "@/lib/manager";
 import {
+  loginIdentifierSchema,
   loginIdentifierTypeSchema,
   loginOriginSchema,
   serializeLoginVaultPayload,
@@ -21,7 +22,7 @@ import { VaultFormField } from "./vault-form-field";
 
 const loginFormSchema = z
   .object({
-    identifier: z.string().trim().min(1, "Enter the sign-in identifier."),
+    identifier: z.string().trim(),
     identifierType: loginIdentifierTypeSchema,
     nickname: z.string().trim().min(1, "Enter a name for this login.").max(120),
     origin: z
@@ -32,6 +33,19 @@ const loginFormSchema = z
     password: z.string().max(20_000),
   })
   .superRefine((form, context) => {
+    const identifier = loginIdentifierSchema.safeParse({
+      type: form.identifierType,
+      value: form.identifier,
+    });
+    if (!identifier.success) {
+      for (const issue of identifier.error.issues) {
+        context.addIssue({
+          code: "custom",
+          message: issue.message,
+          path: ["identifier"],
+        });
+      }
+    }
     if (form.identifierType === "username" && !form.password) {
       context.addIssue({
         code: "custom",

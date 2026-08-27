@@ -15,10 +15,29 @@ export const loginOriginSchema = z.url().refine((value) => {
   return ["http:", "https:"].includes(url.protocol) && url.origin === value;
 }, "Enter a website origin such as https://www.ubereats.com.");
 
-const loginIdentifierSchema = z.object({
-  type: loginIdentifierTypeSchema,
-  value: z.string().trim().min(1).max(300),
-});
+const loginIdentifierValueSchema = z
+  .string()
+  .trim()
+  .min(1, "Enter the sign-in identifier.")
+  .max(300);
+
+export const loginIdentifierSchema = z
+  .object({
+    type: loginIdentifierTypeSchema,
+    value: loginIdentifierValueSchema,
+  })
+  .superRefine((identifier, context) => {
+    if (
+      identifier.type === "email" &&
+      !z.email().safeParse(identifier.value).success
+    ) {
+      context.addIssue({
+        code: "custom",
+        message: "Enter a valid email identifier.",
+        path: ["value"],
+      });
+    }
+  });
 
 const loginAuthenticationSchema = z.discriminatedUnion("type", [
   z.object({
@@ -57,16 +76,6 @@ function validateLoginVaultPayload(
   payload: z.infer<typeof loginVaultPayloadBaseSchema>,
   context: z.RefinementCtx
 ) {
-  if (
-    payload.identifier.type === "email" &&
-    !z.email().safeParse(payload.identifier.value).success
-  ) {
-    context.addIssue({
-      code: "custom",
-      message: "Enter a valid email identifier.",
-      path: ["identifier", "value"],
-    });
-  }
   if (
     payload.authentication.type === "email_otp" &&
     payload.identifier.type !== "email"

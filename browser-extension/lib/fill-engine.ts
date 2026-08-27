@@ -7,11 +7,17 @@ import { findBestAutofillElement } from "./field-detector";
 const fillActionDelayMilliseconds = 20;
 const fillVerificationDelayMilliseconds = 20;
 
-export async function fillAutofillClaims(input: VaultAutofillFrameFillRequest) {
+export async function fillAutofillClaims(
+  input: VaultAutofillFrameFillRequest,
+  currentOrigin: () => string
+) {
+  assertFrameOrigin(input.expectedOrigin, currentOrigin());
+
   const results: AutofillClaimResult[] = [];
 
   for (const claim of input.claims) {
     await delay(fillActionDelayMilliseconds);
+    assertFrameOrigin(input.expectedOrigin, currentOrigin());
     const element = findBestAutofillElement(claim.token);
     if (!element) {
       results.push({ claimId: claim.id, status: "missing" });
@@ -27,6 +33,14 @@ export async function fillAutofillClaims(input: VaultAutofillFrameFillRequest) {
   }
 
   return results;
+}
+
+function assertFrameOrigin(expectedOrigin: string, actualOrigin: string) {
+  if (actualOrigin !== expectedOrigin) {
+    throw new Error(
+      "The autofill frame no longer matches the approved origin."
+    );
+  }
 }
 
 async function fillElement(
