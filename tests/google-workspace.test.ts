@@ -7,9 +7,12 @@ import {
   type ConnectTokenResponse,
 } from "@vercel/connect";
 import { describe, expect, it } from "vitest";
+import { z } from "zod";
 import { parseCalendarAvailability } from "@/agent/lib/google-workspace/calendar";
 import { googleWorkspaceAuthOptions } from "@/agent/lib/google-workspace/client";
 import { gmailUpdateLabels } from "@/agent/lib/google-workspace/gmail";
+import { googleWorkspaceReadInputSchema } from "@/agent/tools/google_workspace_read";
+import { googleWorkspaceWriteInputSchema } from "@/agent/tools/google_workspace_write";
 import { googleWorkspaceWriteApproval } from "@/agent/tools/google_workspace_write";
 import {
   GOOGLE_WORKSPACE_SCOPES,
@@ -28,6 +31,10 @@ const scope = {
 };
 
 describe("Google Workspace connection", () => {
+  it("uses Anthropic-compatible object-root tool schemas", () => {
+    expect(z.toJSONSchema(googleWorkspaceReadInputSchema).type).toBe("object");
+    expect(z.toJSONSchema(googleWorkspaceWriteInputSchema).type).toBe("object");
+  });
   it("uses one explicit full Gmail and Calendar scope set", () => {
     expect(GOOGLE_WORKSPACE_SCOPES).not.toContain("*");
     expect(GOOGLE_WORKSPACE_SCOPES).toContain("https://mail.google.com/");

@@ -1,5 +1,7 @@
 import { timingSafeEqual } from "node:crypto";
-import { generateText } from "ai";
+import { generateText, tool } from "ai";
+import { googleWorkspaceReadInputSchema } from "@/agent/tools/google_workspace_read";
+import { googleWorkspaceWriteInputSchema } from "@/agent/tools/google_workspace_write";
 import { createHaikuModelSelection } from "@/lib/anthropic";
 import { env } from "@/lib/env";
 
@@ -14,7 +16,21 @@ export async function POST(request: Request) {
   const result = await generateText({
     maxOutputTokens: 20,
     model: selection.model,
-    prompt: "Reply with exactly MOUSE_MODEL_OK",
+    prompt: "Do not call a tool. Reply with exactly MOUSE_MODEL_OK",
+    tools: {
+      google_workspace_read: tool({
+        description:
+          "Production schema smoke check for Google Workspace reads.",
+        execute: async () => ({ ok: true }),
+        inputSchema: googleWorkspaceReadInputSchema,
+      }),
+      google_workspace_write: tool({
+        description:
+          "Production schema smoke check for Google Workspace writes.",
+        execute: async () => ({ ok: true }),
+        inputSchema: googleWorkspaceWriteInputSchema,
+      }),
+    },
   });
 
   return Response.json({
