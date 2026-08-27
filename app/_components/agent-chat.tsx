@@ -1,10 +1,9 @@
 "use client";
 
 import type { UserContent } from "ai";
-import { isTurnFailureEvent } from "eve/client";
 import { useEveAgent } from "eve/react";
 import { AlertCircleIcon, BrainIcon, PlusIcon, SquareIcon } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import {
   Conversation,
   ConversationContent,
@@ -22,9 +21,11 @@ import { Shimmer } from "@/components/ai-elements/shimmer";
 import { Button } from "@/components/ui/button";
 import { ButtonGroup } from "@/components/ui/button-group";
 import { formatChatUsage, summarizeChatUsage } from "@/app/_lib/chat-usage";
+import { getLatestTurnFailure } from "@/app/_lib/turn-failure";
 import type { ChatUsage } from "@/lib/chat";
 import { cn } from "@/lib/utils";
 import { AgentMessage } from "./agent-message";
+import { SubagentTrace } from "./subagent-trace";
 
 const AGENT_NAME = "Local Vault Assistant";
 
@@ -144,6 +145,19 @@ export function AgentChat({
 
     return deliveriesByMessage;
   }, [agent.events]);
+  const subagentTraces = useMemo(() => {
+    const traces = new Map<string, ReactNode>();
+
+    for (const event of agent.events) {
+      if (event.type !== "subagent.called") continue;
+      traces.set(
+        event.data.callId,
+        <SubagentTrace key={event.data.childSessionId} target={event.data} />
+      );
+    }
+
+    return traces;
+  }, [agent.events]);
 
   useEffect(() => {
     if (activeSessionId === undefined || latestTerminalTurnAt === undefined) {
@@ -246,6 +260,9 @@ export function AgentChat({
               isPendingAssistantShell &&
               message.id === lastMessage.id ? null : (
                 <AgentMessage
+                  afterToolCalls={
+                    traceView === "trace" ? subagentTraces : undefined
+                  }
                   canRespond={!isBusy && !isRestoring}
                   deliveredAssistantMessages={deliveredAssistantMessages.get(
                     message.id
@@ -414,32 +431,4 @@ async function saveChat(sessionId: string, title?: string, usage?: ChatUsage) {
     headers: { "Content-Type": "application/json" },
     method: "POST",
   });
-}
-
-function getLatestTurnFailure(
-  events: ReturnType<typeof useEveAgent>["events"]
-): string | undefined {
-  for (let index = events.length - 1; index >= 0; index -= 1) {
-    const event = events[index];
-
-    if (!event) {
-      continue;
-    }
-
-    if (isTurnFailureEvent(event) && event.type === "turn.failed") {
-      return event.data.code === "MODEL_CALL_FAILED"
-        ? "The model is temporarily unavailable. Please try again."
-        : event.data.message;
-    }
-
-    if (event.type === "turn.completed" || event.type === "turn.cancelled") {
-      return undefined;
-    }
-
-    if (event.type === "message.received") {
-      return undefined;
-    }
-  }
-
-  return undefined;
 }

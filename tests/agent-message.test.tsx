@@ -1,7 +1,9 @@
+import type { MessageStreamEvent } from "eve/client";
 import type { EveMessage } from "eve/react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { AgentMessage } from "../app/_components/agent-message";
+import { getLatestTurnFailure } from "../app/_lib/turn-failure";
 
 describe("agent messages", () => {
   it("renders ordinary assistant text without a delivery tool result", () => {
@@ -131,5 +133,62 @@ describe("agent messages", () => {
     expect(markup).toContain("Cancel");
     expect(markup).not.toContain("send_payment");
     expect(markup).not.toContain("Hidden recipient");
+  });
+
+  it("renders a matching child trace after its subagent tool", () => {
+    const message = {
+      id: "turn-3:assistant",
+      parts: [
+        {
+          input: { message: "Research this" },
+          output: { status: "working", taskId: "task-1" },
+          state: "output-available",
+          toolCallId: "call-agent",
+          toolName: "agent",
+          type: "dynamic-tool",
+        },
+      ],
+      role: "assistant",
+    } satisfies EveMessage;
+
+    const markup = renderToStaticMarkup(
+      <AgentMessage
+        afterToolCalls={
+          new Map([["call-agent", <div key="trace">Live child trace</div>]])
+        }
+        canRespond
+        isStreaming={false}
+        message={message}
+        onInputResponses={() => undefined}
+      />
+    );
+
+    expect(markup).toContain("agent");
+    expect(markup).toContain("Live child trace");
+    expect(markup.indexOf("Live child trace")).toBeGreaterThan(
+      markup.indexOf("agent")
+    );
+  });
+
+  it("keeps a parked failed child visibly failed", () => {
+    const events = [
+      {
+        data: {
+          code: "CHILD_FAILED",
+          message: "Child failed.",
+          sequence: 1,
+          turnId: "child-turn",
+        },
+        meta: { at: "2026-08-27T20:00:00.000Z", id: "failed" },
+        type: "turn.failed",
+      },
+      {
+        data: { continuationToken: "", wait: "next-user-message" },
+        meta: { at: "2026-08-27T20:00:01.000Z", id: "waiting" },
+        type: "session.waiting",
+      },
+    ] satisfies MessageStreamEvent[];
+
+    expect(getLatestTurnFailure(events)).toBe("Child failed.");
   });
 });
