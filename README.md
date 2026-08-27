@@ -14,6 +14,8 @@ One-click deploy to Vercel and get rolling.
 
 [![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2FMerit-Systems%2Fopen-instinct&project-name=open-instinct&repository-name=open-instinct&products=%5B%7B%22type%22%3A%22integration%22%2C%22protocol%22%3A%22other%22%2C%22productSlug%22%3A%22kernel%22%2C%22integrationSlug%22%3A%22kernel%22%7D%2C%7B%22type%22%3A%22integration%22%2C%22protocol%22%3A%22storage%22%2C%22productSlug%22%3A%22neon%22%2C%22integrationSlug%22%3A%22neon%22%7D%5D)
 
+<img src=".github/demo.png" alt="OpenInstinct booking movie tickets over iMessage — it browses Fandango, reaches checkout, and confirms the showtime and price before anything goes through" width="560">
+
 </div>
 
 ## Why self-host?
