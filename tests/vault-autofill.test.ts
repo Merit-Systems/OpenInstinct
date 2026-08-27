@@ -1,197 +1,242 @@
-import type { ToolContext } from "eve/tools";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
+import { classifyAutofillField } from "../browser-extension/lib/field-detector";
+import { fillCandidates } from "../browser-extension/lib/fill-engine";
+import type { AccessScope } from "../lib/access-scope";
+import {
+  listAutofillSuggestions,
+  materializeAutofillClaims,
+  type AutofillVaultAdapter,
+} from "../lib/manager/server/vault-autofill";
+import { createVaultAutofillProvider } from "../lib/manager/server/vault-autofill-provider";
+import { extensionRuntimeCode } from "../lib/manager/server/vault-extension-autofill";
 import { serializePaymentCard } from "../lib/manager/payment-card";
+import { vaultAutofillCommandSchema } from "../lib/manager/vault-autofill-protocol";
 
-const VAULT_ITEM_ID = "00000000-0000-4000-8000-000000000001";
-
-const mocks = vi.hoisted(() => ({
-  executePlaywright:
-    vi.fn<
-      (
-        _sessionId: string,
-        _input: { code: string; timeout_sec: number },
-        _options: { signal?: AbortSignal }
-      ) => Promise<{ success: boolean }>
-    >(),
-  readVaultItem: vi.fn<
-    () => Promise<
-      | {
-          account: string;
-          createdAt: string;
-          id: string;
-          kind: "login" | "payment";
-          label: string;
-          updatedAt: string;
-        }
-      | undefined
-    >
-  >(),
-  readSecret: vi.fn<() => Promise<string | undefined>>(),
-  requireOwnedBrowserSession: vi.fn<() => Promise<void>>(),
-}));
-
-vi.mock("@onkernel/sdk", () => ({
-  default: class {
-    readonly browsers = {
-      playwright: { execute: mocks.executePlaywright },
-    };
-  },
-}));
-
-vi.mock("@/lib/manager/server/secret-store", () => ({
-  readSecret: mocks.readSecret,
-}));
-
-vi.mock("@/db/services/vault", () => ({
-  readVaultItem: mocks.readVaultItem,
-}));
-
-vi.mock("@/agent/extensions/kernel/browser-runtime", () => ({
-  requireOwnedBrowserSession: mocks.requireOwnedBrowserSession,
-}));
-
-import fillFromVault from "../agent/tools/fill_from_vault";
-
-beforeEach(() => {
-  vi.clearAllMocks();
-  mocks.executePlaywright.mockResolvedValue({ success: true });
-  mocks.readVaultItem.mockResolvedValue({
-    account: "ada@example.com",
-    createdAt: "2026-01-01T00:00:00.000Z",
-    id: VAULT_ITEM_ID,
-    kind: "login",
-    label: "Primary login",
-    updatedAt: "2026-01-01T00:00:00.000Z",
-  });
-  mocks.readSecret.mockResolvedValue("correct horse battery staple");
-  mocks.requireOwnedBrowserSession.mockResolvedValue(undefined);
-});
-
-describe("vault browser autofill", () => {
-  it("fills only the requested login values through the tool boundary", async () => {
-    await expect(
-      fillFromVault.execute(
-        {
-          browserSessionId: "browser-1",
-          expectedOrigin: "https://checkout.example",
-          fields: [{ field: "username", selector: "#username" }],
-          vaultItemId: VAULT_ITEM_ID,
-        },
-        toolContext
-      )
-    ).resolves.toEqual({
-      filledFields: ["username"],
-      origin: "https://checkout.example",
-      success: true,
-    });
-
-    const [sessionId, request, options] =
-      mocks.executePlaywright.mock.calls[0] ?? [];
-    expect(sessionId).toBe("browser-1");
-    expect(request?.timeout_sec).toBe(30);
-    expect(request?.code).toContain("ada@example.com");
-    expect(request?.code).not.toContain("correct horse battery staple");
-    expect(options?.signal).toBe(toolContext.abortSignal);
-  });
-
-  it("formats payment fields and uses native card autofill with a keyboard fallback", async () => {
-    mocks.readVaultItem.mockResolvedValue({
-      account: "Visa 4242",
-      createdAt: "2026-01-01T00:00:00.000Z",
-      id: VAULT_ITEM_ID,
-      kind: "payment",
-      label: "Primary card",
-      updatedAt: "2026-01-01T00:00:00.000Z",
-    });
-    mocks.readSecret.mockResolvedValue(
-      serializePaymentCard({
-        billingPostalCode: "11217",
-        cardholderName: "Ada Lovelace",
-        expirationMonth: 3,
-        expirationYear: 2031,
-        kind: "payment-card",
-        number: "4242424242424242",
-        securityCode: "123",
-        version: 1,
-      })
-    );
-
-    await expect(
-      fillFromVault.execute(
-        {
-          browserSessionId: "browser-1",
-          expectedOrigin: "https://checkout.example",
-          fields: [
-            { field: "cardholder_name", selector: "#cardholder-name" },
-            { field: "card_number", selector: "#card-number" },
-            { field: "expiration", selector: "#expiration" },
-            { field: "cvc", selector: "#cvc" },
-            { field: "billing_postal_code", selector: "#postal-code" },
-          ],
-          vaultItemId: VAULT_ITEM_ID,
-        },
-        toolContext
-      )
-    ).resolves.toEqual({
-      filledFields: [
-        "cardholder_name",
-        "card_number",
-        "expiration",
-        "cvc",
-        "billing_postal_code",
-      ],
-      origin: "https://checkout.example",
-      success: true,
-    });
-
-    const code = mocks.executePlaywright.mock.calls[0]?.[1].code;
-    expect(code).toMatch(
-      /03\/31[\s\S]*context\.newCDPSession\(page\)[\s\S]*Autofill\.trigger[\s\S]*pressSequentially/
-    );
-  });
-
-  it("rejects fields that do not belong to the selected vault item", async () => {
-    await expect(
-      fillFromVault.execute(
-        {
-          browserSessionId: "browser-1",
-          expectedOrigin: "https://checkout.example",
-          fields: [{ field: "card_number", selector: "#card-number" }],
-          vaultItemId: VAULT_ITEM_ID,
-        },
-        toolContext
-      )
-    ).rejects.toThrow("does not provide card_number");
-    expect(mocks.executePlaywright).not.toHaveBeenCalled();
-  });
-});
-
-const principal = {
-  attributes: { workspaceId: "workspace:user-1" },
-  authenticator: "test",
-  principalId: "user-1",
-  principalType: "user",
+const scope: AccessScope = {
+  userId: "user-1",
+  workspaceId: "workspace-1",
 };
 
-const toolContext = {
-  abortSignal: new AbortController().signal,
-  callId: "call-1",
-  async getSandbox() {
-    throw new Error("No sandbox is needed for this tool test.");
-  },
-  getSkill() {
-    throw new Error("No skill is needed for this tool test.");
-  },
-  async getToken() {
-    throw new Error("No token is needed for this tool test.");
-  },
-  requireAuth() {
-    throw new Error("No authorization is needed for this tool test.");
-  },
-  session: {
-    auth: { current: principal, initiator: principal },
-    id: "session-1",
-    turn: { id: "turn-1", sequence: 0 },
-  },
-  toolName: "fill_from_vault",
-} satisfies ToolContext;
+const paymentSurface = {
+  fields: [
+    { score: 100, token: "cc-number" },
+    { score: 100, token: "cc-exp" },
+  ],
+  id: "payment-card",
+  kind: "payment-card" as const,
+};
+
+describe("vault browser autofill", () => {
+  it("uses the encrypted local vault instead of a development card fixture", async () => {
+    const card = {
+      account: "Visa · •••• 1111",
+      createdAt: "2026-08-27T00:00:00.000Z",
+      id: "real-card-id",
+      kind: "payment" as const,
+      label: "Travel card",
+      updatedAt: "2026-08-27T00:00:00.000Z",
+    };
+    const provider = createVaultAutofillProvider({
+      async hasSecret() {
+        return true;
+      },
+      async listVaultItems() {
+        return [card];
+      },
+      async readSecret() {
+        return serializePaymentCard({
+          billingPostalCode: "10001",
+          cardholderName: "Grace Hopper",
+          expirationMonth: 9,
+          expirationYear: 2031,
+          kind: "payment-card",
+          number: "4111111111111111",
+          securityCode: "321",
+          version: 1,
+        });
+      },
+      async readVaultItem() {
+        return card;
+      },
+    });
+
+    await expect(
+      provider.listSuggestions(
+        scope,
+        "https://merchant.example",
+        paymentSurface
+      )
+    ).resolves.toEqual([
+      {
+        candidateId: "real-card-id",
+        label: "Travel card",
+        matchReason: "Saved payment card",
+        summary: "Visa · •••• 1111",
+      },
+    ]);
+
+    const claims = await provider.materializeClaims(scope, "real-card-id", {
+      availableTokens: new Set([
+        "cc-name",
+        "cc-number",
+        "cc-exp",
+        "cc-csc",
+        "postal-code",
+      ]),
+      origin: "https://merchant.example",
+      surface: paymentSurface,
+    });
+    expect(
+      Object.fromEntries(claims.map(({ token, value }) => [token, value]))
+    ).toEqual({
+      "cc-csc": "321",
+      "cc-exp": "09/31",
+      "cc-name": "Grace Hopper",
+      "cc-number": "4111111111111111",
+      "postal-code": "10001",
+    });
+  });
+
+  it("lets a vault-owned adapter supply masked suggestions and claims", async () => {
+    const adapter: AutofillVaultAdapter = {
+      async listSuggestions(_scope, origin, surface) {
+        expect(origin).toBe("https://merchant.example");
+        expect(surface.kind).toBe("payment-card");
+        return [
+          {
+            candidateId: "opaque-card",
+            label: "Personal Visa",
+            matchReason: "Preferred payment method",
+            summary: "Visa •••• 4242",
+          },
+        ];
+      },
+      async materializeClaims(_scope, candidateId, target) {
+        expect(candidateId).toBe("opaque-card");
+        expect(target.surface.kind).toBe("payment-card");
+        return [
+          {
+            id: "84e90f49-68d0-45ba-a183-3ca18ef087dc",
+            token: "cc-number",
+            value: "4242424242424242",
+          },
+        ];
+      },
+    };
+
+    await expect(
+      listAutofillSuggestions(
+        scope,
+        "https://merchant.example",
+        paymentSurface,
+        adapter
+      )
+    ).resolves.toEqual([
+      {
+        candidateId: "opaque-card",
+        label: "Personal Visa",
+        matchReason: "Preferred payment method",
+        summary: "Visa •••• 4242",
+      },
+    ]);
+    await expect(
+      materializeAutofillClaims(
+        scope,
+        "opaque-card",
+        {
+          availableTokens: new Set(["cc-number", "cc-exp"]),
+          origin: "https://merchant.example",
+          surface: paymentSurface,
+        },
+        adapter
+      )
+    ).resolves.toEqual([
+      {
+        id: "84e90f49-68d0-45ba-a183-3ca18ef087dc",
+        token: "cc-number",
+        value: "4242424242424242",
+      },
+    ]);
+  });
+
+  it("accepts protocol tokens without defining a vault-field enum", () => {
+    const now = Date.now();
+    expect(
+      vaultAutofillCommandSchema.parse({
+        claims: [
+          {
+            id: "84e90f49-68d0-45ba-a183-3ca18ef087dc",
+            token: "future-browser-token",
+            value: "private value",
+          },
+        ],
+        expectedOrigin: "https://merchant.example",
+        expiresAt: now + 30_000,
+        issuedAt: now,
+        nonce: "a-unique-request-nonce",
+        surfaceId: "future-surface",
+        version: 1,
+      }).claims[0]?.token
+    ).toBe("future-browser-token");
+  });
+
+  it("prefers browser-standard autocomplete semantics", () => {
+    expect(
+      classifyAutofillField({
+        autocomplete: "billing cc-number",
+        label: "",
+        name: "opaque-provider-field",
+        type: "tel",
+      })
+    ).toEqual({ kind: "payment-card", score: 100, token: "cc-number" });
+    expect(
+      classifyAutofillField({
+        autocomplete: "billing cc-exp-month",
+        label: "",
+        name: "month",
+        type: "text",
+      })
+    ).toEqual({ kind: "payment-card", score: 100, token: "cc-exp-month" });
+  });
+
+  it("falls back to labels without model-authored selectors", () => {
+    expect(
+      classifyAutofillField({
+        autocomplete: "off",
+        label: "Security code (CVV)",
+        name: "secure-field",
+        type: "text",
+      })
+    ).toEqual({ kind: "payment-card", score: 70, token: "cc-csc" });
+    expect(
+      classifyAutofillField({
+        autocomplete: "",
+        label: "MM/YY",
+        name: "cardExpiry cc-cardExpiry",
+        type: "text",
+      })
+    ).toEqual({ kind: "payment-card", score: 70, token: "cc-exp" });
+  });
+
+  it("lets masked expiry controls own slash formatting", () => {
+    expect(fillCandidates("09/31", "cc-exp")).toEqual(["09/31", "0931"]);
+    expect(fillCandidates("Grace Hopper", "cc-name")).toEqual(["Grace Hopper"]);
+  });
+
+  it("sends only an encrypted envelope through Kernel Playwright", () => {
+    const code = extensionRuntimeCode("fill", "encrypted-envelope");
+
+    expect(code).toContain('cdpSession.send("Runtime.enable")');
+    expect(code).toContain("vaultAutofillContentRuntime");
+    expect(code).toContain("encrypted-envelope");
+    expect(code).not.toContain("4242424242424242");
+    expect(code).not.toContain("context.serviceWorkers()");
+  });
+
+  it("timestamps commands with the browser clock", () => {
+    const code = extensionRuntimeCode("getPublicKey");
+
+    expect(code).toContain("browserNow: Date.now()");
+    expect(code).toContain("publicKey");
+  });
+});
