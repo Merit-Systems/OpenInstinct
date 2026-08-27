@@ -34,21 +34,21 @@ export default defineDynamic({
       return {
         manage_browsers: defineTool({
           description:
-            'Manage browser sessions. Use "create" before browser control, "list" or "get" to inspect sessions, and "delete" when finished.',
+            'Manage browser sessions. Create one browser and reuse it for the assignment; use "list" or "get" to inspect sessions and "delete" when finished. Keep a browser open only for a pending human action or transaction approval.',
           inputSchema: manageBrowsersInputSchema,
           execute: (input, context) =>
             manageOwnedKernelBrowsers(scope, input, context.abortSignal),
         }),
         execute_playwright_code: defineTool({
           description:
-            "Execute Playwright/TypeScript automation code against an existing browser session. Does not create or delete browsers; use manage_browsers for session lifecycle.",
+            'Execute Playwright/TypeScript automation code against an existing browser session with a 30-second ceiling. Batch related operations, use "domcontentloaded" or a precise locator with waits of at most five seconds, and never wait for "networkidle" or use fixed multi-second sleeps. Does not create or delete browsers.',
           inputSchema: executePlaywrightInputSchema,
           execute: (input, context) =>
             executeOwnedKernelPlaywright(scope, input, context.abortSignal),
         }),
         computer_action: defineTool({
           description:
-            "Execute computer actions on a browser session. Pass one or more mouse, keyboard, clipboard, sleep, or screenshot actions. Always include a screenshot as the last action when visual inspection is needed; screenshots are delivered directly to the vision model.",
+            "Execute a bounded batch of computer actions on one browser session. Prefer one batch over repeated calls, keep sleep actions at or below two seconds, and include a screenshot last only when visual inspection is needed; screenshots are delivered directly to the vision model.",
           inputSchema: computerActionInputSchema,
           execute: async (input, context) =>
             computerResultSchema.parse(

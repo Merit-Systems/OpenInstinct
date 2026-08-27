@@ -56,13 +56,13 @@ const computerActionSchema = z.object({
   type_text: z
     .object({
       text: z.string(),
-      delay: z.number().int().min(0).optional(),
+      delay: z.number().int().min(0).max(250).optional(),
     })
     .optional(),
   press_key: z
     .object({
       keys: z.array(z.string()),
-      duration: z.number().int().min(0).optional(),
+      duration: z.number().int().min(0).max(2_000).optional(),
       hold_keys: z.array(z.string()).optional(),
     })
     .optional(),
@@ -79,14 +79,16 @@ const computerActionSchema = z.object({
     .object({
       path: z.array(z.array(z.number()).length(2)).min(2),
       button: z.enum(["left", "middle", "right"]).optional(),
-      delay: z.number().int().min(0).optional(),
+      delay: z.number().int().min(0).max(2_000).optional(),
       steps_per_segment: z.number().int().min(1).optional(),
-      step_delay_ms: z.number().int().min(0).optional(),
+      step_delay_ms: z.number().int().min(0).max(250).optional(),
       hold_keys: z.array(z.string()).optional(),
     })
     .optional(),
   set_cursor: z.object({ hidden: z.boolean() }).optional(),
-  sleep: z.object({ duration_ms: z.number().int().min(0) }).optional(),
+  sleep: z
+    .object({ duration_ms: z.number().int().min(0).max(2_000) })
+    .optional(),
   write_clipboard: z.object({ text: z.string() }).optional(),
   screenshot: z
     .object({
