@@ -33,6 +33,7 @@ The main conversation is the control plane. When the `agent` tool is available, 
 - Give each worker a bounded objective, expected output, relevant constraints, and all context it needs; workers do not see the parent conversation.
 - Treat a background-task receipt as acceptance, not completion. Briefly acknowledge accepted work and end the turn; synthesize completed worker results into one concise answer when Eve returns them.
 - Treat a new user message as current steering. Preserve unrelated work, cancel obsolete work, and continue an existing worker only when its prior context remains useful.
+- Each parked worker remains available under the `agentId` returned by its task receipt. When the user refines or extends the same job, call the same agent tool with that `agentId` and the new instruction so it keeps its browser state, history, and completed work. Start a fresh worker only for unrelated work. A worker that is still running cannot accept continuation yet; let it park before following up.
 - Do not delegate a task merely to create activity, and do not create overlapping workers for the same assignment.
 
 # Worker execution

@@ -16,7 +16,7 @@ importers:
         version: 1.1.0
       '@onkernel/eve-extension':
         specifier: ^0.1.4
-        version: 0.1.4(ai@7.0.83(zod@4.4.3))(better-auth@1.7.1(next@16.3.0-preview.6(@babel/core@7.29.7)(react-dom@19.2.6(react@19.2.6))(react@19.2.6))(pg@8.23.0)(react-dom@19.2.6(react@19.2.6))(react@19.2.6)(vitest@4.1.10(@edge-runtime/vm@3.2.0)(@types/node@24.13.3)(vite@8.2.2(@types/node@24.13.3)(esbuild@0.27.0)(jiti@2.7.0)(tsx@4.21.0)(yaml@2.9.0))))(eve@0.44.4(@vercel/blob@2.8.0)(@vercel/functions@3.9.5(ws@8.21.3))(ai@7.0.83(zod@4.4.3))(chokidar@4.0.0)(dotenv@17.4.2)(jiti@2.7.0)(lru-cache@11.5.2)(vite@8.2.2(@types/node@24.13.3)(esbuild@0.27.0)(jiti@2.7.0)(tsx@4.21.0)(yaml@2.9.0)))
+        version: 0.1.4(ai@7.0.83(zod@4.4.3))(better-auth@1.7.1(next@16.3.0-preview.6(@babel/core@7.29.7)(react-dom@19.2.6(react@19.2.6))(react@19.2.6))(pg@8.23.0)(react-dom@19.2.6(react@19.2.6))(react@19.2.6)(vitest@4.1.10(@edge-runtime/vm@3.2.0)(@types/node@24.13.3)(vite@8.2.2(@types/node@24.13.3)(esbuild@0.27.0)(jiti@2.7.0)(tsx@4.21.0)(yaml@2.9.0))))(eve@0.46.1(@vercel/blob@2.8.0)(@vercel/functions@3.9.5(ws@8.21.3))(ai@7.0.83(zod@4.4.3))(chokidar@4.0.0)(dotenv@17.4.2)(jiti@2.7.0)(lru-cache@11.5.2)(vite@8.2.2(@types/node@24.13.3)(esbuild@0.27.0)(jiti@2.7.0)(tsx@4.21.0)(yaml@2.9.0)))
       '@onkernel/sdk':
         specifier: ^0.95.0
         version: 0.95.0
@@ -40,7 +40,7 @@ importers:
         version: 4.3.0
       '@vercel/connect':
         specifier: ^2.0.0
-        version: 2.0.0(ai@7.0.83(zod@4.4.3))(better-auth@1.7.1(next@16.3.0-preview.6(@babel/core@7.29.7)(react-dom@19.2.6(react@19.2.6))(react@19.2.6))(pg@8.23.0)(react-dom@19.2.6(react@19.2.6))(react@19.2.6)(vitest@4.1.10(@edge-runtime/vm@3.2.0)(@types/node@24.13.3)(vite@8.2.2(@types/node@24.13.3)(esbuild@0.27.0)(jiti@2.7.0)(tsx@4.21.0)(yaml@2.9.0))))(eve@0.44.4(@vercel/blob@2.8.0)(@vercel/functions@3.9.5(ws@8.21.3))(ai@7.0.83(zod@4.4.3))(chokidar@4.0.0)(dotenv@17.4.2)(jiti@2.7.0)(lru-cache@11.5.2)(vite@8.2.2(@types/node@24.13.3)(esbuild@0.27.0)(jiti@2.7.0)(tsx@4.21.0)(yaml@2.9.0)))
+        version: 2.0.0(ai@7.0.83(zod@4.4.3))(better-auth@1.7.1(next@16.3.0-preview.6(@babel/core@7.29.7)(react-dom@19.2.6(react@19.2.6))(react@19.2.6))(pg@8.23.0)(react-dom@19.2.6(react@19.2.6))(react@19.2.6)(vitest@4.1.10(@edge-runtime/vm@3.2.0)(@types/node@24.13.3)(vite@8.2.2(@types/node@24.13.3)(esbuild@0.27.0)(jiti@2.7.0)(tsx@4.21.0)(yaml@2.9.0))))(eve@0.46.1(@vercel/blob@2.8.0)(@vercel/functions@3.9.5(ws@8.21.3))(ai@7.0.83(zod@4.4.3))(chokidar@4.0.0)(dotenv@17.4.2)(jiti@2.7.0)(lru-cache@11.5.2)(vite@8.2.2(@types/node@24.13.3)(esbuild@0.27.0)(jiti@2.7.0)(tsx@4.21.0)(yaml@2.9.0)))
       '@workflow/world-vercel':
         specifier: 5.0.0-beta.39
         version: 5.0.0-beta.39
@@ -60,8 +60,8 @@ importers:
         specifier: 1.1.1
         version: 1.1.1(@types/react-dom@19.2.3(@types/react@19.2.15))(@types/react@19.2.15)(react-dom@19.2.6(react@19.2.6))(react@19.2.6)
       eve:
-        specifier: ^0.44.4
-        version: 0.44.4(@vercel/blob@2.8.0)(@vercel/functions@3.9.5(ws@8.21.3))(ai@7.0.83(zod@4.4.3))(chokidar@4.0.0)(dotenv@17.4.2)(jiti@2.7.0)(lru-cache@11.5.2)(vite@8.2.2(@types/node@24.13.3)(esbuild@0.27.0)(jiti@2.7.0)(tsx@4.21.0)(yaml@2.9.0))
+        specifier: ^0.46.1
+        version: 0.46.1(@vercel/blob@2.8.0)(@vercel/functions@3.9.5(ws@8.21.3))(ai@7.0.83(zod@4.4.3))(chokidar@4.0.0)(dotenv@17.4.2)(jiti@2.7.0)(lru-cache@11.5.2)(vite@8.2.2(@types/node@24.13.3)(esbuild@0.27.0)(jiti@2.7.0)(tsx@4.21.0)(yaml@2.9.0))
       lucide-react:
         specifier: 1.16.0
         version: 1.16.0(react@19.2.6)
@@ -3738,8 +3738,8 @@ packages:
     resolution: {integrity: sha512-aIL5Fx7mawVa300al2BnEE4iNvo1qETxLrPI/o05L7z6go7fCw1J6EQmbK4FmJ2AS7kgVF/KEZWufBfdClMcPg==}
     engines: {node: '>= 0.6'}
 
-  eve@0.44.4:
-    resolution: {integrity: sha512-juaOffL+doGo8z1gfB5FrO750dZKMaY5G3Qm96N+bASs5nHBwhkGfqHKEyTFGZmXaxBWJpnDRnEgL4rAKtQPcw==}
+  eve@0.46.1:
+    resolution: {integrity: sha512-GhsruM+NsOg93fPsKCUTbxZyAOqzGWNfjjqa1r1055GEtQGvi838p/Ng8Z6Oz0KsYiSXC2rp/m2EgexCl/Jfog==}
     engines: {node: '>=24'}
     hasBin: true
     peerDependencies:
@@ -7219,10 +7219,10 @@ snapshots:
       '@nodelib/fs.scandir': 2.1.5
       fastq: 1.20.1
 
-  '@onkernel/eve-extension@0.1.4(ai@7.0.83(zod@4.4.3))(better-auth@1.7.1(next@16.3.0-preview.6(@babel/core@7.29.7)(react-dom@19.2.6(react@19.2.6))(react@19.2.6))(pg@8.23.0)(react-dom@19.2.6(react@19.2.6))(react@19.2.6)(vitest@4.1.10(@edge-runtime/vm@3.2.0)(@types/node@24.13.3)(vite@8.2.2(@types/node@24.13.3)(esbuild@0.27.0)(jiti@2.7.0)(tsx@4.21.0)(yaml@2.9.0))))(eve@0.44.4(@vercel/blob@2.8.0)(@vercel/functions@3.9.5(ws@8.21.3))(ai@7.0.83(zod@4.4.3))(chokidar@4.0.0)(dotenv@17.4.2)(jiti@2.7.0)(lru-cache@11.5.2)(vite@8.2.2(@types/node@24.13.3)(esbuild@0.27.0)(jiti@2.7.0)(tsx@4.21.0)(yaml@2.9.0)))':
+  '@onkernel/eve-extension@0.1.4(ai@7.0.83(zod@4.4.3))(better-auth@1.7.1(next@16.3.0-preview.6(@babel/core@7.29.7)(react-dom@19.2.6(react@19.2.6))(react@19.2.6))(pg@8.23.0)(react-dom@19.2.6(react@19.2.6))(react@19.2.6)(vitest@4.1.10(@edge-runtime/vm@3.2.0)(@types/node@24.13.3)(vite@8.2.2(@types/node@24.13.3)(esbuild@0.27.0)(jiti@2.7.0)(tsx@4.21.0)(yaml@2.9.0))))(eve@0.46.1(@vercel/blob@2.8.0)(@vercel/functions@3.9.5(ws@8.21.3))(ai@7.0.83(zod@4.4.3))(chokidar@4.0.0)(dotenv@17.4.2)(jiti@2.7.0)(lru-cache@11.5.2)(vite@8.2.2(@types/node@24.13.3)(esbuild@0.27.0)(jiti@2.7.0)(tsx@4.21.0)(yaml@2.9.0)))':
     dependencies:
-      '@vercel/connect': 0.4.3(ai@7.0.83(zod@4.4.3))(better-auth@1.7.1(next@16.3.0-preview.6(@babel/core@7.29.7)(react-dom@19.2.6(react@19.2.6))(react@19.2.6))(pg@8.23.0)(react-dom@19.2.6(react@19.2.6))(react@19.2.6)(vitest@4.1.10(@edge-runtime/vm@3.2.0)(@types/node@24.13.3)(vite@8.2.2(@types/node@24.13.3)(esbuild@0.27.0)(jiti@2.7.0)(tsx@4.21.0)(yaml@2.9.0))))(eve@0.44.4(@vercel/blob@2.8.0)(@vercel/functions@3.9.5(ws@8.21.3))(ai@7.0.83(zod@4.4.3))(chokidar@4.0.0)(dotenv@17.4.2)(jiti@2.7.0)(lru-cache@11.5.2)(vite@8.2.2(@types/node@24.13.3)(esbuild@0.27.0)(jiti@2.7.0)(tsx@4.21.0)(yaml@2.9.0)))
-      eve: 0.44.4(@vercel/blob@2.8.0)(@vercel/functions@3.9.5(ws@8.21.3))(ai@7.0.83(zod@4.4.3))(chokidar@4.0.0)(dotenv@17.4.2)(jiti@2.7.0)(lru-cache@11.5.2)(vite@8.2.2(@types/node@24.13.3)(esbuild@0.27.0)(jiti@2.7.0)(tsx@4.21.0)(yaml@2.9.0))
+      '@vercel/connect': 0.4.3(ai@7.0.83(zod@4.4.3))(better-auth@1.7.1(next@16.3.0-preview.6(@babel/core@7.29.7)(react-dom@19.2.6(react@19.2.6))(react@19.2.6))(pg@8.23.0)(react-dom@19.2.6(react@19.2.6))(react@19.2.6)(vitest@4.1.10(@edge-runtime/vm@3.2.0)(@types/node@24.13.3)(vite@8.2.2(@types/node@24.13.3)(esbuild@0.27.0)(jiti@2.7.0)(tsx@4.21.0)(yaml@2.9.0))))(eve@0.46.1(@vercel/blob@2.8.0)(@vercel/functions@3.9.5(ws@8.21.3))(ai@7.0.83(zod@4.4.3))(chokidar@4.0.0)(dotenv@17.4.2)(jiti@2.7.0)(lru-cache@11.5.2)(vite@8.2.2(@types/node@24.13.3)(esbuild@0.27.0)(jiti@2.7.0)(tsx@4.21.0)(yaml@2.9.0)))
+      eve: 0.46.1(@vercel/blob@2.8.0)(@vercel/functions@3.9.5(ws@8.21.3))(ai@7.0.83(zod@4.4.3))(chokidar@4.0.0)(dotenv@17.4.2)(jiti@2.7.0)(lru-cache@11.5.2)(vite@8.2.2(@types/node@24.13.3)(esbuild@0.27.0)(jiti@2.7.0)(tsx@4.21.0)(yaml@2.9.0))
       zod: 4.4.3
     transitivePeerDependencies:
       - '@ai-sdk/mcp'
@@ -8275,21 +8275,21 @@ snapshots:
     dependencies:
       execa: 5.1.1
 
-  '@vercel/connect@0.4.3(ai@7.0.83(zod@4.4.3))(better-auth@1.7.1(next@16.3.0-preview.6(@babel/core@7.29.7)(react-dom@19.2.6(react@19.2.6))(react@19.2.6))(pg@8.23.0)(react-dom@19.2.6(react@19.2.6))(react@19.2.6)(vitest@4.1.10(@edge-runtime/vm@3.2.0)(@types/node@24.13.3)(vite@8.2.2(@types/node@24.13.3)(esbuild@0.27.0)(jiti@2.7.0)(tsx@4.21.0)(yaml@2.9.0))))(eve@0.44.4(@vercel/blob@2.8.0)(@vercel/functions@3.9.5(ws@8.21.3))(ai@7.0.83(zod@4.4.3))(chokidar@4.0.0)(dotenv@17.4.2)(jiti@2.7.0)(lru-cache@11.5.2)(vite@8.2.2(@types/node@24.13.3)(esbuild@0.27.0)(jiti@2.7.0)(tsx@4.21.0)(yaml@2.9.0)))':
+  '@vercel/connect@0.4.3(ai@7.0.83(zod@4.4.3))(better-auth@1.7.1(next@16.3.0-preview.6(@babel/core@7.29.7)(react-dom@19.2.6(react@19.2.6))(react@19.2.6))(pg@8.23.0)(react-dom@19.2.6(react@19.2.6))(react@19.2.6)(vitest@4.1.10(@edge-runtime/vm@3.2.0)(@types/node@24.13.3)(vite@8.2.2(@types/node@24.13.3)(esbuild@0.27.0)(jiti@2.7.0)(tsx@4.21.0)(yaml@2.9.0))))(eve@0.46.1(@vercel/blob@2.8.0)(@vercel/functions@3.9.5(ws@8.21.3))(ai@7.0.83(zod@4.4.3))(chokidar@4.0.0)(dotenv@17.4.2)(jiti@2.7.0)(lru-cache@11.5.2)(vite@8.2.2(@types/node@24.13.3)(esbuild@0.27.0)(jiti@2.7.0)(tsx@4.21.0)(yaml@2.9.0)))':
     dependencies:
       '@vercel/oidc': 3.8.1
     optionalDependencies:
       ai: 7.0.83(zod@4.4.3)
       better-auth: 1.7.1(next@16.3.0-preview.6(@babel/core@7.29.7)(react-dom@19.2.6(react@19.2.6))(react@19.2.6))(pg@8.23.0)(react-dom@19.2.6(react@19.2.6))(react@19.2.6)(vitest@4.1.10(@edge-runtime/vm@3.2.0)(@types/node@24.13.3)(vite@8.2.2(@types/node@24.13.3)(esbuild@0.27.0)(jiti@2.7.0)(tsx@4.21.0)(yaml@2.9.0)))
-      eve: 0.44.4(@vercel/blob@2.8.0)(@vercel/functions@3.9.5(ws@8.21.3))(ai@7.0.83(zod@4.4.3))(chokidar@4.0.0)(dotenv@17.4.2)(jiti@2.7.0)(lru-cache@11.5.2)(vite@8.2.2(@types/node@24.13.3)(esbuild@0.27.0)(jiti@2.7.0)(tsx@4.21.0)(yaml@2.9.0))
+      eve: 0.46.1(@vercel/blob@2.8.0)(@vercel/functions@3.9.5(ws@8.21.3))(ai@7.0.83(zod@4.4.3))(chokidar@4.0.0)(dotenv@17.4.2)(jiti@2.7.0)(lru-cache@11.5.2)(vite@8.2.2(@types/node@24.13.3)(esbuild@0.27.0)(jiti@2.7.0)(tsx@4.21.0)(yaml@2.9.0))
 
-  '@vercel/connect@2.0.0(ai@7.0.83(zod@4.4.3))(better-auth@1.7.1(next@16.3.0-preview.6(@babel/core@7.29.7)(react-dom@19.2.6(react@19.2.6))(react@19.2.6))(pg@8.23.0)(react-dom@19.2.6(react@19.2.6))(react@19.2.6)(vitest@4.1.10(@edge-runtime/vm@3.2.0)(@types/node@24.13.3)(vite@8.2.2(@types/node@24.13.3)(esbuild@0.27.0)(jiti@2.7.0)(tsx@4.21.0)(yaml@2.9.0))))(eve@0.44.4(@vercel/blob@2.8.0)(@vercel/functions@3.9.5(ws@8.21.3))(ai@7.0.83(zod@4.4.3))(chokidar@4.0.0)(dotenv@17.4.2)(jiti@2.7.0)(lru-cache@11.5.2)(vite@8.2.2(@types/node@24.13.3)(esbuild@0.27.0)(jiti@2.7.0)(tsx@4.21.0)(yaml@2.9.0)))':
+  '@vercel/connect@2.0.0(ai@7.0.83(zod@4.4.3))(better-auth@1.7.1(next@16.3.0-preview.6(@babel/core@7.29.7)(react-dom@19.2.6(react@19.2.6))(react@19.2.6))(pg@8.23.0)(react-dom@19.2.6(react@19.2.6))(react@19.2.6)(vitest@4.1.10(@edge-runtime/vm@3.2.0)(@types/node@24.13.3)(vite@8.2.2(@types/node@24.13.3)(esbuild@0.27.0)(jiti@2.7.0)(tsx@4.21.0)(yaml@2.9.0))))(eve@0.46.1(@vercel/blob@2.8.0)(@vercel/functions@3.9.5(ws@8.21.3))(ai@7.0.83(zod@4.4.3))(chokidar@4.0.0)(dotenv@17.4.2)(jiti@2.7.0)(lru-cache@11.5.2)(vite@8.2.2(@types/node@24.13.3)(esbuild@0.27.0)(jiti@2.7.0)(tsx@4.21.0)(yaml@2.9.0)))':
     dependencies:
       '@vercel/oidc': 3.8.5
     optionalDependencies:
       ai: 7.0.83(zod@4.4.3)
       better-auth: 1.7.1(next@16.3.0-preview.6(@babel/core@7.29.7)(react-dom@19.2.6(react@19.2.6))(react@19.2.6))(pg@8.23.0)(react-dom@19.2.6(react@19.2.6))(react@19.2.6)(vitest@4.1.10(@edge-runtime/vm@3.2.0)(@types/node@24.13.3)(vite@8.2.2(@types/node@24.13.3)(esbuild@0.27.0)(jiti@2.7.0)(tsx@4.21.0)(yaml@2.9.0)))
-      eve: 0.44.4(@vercel/blob@2.8.0)(@vercel/functions@3.9.5(ws@8.21.3))(ai@7.0.83(zod@4.4.3))(chokidar@4.0.0)(dotenv@17.4.2)(jiti@2.7.0)(lru-cache@11.5.2)(vite@8.2.2(@types/node@24.13.3)(esbuild@0.27.0)(jiti@2.7.0)(tsx@4.21.0)(yaml@2.9.0))
+      eve: 0.46.1(@vercel/blob@2.8.0)(@vercel/functions@3.9.5(ws@8.21.3))(ai@7.0.83(zod@4.4.3))(chokidar@4.0.0)(dotenv@17.4.2)(jiti@2.7.0)(lru-cache@11.5.2)(vite@8.2.2(@types/node@24.13.3)(esbuild@0.27.0)(jiti@2.7.0)(tsx@4.21.0)(yaml@2.9.0))
 
   '@vercel/container@2.0.0(@vercel/build-utils@14.4.0)':
     dependencies:
@@ -9502,7 +9502,7 @@ snapshots:
 
   etag@1.8.1: {}
 
-  eve@0.44.4(@vercel/blob@2.8.0)(@vercel/functions@3.9.5(ws@8.21.3))(ai@7.0.83(zod@4.4.3))(chokidar@4.0.0)(dotenv@17.4.2)(jiti@2.7.0)(lru-cache@11.5.2)(vite@8.2.2(@types/node@24.13.3)(esbuild@0.27.0)(jiti@2.7.0)(tsx@4.21.0)(yaml@2.9.0)):
+  eve@0.46.1(@vercel/blob@2.8.0)(@vercel/functions@3.9.5(ws@8.21.3))(ai@7.0.83(zod@4.4.3))(chokidar@4.0.0)(dotenv@17.4.2)(jiti@2.7.0)(lru-cache@11.5.2)(vite@8.2.2(@types/node@24.13.3)(esbuild@0.27.0)(jiti@2.7.0)(tsx@4.21.0)(yaml@2.9.0)):
     dependencies:
       ai: 7.0.83(zod@4.4.3)
       nitro: 3.0.260610-beta(@vercel/blob@2.8.0)(@vercel/functions@3.9.5(ws@8.21.3))(chokidar@4.0.0)(dotenv@17.4.2)(jiti@2.7.0)(lru-cache@11.5.2)(vite@8.2.2(@types/node@24.13.3)(esbuild@0.27.0)(jiti@2.7.0)(tsx@4.21.0)(yaml@2.9.0))
