@@ -1,8 +1,14 @@
 import { randomUUID } from "node:crypto";
+import { ensureScope } from "@/db/services/scope";
+import { selectGatewayModel } from "@/db/services/settings";
+import {
+  createVaultItem as insertVaultItem,
+  deleteVaultItem,
+  listVaultItems,
+} from "@/db/services/vault";
 import type { AccessScope } from "../access-scope";
 import type { ManagerMutation } from "../manager";
 import { getModelSettings } from "../model-config";
-import { getAppStore } from "./app-store";
 import {
   deleteSecret,
   hasSecret,
@@ -11,10 +17,9 @@ import {
 } from "./secret-store";
 
 export async function readManagerSnapshot(scope: AccessScope) {
-  const store = await getAppStore();
-  await store.ensureScope(scope);
+  await ensureScope(scope);
   const [vaultRows, modelSettings] = await Promise.all([
-    store.listVaultItems(scope),
+    listVaultItems(scope),
     getModelSettings(scope),
   ]);
   const vaultItems = await Promise.all(
@@ -40,12 +45,11 @@ export async function applyManagerMutation(
   scope: AccessScope,
   mutation: ManagerMutation
 ) {
-  const store = await getAppStore();
-  await store.ensureScope(scope);
+  await ensureScope(scope);
 
   switch (mutation.action) {
     case "model.select":
-      await store.selectGatewayModel(scope, mutation.modelId);
+      await selectGatewayModel(scope, mutation.modelId);
       break;
     case "vault.create":
       await createVaultItem(scope, mutation.input);
@@ -67,9 +71,7 @@ async function createVaultItem(
   await writeSecret({ id, namespace: "vault", scope, value: input.secret });
 
   try {
-    await (
-      await getAppStore()
-    ).createVaultItem(scope, {
+    await insertVaultItem(scope, {
       account: input.account,
       createdAt: now,
       id,
@@ -84,7 +86,7 @@ async function createVaultItem(
 }
 
 async function removeVaultItem(scope: AccessScope, id: string) {
-  const deleted = await (await getAppStore()).deleteVaultItem(scope, id);
+  const deleted = await deleteVaultItem(scope, id);
   if (!deleted) return;
   await deleteSecret({ id, namespace: "vault", scope });
 }

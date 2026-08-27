@@ -1,6 +1,6 @@
 import { createWorld } from "@workflow/world-vercel";
+import { listOwnedSessionIds } from "@/db/services/sessions";
 import { taskHistoryPageSchema } from "@/lib/task-history";
-import { getAppStore } from "@/lib/server/app-store";
 import {
   requireRequestScope,
   UnauthenticatedError,
@@ -15,9 +15,7 @@ const workflowName = "workflow//eve//workflowEntry";
 export async function GET(request: Request) {
   try {
     const scope = await requireRequestScope();
-    const ownedSessionIds = await (
-      await getAppStore()
-    ).listOwnedSessionIds(scope);
+    const ownedSessionIds = await listOwnedSessionIds(scope);
     const cursor = new URL(request.url).searchParams.get("cursor") ?? undefined;
     const world = createWorld({
       headers: { "User-Agent": "local-vault-assistant/task-history" },

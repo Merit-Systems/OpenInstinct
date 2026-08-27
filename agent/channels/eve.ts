@@ -4,9 +4,9 @@ import {
   UnauthenticatedError,
   type AuthFn,
 } from "eve/channels/auth";
+import { isSessionOwned } from "@/db/services/sessions";
 import type { AccessScope } from "@/lib/access-scope";
 import { sessionIdFromPath } from "@/lib/eve-session-path";
-import { getAppStore } from "@/lib/server/app-store";
 import { requestScopeFromRequest } from "@/lib/server/eve-request-scope";
 
 function applicationAuth(): AuthFn {
@@ -36,9 +36,8 @@ function applicationAuth(): AuthFn {
 export default eveChannel({ auth: [applicationAuth()] });
 
 async function waitForSessionOwnership(scope: AccessScope, sessionId: string) {
-  const store = await getAppStore();
   for (let attempt = 0; attempt < 5; attempt += 1) {
-    if (await store.isSessionOwned(scope, sessionId)) return true;
+    if (await isSessionOwned(scope, sessionId)) return true;
     await new Promise((resolve) => setTimeout(resolve, 50));
   }
   return false;

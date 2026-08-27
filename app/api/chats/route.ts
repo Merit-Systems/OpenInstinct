@@ -1,6 +1,6 @@
+import { listChats, saveChat } from "@/db/services/chats";
 import { chatListSchema, saveChatSchema } from "@/lib/chat";
 import { isAllowedMutationOrigin } from "@/lib/manager";
-import { getAppStore } from "@/lib/server/app-store";
 import {
   requireRequestScope,
   UnauthenticatedError,
@@ -13,10 +13,9 @@ export const runtime = "nodejs";
 export async function GET() {
   try {
     const scope = await requireRequestScope();
-    return Response.json(
-      chatListSchema.parse(await (await getAppStore()).listChats(scope)),
-      { headers: { "Cache-Control": "no-store" } }
-    );
+    return Response.json(chatListSchema.parse(await listChats(scope)), {
+      headers: { "Cache-Control": "no-store" },
+    });
   } catch (error) {
     if (error instanceof UnauthenticatedError) return unauthorizedResponse();
     return chatError(
@@ -31,7 +30,7 @@ export async function POST(request: Request) {
     const denied = denyCrossOriginMutation(request);
     if (denied) return denied;
     const chat = saveChatSchema.parse(await request.json());
-    await (await getAppStore()).saveChat(scope, chat);
+    await saveChat(scope, chat);
     return Response.json({ ok: true });
   } catch (error) {
     if (error instanceof UnauthenticatedError) return unauthorizedResponse();
