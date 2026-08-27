@@ -15,7 +15,6 @@ describe("environment", () => {
     for (const [name, value] of Object.entries(requiredEnvironment)) {
       vi.stubEnv(name, value);
     }
-    vi.stubEnv("HOSTED_SECRET_ENCRYPTION_KEY", "");
   });
 
   afterEach(() => {
@@ -44,7 +43,7 @@ describe("environment", () => {
     ["BETTER_AUTH_URL", "Invalid environment variables"],
     ["DATABASE_URL", "Invalid environment variables"],
     ["KERNEL_API_KEY", "Invalid environment variables"],
-    ["SECRET_ENCRYPTION_KEY", "SECRET_ENCRYPTION_KEY is required"],
+    ["SECRET_ENCRYPTION_KEY", "Invalid environment variables"],
   ])(
     "rejects a missing required %s value during import",
     async (name, errorMessage) => {
@@ -53,6 +52,14 @@ describe("environment", () => {
       await expect(import("../lib/env")).rejects.toThrow(errorMessage);
     }
   );
+
+  it("rejects an encryption key that does not decode to 32 bytes", async () => {
+    vi.stubEnv("SECRET_ENCRYPTION_KEY", Buffer.alloc(31, 1).toString("base64"));
+
+    await expect(import("../lib/env")).rejects.toThrow(
+      "Invalid environment variables"
+    );
+  });
 
   it("rejects a non-Postgres database URL", async () => {
     vi.stubEnv("DATABASE_URL", "https://example.com/database");
