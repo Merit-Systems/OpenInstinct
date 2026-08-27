@@ -13,6 +13,14 @@ const LOCAL_UNUSED_DATABASE_URL =
   "postgresql://local:local@127.0.0.1:1/local_unused";
 const LOCAL_UNUSED_SECRET = "local-vault-assistant-auth-is-disabled-locally";
 const AUTH_MIGRATION_LOCK_ID = 1_972_040_815;
+const AUTH_TABLE_NAMES = [
+  "account",
+  "session",
+  "twoFactor",
+  "user",
+  "verification",
+] as const;
+const authSchemaReadinessSchema = z.object({ ready: z.boolean() });
 const phoneUserSchema = z.object({ phoneNumber: z.string().min(1) });
 
 const env = getEnv();
@@ -103,13 +111,30 @@ export async function ensureAuthDatabase() {
   if (getDeploymentMode() === "local") return;
   requireHostedAuthConfiguration();
 
-  const currentMigration = (migrationPromise ??= runAuthMigrations());
+  const currentMigration = (migrationPromise ??= prepareAuthDatabase());
   try {
     await currentMigration;
   } catch (error) {
     if (migrationPromise === currentMigration) migrationPromise = undefined;
     throw error;
   }
+}
+
+async function prepareAuthDatabase() {
+  if (await isAuthSchemaReady()) return;
+  await runAuthMigrations();
+}
+
+async function isAuthSchemaReady() {
+  const readinessResult = await authPool.query(
+    `SELECT count(*) = $1 AS ready
+     FROM information_schema.tables
+     WHERE table_schema = current_schema()
+       AND table_name = ANY($2::text[])`,
+    [AUTH_TABLE_NAMES.length, AUTH_TABLE_NAMES]
+  );
+  const readiness = authSchemaReadinessSchema.parse(readinessResult.rows[0]);
+  return readiness.ready;
 }
 
 async function runAuthMigrations() {
@@ -120,6 +145,7 @@ async function runAuthMigrations() {
       AUTH_MIGRATION_LOCK_ID,
     ]);
     lockAcquired = true;
+    if (await isAuthSchemaReady()) return;
     const { runMigrations } = await getMigrations(auth.options);
     await runMigrations();
   } finally {
