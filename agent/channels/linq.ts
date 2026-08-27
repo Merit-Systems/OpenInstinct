@@ -6,6 +6,7 @@ import { auth } from "@/auth";
 import { normalizeAuthPhoneNumber } from "@/auth/phone-number";
 import { accessScopeForUser } from "@/lib/access-scope";
 import { env } from "@/lib/env";
+import { deliverCompletedLinqMessage } from "./linq-message-delivery";
 
 const verifiedPhoneUserSchema = z.object({
   id: z.string().min(1),
@@ -14,6 +15,9 @@ const verifiedPhoneUserSchema = z.object({
 
 export default linqChannel({
   credentials: connectLinqCredentials(env.LINQ_CONNECTOR_UID),
+  events: {
+    "message.completed": deliverCompletedLinqMessage,
+  },
   async onMessage(_context, message) {
     if (message.author.isBot) return null;
 
