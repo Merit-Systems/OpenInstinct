@@ -3,6 +3,9 @@ import { getModelSettings } from "../lib/model-config.js";
 import { scopeFromPrincipal } from "../lib/access-scope.js";
 
 export default defineAgent({
+  experimental: {
+    tasks: true,
+  },
   model: defineDynamic({
     events: {
       "step.started": async (_event, ctx) => {

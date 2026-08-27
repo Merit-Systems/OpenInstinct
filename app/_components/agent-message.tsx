@@ -45,6 +45,10 @@ import {
   ToolOutput,
 } from "@/components/ai-elements/tool";
 import { Button } from "@/components/ui/button";
+import {
+  conversationMessageFromOutput,
+  SEND_MESSAGE_TOOL_NAME,
+} from "@/lib/conversation-message";
 import { cn } from "@/lib/utils";
 
 export type AgentInputResponse = {
@@ -73,13 +77,22 @@ export function AgentMessage({
   const [optimisticTimestamp] = useState(() => new Date().toISOString());
   const displayedTimestamp =
     timestamp ?? (message.role === "user" ? optimisticTimestamp : undefined);
-  const lastTextIndex = message.parts.reduce(
+  const visibleParts = message.parts.filter(
+    (part) =>
+      (message.role !== "assistant" || part.type !== "text") &&
+      (part.type !== "dynamic-tool" ||
+        part.toolName !== SEND_MESSAGE_TOOL_NAME ||
+        conversationMessageFromOutput(part.toolName, part.output) !== undefined)
+  );
+  const lastTextIndex = visibleParts.reduce(
     (last, part, index) => (part.type === "text" ? index : last),
     -1
   );
   const hasAssistantText =
     message.role === "assistant" &&
-    message.parts.some((part) => part.type === "text" && part.text.length > 0);
+    visibleParts.some((part) => part.type === "text" && part.text.length > 0);
+
+  if (visibleParts.length === 0) return null;
 
   return (
     <Message
@@ -87,7 +100,7 @@ export function AgentMessage({
       from={message.role}
     >
       <MessageContent>
-        {message.parts.map((part, index) =>
+        {visibleParts.map((part, index) =>
           hasAssistantText && part.type === "reasoning" ? null : (
             <AgentMessagePart
               canRespond={canRespond}
@@ -173,6 +186,16 @@ function AgentMessagePart({
     case "authorization":
       return <AuthorizationPrompt part={part} />;
     case "dynamic-tool": {
+      const conversationMessage = conversationMessageFromOutput(
+        part.toolName,
+        part.output
+      );
+      if (part.toolName === SEND_MESSAGE_TOOL_NAME) {
+        return conversationMessage ? (
+          <MessageResponse>{conversationMessage}</MessageResponse>
+        ) : null;
+      }
+
       const inputRequest = part.toolMetadata?.eve?.inputRequest;
       if (inputRequest?.kind === "question") {
         return (
