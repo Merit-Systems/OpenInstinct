@@ -93,6 +93,7 @@
     "test": "turbo run test:app",
     "test:app": "vitest run",
     "types:check": "turbo run types:check:app",
+    "types:generate": "next typegen",
     "types:check:app": "tsc --noEmit -p tsconfig.json",
     "build:eve": "eve build",
     "dev:eve": "eve dev",

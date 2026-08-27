@@ -4,6 +4,7 @@ node_modules
 .eve
 .vercel
 .next
+next-env.d.ts
 .turbo
 .output
 .wxt
