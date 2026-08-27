@@ -3,7 +3,7 @@ import { headers } from "next/headers";
 import { PhoneAuthForm } from "@/app/sign-in/phone-auth-form";
 import { Logo } from "@/components/ui/logo";
 import { localPhoneAuthBypassEnabled } from "@/lib/env";
-import { getAuthSession } from "@/lib/auth/session";
+import { getAuthSession } from "@/auth/session";
 
 export default async function SignInPage({
   searchParams,
