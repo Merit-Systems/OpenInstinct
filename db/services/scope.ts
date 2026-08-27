@@ -3,12 +3,12 @@ import { db, workspaceMemberships, workspaces } from "@/db";
 
 export async function ensureScope(scope: AccessScope) {
   const createdAt = new Date().toISOString();
-  await db.batch([
-    db
+  await db.transaction(async (transaction) => {
+    await transaction
       .insert(workspaces)
       .values({ createdAt, id: scope.workspaceId })
-      .onConflictDoNothing({ target: workspaces.id }),
-    db
+      .onConflictDoNothing({ target: workspaces.id });
+    await transaction
       .insert(workspaceMemberships)
       .values({
         createdAt,
@@ -18,6 +18,6 @@ export async function ensureScope(scope: AccessScope) {
       })
       .onConflictDoNothing({
         target: [workspaceMemberships.workspaceId, workspaceMemberships.userId],
-      }),
-  ]);
+      });
+  });
 }

@@ -5,7 +5,7 @@ import { z } from "zod";
 import { auth } from "@/auth";
 import { accessScopeForUser } from "@/lib/access-scope";
 import { LINQ_CONNECTOR } from "@/lib/linq";
-import { normalizeAuthPhoneNumber } from "@/lib/auth/phone-number";
+import { normalizeAuthPhoneNumber } from "@/auth/phone-number";
 
 const verifiedPhoneUserSchema = z.object({
   id: z.string().min(1),

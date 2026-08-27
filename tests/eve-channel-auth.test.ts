@@ -8,7 +8,7 @@ const mocks = vi.hoisted(() => ({
     vi.fn<(_scope: unknown, _sessionId: string) => Promise<boolean>>(),
 }));
 
-vi.mock("@/lib/auth/session", () => ({
+vi.mock("@/auth/session", () => ({
   getAuthSession: mocks.getAuthSession,
 }));
 

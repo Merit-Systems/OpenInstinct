@@ -105,7 +105,8 @@ Gotchas:
 
 ## Local development
 
-Configure the variables in `.env.example`, then:
+Docker Desktop (or another Docker Compose installation) is required. Configure
+the non-database variables in `.env.example`, then:
 
 ```bash
 git clone https://github.com/Merit-Systems/open-instinct.git
@@ -114,8 +115,14 @@ pnpm install
 pnpm dev
 ```
 
-Local development uses the same Postgres, vault, Kernel browser, and AI Gateway
-path as the Vercel deployment — there is no separate local-only runtime.
+`pnpm dev` starts PostgreSQL from `compose.yaml`, applies the committed database
+migrations, and starts the application. Stopping the development process also
+stops and removes the PostgreSQL container; its data remains in the
+`postgres-data` volume for the next run. Run `pnpm dev:app` when intentionally
+using an externally managed database instead.
+
+Local development otherwise uses the same vault, Kernel browser, and AI Gateway
+path as the Vercel deployment.
 
 > [!WARNING]
 > This is not software intended for production use.

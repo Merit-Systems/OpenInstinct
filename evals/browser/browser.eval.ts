@@ -2,9 +2,9 @@ import { defineEval } from "eve/evals";
 import { includes } from "eve/evals/expect";
 import type { MessageStreamEvent } from "eve/client";
 import { browserBenchmarkTasks } from "@/lib/browser/benchmark-tasks";
-import { env } from "@/lib/env";
+import { browserBenchmarkEnv } from "@/evals/browser/env";
 
-const repetitions = env.BROWSER_BENCH_REPETITIONS;
+const repetitions = browserBenchmarkEnv.BROWSER_BENCH_REPETITIONS;
 
 export default browserBenchmarkTasks.flatMap((task) =>
   Array.from({ length: repetitions }, (_, repetitionIndex) =>
