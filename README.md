@@ -18,9 +18,6 @@ One-click deploy to Vercel and get rolling.
 
 </div>
 
-> [!WARNING]
-> This is not software intended for production use.
-
 ## Why self-host?
 
 Personal agents are much more useful when they can sign in, book, buy and act
@@ -59,6 +56,9 @@ pnpm dev
 
 Local development uses the same Postgres, vault, Kernel browser, and AI Gateway
 path as the Vercel deployment — there is no separate local-only runtime.
+
+> [!WARNING]
+> This is not software intended for production use.
 
 ---
 
