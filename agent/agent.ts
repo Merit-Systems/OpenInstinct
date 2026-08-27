@@ -2,13 +2,14 @@ import { createAnthropic } from "@ai-sdk/anthropic";
 import { defineAgent, defineDynamic } from "eve";
 import { scopeFromPrincipal } from "@/lib/access-scope";
 import { env } from "@/lib/env";
-import { DIRECT_HAIKU_MODEL_ID, getModelSettings } from "@/lib/model-config";
+import {
+  createDirectHaikuSelection,
+  DIRECT_HAIKU_MODEL_ID,
+  getModelSettings,
+} from "@/lib/model-config";
 
 const anthropic = createAnthropic({
   apiKey: env.ANTHROPIC_API_KEY,
-  headers: env.ANTHROPIC_WORKSPACE_ID
-    ? { "anthropic-workspace-id": env.ANTHROPIC_WORKSPACE_ID }
-    : undefined,
 });
 
 export default defineAgent({
@@ -22,7 +23,7 @@ export default defineAgent({
         if (!caller) throw new Error("An authenticated user is required.");
         const { modelId } = await getModelSettings(scopeFromPrincipal(caller));
         return modelId === DIRECT_HAIKU_MODEL_ID
-          ? anthropic("claude-haiku-4-5")
+          ? createDirectHaikuSelection(anthropic("claude-haiku-4-5"))
           : modelId;
       },
     },

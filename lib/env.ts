@@ -26,7 +26,6 @@ export const env = createEnv({
 
     GOOGLE_CONNECTOR_UID: optionalValue,
     ANTHROPIC_API_KEY: optionalValue,
-    ANTHROPIC_WORKSPACE_ID: optionalValue,
     LINQ_API_KEY: optionalValue,
     LINQ_WEBHOOK_SECRET: optionalValue,
     NODE_ENV: z
