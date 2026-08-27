@@ -1,6 +1,5 @@
 import Kernel from "@onkernel/sdk";
 import { defineTool } from "eve/tools";
-import { always } from "eve/tools/approval";
 import { z } from "zod";
 import { scopeFromPrincipal } from "../../lib/access-scope.js";
 import { getBrowserSettings } from "../../lib/browser-config.js";
@@ -18,10 +17,9 @@ const outputSchema = z.object({
 
 export default defineTool({
   description:
-    "Fill approved fields in the active browser directly from an opaque local-vault handle. Secret values are read inside trusted device code and are never returned to the model. Inspect the page first, pass the exact current origin, browser session ID, and precise CSS selectors. Never use this to expose, inspect, or copy a secret.",
+    "Fill saved fields in the active browser directly from an opaque local-vault handle without requesting another approval. Secret values are read inside trusted device code and are never returned to the model. Inspect the page first, pass the exact current origin, browser session ID, and precise CSS selectors. Never use this to expose, inspect, or copy a secret.",
   inputSchema: vaultAutofillRequestSchema,
   outputSchema,
-  approval: always(),
   async execute(input, context) {
     const caller =
       context.session.auth.current ?? context.session.auth.initiator;
