@@ -1,5 +1,5 @@
 import { defineDynamic, defineTool } from "eve/tools";
-import { conversationMessageSchema } from "../../lib/conversation-message.js";
+import { conversationMessageSchema } from "@/lib/conversation-message";
 
 export default defineDynamic({
   events: {

@@ -1,5 +1,5 @@
 import { defineEvalConfig } from "eve/evals";
-import { browserBenchmarkReporter } from "./browser/benchmark-reporter.js";
+import { browserBenchmarkReporter } from "@/evals/browser/benchmark-reporter";
 
 export default defineEvalConfig({
   maxConcurrency: 8,

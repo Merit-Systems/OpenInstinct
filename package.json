@@ -89,9 +89,5 @@
     "start:eve": "eve start"
   },
   "version": "0.0.0",
-  "type": "module",
-  "imports": {
-    "#*": "./agent/*",
-    "#evals/*": "./evals/*"
-  }
+  "type": "module"
 }

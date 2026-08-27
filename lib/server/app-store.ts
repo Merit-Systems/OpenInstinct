@@ -3,7 +3,7 @@ import { z } from "zod";
 import type { AccessScope } from "../access-scope";
 import { chatListSchema, type ChatSummary, type SaveChat } from "../chat";
 import { vaultItemKindSchema } from "../manager";
-import { getEnv } from "../runtime-env";
+import { env } from "@/lib/env";
 
 const vaultRecordSchema = z.object({
   account: z.string(),
@@ -77,15 +77,7 @@ export function getAppStore() {
 }
 
 async function createAppStore() {
-  const databaseUrl = getEnv().DATABASE_URL;
-  if (
-    !databaseUrl?.startsWith("postgres://") &&
-    !databaseUrl?.startsWith("postgresql://")
-  ) {
-    throw new Error("A Postgres DATABASE_URL is required.");
-  }
-
-  const store = createPostgresStore(databaseUrl);
+  const store = createPostgresStore(env.DATABASE_URL);
   await store.initialize();
   return store;
 }
