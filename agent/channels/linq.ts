@@ -4,10 +4,6 @@ import { defaultLinqAuth, linqChannel } from "eve/channels/linq";
 import { z } from "zod";
 import { auth } from "@/auth";
 import { accessScopeForUser } from "@/lib/access-scope";
-import {
-  claimConversationMessageRelay,
-  conversationMessageFromActionResult,
-} from "@/lib/conversation-message";
 import { LINQ_CONNECTOR } from "@/lib/linq";
 import { normalizeAuthPhoneNumber } from "@/lib/auth/phone-number";
 
@@ -18,28 +14,6 @@ const verifiedPhoneUserSchema = z.object({
 
 export default linqChannel({
   credentials: connectLinqCredentials(LINQ_CONNECTOR),
-  events: {
-    async "action.result"(event, channel, ctx) {
-      const message = conversationMessageFromActionResult(event.result);
-      if (!message || !channel.thread) return;
-      if (
-        !claimConversationMessageRelay(
-          channel.state,
-          ctx.session.turn.id,
-          message
-        )
-      )
-        return;
-
-      await channel.thread.post({ markdown: message });
-    },
-    "message.appended"() {
-      return undefined;
-    },
-    "message.completed"() {
-      return undefined;
-    },
-  },
   async onMessage(_context, message) {
     if (message.author.isBot) return null;
 

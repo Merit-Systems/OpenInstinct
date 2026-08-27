@@ -4,13 +4,11 @@ import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { phoneNumber } from "better-auth/plugins/phone-number";
 import { getToken } from "@vercel/connect";
 import { account, db, session, user, verification } from "@/db";
-import { env, isLocalPhoneAuthBypassEnabled } from "@/lib/env";
+import { env, localPhoneAuthBypassEnabled } from "@/lib/env";
 import { isE164PhoneNumber } from "@/lib/auth/phone-number";
 import { LINQ_CONNECTOR } from "@/lib/linq";
 
 const LINQ_MESSAGES_URL = "https://api.linqapp.com/api/partner/v3/messages";
-const localPhoneAuthBypass = isLocalPhoneAuthBypassEnabled(env);
-
 export const auth = betterAuth({
   appName: "Local Vault Assistant",
   baseURL: env.BETTER_AUTH_URL,
@@ -35,7 +33,7 @@ export const auth = betterAuth({
       expiresIn: 300,
       phoneNumberValidator: isE164PhoneNumber,
       requireVerification: true,
-      sendOTP: localPhoneAuthBypass
+      sendOTP: localPhoneAuthBypassEnabled
         ? () => undefined
         : ({ code, phoneNumber: to }) => sendPhoneCode({ code, to }),
       signUpOnVerification: {
@@ -45,7 +43,7 @@ export const auth = betterAuth({
             .digest("hex")}@local-vault.invalid`,
         getTempName: () => "Phone user",
       },
-      verifyOTP: localPhoneAuthBypass
+      verifyOTP: localPhoneAuthBypassEnabled
         ? ({ phoneNumber: value }) => isE164PhoneNumber(value)
         : undefined,
     }),

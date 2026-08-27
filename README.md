@@ -51,6 +51,58 @@ its separate migration path.
 Treat `SECRET_ENCRYPTION_KEY` as production key material — back it up
 separately; rotating it requires re-encrypting existing values.
 
+## Google Workspace connection
+
+OpenInstinct can use a user's Gmail, Calendar, and read-only Contacts through a
+user-scoped Google OAuth grant. Vercel Connect stores and refreshes the tokens;
+OpenInstinct stores only the stable user identity used to request them. Gmail
+access deliberately uses `gmail.modify`, not the permanent-delete
+`mail.google.com` scope.
+
+1. In one Google Cloud project, configure the OAuth consent screen and enable
+   the Gmail API, Google Calendar API, and People API.
+2. Create OAuth web credentials. Add
+   `https://connect.vercel.com/callback` as an authorized redirect URI, then
+   download the client-secret JSON.
+3. Vercel expects top-level `clientId` and `clientSecret` keys, not Google's
+   nested `web.client_id` and `web.client_secret` download. Convert the download
+   into a temporary file outside the repository, then create and attach the
+   connector:
+
+   ```bash
+   vercel link
+   google_credentials_file="$(mktemp)"
+   jq '{clientId: .web.client_id, clientSecret: .web.client_secret}' /absolute/path/to/downloaded-client-secret.json > "$google_credentials_file"
+   vercel connect create google --connection-method oauth --name open-instinct --data @"$google_credentials_file"
+   rm -f "$google_credentials_file"
+   vercel connect attach <returned-connector-uid> --project <your-vercel-project> --environment production --yes
+   vercel env pull
+   ```
+
+   Never commit either credential file.
+
+4. Set `GOOGLE_CONNECTOR_UID` to the returned UID and redeploy. The default is
+   `google/open-instinct`.
+
+Gotchas:
+
+- Attach the connector separately to every Vercel environment that should use
+  it. A production attachment does not make preview or local development work.
+- The Gmail read/modify scope is restricted. A Google OAuth app in Testing mode
+  only works for listed test users, and those grants expire after seven days.
+  Broader distribution requires Google's OAuth verification and may require a
+  security assessment.
+- The scopes requested here must also be declared on the Google consent screen.
+  After changing scopes or enabled APIs, disconnect and reconnect the account so
+  Google issues a grant with the new access.
+- The grant is keyed to the authenticated OpenInstinct user. iMessage reaches
+  the same grant only when its verified phone number maps to that Better Auth
+  account.
+- Google Contacts search uses a provider-side lazy cache, so a contact created
+  moments ago may not appear immediately.
+- Sending email and creating confirmed calendar events always require approval.
+  Calendar events with attendees send Google invitations.
+
 ## Local development
 
 Docker Desktop (or another Docker Compose installation) is required. Configure

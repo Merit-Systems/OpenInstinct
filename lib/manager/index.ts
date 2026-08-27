@@ -29,6 +29,10 @@ const managerVaultItemSchema = z.object({
 
 export const managerSnapshotSchema = z.object({
   browser: z.object({ available: z.boolean() }),
+  googleWorkspace: z.object({
+    accountLabel: z.string().nullable(),
+    state: z.enum(["connected", "disconnected", "unavailable"]),
+  }),
   runtime: z.object({ inference: z.string() }),
   secretStore: z.object({
     available: z.boolean(),

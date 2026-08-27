@@ -27,7 +27,6 @@ describe("environment", () => {
     const { env } = await import("../lib/env");
 
     expect(env).toMatchObject(requiredEnvironment);
-    expect(env.BROWSER_BENCH_REPETITIONS).toBe(1);
   });
 
   it.each([
@@ -62,4 +61,22 @@ describe("environment", () => {
       "Invalid environment variables"
     );
   });
+
+  it.each([
+    ["http://localhost:3000", "development", undefined, true],
+    ["http://localhost:3000", "production", undefined, false],
+    ["http://localhost:3000", "development", "development", false],
+    ["https://preview.example.com", "development", undefined, false],
+  ] as const)(
+    "resolves local phone auth bypass for %s in %s",
+    async (url, nodeEnv, vercelEnv, expected) => {
+      vi.stubEnv("BETTER_AUTH_URL", url);
+      vi.stubEnv("NODE_ENV", nodeEnv);
+      vi.stubEnv("VERCEL_ENV", vercelEnv);
+
+      const { localPhoneAuthBypassEnabled } = await import("../lib/env");
+
+      expect(localPhoneAuthBypassEnabled).toBe(expected);
+    }
+  );
 });
