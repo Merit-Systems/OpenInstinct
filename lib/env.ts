@@ -33,6 +33,9 @@ const runtimeEnv = createEnv({
     HOSTED_SECRET_ENCRYPTION_KEY: optionalValue,
     SECRET_ENCRYPTION_KEY: optionalValue,
     KERNEL_API_KEY: requiredValue,
+    NODE_ENV: z
+      .enum(["development", "production", "test"])
+      .default("production"),
     VERCEL_ENV: z.enum(["production", "preview", "development"]).optional(),
   },
   experimental__runtimeEnv: {},
@@ -55,3 +58,22 @@ export const env = {
   ...runtimeEnv,
   SECRET_ENCRYPTION_KEY: secretEncryptionKey,
 };
+
+export function isLocalPhoneAuthBypassEnabled(
+  environment: Pick<
+    typeof env,
+    "BETTER_AUTH_URL" | "NODE_ENV" | "VERCEL_ENV"
+  > = env
+) {
+  if (
+    environment.NODE_ENV !== "development" ||
+    environment.VERCEL_ENV !== undefined
+  ) {
+    return false;
+  }
+
+  const hostname = new URL(environment.BETTER_AUTH_URL).hostname;
+  return (
+    hostname === "localhost" || hostname === "127.0.0.1" || hostname === "[::1]"
+  );
+}

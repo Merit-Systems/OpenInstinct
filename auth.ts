@@ -5,7 +5,7 @@ import { phoneNumber } from "better-auth/plugins/phone-number";
 import { Pool } from "pg";
 import { z } from "zod";
 import { isE164PhoneNumber } from "@/lib/phone-number";
-import { env } from "@/lib/env";
+import { env, isLocalPhoneAuthBypassEnabled } from "@/lib/env";
 import { sendLinqText } from "@/lib/server/linq";
 
 const AUTH_MIGRATION_LOCK_ID = 1_972_040_815;
@@ -18,6 +18,7 @@ const AUTH_TABLE_NAMES = [
 const authSchemaReadinessSchema = z.object({ ready: z.boolean() });
 
 const databaseUrl = withExplicitVerifiedSsl(env.DATABASE_URL);
+const localPhoneAuthBypass = isLocalPhoneAuthBypassEnabled(env);
 
 const authPool = new Pool({ connectionString: databaseUrl, max: 5 });
 
@@ -55,7 +56,9 @@ export const auth = betterAuth({
       expiresIn: 300,
       phoneNumberValidator: isE164PhoneNumber,
       requireVerification: true,
-      sendOTP: ({ code, phoneNumber: to }) => sendPhoneCode({ code, to }),
+      sendOTP: localPhoneAuthBypass
+        ? () => undefined
+        : ({ code, phoneNumber: to }) => sendPhoneCode({ code, to }),
       signUpOnVerification: {
         getTempEmail: (phoneNumberValue) =>
           `phone-${createHash("sha256")
@@ -63,6 +66,9 @@ export const auth = betterAuth({
             .digest("hex")}@local-vault.invalid`,
         getTempName: () => "Phone user",
       },
+      verifyOTP: localPhoneAuthBypass
+        ? ({ phoneNumber: value }) => isE164PhoneNumber(value)
+        : undefined,
     }),
   ],
   secret: env.BETTER_AUTH_SECRET,
