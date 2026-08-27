@@ -31,7 +31,7 @@ const exactOriginSchema = z.url().refine((value) => {
 }, "Use the exact HTTP(S) origin without a path, query, or trailing slash.");
 
 const vaultAutofillRequestSchema = z.object({
-  browserSessionId: z.string().trim().min(1).max(500),
+  browserSessionId: z.string().trim().min(1).max(500).optional(),
   expectedOrigin: exactOriginSchema,
   fields: z
     .array(
@@ -62,6 +62,12 @@ export default defineTool({
       context.session.auth.current ?? context.session.auth.initiator;
     if (!caller) throw new Error("An authenticated user is required.");
     const scope = scopeFromPrincipal(caller);
+    if (!input.browserSessionId) {
+      throw new Error(
+        "A browser session ID is required for secure vault autofill."
+      );
+    }
+
     const resolved = await prepareVaultAutofill(
       scope,
       input.vaultItemId,
@@ -99,7 +105,7 @@ async function prepareVaultAutofill(
   const item = await readVaultItem(scope, vaultItemId);
   if (!item) throw new Error("The selected vault item no longer exists.");
 
-  const secret = await readSecret({ id: item.id, scope });
+  const secret = await readSecret({ id: item.id, namespace: "vault", scope });
   if (secret === undefined) {
     throw new Error("The selected vault item no longer has a secret value.");
   }
