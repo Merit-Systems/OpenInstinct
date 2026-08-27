@@ -3,11 +3,11 @@ import {
   requireRequestScope,
   UnauthenticatedError,
   unauthorizedResponse,
-} from "@/lib/server/request-scope";
+} from "@/app/_lib/server/request-scope";
 import {
   applyManagerMutation,
   readManagerSnapshot,
-} from "@/lib/server/manager-store";
+} from "@/lib/manager/server/store";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";

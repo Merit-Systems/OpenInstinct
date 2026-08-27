@@ -6,9 +6,9 @@ import {
   deleteVaultItem,
   listVaultItems,
 } from "@/db/services/vault";
-import type { AccessScope } from "../access-scope";
-import type { ManagerMutation } from "../manager";
-import { getModelSettings } from "../model-config";
+import type { AccessScope } from "../../access-scope";
+import { getModelSettings } from "../../model-config";
+import type { ManagerMutation } from "..";
 import {
   deleteSecret,
   hasSecret,

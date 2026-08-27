@@ -1,7 +1,7 @@
 import { defineEval } from "eve/evals";
 import { includes } from "eve/evals/expect";
-import { browserBenchmarkTasks } from "@/lib/browser-benchmark-tasks";
-import { didCompleteKernelBrowserAction } from "@/lib/browser-benchmark";
+import type { MessageStreamEvent } from "eve/client";
+import { browserBenchmarkTasks } from "@/lib/browser/benchmark-tasks";
 import { env } from "@/lib/env";
 
 const repetitions = env.BROWSER_BENCH_REPETITIONS;
@@ -36,3 +36,15 @@ export default browserBenchmarkTasks.flatMap((task) =>
     })
   )
 );
+
+function didCompleteKernelBrowserAction(events: readonly MessageStreamEvent[]) {
+  return events.some(
+    (event) =>
+      event.type === "action.result" &&
+      event.data.status === "completed" &&
+      event.data.result.kind === "tool-result" &&
+      (event.data.result.toolName.endsWith("__execute_playwright_code") ||
+        event.data.result.toolName.endsWith("__computer_action") ||
+        event.data.result.toolName.endsWith("__browser_curl"))
+  );
+}

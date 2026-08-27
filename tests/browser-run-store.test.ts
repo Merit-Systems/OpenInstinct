@@ -4,7 +4,7 @@ import {
   readBrowserRunGroups,
   saveBrowserRunGroup,
   updateBrowserRunTask,
-} from "../lib/browser-run-store";
+} from "../app/_lib/browser-run-store";
 
 describe("browser run store", () => {
   const values = new Map<string, string>();

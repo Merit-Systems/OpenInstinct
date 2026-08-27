@@ -5,7 +5,7 @@ import {
   requireRequestScope,
   UnauthenticatedError,
   unauthorizedResponse,
-} from "@/lib/server/request-scope";
+} from "@/app/_lib/server/request-scope";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";

@@ -5,9 +5,8 @@ import {
   type AuthFn,
 } from "eve/channels/auth";
 import { isSessionOwned } from "@/db/services/sessions";
-import type { AccessScope } from "@/lib/access-scope";
-import { sessionIdFromPath } from "@/lib/eve-session-path";
-import { requestScopeFromRequest } from "@/lib/server/eve-request-scope";
+import { accessScopeForUser, type AccessScope } from "@/lib/access-scope";
+import { getAuthSession } from "@/lib/auth/session";
 
 function applicationAuth(): AuthFn {
   return async (request) => {
@@ -34,6 +33,23 @@ function applicationAuth(): AuthFn {
 }
 
 export default eveChannel({ auth: [applicationAuth()] });
+
+function sessionIdFromPath(pathname: string) {
+  const match = /^\/eve\/v1\/session\/([^/]+)/.exec(pathname);
+  if (!match?.[1]) return;
+  try {
+    return decodeURIComponent(match[1]);
+  } catch {
+    return;
+  }
+}
+
+async function requestScopeFromRequest(request: Request) {
+  const session = await getAuthSession(request.headers);
+  return session
+    ? accessScopeForUser(`better-auth:${session.user.id}`)
+    : undefined;
+}
 
 async function waitForSessionOwnership(scope: AccessScope, sessionId: string) {
   for (let attempt = 0; attempt < 5; attempt += 1) {

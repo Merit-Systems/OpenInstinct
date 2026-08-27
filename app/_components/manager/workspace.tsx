@@ -25,8 +25,8 @@ import {
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import type { ManagerMutation } from "@/lib/manager";
-import type { ModelCatalogItem } from "@/lib/model-catalog";
-import { modelCatalogSchema } from "@/lib/model-catalog";
+import type { ModelCatalogItem } from "@/app/_lib/model-catalog";
+import { modelCatalogSchema } from "@/app/_lib/model-catalog";
 import { useManager } from "./use-manager";
 
 const priceFormatter = new Intl.NumberFormat("en-US", {

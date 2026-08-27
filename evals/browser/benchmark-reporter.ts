@@ -7,7 +7,7 @@ import {
   measureBrowserTask,
   readTaskCompletion,
   terminalBrowserMessage,
-} from "@/lib/browser-benchmark";
+} from "@/lib/browser/benchmark";
 import type { BrowserBenchmark } from "@/evals/browser/benchmark-schema";
 
 const tableWidths = [34, 8, 10, 12, 64] as const;

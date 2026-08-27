@@ -1,11 +1,11 @@
 import { createWorld } from "@workflow/world-vercel";
 import { listOwnedSessionIds } from "@/db/services/sessions";
-import { taskHistoryPageSchema } from "@/lib/task-history";
+import { taskHistoryPageSchema } from "@/app/_lib/task-history";
 import {
   requireRequestScope,
   UnauthenticatedError,
   unauthorizedResponse,
-} from "@/lib/server/request-scope";
+} from "@/app/_lib/server/request-scope";
 
 export const runtime = "nodejs";
 

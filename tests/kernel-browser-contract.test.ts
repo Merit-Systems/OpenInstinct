@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { computerActionInputSchema } from "../lib/kernel-browser-contract";
+import { computerActionInputSchema } from "../agent/extensions/kernel/browser-contract";
 
 describe("Kernel browser action latency bounds", () => {
   it("allows a two-second bounded sleep", () => {

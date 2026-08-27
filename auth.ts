@@ -2,13 +2,15 @@ import { createHash } from "node:crypto";
 import { betterAuth } from "better-auth";
 import { getMigrations } from "better-auth/db/migration";
 import { phoneNumber } from "better-auth/plugins/phone-number";
+import { getToken } from "@vercel/connect";
 import { Pool } from "pg";
 import { z } from "zod";
-import { isE164PhoneNumber } from "@/lib/phone-number";
 import { env, isLocalPhoneAuthBypassEnabled } from "@/lib/env";
-import { sendLinqText } from "@/lib/server/linq";
+import { isE164PhoneNumber } from "@/lib/auth/phone-number";
+import { LINQ_CONNECTOR } from "@/lib/linq";
 
 const AUTH_MIGRATION_LOCK_ID = 1_972_040_815;
+const LINQ_MESSAGES_URL = "https://api.linqapp.com/api/partner/v3/messages";
 const AUTH_TABLE_NAMES = [
   "account",
   "session",
@@ -135,4 +137,35 @@ async function sendPhoneCode({ code, to }: { code: string; to: string }) {
     message: `Local Vault Assistant sign-in code: ${code}. Expires in 5 minutes.`,
     to,
   });
+}
+
+async function sendLinqText({
+  idempotencyKey,
+  message,
+  to,
+}: {
+  readonly idempotencyKey: string;
+  readonly message: string;
+  readonly to: string;
+}) {
+  const token = await getToken(LINQ_CONNECTOR, {
+    subject: { type: "app" },
+  });
+  const response = await fetch(LINQ_MESSAGES_URL, {
+    body: JSON.stringify({
+      message: { parts: [{ type: "text", value: message }] },
+      to: [to],
+    }),
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+      "Idempotency-Key": idempotencyKey,
+    },
+    method: "POST",
+  });
+  if (!response.ok) {
+    throw new Error(
+      `Linq message delivery failed with HTTP ${String(response.status)}.`
+    );
+  }
 }

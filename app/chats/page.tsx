@@ -1,10 +1,10 @@
 import { MessageSquareIcon, PlusIcon } from "lucide-react";
 import Link from "next/link";
 import { ManagerShell } from "@/app/_components/manager-shell";
+import { combineChatUsage, formatChatUsage } from "@/app/_lib/chat-usage";
 import { Button } from "@/components/ui/button";
 import { listChats } from "@/db/services/chats";
-import { combineChatUsage, formatChatUsage } from "@/lib/chat";
-import { requireRequestScope } from "@/lib/server/request-scope";
+import { requireRequestScope } from "@/app/_lib/server/request-scope";
 
 export const dynamic = "force-dynamic";
 
