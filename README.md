@@ -105,7 +105,7 @@ Gotchas:
 
 ## Local development
 
-Configure the variables in `.env.example`, then:
+Configure the external-service and database variables in `.env.example`, then:
 
 ```bash
 git clone https://github.com/Merit-Systems/open-instinct.git
@@ -115,7 +115,9 @@ pnpm dev
 ```
 
 Local development uses the same Postgres, vault, Kernel browser, and AI Gateway
-path as the Vercel deployment — there is no separate local-only runtime.
+path as the Vercel deployment — there is no separate local-only runtime. Better
+Auth and vault encryption use stable local-only defaults when their variables
+are unset; deployments still require explicit secrets.
 
 > [!WARNING]
 > This is not software intended for production use.

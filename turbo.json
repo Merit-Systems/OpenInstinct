@@ -9,6 +9,7 @@
 
     "EVE_NEXT_PRODUCTION_ORIGIN",
     "GOOGLE_CONNECTOR_UID",
+    "NODE_ENV",
     "VERCEL_ENV"
   ],
   "tasks": {

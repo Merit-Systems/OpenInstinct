@@ -2,9 +2,24 @@ import { createEnv } from "@t3-oss/env-nextjs";
 import { z } from "zod";
 import { databaseUrlSchema } from "../db/env/utils";
 
+const localDevelopment =
+  process.env.NODE_ENV === "development" &&
+  process.env.VERCEL_ENV === undefined;
+
+const localDevelopmentDefaults = {
+  BETTER_AUTH_SECRET: "openinstinct-local-auth-development-secret",
+  BETTER_AUTH_URL: "http://localhost:3000",
+  SECRET_ENCRYPTION_KEY: "b3Blbmluc3RpbmN0LWxvY2FsLWRldmVsb3BtZW50ISE=",
+} as const;
+
 const requiredValue = z
   .string()
   .refine((value) => value.trim().length > 0, "Required");
+
+const betterAuthUrlSchema = requiredValue.refine(
+  (value) => URL.canParse(value),
+  "BETTER_AUTH_URL must be an absolute URL"
+);
 
 const secretEncryptionKeySchema = requiredValue.refine(
   (value) => Buffer.from(value, "base64").length === 32,
@@ -15,14 +30,19 @@ const optionalValue = z.string().optional();
 
 export const env = createEnv({
   server: {
-    BETTER_AUTH_SECRET: requiredValue,
-    BETTER_AUTH_URL: requiredValue.refine(
-      (value) => URL.canParse(value),
-      "BETTER_AUTH_URL must be an absolute URL"
-    ),
+    BETTER_AUTH_SECRET: localDevelopment
+      ? requiredValue.default(localDevelopmentDefaults.BETTER_AUTH_SECRET)
+      : requiredValue,
+    BETTER_AUTH_URL: localDevelopment
+      ? betterAuthUrlSchema.default(localDevelopmentDefaults.BETTER_AUTH_URL)
+      : betterAuthUrlSchema,
     DATABASE_URL: databaseUrlSchema,
     KERNEL_API_KEY: requiredValue,
-    SECRET_ENCRYPTION_KEY: secretEncryptionKeySchema,
+    SECRET_ENCRYPTION_KEY: localDevelopment
+      ? secretEncryptionKeySchema.default(
+          localDevelopmentDefaults.SECRET_ENCRYPTION_KEY
+        )
+      : secretEncryptionKeySchema,
 
     GOOGLE_CONNECTOR_UID: optionalValue,
     NODE_ENV: z
@@ -37,8 +57,7 @@ export const env = createEnv({
 const authHostname = new URL(env.BETTER_AUTH_URL).hostname;
 
 export const localPhoneAuthBypassEnabled =
-  env.NODE_ENV === "development" &&
-  env.VERCEL_ENV === undefined &&
+  localDevelopment &&
   (authHostname === "localhost" ||
     authHostname === "127.0.0.1" ||
     authHostname === "[::1]");
