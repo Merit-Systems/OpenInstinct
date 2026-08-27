@@ -2,7 +2,7 @@
 import { connectLinqCredentials } from "@vercel/connect/eve";
 import { defaultLinqAuth, linqChannel } from "eve/channels/linq";
 import { z } from "zod";
-import { auth, ensureAuthDatabase } from "@/auth";
+import { auth } from "@/auth";
 import { accessScopeForUser } from "@/lib/access-scope";
 import {
   claimConversationMessageRelay,
@@ -70,7 +70,6 @@ export default linqChannel({
 });
 
 async function findVerifiedAuthUserIdByPhoneNumber(phoneNumber: string) {
-  await ensureAuthDatabase();
   const context = await auth.$context;
   const user = await context.adapter.findOne({
     model: "user",

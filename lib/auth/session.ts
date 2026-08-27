@@ -1,4 +1,4 @@
-import { auth, ensureAuthDatabase } from "@/auth";
+import { auth } from "@/auth";
 
 function isFullyAuthenticatedUser(
   user:
@@ -11,9 +11,7 @@ function isFullyAuthenticatedUser(
 ) {
   return Boolean(user?.phoneNumber && user.phoneNumberVerified === true);
 }
-
 export async function getAuthSession(headers: Headers) {
-  await ensureAuthDatabase();
   const session = await auth.api.getSession({ headers });
   if (!isFullyAuthenticatedUser(session?.user)) return null;
   return session;
