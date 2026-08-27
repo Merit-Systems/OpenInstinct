@@ -6,6 +6,7 @@ import { phoneNumber } from "better-auth/plugins/phone-number";
 import { Pool } from "pg";
 import { z } from "zod";
 import { getDeploymentMode } from "@/lib/deployment-mode";
+import { isE164PhoneNumber } from "@/lib/phone-number";
 import { getEnv } from "@/lib/runtime-env";
 
 const LOCAL_UNUSED_DATABASE_URL =
@@ -48,10 +49,10 @@ export const auth = betterAuth({
     phoneNumber({
       allowedAttempts: 3,
       expiresIn: 300,
-      phoneNumberValidator: (value) => /^\+[1-9]\d{7,14}$/.test(value),
+      phoneNumberValidator: isE164PhoneNumber,
       requireVerification: true,
       sendOTP: ({ code, phoneNumber: to }) =>
-        sendPhoneCode({ code, template: "phone-verification", to }),
+        sendPhoneCode({ code, template: "sign-in-otp", to }),
       signUpOnVerification: {
         getTempEmail: (phoneNumberValue) =>
           `phone-${createHash("sha256")
@@ -155,6 +156,8 @@ async function sendPhoneCode({
     apiKey: env.BETTER_AUTH_INFRA_API_KEY,
   }).send({ code, template, to });
   if (!result.success) {
-    throw new Error("The authentication code could not be sent.");
+    throw new Error(
+      `Better Auth Infra SMS failed: ${result.error ?? "Unknown provider error"}`
+    );
   }
 }

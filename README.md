@@ -90,7 +90,8 @@ HOSTED_SECRET_ENCRYPTION_KEY="$(openssl rand -base64 32)"
 
 The hosted UI asks for a phone number and then signs the user in with a one-time
 SMS code. A user's first successful verification creates their account. Phone
-numbers must use E.164 format. Better Auth tables are migrated automatically when the hosted auth
+numbers without a country code default to `+1`; an explicit `+` country code is
+preserved. Better Auth tables are migrated automatically when the hosted auth
 surface is first used. On Vercel, hosted mode is selected automatically;
 setting `LOCAL_VAULT_ASSISTANT_MODE=local` keeps the no-login experience for an
 explicitly local deployment and does not contact Better Auth or the SMS service.

@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { authClient } from "@/lib/auth-client";
+import { normalizeAuthPhoneNumber } from "@/lib/phone-number";
 
 type AuthStep = "phone-number" | "verification-code";
 
@@ -22,15 +23,17 @@ export function PhoneAuthForm({
   async function submitDetails(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError(undefined);
-    if (!/^\+[1-9]\d{7,14}$/.test(phoneNumber)) {
-      setError(
-        "Enter a phone number in international format, such as +12025550123."
-      );
+    const normalizedPhoneNumber = normalizeAuthPhoneNumber(phoneNumber);
+    if (!normalizedPhoneNumber) {
+      setError("Enter a valid phone number.");
       return;
     }
+    setPhoneNumber(normalizedPhoneNumber);
     setLoading(true);
     try {
-      const result = await authClient.phoneNumber.sendOtp({ phoneNumber });
+      const result = await authClient.phoneNumber.sendOtp({
+        phoneNumber: normalizedPhoneNumber,
+      });
       if (result.error) throw new Error(result.error.message);
       setStep("verification-code");
     } catch {
@@ -120,7 +123,7 @@ export function PhoneAuthForm({
           autoComplete="tel"
           id="phone-number"
           onChange={(event) => setPhoneNumber(event.target.value.trim())}
-          placeholder="+12025550123"
+          placeholder="(202) 555-0123"
           required
           type="tel"
           value={phoneNumber}
