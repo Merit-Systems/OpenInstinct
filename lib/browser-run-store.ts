@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 const browserRunTaskSchema = z.object({
+  activity: z.string().optional(),
   completedAt: z.number().nonnegative().optional(),
   costComplete: z.boolean(),
   costUsd: z.number().nonnegative().nullable(),

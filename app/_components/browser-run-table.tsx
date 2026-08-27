@@ -114,7 +114,9 @@ export function BrowserRunTable({
                   <div className="flex items-start gap-2">
                     <span className="min-w-0 flex-1 text-muted-foreground">
                       {task.terminalMessage ??
-                        (task.status === "running" ? "Running…" : "—")}
+                        (task.status === "running"
+                          ? (task.activity ?? "Running…")
+                          : "—")}
                     </span>
                     {task.sessionId ? (
                       <Button

@@ -1,11 +1,15 @@
 import { z } from "zod";
-import type { MessageStreamEvent } from "eve/client";
+import {
+  isCurrentTurnBoundaryEvent,
+  type MessageStreamEvent,
+} from "eve/client";
 import {
   measureBrowserTask,
   readTaskCompletion,
   terminalBrowserMessage,
 } from "./browser-benchmark";
 import type { BrowserRunTask } from "./browser-run-store";
+import type { TaskSessionTree } from "./task-stream";
 
 export const taskHistoryPageSchema = z.object({
   cursor: z.string().nullable(),
@@ -32,22 +36,48 @@ export type TaskHistoryRun = TaskHistoryPage["runs"][number];
 
 export function taskFromHistoryRun(
   run: TaskHistoryRun,
-  events: readonly MessageStreamEvent[],
+  input: readonly MessageStreamEvent[] | TaskSessionTree,
   now = Date.now()
 ): BrowserRunTask {
+  const events = isTaskSessionTree(input) ? input.events : input;
+  const rootEvents = isTaskSessionTree(input)
+    ? (input.sessions.find(({ sessionId }) => sessionId === input.rootSessionId)
+        ?.events ?? [])
+    : events;
   const received = events.find((event) => event.type === "message.received");
   const startedAt = eventTime(received) ?? new Date(run.createdAt).getTime();
-  const completion = readTaskCompletion(events);
-  const terminalFailure = events.findLast(
+  const backgroundChildren = backgroundChildState(input);
+  const hasBackgroundTask = events.some(
+    (event) =>
+      event.type === "subagent.completed" &&
+      event.data.backgroundTask?.status === "working"
+  );
+  const backgroundActive =
+    hasBackgroundTask && backgroundChildren?.active === true;
+  const forcedBackgroundFailure =
+    hasBackgroundTask &&
+    backgroundChildren?.settled === true &&
+    !backgroundChildren.succeeded;
+  const completion =
+    backgroundActive || forcedBackgroundFailure
+      ? undefined
+      : readTaskCompletion(events);
+  const terminalFailure = rootEvents.findLast(
     (event) =>
       event.type === "turn.failed" ||
       event.type === "turn.cancelled" ||
       event.type === "session.failed"
   );
-  const waiting = events.findLast(
-    (event) =>
-      event.type === "session.waiting" || event.type === "session.completed"
-  );
+  const waiting = backgroundActive
+    ? undefined
+    : hasBackgroundTask
+      ? (backgroundChildren?.terminalEvent ??
+        events.findLast((event) => event.type === "session.completed"))
+      : events.findLast(
+          (event) =>
+            event.type === "session.waiting" ||
+            event.type === "session.completed"
+        );
   const settled =
     completion !== undefined ||
     terminalFailure !== undefined ||
@@ -67,9 +97,16 @@ export function taskFromHistoryRun(
   const message = events.findLast(
     (event) => event.type === "message.completed"
   );
-  const status = completion?.status ?? historyFallbackStatus(run, settled);
+  const status = forcedBackgroundFailure
+    ? "failure"
+    : (completion?.status ?? historyFallbackStatus(run, settled));
 
   return {
+    activity:
+      status === "running"
+        ? (latestTaskUpdate(events) ??
+          (hasBackgroundTask ? "Background worker running…" : undefined))
+        : undefined,
     completedAt: settled ? (eventTime(terminalEvent) ?? updatedAt) : undefined,
     costComplete: metrics.costComplete,
     costUsd: metrics.costUsd,
@@ -92,6 +129,65 @@ export function taskFromHistoryRun(
             events
           ),
   };
+}
+
+function backgroundChildState(
+  input: readonly MessageStreamEvent[] | TaskSessionTree
+) {
+  if (!isTaskSessionTree(input)) return;
+  const children = input.sessions.filter(
+    ({ sessionId }) => sessionId !== input.rootSessionId
+  );
+  if (children.length === 0) return;
+
+  const childStates = children.map(({ events }) => {
+    const terminalEvent = events.at(-1);
+    const settled =
+      terminalEvent !== undefined && isCurrentTurnBoundaryEvent(terminalEvent);
+    return {
+      completion: readTaskCompletion(events),
+      settled,
+      terminalEvent: settled ? terminalEvent : undefined,
+    };
+  });
+  const active = childStates.some(({ settled }) => !settled);
+  const settled = childStates.every((state) => state.settled);
+  return {
+    active,
+    settled,
+    succeeded:
+      settled &&
+      childStates.every(({ completion }) => completion?.status === "success"),
+    terminalEvent: settled
+      ? childStates
+          .flatMap(({ terminalEvent }) =>
+            terminalEvent ? [terminalEvent] : []
+          )
+          .at(-1)
+      : undefined,
+  };
+}
+
+function isTaskSessionTree(
+  input: readonly MessageStreamEvent[] | TaskSessionTree
+): input is TaskSessionTree {
+  return !Array.isArray(input);
+}
+
+export function latestTaskUpdate(events: readonly MessageStreamEvent[]) {
+  for (const event of events.toReversed()) {
+    if (event.type !== "actions.requested") continue;
+    for (const action of event.data.actions.toReversed()) {
+      if (
+        action.kind === "tool-call" &&
+        action.toolName === "task_update" &&
+        typeof action.input.message === "string" &&
+        action.input.message.trim()
+      ) {
+        return action.input.message.trim();
+      }
+    }
+  }
 }
 
 function historyFallbackStatus(

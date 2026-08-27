@@ -1,6 +1,6 @@
 "use client";
 
-import { Client, type MessageStreamEvent } from "eve/client";
+import { Client } from "eve/client";
 import { RefreshCwIcon } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -15,6 +15,7 @@ import {
   taskHistoryPageSchema,
   type TaskHistoryRun,
 } from "@/lib/task-history";
+import { readTaskSessionTree } from "@/lib/task-stream";
 
 export function GlobalTaskHistory({
   localGroups,
@@ -39,27 +40,20 @@ export function GlobalTaskHistory({
         nextIndex += 1;
         if (!run) return;
 
-        const events: MessageStreamEvent[] = [];
         try {
-          const session = clientRef.current.sessions.attach(run.sessionId, {
-            streamIndex: 0,
+          const tree = await readTaskSessionTree(
+            clientRef.current,
+            run.sessionId
+          );
+          const task = taskFromHistoryRun(run, tree);
+          setTasks((current) => {
+            const next = new Map(current);
+            next.set(run.sessionId, task);
+            return next;
           });
-          for await (const event of session.stream({
-            follow: false,
-            startIndex: 0,
-          })) {
-            events.push(event);
-          }
         } catch {
           // The durable index remains useful if an old event stream is unavailable.
         }
-
-        const task = taskFromHistoryRun(run, events);
-        setTasks((current) => {
-          const next = new Map(current);
-          next.set(run.sessionId, task);
-          return next;
-        });
       }
     };
 
