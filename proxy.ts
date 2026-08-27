@@ -5,6 +5,7 @@ export async function proxy(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
   if (
     pathname === "/sign-in" ||
+    pathname === "/google-connected" ||
     pathname.startsWith("/api/auth/") ||
     pathname === "/eve/v1/health"
   ) {
