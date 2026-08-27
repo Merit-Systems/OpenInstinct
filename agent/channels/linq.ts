@@ -1,6 +1,7 @@
 /* oxlint-disable typescript/no-unsafe-call, typescript/no-unsafe-member-access -- Eve's Linq adapter exposes the thread through a transitive Chat SDK type; TypeScript still checks this contextual handler. */
 import { connectLinqCredentials } from "@vercel/connect/eve";
-import { linqChannel } from "eve/channels/linq";
+import { defaultLinqAuth, linqChannel } from "eve/channels/linq";
+import { accessScopeForUser } from "../../lib/access-scope.js";
 import { conversationMessageFromActionResult } from "../../lib/conversation-message.js";
 
 export default linqChannel({
@@ -18,5 +19,20 @@ export default linqChannel({
     "message.completed"() {
       return undefined;
     },
+  },
+  onMessage(_context, message) {
+    if (message.author.isBot) return null;
+
+    const auth = defaultLinqAuth(message);
+    const scope = accessScopeForUser(auth.principalId);
+    return {
+      auth: {
+        ...auth,
+        attributes: {
+          ...auth.attributes,
+          workspaceId: scope.workspaceId,
+        },
+      },
+    };
   },
 });

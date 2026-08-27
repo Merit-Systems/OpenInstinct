@@ -111,15 +111,15 @@ function ChannelsSection({ browserReady }: { readonly browserReady: boolean }) {
             WebChat
           </Button>
         )}
-        <Button className="h-11 justify-start" disabled variant="outline">
+        <Button className="h-11 justify-start" variant="outline">
           <MailIcon />
           iMessage
         </Button>
       </div>
       <p className="type-caption text-muted-foreground">
         {browserReady
-          ? "WebChat is ready. iMessage is not yet available."
-          : "KERNEL_API_KEY is required to enable WebChat."}
+          ? "WebChat and iMessage are ready."
+          : "iMessage is ready. KERNEL_API_KEY is required to enable WebChat."}
       </p>
     </section>
   );
