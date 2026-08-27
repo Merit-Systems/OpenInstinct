@@ -1,46 +1,23 @@
 import { createHash } from "node:crypto";
 import { betterAuth } from "better-auth";
-import { getMigrations } from "better-auth/db/migration";
+import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { phoneNumber } from "better-auth/plugins/phone-number";
 import { getToken } from "@vercel/connect";
-import { Pool } from "pg";
-import { z } from "zod";
+import { account, db, session, user, verification } from "@/db";
 import { env, isLocalPhoneAuthBypassEnabled } from "@/lib/env";
 import { isE164PhoneNumber } from "@/lib/auth/phone-number";
 import { LINQ_CONNECTOR } from "@/lib/linq";
 
-const AUTH_MIGRATION_LOCK_ID = 1_972_040_815;
 const LINQ_MESSAGES_URL = "https://api.linqapp.com/api/partner/v3/messages";
-const AUTH_TABLE_NAMES = [
-  "account",
-  "session",
-  "user",
-  "verification",
-] as const;
-const authSchemaReadinessSchema = z.object({ ready: z.boolean() });
-
-const databaseUrl = withExplicitVerifiedSsl(env.DATABASE_URL);
 const localPhoneAuthBypass = isLocalPhoneAuthBypassEnabled(env);
-
-const authPool = new Pool({ connectionString: databaseUrl, max: 5 });
-
-function withExplicitVerifiedSsl(value: string) {
-  const url = new URL(value);
-  const sslMode = url.searchParams.get("sslmode");
-  if (
-    sslMode === "prefer" ||
-    sslMode === "require" ||
-    sslMode === "verify-ca"
-  ) {
-    url.searchParams.set("sslmode", "verify-full");
-  }
-  return url.toString();
-}
 
 export const auth = betterAuth({
   appName: "Local Vault Assistant",
   baseURL: env.BETTER_AUTH_URL,
-  database: authPool,
+  database: drizzleAdapter(db, {
+    provider: "pg",
+    schema: { account, session, user, verification },
+  }),
   disabledPaths: [
     "/change-email",
     "/request-password-reset",
@@ -75,59 +52,6 @@ export const auth = betterAuth({
   ],
   secret: env.BETTER_AUTH_SECRET,
 });
-
-let migrationPromise: Promise<void> | undefined;
-
-export async function ensureAuthDatabase() {
-  const currentMigration = (migrationPromise ??= prepareAuthDatabase());
-  try {
-    await currentMigration;
-  } catch (error) {
-    if (migrationPromise === currentMigration) migrationPromise = undefined;
-    throw error;
-  }
-}
-
-async function prepareAuthDatabase() {
-  if (await isAuthSchemaReady()) return;
-  await runAuthMigrations();
-}
-
-async function isAuthSchemaReady() {
-  const readinessResult = await authPool.query(
-    `SELECT count(*) = $1 AS ready
-     FROM information_schema.tables
-     WHERE table_schema = current_schema()
-       AND table_name = ANY($2::text[])`,
-    [AUTH_TABLE_NAMES.length, AUTH_TABLE_NAMES]
-  );
-  const readiness = authSchemaReadinessSchema.parse(readinessResult.rows[0]);
-  return readiness.ready;
-}
-
-async function runAuthMigrations() {
-  const lockClient = await authPool.connect();
-  let lockAcquired = false;
-  try {
-    await lockClient.query("SELECT pg_advisory_lock($1)", [
-      AUTH_MIGRATION_LOCK_ID,
-    ]);
-    lockAcquired = true;
-    if (await isAuthSchemaReady()) return;
-    const { runMigrations } = await getMigrations(auth.options);
-    await runMigrations();
-  } finally {
-    try {
-      if (lockAcquired) {
-        await lockClient.query("SELECT pg_advisory_unlock($1)", [
-          AUTH_MIGRATION_LOCK_ID,
-        ]);
-      }
-    } finally {
-      lockClient.release();
-    }
-  }
-}
 
 async function sendPhoneCode({ code, to }: { code: string; to: string }) {
   await sendLinqText({

@@ -3,18 +3,22 @@ import { getTableConfig } from "drizzle-orm/pg-core";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 import {
+  account,
   agentSessions,
   browserSessions,
   chats,
   encryptedSecrets,
+  session,
   settings,
+  user,
   vaultItems,
+  verification,
   workspaceMemberships,
   workspaces,
 } from "../db/schema";
 
-describe("application database schema", () => {
-  it("owns only the existing application tables", () => {
+describe("database schema", () => {
+  it("owns the application and Better Auth tables", () => {
     expect(
       [
         workspaces,
@@ -25,6 +29,10 @@ describe("application database schema", () => {
         browserSessions,
         chats,
         encryptedSecrets,
+        user,
+        session,
+        account,
+        verification,
       ].map((table) => getTableConfig(table).name)
     ).toEqual([
       "workspaces",
@@ -35,6 +43,10 @@ describe("application database schema", () => {
       "browser_sessions",
       "chats",
       "encrypted_secrets",
+      "user",
+      "session",
+      "account",
+      "verification",
     ]);
   });
 
@@ -156,6 +168,14 @@ describe("migration deployment policy", () => {
           )
       )
     );
+    const authSource = await readFile(
+      new URL("../auth.ts", import.meta.url),
+      "utf8"
+    );
+    const authMigration = await readFile(
+      new URL("../db/migrations/0001_better-auth.sql", import.meta.url),
+      "utf8"
+    );
 
     expect(migration).toContain('CREATE TABLE IF NOT EXISTS "workspaces"');
     expect(migration).toContain(
@@ -166,5 +186,12 @@ describe("migration deployment policy", () => {
     );
     expect(services.join("\n")).not.toContain("CREATE TABLE");
     expect(services.join("\n")).not.toContain("initializePostgres");
+    expect(authMigration).toContain('CREATE TABLE IF NOT EXISTS "user"');
+    expect(authMigration).toContain(
+      'ALTER TABLE "user" ADD COLUMN IF NOT EXISTS "phoneNumber"'
+    );
+    expect(authSource).toContain("database: drizzleAdapter(db");
+    expect(authSource).not.toContain("getMigrations");
+    expect(authSource).not.toContain("ensureAuthDatabase");
   });
 });

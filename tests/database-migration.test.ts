@@ -8,12 +8,14 @@ afterEach(async () => {
   await Promise.all(databases.splice(0).map((database) => database.close()));
 });
 
-describe("application database migration", () => {
+describe("database migrations", () => {
   it("creates a validated schema and is idempotent on an empty database", async () => {
     const database = createDatabase();
 
-    await applyInitialMigration(database);
-    await applyInitialMigration(database);
+    await applyMigration(database, "0000_fluffy_the_spike.sql");
+    await applyMigration(database, "0001_better-auth.sql");
+    await applyMigration(database, "0000_fluffy_the_spike.sql");
+    await applyMigration(database, "0001_better-auth.sql");
 
     const tables = await database.query<{ count: number }>(
       `SELECT count(*)::int AS count
@@ -27,12 +29,16 @@ describe("application database migration", () => {
            'agent_sessions',
            'browser_sessions',
            'chats',
-           'encrypted_secrets'
+           'encrypted_secrets',
+           'user',
+           'session',
+           'account',
+           'verification'
          )`
     );
     const pendingConstraints = await pendingConstraintCount(database);
 
-    expect(tables.rows[0]?.count).toBe(8);
+    expect(tables.rows[0]?.count).toBe(12);
     expect(pendingConstraints).toBe(0);
   }, 15_000);
 
@@ -65,7 +71,7 @@ describe("application database migration", () => {
       );
       `);
 
-    await applyInitialMigration(database);
+    await applyMigration(database, "0000_fluffy_the_spike.sql");
 
     const vault = await database.query<{ id: string; kind: string }>(
       "SELECT id, kind FROM vault_items WHERE id = 'legacy-item'"
@@ -101,6 +107,128 @@ describe("application database migration", () => {
         `)
     ).rejects.toThrow(/constraint/);
   }, 15_000);
+
+  it("adopts existing Better Auth tables without changing their rows", async () => {
+    const database = createDatabase();
+    await database.exec(legacyAuthSchema);
+    await database.exec(`
+      INSERT INTO "user" (
+        id,
+        name,
+        email,
+        "emailVerified",
+        "createdAt",
+        "updatedAt"
+      ) VALUES (
+        'auth-user',
+        'Auth User',
+        'auth@example.com',
+        false,
+        '2026-01-01T00:00:00Z',
+        '2026-01-01T00:00:00Z'
+      );
+      INSERT INTO "account" (
+        id,
+        issuer,
+        "accountId",
+        "providerId",
+        "userId",
+        "createdAt",
+        "updatedAt"
+      ) VALUES (
+        'auth-account',
+        'credential',
+        'auth-user',
+        'credential',
+        'auth-user',
+        '2026-01-01T00:00:00Z',
+        '2026-01-01T00:00:00Z'
+      );
+      INSERT INTO "session" (
+        id,
+        "expiresAt",
+        token,
+        "createdAt",
+        "updatedAt",
+        "userId"
+      ) VALUES (
+        'auth-session',
+        '2027-01-01T00:00:00Z',
+        'auth-token',
+        '2026-01-01T00:00:00Z',
+        '2026-01-01T00:00:00Z',
+        'auth-user'
+      );
+      INSERT INTO "verification" (
+        id,
+        identifier,
+        value,
+        "expiresAt",
+        "createdAt",
+        "updatedAt"
+      ) VALUES (
+        'auth-verification',
+        '+12125550123',
+        'hashed-code',
+        '2027-01-01T00:00:00Z',
+        '2026-01-01T00:00:00Z',
+        '2026-01-01T00:00:00Z'
+      );
+    `);
+
+    await applyMigration(database, "0001_better-auth.sql");
+    await applyMigration(database, "0001_better-auth.sql");
+    await database.exec(`
+      UPDATE "user"
+      SET "phoneNumber" = '+12125550123', "phoneNumberVerified" = true
+      WHERE id = 'auth-user'
+    `);
+
+    const rows = await database.query<{
+      accountId: string;
+      sessionId: string;
+      userId: string;
+      verificationId: string;
+    }>(`
+      SELECT
+        "account".id AS "accountId",
+        "session".id AS "sessionId",
+        "user".id AS "userId",
+        "verification".id AS "verificationId"
+      FROM "user"
+      JOIN "account" ON "account"."userId" = "user".id
+      JOIN "session" ON "session"."userId" = "user".id
+      JOIN "verification" ON "verification".identifier = "user"."phoneNumber"
+    `);
+
+    expect(rows.rows).toEqual([
+      {
+        accountId: "auth-account",
+        sessionId: "auth-session",
+        userId: "auth-user",
+        verificationId: "auth-verification",
+      },
+    ]);
+    await expect(
+      database.exec(`
+        INSERT INTO "session" (
+          id,
+          "expiresAt",
+          token,
+          "createdAt",
+          "updatedAt",
+          "userId"
+        ) VALUES (
+          'orphan-session',
+          now(),
+          'orphan-token',
+          now(),
+          now(),
+          'missing-user'
+        )
+      `)
+    ).rejects.toThrow(/foreign key constraint/);
+  }, 15_000);
 });
 
 function createDatabase() {
@@ -109,9 +237,9 @@ function createDatabase() {
   return database;
 }
 
-async function applyInitialMigration(database: PGlite) {
+async function applyMigration(database: PGlite, name: string) {
   const migration = await readFile(
-    new URL("../db/migrations/0000_fluffy_the_spike.sql", import.meta.url),
+    new URL(`../db/migrations/${name}`, import.meta.url),
     "utf8"
   );
   for (const statement of migration.split("--> statement-breakpoint")) {
@@ -183,4 +311,56 @@ const legacyRuntimeSchema = `
     updated_at TEXT NOT NULL,
     PRIMARY KEY (workspace_id, namespace, id)
   );
+`;
+
+const legacyAuthSchema = `
+  CREATE TABLE "user" (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    email TEXT NOT NULL UNIQUE,
+    "emailVerified" BOOLEAN DEFAULT false NOT NULL,
+    image TEXT,
+    "createdAt" TIMESTAMPTZ DEFAULT now() NOT NULL,
+    "updatedAt" TIMESTAMPTZ DEFAULT now() NOT NULL
+  );
+  CREATE TABLE "account" (
+    id TEXT PRIMARY KEY,
+    issuer TEXT NOT NULL,
+    "accountId" TEXT NOT NULL,
+    "providerId" TEXT NOT NULL,
+    "userId" TEXT NOT NULL REFERENCES "user"(id) ON DELETE CASCADE,
+    "accessToken" TEXT,
+    "refreshToken" TEXT,
+    "idToken" TEXT,
+    "accessTokenExpiresAt" TIMESTAMPTZ,
+    "refreshTokenExpiresAt" TIMESTAMPTZ,
+    scope TEXT,
+    password TEXT,
+    "createdAt" TIMESTAMPTZ DEFAULT now() NOT NULL,
+    "updatedAt" TIMESTAMPTZ NOT NULL
+  );
+  CREATE UNIQUE INDEX "account_issuer_accountId_uidx"
+    ON "account" (issuer, "accountId");
+  CREATE INDEX "account_userId_idx" ON "account" ("userId");
+  CREATE TABLE "session" (
+    id TEXT PRIMARY KEY,
+    "expiresAt" TIMESTAMPTZ NOT NULL,
+    token TEXT NOT NULL UNIQUE,
+    "createdAt" TIMESTAMPTZ DEFAULT now() NOT NULL,
+    "updatedAt" TIMESTAMPTZ NOT NULL,
+    "ipAddress" TEXT,
+    "userAgent" TEXT,
+    "userId" TEXT NOT NULL REFERENCES "user"(id) ON DELETE CASCADE
+  );
+  CREATE INDEX "session_userId_idx" ON "session" ("userId");
+  CREATE TABLE "verification" (
+    id TEXT PRIMARY KEY,
+    identifier TEXT NOT NULL,
+    value TEXT NOT NULL,
+    "expiresAt" TIMESTAMPTZ NOT NULL,
+    "createdAt" TIMESTAMPTZ DEFAULT now() NOT NULL,
+    "updatedAt" TIMESTAMPTZ DEFAULT now() NOT NULL
+  );
+  CREATE INDEX "verification_identifier_idx"
+    ON "verification" (identifier);
 `;
