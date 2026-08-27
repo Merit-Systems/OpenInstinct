@@ -58,31 +58,6 @@ export const localVaultAutofillSchema = vaultAutofillRequestSchema
       .max(20),
   });
 
-export async function runLocalBrowserAction(
-  input: z.infer<typeof localBrowserActionSchema>,
-  signal?: AbortSignal
-) {
-  let response: Response;
-  try {
-    response = await fetch("http://127.0.0.1:4275/action", {
-      body: JSON.stringify(input),
-      headers: { "Content-Type": "application/json" },
-      method: "POST",
-      signal,
-    });
-  } catch {
-    throw new Error(
-      "The local browser is not running. Start the device app with ./bin/local-assistant."
-    );
-  }
-
-  const body = localBrowserResponseSchema.parse(await response.json());
-  if (!response.ok) {
-    throw new Error(body.error ?? "The local browser action failed.");
-  }
-  return body.result;
-}
-
 export async function runLocalVaultAutofill(
   input: z.infer<typeof localVaultAutofillSchema>,
   signal?: AbortSignal
@@ -95,12 +70,12 @@ export async function runLocalVaultAutofill(
       signal,
     });
     if (!response.ok) {
-      throw new Error("Local browser rejected the request.");
+      throw new Error("The browser rejected the request.");
     }
     localBrowserResponseSchema.parse(await response.json());
   } catch {
     throw new Error(
-      "Secure vault fill failed. Check that the local browser is open on the approved site."
+      "Secure vault fill failed. Check that the browser is open on the approved site."
     );
   }
 }

@@ -40,7 +40,19 @@ export function getEnv() {
         .default("false")
         .transform((value) => value === "true"),
       LOCAL_VAULT_ASSISTANT_BROWSER_EXECUTABLE: optionalValue,
+      LOCAL_VAULT_ASSISTANT_BROWSER_VISIBLE: z
+        .enum(["true", "false"])
+        .default("false")
+        .transform((value) => value === "true"),
       LOCAL_VAULT_ASSISTANT_DATA_DIR: optionalValue,
+      LOCAL_VAULT_ASSISTANT_KERNEL_IMAGE_API_URL: optionalValue.refine(
+        (value) => value === undefined || URL.canParse(value),
+        "LOCAL_VAULT_ASSISTANT_KERNEL_IMAGE_API_URL must be an absolute URL"
+      ),
+      LOCAL_VAULT_ASSISTANT_KERNEL_IMAGE_CDP_URL: optionalValue.refine(
+        (value) => value === undefined || URL.canParse(value),
+        "LOCAL_VAULT_ASSISTANT_KERNEL_IMAGE_CDP_URL must be an absolute URL"
+      ),
       LOCAL_VAULT_ASSISTANT_MANAGER_URL: optionalValue.refine(
         (value) => value === undefined || URL.canParse(value),
         "LOCAL_VAULT_ASSISTANT_MANAGER_URL must be an absolute URL"

@@ -33,7 +33,15 @@ curl -fsSL https://raw.githubusercontent.com/Merit-Systems/open-instinct/main/in
 ~/.local/bin/local-vault-assistant
 ```
 
-The installer sets up an isolated Node.js runtime, installs the app, and builds it. The launcher opens the manager at `https://local-vault-assistant.localhost`, where you choose local or cloud browser execution and a hosted or local model. Local browser execution uses a visible Chrome-compatible browser on the device. Cloud execution is available when the system environment provides `KERNEL_API_KEY`. [Portless](https://github.com/vercel-labs/portless) assigns the underlying app port, so the assistant never claims `localhost:3000` and its URL stays stable across restarts.
+The installer sets up an isolated Node.js runtime, installs the app, and builds it. The launcher opens the manager at `https://local-vault-assistant.localhost`, where you choose browser execution and a hosted or local model. [Portless](https://github.com/vercel-labs/portless) assigns the underlying app port, so the assistant never claims `localhost:3000` and its URL stays stable across restarts.
+
+For full browser isolation and visual computer use, start Docker Desktop and run this one-time install before launching the app:
+
+```bash
+~/.local/bin/local-vault-assistant browser install
+```
+
+The browser then runs headfully inside a hidden container with a persistent profile; it does not open an extra desktop window. Without the image, the launcher falls back to a limited headless browser. Hosted browser execution uses the system `KERNEL_API_KEY` when configured.
 
 Portless may ask for administrator approval on first launch to trust its local HTTPS certificate and bind the standard HTTPS port. The app and its vault still run only on your machine.
 

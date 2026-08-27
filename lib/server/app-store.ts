@@ -54,11 +54,21 @@ const encryptedSecretSchema = z
   .object({ encryptedValue: z.string() })
   .optional();
 
+const browserSessionRecordSchema = z.object({
+  createdAt: z.string(),
+  sessionId: z.string().min(1),
+});
+
 type ConnectionRecord = z.infer<typeof connectionRecordSchema>;
+type BrowserSessionRecord = z.infer<typeof browserSessionRecordSchema>;
 type VaultRecord = z.infer<typeof vaultRecordSchema>;
 
 export interface AppStore {
   claimSession(scope: AccessScope, sessionId: string): Promise<void>;
+  createBrowserSession(
+    scope: AccessScope,
+    record: BrowserSessionRecord
+  ): Promise<void>;
   createConnection(
     scope: AccessScope,
     record: ConnectionRecord,
@@ -71,12 +81,16 @@ export interface AppStore {
     namespace: "connection" | "vault",
     id: string
   ): Promise<void>;
+  deleteBrowserSession(scope: AccessScope, sessionId: string): Promise<boolean>;
   deleteVaultItem(scope: AccessScope, id: string): Promise<boolean>;
   ensureScope(scope: AccessScope): Promise<void>;
   initialize(): Promise<void>;
   isSessionOwned(scope: AccessScope, sessionId: string): Promise<boolean>;
   listChats(scope: AccessScope): Promise<readonly ChatSummary[]>;
   listConnections(scope: AccessScope): Promise<readonly ConnectionRecord[]>;
+  listBrowserSessions(
+    scope: AccessScope
+  ): Promise<readonly BrowserSessionRecord[]>;
   listOwnedSessionIds(scope: AccessScope): Promise<ReadonlySet<string>>;
   listVaultItems(scope: AccessScope): Promise<readonly VaultRecord[]>;
   readConnectionByProvider(
@@ -84,6 +98,10 @@ export interface AppStore {
     provider: ConnectionRecord["provider"]
   ): Promise<ConnectionRecord | undefined>;
   readBrowserMode(scope: AccessScope): Promise<BrowserMode | undefined>;
+  readBrowserSession(
+    scope: AccessScope,
+    sessionId: string
+  ): Promise<BrowserSessionRecord | undefined>;
   readEncryptedSecret(
     scope: AccessScope,
     namespace: "connection" | "vault",
@@ -149,6 +167,12 @@ export function createSqliteStore(filename: string): AppStore {
       run(
         "INSERT OR IGNORE INTO agent_sessions (session_id, workspace_id, created_by_user_id, created_at) VALUES (?, ?, ?, ?)",
         [sessionId, scope.workspaceId, scope.userId, new Date().toISOString()]
+      );
+    },
+    async createBrowserSession(scope, record) {
+      run(
+        "INSERT INTO browser_sessions (session_id, workspace_id, created_by_user_id, created_at) VALUES (?, ?, ?, ?)",
+        [record.sessionId, scope.workspaceId, scope.userId, record.createdAt]
       );
     },
     async createConnection(scope, record, replaceProvider) {
@@ -218,6 +242,14 @@ export function createSqliteStore(filename: string): AppStore {
         [scope.workspaceId, namespace, id]
       );
     },
+    async deleteBrowserSession(scope, sessionId) {
+      return (
+        run(
+          "DELETE FROM browser_sessions WHERE workspace_id = ? AND session_id = ?",
+          [scope.workspaceId, sessionId]
+        ).changes > 0
+      );
+    },
     async deleteVaultItem(scope, id) {
       return (
         run("DELETE FROM vault_items WHERE workspace_id = ? AND id = ?", [
@@ -275,6 +307,16 @@ export function createSqliteStore(filename: string): AppStore {
           )
         );
     },
+    async listBrowserSessions(scope) {
+      return browserSessionRecordSchema
+        .array()
+        .parse(
+          all(
+            "SELECT created_at AS createdAt, session_id AS sessionId FROM browser_sessions WHERE workspace_id = ? ORDER BY created_at DESC",
+            [scope.workspaceId]
+          )
+        );
+    },
     async listOwnedSessionIds(scope) {
       if (scope.mode === "local") return new Set<string>();
       const rows = z
@@ -318,6 +360,16 @@ export function createSqliteStore(filename: string): AppStore {
           )
         );
       return row ? browserModeSchema.parse(row.value) : undefined;
+    },
+    async readBrowserSession(scope, sessionId) {
+      return browserSessionRecordSchema
+        .optional()
+        .parse(
+          get(
+            "SELECT created_at AS createdAt, session_id AS sessionId FROM browser_sessions WHERE workspace_id = ? AND session_id = ? LIMIT 1",
+            [scope.workspaceId, sessionId]
+          )
+        );
     },
     async readEncryptedSecret(scope, namespace, id) {
       return encryptedSecretSchema.parse(
@@ -526,6 +578,12 @@ function initializeSqlite(database: DatabaseSync) {
       created_by_user_id TEXT NOT NULL,
       created_at TEXT NOT NULL
     );
+    CREATE TABLE IF NOT EXISTS browser_sessions (
+      session_id TEXT PRIMARY KEY,
+      workspace_id TEXT NOT NULL,
+      created_by_user_id TEXT NOT NULL,
+      created_at TEXT NOT NULL
+    );
     CREATE TABLE IF NOT EXISTS encrypted_secrets (
       workspace_id TEXT NOT NULL,
       namespace TEXT NOT NULL,
@@ -542,6 +600,8 @@ function initializeSqlite(database: DatabaseSync) {
       ON chats (workspace_id, updated_at DESC);
     CREATE INDEX IF NOT EXISTS agent_sessions_workspace_idx
       ON agent_sessions (workspace_id, created_at DESC);
+    CREATE INDEX IF NOT EXISTS browser_sessions_workspace_idx
+      ON browser_sessions (workspace_id, created_at DESC);
   `);
 }
 
@@ -586,6 +646,12 @@ function createPostgresStore(databaseUrl: string): AppStore {
       await query(
         "INSERT INTO agent_sessions (session_id, workspace_id, created_by_user_id, created_at) VALUES ($1, $2, $3, $4) ON CONFLICT (session_id) DO NOTHING",
         [sessionId, scope.workspaceId, scope.userId, new Date().toISOString()]
+      );
+    },
+    async createBrowserSession(scope, record) {
+      await query(
+        "INSERT INTO browser_sessions (session_id, workspace_id, created_by_user_id, created_at) VALUES ($1, $2, $3, $4)",
+        [record.sessionId, scope.workspaceId, scope.userId, record.createdAt]
       );
     },
     async createConnection(scope, record, replaceProvider) {
@@ -647,6 +713,13 @@ function createPostgresStore(databaseUrl: string): AppStore {
         [scope.workspaceId, namespace, id]
       );
     },
+    async deleteBrowserSession(scope, sessionId) {
+      const rows = await query(
+        "DELETE FROM browser_sessions WHERE workspace_id = $1 AND session_id = $2 RETURNING session_id",
+        [scope.workspaceId, sessionId]
+      );
+      return rows.length > 0;
+    },
     async deleteVaultItem(scope, id) {
       const rows = await query(
         "DELETE FROM vault_items WHERE workspace_id = $1 AND id = $2 RETURNING id",
@@ -703,6 +776,16 @@ function createPostgresStore(databaseUrl: string): AppStore {
           )
         );
     },
+    async listBrowserSessions(scope) {
+      return browserSessionRecordSchema
+        .array()
+        .parse(
+          await query(
+            'SELECT created_at AS "createdAt", session_id AS "sessionId" FROM browser_sessions WHERE workspace_id = $1 ORDER BY created_at DESC',
+            [scope.workspaceId]
+          )
+        );
+    },
     async listOwnedSessionIds(scope) {
       const rows = z
         .array(z.object({ sessionId: z.string() }))
@@ -738,6 +821,13 @@ function createPostgresStore(databaseUrl: string): AppStore {
       );
       const row = z.object({ value: z.string() }).optional().parse(rows[0]);
       return row ? browserModeSchema.parse(row.value) : undefined;
+    },
+    async readBrowserSession(scope, sessionId) {
+      const rows = await query(
+        'SELECT created_at AS "createdAt", session_id AS "sessionId" FROM browser_sessions WHERE workspace_id = $1 AND session_id = $2 LIMIT 1',
+        [scope.workspaceId, sessionId]
+      );
+      return browserSessionRecordSchema.optional().parse(rows[0]);
     },
     async readEncryptedSecret(scope, namespace, id) {
       const rows = await query(
@@ -850,12 +940,14 @@ async function initializePostgres(sql: NeonQueryFunction<false, false>) {
     `CREATE TABLE IF NOT EXISTS vault_items (id TEXT PRIMARY KEY, workspace_id TEXT NOT NULL, kind TEXT NOT NULL, label TEXT NOT NULL, account TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL)`,
     `CREATE TABLE IF NOT EXISTS settings (workspace_id TEXT NOT NULL, key TEXT NOT NULL, value TEXT NOT NULL, PRIMARY KEY (workspace_id, key))`,
     `CREATE TABLE IF NOT EXISTS agent_sessions (session_id TEXT PRIMARY KEY, workspace_id TEXT NOT NULL, created_by_user_id TEXT NOT NULL, created_at TEXT NOT NULL)`,
+    `CREATE TABLE IF NOT EXISTS browser_sessions (session_id TEXT PRIMARY KEY, workspace_id TEXT NOT NULL, created_by_user_id TEXT NOT NULL, created_at TEXT NOT NULL)`,
     `CREATE TABLE IF NOT EXISTS chats (session_id TEXT PRIMARY KEY, workspace_id TEXT NOT NULL, title TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, input_tokens INTEGER NOT NULL DEFAULT 0, output_tokens INTEGER NOT NULL DEFAULT 0, cost_usd DOUBLE PRECISION)`,
     `CREATE TABLE IF NOT EXISTS encrypted_secrets (workspace_id TEXT NOT NULL, namespace TEXT NOT NULL, id TEXT NOT NULL, encrypted_value TEXT NOT NULL, updated_at TEXT NOT NULL, PRIMARY KEY (workspace_id, namespace, id))`,
     `CREATE INDEX IF NOT EXISTS connections_workspace_provider_idx ON connections (workspace_id, provider)`,
     `CREATE INDEX IF NOT EXISTS vault_items_workspace_updated_idx ON vault_items (workspace_id, updated_at DESC)`,
     `CREATE INDEX IF NOT EXISTS chats_workspace_updated_idx ON chats (workspace_id, updated_at DESC)`,
     `CREATE INDEX IF NOT EXISTS agent_sessions_workspace_idx ON agent_sessions (workspace_id, created_at DESC)`,
+    `CREATE INDEX IF NOT EXISTS browser_sessions_workspace_idx ON browser_sessions (workspace_id, created_at DESC)`,
   ];
   for (const statement of statements) await sql.query(statement);
 }

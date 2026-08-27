@@ -6,6 +6,7 @@ import { scopeFromPrincipal } from "../../lib/access-scope.js";
 import { getBrowserSettings } from "../../lib/browser-config.js";
 import { runLocalVaultAutofill } from "../../lib/local-browser.js";
 import { getEnv } from "../../lib/runtime-env.js";
+import { requireOwnedBrowserSession } from "../../lib/server/kernel-browser.js";
 import { prepareVaultAutofill } from "../../lib/server/vault-autofill.js";
 import { vaultAutofillRequestSchema } from "../../lib/vault-autofill.js";
 
@@ -17,7 +18,7 @@ const outputSchema = z.object({
 
 export default defineTool({
   description:
-    "Fill approved fields in the active browser directly from an opaque local-vault handle. Secret values are read inside trusted device code and are never returned to the model. Inspect the page first, pass the exact current origin, and use element refs as selectors in the local browser or CSS selectors for Kernel. A Kernel browserSessionId is required only in cloud browser mode. Never use this to expose, inspect, or copy a secret.",
+    "Fill approved fields in the active browser directly from an opaque local-vault handle. Secret values are read inside trusted device code and are never returned to the model. Inspect the page first, pass the exact current origin, browser session ID, and precise CSS selectors. Never use this to expose, inspect, or copy a secret.",
   inputSchema: vaultAutofillRequestSchema,
   outputSchema,
   approval: always(),
@@ -27,9 +28,9 @@ export default defineTool({
     if (!caller) throw new Error("An authenticated user is required.");
     const scope = scopeFromPrincipal(caller);
     const browser = await getBrowserSettings(scope);
-    if (browser.mode === "cloud" && !input.browserSessionId) {
+    if (!input.browserSessionId) {
       throw new Error(
-        "A Kernel browser session ID is required for cloud autofill."
+        "A browser session ID is required for secure vault autofill."
       );
     }
 
@@ -51,17 +52,14 @@ export default defineTool({
         { expectedOrigin: input.expectedOrigin, fields },
         context.abortSignal
       );
-    } else if (input.browserSessionId) {
+    } else {
+      await requireOwnedBrowserSession(scope, input.browserSessionId);
       await fillKernelBrowser({
         browserSessionId: input.browserSessionId,
         expectedOrigin: input.expectedOrigin,
         fields,
         signal: context.abortSignal,
       });
-    } else {
-      throw new Error(
-        "A Kernel browser session ID is required for cloud autofill."
-      );
     }
 
     return {
@@ -87,9 +85,7 @@ async function fillKernelBrowser({
 }) {
   const apiKey = getEnv().KERNEL_API_KEY;
   if (!apiKey) {
-    throw new Error(
-      "Cloud browser execution requires KERNEL_API_KEY in the system environment."
-    );
+    throw new Error("The browser runtime is unavailable.");
   }
 
   const payload = JSON.stringify({ expectedOrigin, fields });
@@ -107,6 +103,11 @@ for (const field of payload.fields) {
     throw new Error("An approved target is not editable.");
   }
   await element.fill(field.value);
+  await element.evaluate((node) => {
+    if (node instanceof HTMLElement) {
+      node.dataset.vaultSecret = "true";
+    }
+  });
 }
 return {
   filledFields: payload.fields.map(({ field }) => field),
@@ -120,10 +121,11 @@ return {
       { code, timeout_sec: 30 },
       { signal }
     );
-    if (!result.success) throw new Error("Kernel rejected vault autofill.");
+    if (!result.success)
+      throw new Error("The browser rejected vault autofill.");
   } catch {
     throw new Error(
-      "Secure vault fill failed. Check that the Kernel browser is open on the approved site."
+      "Secure vault fill failed. Check that the browser is open on the approved site."
     );
   }
 }

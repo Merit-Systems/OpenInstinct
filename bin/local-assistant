@@ -14,6 +14,10 @@ else
   package_manager=(corepack pnpm)
 fi
 
+if [[ "${1:-}" == "browser" && "${2:-}" == "install" ]]; then
+  exec "$repository_directory/scripts/install-kernel-browser-image.sh"
+fi
+
 if [[ ! -d node_modules ]]; then
   "${package_manager[@]}" install
 fi
@@ -27,6 +31,10 @@ while (($# > 0)); do
       ;;
     --no-open)
       export LOCAL_VAULT_ASSISTANT_NO_OPEN=1
+      shift
+      ;;
+    --visible-browser)
+      export LOCAL_VAULT_ASSISTANT_BROWSER_VISIBLE=true
       shift
       ;;
     doctor)
@@ -61,6 +69,12 @@ while (($# > 0)); do
       else
         printf '✗ macOS Keychain command is unavailable\n'
         failures=$((failures + 1))
+      fi
+      if docker image inspect \
+        local-vault-assistant/kernel-browser:57858c7 >/dev/null 2>&1; then
+        printf '✓ Isolated browser image\n'
+      else
+        printf '• Isolated browser image can be installed with: %s browser install\n' "$0"
       fi
       if [[ -f .output/.local-vault-assistant-build && -f .next/BUILD_ID ]]; then
         printf '✓ Agent and manager production builds\n'
@@ -115,6 +129,7 @@ fi
 
 eve_pid=""
 browser_pid=""
+browser_container_started=0
 web_pid=""
 telegram_pid=""
 route_registered=0
@@ -134,6 +149,9 @@ cleanup() {
   if [[ -n "$browser_pid" ]] && kill -0 "$browser_pid" >/dev/null 2>&1; then
     kill -TERM "$browser_pid" >/dev/null 2>&1 || true
     wait "$browser_pid" 2>/dev/null || true
+  fi
+  if [[ "$browser_container_started" == "1" ]]; then
+    docker stop local-vault-assistant-browser >/dev/null 2>&1 || true
   fi
   if [[ -n "$eve_pid" ]] && kill -0 "$eve_pid" >/dev/null 2>&1; then
     kill "$eve_pid" >/dev/null 2>&1 || true
@@ -168,6 +186,15 @@ if [[ "$mode" == "start" ]]; then
       "$EVE_PORT" >&2
     exit 1
   fi
+fi
+
+if "$repository_directory/scripts/start-kernel-browser-image.sh"; then
+  export LOCAL_VAULT_ASSISTANT_KERNEL_IMAGE_API_URL="http://127.0.0.1:4277"
+  export LOCAL_VAULT_ASSISTANT_KERNEL_IMAGE_CDP_URL="http://127.0.0.1:4278"
+  browser_container_started=1
+else
+  printf 'Browser isolation is not installed; using the limited headless fallback.\n'
+  printf 'Install it with: %s browser install\n' "$0"
 fi
 
 node --experimental-strip-types scripts/local-browser-daemon.ts &
