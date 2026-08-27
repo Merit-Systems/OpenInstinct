@@ -1,22 +1,32 @@
+<div align="center">
+
 # OpenInstinct
 
-A personal iMessage assistant that can use a browser like you. It can do your chores, book you movie tickets, or handle your groceries. You stay in control of your passwords, credit cards and context.
+[![License: MIT](https://img.shields.io/badge/License-MIT-lightgrey.svg)](LICENSE)
 
-It's Open Source, self-hostable, and can use any model. One-click deploy to Vercel and get rolling.
+**A personal iMessage assistant that can use a browser like you.**
+
+It can do your chores, book you movie tickets, or handle your groceries.
+You stay in control of your passwords, credit cards and context.
+
+It's Open Source, self-hostable, and can use any model.
+One-click deploy to Vercel and get rolling.
 
 [![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2FMerit-Systems%2Fopen-instinct&project-name=open-instinct&repository-name=open-instinct&products=%5B%7B%22type%22%3A%22integration%22%2C%22protocol%22%3A%22other%22%2C%22productSlug%22%3A%22kernel%22%2C%22integrationSlug%22%3A%22kernel%22%7D%2C%7B%22type%22%3A%22integration%22%2C%22protocol%22%3A%22storage%22%2C%22productSlug%22%3A%22neon%22%2C%22integrationSlug%22%3A%22neon%22%7D%5D)
 
+<img src=".github/demo.png" alt="OpenInstinct booking movie tickets over iMessage — it browses Fandango, reaches checkout, and confirms the showtime and price before anything goes through" width="560">
+
+</div>
+
 ## Why self-host?
 
-Personal agents are much more useful when they can sign in, book, buy and act on your behalf. But your accounts, your passwords, are the keys to your digital kingdom. OpenInstinct runs in your own Vercel account. Secrets are encrypted before they touch your database and models never see them. Verify yourself by reading the code!
+Personal agents are much more useful when they can sign in, book, buy and act
+on your behalf. But your accounts, your passwords, are the keys to your digital
+kingdom. OpenInstinct runs in your own Vercel account. Secrets are encrypted
+before they touch your database and models never see them. Verify yourself by
+reading the code!
 
-
-## What you get
-
-- A conversational agent at `/chat`, plus a vault and model manager at `/`
-- Parallel browser tasks with time, outcome, and cost tracking at `/tasks`
-- Encrypted secret storage in your own Postgres database
-- Passwordless SMS sign-in with isolated personal workspaces
+## Deployment
 
 The deploy flow provisions everything: [Kernel](https://kernel.sh) for cloud
 browsers, [Neon](https://neon.tech) for Postgres, [Linq](https://linq.app) for
@@ -29,11 +39,6 @@ BETTER_AUTH_URL=https://your-host
 DATABASE_URL=postgresql://user:password@host/database
 SECRET_ENCRYPTION_KEY="$(openssl rand -base64 32)"
 ```
-
-Link a Linq connector named `linq/eve-kernel` to the Vercel project and assign
-it a sending line. Eve uses that connector for both inbound iMessage
-conversations and outbound sign-in codes; no Linq API key belongs in the
-repository or project environment variables.
 
 Treat `SECRET_ENCRYPTION_KEY` as production key material — back it up
 separately; rotating it requires re-encrypting existing values.
@@ -52,5 +57,10 @@ pnpm dev
 Local development uses the same Postgres, vault, Kernel browser, and AI Gateway
 path as the Vercel deployment — there is no separate local-only runtime.
 
-# Providers
-Vercel, Kernel, Linq, Neon
+---
+
+<div align="center">
+
+Built on [Vercel](https://vercel.com) · [Kernel](https://kernel.sh) · [Linq](https://linq.app) · [Neon](https://neon.tech)
+
+</div>
