@@ -9,7 +9,7 @@ import type { AccessScope } from "../../access-scope";
 import { getGoogleWorkspaceConnection } from "../../google-workspace/server";
 import { getModelSettings } from "../../model-config";
 import type { ManagerMutation } from "..";
-import { deleteSecret, secretStoreStatus, writeSecret } from "./secret-store";
+import { deleteSecret, writeSecret } from "./secret-store";
 import { readManagerVaultItems } from "./vault";
 
 export async function readManagerSnapshot(scope: AccessScope) {
@@ -23,7 +23,12 @@ export async function readManagerSnapshot(scope: AccessScope) {
     browser: { available: true },
     googleWorkspace,
     runtime: { inference: modelSettings.modelId },
-    secretStore: secretStoreStatus(),
+    secretStore: {
+      available: true,
+      description:
+        "Secrets are encrypted for this workspace before database storage.",
+      kind: "Encrypted vault",
+    },
     vaultItems: vaultRows,
   };
 }
@@ -55,7 +60,7 @@ async function createVaultItem(
 ) {
   const id = randomUUID();
   const now = new Date().toISOString();
-  await writeSecret({ id, namespace: "vault", scope, value: input.secret });
+  await writeSecret({ id, scope, value: input.secret });
 
   try {
     await insertVaultItem(scope, {
@@ -67,7 +72,7 @@ async function createVaultItem(
       updatedAt: now,
     });
   } catch (error) {
-    await deleteSecret({ id, namespace: "vault", scope });
+    await deleteSecret({ id, scope });
     throw error;
   }
 }
@@ -75,5 +80,5 @@ async function createVaultItem(
 async function removeVaultItem(scope: AccessScope, id: string) {
   const deleted = await deleteVaultItem(scope, id);
   if (!deleted) return;
-  await deleteSecret({ id, namespace: "vault", scope });
+  await deleteSecret({ id, scope });
 }

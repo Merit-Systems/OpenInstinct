@@ -19,9 +19,6 @@ export default {
     "eslint-plugin-react-hooks",
     "eslint-plugin-turbo",
     "oxlint-tailwindcss",
-    // Loaded from generated configuration.
-    "next-themes",
-    "sonner",
     // Invoked as a CLI.
     "vercel",
   ],

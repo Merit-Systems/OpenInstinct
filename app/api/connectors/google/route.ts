@@ -8,7 +8,7 @@ import {
   disconnectGoogleWorkspace,
   startGoogleWorkspaceAuthorization,
 } from "@/lib/google-workspace/server";
-import { isAllowedMutationOrigin } from "@/lib/manager";
+import { isSameOrigin } from "@/app/_lib/server/same-origin";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -16,7 +16,7 @@ export const runtime = "nodejs";
 export async function POST(request: Request) {
   try {
     const scope = await requireRequestScope();
-    if (!isAllowedMutationOrigin(originCheckInput(request))) {
+    if (!isSameOrigin(request)) {
       return Response.json(
         { error: "Cross-origin connection writes are blocked." },
         { status: 403 }
@@ -45,16 +45,6 @@ export async function POST(request: Request) {
     returnUrl.searchParams.set("google", "unavailable");
     return sensitiveRedirect(returnUrl);
   }
-}
-
-function originCheckInput(request: Request) {
-  return {
-    forwardedHost: request.headers.get("x-forwarded-host"),
-    forwardedProto: request.headers.get("x-forwarded-proto"),
-    host: request.headers.get("host"),
-    origin: request.headers.get("origin"),
-    requestUrl: request.url,
-  };
 }
 
 function sensitiveRedirect(url: string | URL) {

@@ -1,38 +1,34 @@
 import { eveChannel } from "eve/channels/eve";
-import {
-  ForbiddenError,
-  UnauthenticatedError,
-  type AuthFn,
-} from "eve/channels/auth";
+import { ForbiddenError, UnauthenticatedError } from "eve/channels/auth";
 import { isSessionOwned } from "@/db/services/sessions";
 import { accessScopeForUser, type AccessScope } from "@/lib/access-scope";
 import { getAuthSession } from "@/auth/session";
 
-function applicationAuth(): AuthFn {
-  return async (request) => {
-    const scope = await requestScopeFromRequest(request);
-    if (!scope) {
-      throw new UnauthenticatedError({
-        code: "authentication_required",
-        message: "Sign in to continue.",
-      });
-    }
+export default eveChannel({
+  auth: [
+    async (request) => {
+      const scope = await requestScopeFromRequest(request);
+      if (!scope) {
+        throw new UnauthenticatedError({
+          code: "authentication_required",
+          message: "Sign in to continue.",
+        });
+      }
 
-    const sessionId = sessionIdFromPath(new URL(request.url).pathname);
-    if (sessionId && !(await waitForSessionOwnership(scope, sessionId))) {
-      throw new ForbiddenError({ message: "Session not found." });
-    }
+      const sessionId = sessionIdFromPath(new URL(request.url).pathname);
+      if (sessionId && !(await waitForSessionOwnership(scope, sessionId))) {
+        throw new ForbiddenError({ message: "Session not found." });
+      }
 
-    return {
-      attributes: { workspaceId: scope.workspaceId },
-      authenticator: "authjs",
-      principalId: scope.userId,
-      principalType: "user",
-    };
-  };
-}
-
-export default eveChannel({ auth: [applicationAuth()] });
+      return {
+        attributes: { workspaceId: scope.workspaceId },
+        authenticator: "authjs",
+        principalId: scope.userId,
+        principalType: "user",
+      };
+    },
+  ],
+});
 
 function sessionIdFromPath(pathname: string) {
   const match = /^\/eve\/v1\/session\/([^/]+)/.exec(pathname);

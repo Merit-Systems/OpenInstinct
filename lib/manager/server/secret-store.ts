@@ -7,22 +7,12 @@ import {
 import type { AccessScope } from "../../access-scope";
 import { env } from "@/lib/env";
 
-export function secretStoreStatus() {
-  return {
-    available: true,
-    description:
-      "Secrets are encrypted for this workspace before database storage.",
-    kind: "Encrypted vault",
-  };
-}
-
 export async function writeSecret({
   id,
   scope,
   value,
 }: {
   readonly id: string;
-  readonly namespace: "vault";
   readonly scope: AccessScope;
   readonly value: string;
 }) {
@@ -34,7 +24,6 @@ export async function readSecret({
   scope,
 }: {
   readonly id: string;
-  readonly namespace: "vault";
   readonly scope: AccessScope;
 }) {
   const encrypted = await readEncryptedSecret(scope, id);
@@ -46,7 +35,6 @@ export async function hasSecret({
   scope,
 }: {
   readonly id: string;
-  readonly namespace: "vault";
   readonly scope: AccessScope;
 }) {
   return (await readEncryptedSecret(scope, id)) !== undefined;
@@ -57,7 +45,6 @@ export async function deleteSecret({
   scope,
 }: {
   readonly id: string;
-  readonly namespace: "vault";
   readonly scope: AccessScope;
 }) {
   await deleteEncryptedSecret(scope, id);

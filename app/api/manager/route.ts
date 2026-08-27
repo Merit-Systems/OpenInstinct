@@ -1,4 +1,5 @@
-import { isAllowedMutationOrigin, managerMutationSchema } from "@/lib/manager";
+import { managerMutationSchema } from "@/lib/manager";
+import { isSameOrigin } from "@/app/_lib/server/same-origin";
 import {
   requireRequestScope,
   UnauthenticatedError,
@@ -44,22 +45,12 @@ export async function POST(request: Request) {
 }
 
 function denyCrossOriginMutation(request: Request) {
-  if (!isAllowedMutationOrigin(originCheckInput(request))) {
+  if (!isSameOrigin(request)) {
     return Response.json(
       { error: "Cross-origin manager writes are blocked." },
       { status: 403 }
     );
   }
-}
-
-function originCheckInput(request: Request) {
-  return {
-    forwardedHost: request.headers.get("x-forwarded-host"),
-    forwardedProto: request.headers.get("x-forwarded-proto"),
-    host: request.headers.get("host"),
-    origin: request.headers.get("origin"),
-    requestUrl: request.url,
-  };
 }
 
 function managerError(message: string) {

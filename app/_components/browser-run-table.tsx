@@ -22,18 +22,18 @@ import type {
 export function BrowserRunTable({
   emptyDescription,
   emptyTitle,
-  groups,
+  rows,
   showGroup = false,
 }: {
   readonly emptyDescription: string;
   readonly emptyTitle: string;
-  readonly groups: readonly BrowserRunGroup[];
+  readonly rows: readonly {
+    readonly group: Pick<BrowserRunGroup, "id" | "name">;
+    readonly task: BrowserRunTask;
+  }[];
   readonly showGroup?: boolean;
 }) {
   const router = useRouter();
-  const rows = groups.flatMap((group) =>
-    group.tasks.map((task) => ({ group, task }))
-  );
   const hasRunningTasks = rows.some(({ task }) => task.status === "running");
   const [clock, setClock] = useState(() => Date.now());
 
