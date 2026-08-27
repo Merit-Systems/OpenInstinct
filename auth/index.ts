@@ -1,13 +1,13 @@
 import { createHash } from "node:crypto";
 import { betterAuth } from "better-auth";
+import { APIError } from "better-auth/api";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { phoneNumber } from "better-auth/plugins/phone-number";
-import { getToken } from "@vercel/connect";
 import { account, db, session, user, verification } from "@/db";
 import { env, localPhoneAuthBypassEnabled } from "@/lib/env";
+import { LinqDeliveryError, linqOtpFailure, sendLinqText } from "./linq";
 import { isE164PhoneNumber } from "./phone-number";
 
-const LINQ_MESSAGES_URL = "https://api.linqapp.com/api/partner/v3/messages";
 export const auth = betterAuth({
   appName: "Local Vault Assistant",
   baseURL: env.BETTER_AUTH_URL,
@@ -50,43 +50,49 @@ export const auth = betterAuth({
   secret: env.BETTER_AUTH_SECRET,
 });
 
-async function sendPhoneCode({ code, to }: { code: string; to: string }) {
-  await sendLinqText({
-    idempotencyKey: `auth-otp-${createHash("sha256")
-      .update(`${to}\u0000${code}`)
-      .digest("hex")}`,
-    message: `Local Vault Assistant sign-in code: ${code}. Expires in 5 minutes.`,
-    to,
-  });
-}
-
-async function sendLinqText({
-  idempotencyKey,
-  message,
+export async function sendPhoneCode({
+  code,
   to,
 }: {
-  readonly idempotencyKey: string;
-  readonly message: string;
+  readonly code: string;
   readonly to: string;
 }) {
-  const token = await getToken(env.LINQ_CONNECTOR_UID, {
-    subject: { type: "app" },
-  });
-  const response = await fetch(LINQ_MESSAGES_URL, {
-    body: JSON.stringify({
-      message: { parts: [{ type: "text", value: message }] },
-      to: [to],
-    }),
-    headers: {
-      Authorization: `Bearer ${token}`,
-      "Content-Type": "application/json",
-      "Idempotency-Key": idempotencyKey,
-    },
-    method: "POST",
-  });
-  if (!response.ok) {
-    throw new Error(
-      `Linq message delivery failed with HTTP ${String(response.status)}.`
-    );
+  if (!env.LINQ_CONNECTOR) {
+    throw new APIError("SERVICE_UNAVAILABLE", {
+      code: "LINQ_NOT_CONFIGURED",
+      message:
+        "iMessage sign-in is not configured. Attach a Linq connector and set LINQ_CONNECTOR and LINQ_PHONE_NUMBER.",
+    });
+  }
+
+  try {
+    await sendLinqText({
+      connector: env.LINQ_CONNECTOR,
+      idempotencyKey: `auth-otp-${createHash("sha256")
+        .update(`${to}\u0000${code}`)
+        .digest("hex")}`,
+      message: `Local Vault Assistant sign-in code: ${code}. Expires in 5 minutes.`,
+      to,
+    });
+  } catch (error) {
+    if (error instanceof LinqDeliveryError) {
+      const failure = linqOtpFailure(error);
+      throw new APIError("BAD_GATEWAY", {
+        code: failure.code,
+        linqError: {
+          code: error.code,
+          message: error.linqMessage,
+          status: error.status,
+          trace_id: error.traceId,
+        },
+        message: failure.message,
+      });
+    }
+
+    throw new APIError("BAD_GATEWAY", {
+      code: "LINQ_CONNECTOR_UNAVAILABLE",
+      message:
+        "This deployment cannot access its Linq connector. Check LINQ_CONNECTOR and the connector's Vercel project attachment.",
+    });
   }
 }

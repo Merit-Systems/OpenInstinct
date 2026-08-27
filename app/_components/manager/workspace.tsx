@@ -36,12 +36,12 @@ const priceFormatter = new Intl.NumberFormat("en-US", {
   currency: "USD",
 });
 
-const LINQ_PHONE_NUMBER = "+12052611117";
-
 export function WorkspaceManager({
   googleNotice,
+  linqPhoneNumber,
 }: {
   readonly googleNotice?: "unavailable";
+  readonly linqPhoneNumber?: string;
 }) {
   const { busy, error, mutate, snapshot } = useManager();
   const browserReady = snapshot?.browser.available === true;
@@ -68,7 +68,10 @@ export function WorkspaceManager({
         </Alert>
       ) : null}
 
-      <ChannelsSection browserReady={browserReady} />
+      <ChannelsSection
+        browserReady={browserReady}
+        linqPhoneNumber={linqPhoneNumber}
+      />
 
       <GoogleWorkspaceSection connection={snapshot?.googleWorkspace} />
 
@@ -162,7 +165,13 @@ function GoogleWorkspaceAction({
   );
 }
 
-function ChannelsSection({ browserReady }: { readonly browserReady: boolean }) {
+function ChannelsSection({
+  browserReady,
+  linqPhoneNumber,
+}: {
+  readonly browserReady: boolean;
+  readonly linqPhoneNumber?: string;
+}) {
   return (
     <section aria-labelledby="channels-heading" className="space-y-3">
       <h2 className="type-section-title" id="channels-heading">
@@ -185,23 +194,46 @@ function ChannelsSection({ browserReady }: { readonly browserReady: boolean }) {
             WebChat
           </Button>
         )}
-        <Button
-          className="h-11 justify-start"
-          nativeButton={false}
-          render={<a href={`sms:${LINQ_PHONE_NUMBER}`} />}
-          variant="outline"
-        >
-          <MailIcon />
-          iMessage
-        </Button>
+        {linqPhoneNumber ? (
+          <Button
+            className="h-11 justify-start"
+            nativeButton={false}
+            render={<a href={`sms:${linqPhoneNumber}`} />}
+            variant="outline"
+          >
+            <MailIcon />
+            iMessage
+          </Button>
+        ) : (
+          <Button className="h-11 justify-start" disabled variant="outline">
+            <MailIcon />
+            iMessage
+          </Button>
+        )}
       </div>
       <p className="type-caption text-muted-foreground">
-        {browserReady
-          ? "WebChat is ready. iMessage opens +1 (205) 261-1117."
-          : "iMessage opens +1 (205) 261-1117. KERNEL_API_KEY is required to enable WebChat."}
+        {channelAvailabilityMessage({ browserReady, linqPhoneNumber })}
       </p>
     </section>
   );
+}
+
+function channelAvailabilityMessage({
+  browserReady,
+  linqPhoneNumber,
+}: {
+  readonly browserReady: boolean;
+  readonly linqPhoneNumber?: string;
+}) {
+  const messages = [
+    browserReady
+      ? "WebChat is ready."
+      : "KERNEL_API_KEY is required to enable WebChat.",
+    linqPhoneNumber
+      ? `iMessage opens ${linqPhoneNumber}.`
+      : "Set up Linq to enable iMessage.",
+  ];
+  return messages.join(" ");
 }
 
 function ConnectorRow({

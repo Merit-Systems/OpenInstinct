@@ -11,9 +11,11 @@ type AuthStep = "phone-number" | "verification-code";
 
 export function PhoneAuthForm({
   callbackUrl,
+  linqConfigured,
   skipOtp,
 }: {
   readonly callbackUrl: string;
+  readonly linqConfigured: boolean;
   readonly skipOtp: boolean;
 }) {
   const [error, setError] = useState<string>();
@@ -40,7 +42,10 @@ export function PhoneAuthForm({
       const result = await authClient.phoneNumber.sendOtp({
         phoneNumber: normalizedPhoneNumber,
       });
-      if (result.error) throw new Error(result.error.message);
+      if (result.error) {
+        setError(phoneOtpErrorMessage(result.error));
+        return;
+      }
       setStep("verification-code");
     } catch {
       setError(
@@ -87,6 +92,15 @@ export function PhoneAuthForm({
 
   function navigateAfterAuth() {
     window.location.assign(callbackUrl);
+  }
+
+  if (!skipOtp && !linqConfigured) {
+    return (
+      <p className="type-supporting-body mt-6 text-muted-foreground">
+        iMessage sign-in is not configured for this deployment. Attach a Linq
+        connector, then set LINQ_CONNECTOR and LINQ_PHONE_NUMBER.
+      </p>
+    );
   }
 
   if (step === "verification-code") {
@@ -157,4 +171,13 @@ export function PhoneAuthForm({
       </Button>
     </form>
   );
+}
+
+export function phoneOtpErrorMessage(error: {
+  readonly code?: string;
+  readonly message?: string;
+}) {
+  return error.code?.startsWith("LINQ_") && error.message
+    ? error.message
+    : "Unable to send a code. Please try again.";
 }

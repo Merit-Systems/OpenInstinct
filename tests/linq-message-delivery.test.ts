@@ -1,6 +1,6 @@
 /* oxlint-disable typescript/no-unsafe-type-assertion -- Eve's Linq adapter exposes the handler context through a transitive Chat SDK `any`; the fixture supplies only the fields exercised here. */
 import { describe, expect, it, vi } from "vitest";
-import { deliverCompletedLinqMessage } from "../agent/channels/linq-message-delivery";
+import { deliverCompletedLinqMessage } from "../agent/channels/linq";
 
 type HandlerParameters = Parameters<typeof deliverCompletedLinqMessage>;
 
