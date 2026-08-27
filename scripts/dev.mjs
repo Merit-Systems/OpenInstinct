@@ -15,17 +15,36 @@ let activeChild;
 let composeAttempted = false;
 let shutdownSignal;
 
+function interrupt(child, signal) {
+  try {
+    if (process.platform === "win32") {
+      child.kill(signal);
+      return;
+    }
+
+    process.kill(-child.pid, signal);
+  } catch (error) {
+    if (error?.code !== "ESRCH") {
+      console.error(`Failed to forward ${signal} to ${child.pid}:`, error);
+      process.exitCode = 1;
+    }
+  }
+}
+
 for (const signal of ["SIGINT", "SIGTERM", "SIGHUP"]) {
   process.on(signal, () => {
     if (shutdownSignal === undefined) {
       shutdownSignal = signal;
-      activeChild?.kill(signal);
+      if (activeChild !== undefined) {
+        interrupt(activeChild, signal);
+      }
     }
   });
 }
 
 async function run(command, args, { allowInterruption = false } = {}) {
   const child = spawn(command, args, {
+    detached: process.platform !== "win32",
     env: developmentEnvironment,
     stdio: "inherit",
   });
@@ -61,7 +80,7 @@ try {
   }
 
   if (shouldContinue) {
-    await run("pnpm", ["exec", "turbo", "run", "dev:app"], {
+    await run("pnpm", ["dev:app"], {
       allowInterruption: true,
     });
   }
@@ -69,9 +88,4 @@ try {
   if (composeAttempted) {
     await run("docker", ["compose", "down"]);
   }
-}
-
-if (shutdownSignal !== undefined) {
-  const signalExitCodes = { SIGHUP: 129, SIGINT: 130, SIGTERM: 143 };
-  process.exitCode = signalExitCodes[shutdownSignal];
 }
