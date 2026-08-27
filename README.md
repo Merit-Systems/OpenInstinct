@@ -35,8 +35,18 @@ Vercel account. Set the remaining auth variables on the deployment:
 BETTER_AUTH_SECRET="$(openssl rand -base64 32)"
 BETTER_AUTH_URL=https://your-host
 DATABASE_URL=postgresql://user:password@host/database
+DATABASE_URL_UNPOOLED=postgresql://user:password@host/database
 SECRET_ENCRYPTION_KEY="$(openssl rand -base64 32)"
 ```
+
+The application database schema and versioned migrations live in `db/`. The
+Drizzle application store uses `DATABASE_URL` for runtime queries; its migration
+commands require the direct `DATABASE_URL_UNPOOLED` connection. Run
+`pnpm db:migrate` before starting against a new or upgraded local database.
+Vercel uses Turbo to run the uncached migration task before its application
+build. See [`db/README.md`](db/README.md) for existing-database adoption,
+environment loading, and constraint-validation sequencing. Better Auth retains
+its separate migration path.
 
 Treat `SECRET_ENCRYPTION_KEY` as production key material — back it up
 separately; rotating it requires re-encrypting existing values.
