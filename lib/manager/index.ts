@@ -105,6 +105,21 @@ export type ManagerSnapshot = z.infer<typeof managerSnapshotSchema>;
 export type VaultItemKind = z.infer<typeof vaultItemKindSchema>;
 export type VaultCreateItemKind = z.infer<typeof vaultCreateItemKindSchema>;
 
+export function parseManagerSetupSearchParams(
+  query: Record<string, string | readonly string[] | undefined>
+) {
+  const identifierType = firstQueryValue(query.identifier_type);
+  const input = {
+    kind: firstQueryValue(query.kind),
+    label: firstQueryValue(query.label),
+    target: firstQueryValue(query.setup),
+  };
+
+  return managerSetupRequestSchema.safeParse(
+    identifierType === undefined ? input : { ...input, identifierType }
+  );
+}
+
 export function createManagerSetupUrl(
   baseUrl: string,
   request: ManagerSetupRequest
@@ -117,6 +132,10 @@ export function createManagerSetupUrl(
     url.searchParams.set("identifier_type", request.identifierType);
   }
   return url.toString();
+}
+
+function firstQueryValue(value: string | readonly string[] | undefined) {
+  return typeof value === "string" ? value : value?.[0];
 }
 
 export function isAllowedMutationOrigin({

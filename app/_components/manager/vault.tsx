@@ -160,6 +160,13 @@ function VaultCategory({
         addLabel={addLabel}
         busy={busy}
         initialSetup={initialSetup}
+        key={
+          initialSetup
+            ? `setup:${initialSetup.kind}:${initialSetup.label ?? ""}:${
+                initialSetup.kind === "login" ? initialSetup.identifierType : ""
+              }`
+            : "manual"
+        }
         kind={kind}
         onSubmit={onSubmit}
       />

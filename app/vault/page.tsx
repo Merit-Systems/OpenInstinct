@@ -1,6 +1,6 @@
 import { ManagerShell } from "@/app/_components/manager-shell";
 import { VaultManager } from "@/app/_components/manager/vault";
-import { managerSetupRequestSchema } from "@/lib/manager";
+import { parseManagerSetupSearchParams } from "@/lib/manager";
 
 export default async function Page({
   searchParams,
@@ -10,12 +10,7 @@ export default async function Page({
   >;
 }) {
   const query = await searchParams;
-  const requestedSetup = managerSetupRequestSchema.safeParse({
-    identifierType: firstQueryValue(query.identifier_type),
-    kind: firstQueryValue(query.kind),
-    label: firstQueryValue(query.label),
-    target: firstQueryValue(query.setup),
-  });
+  const requestedSetup = parseManagerSetupSearchParams(query);
 
   return (
     <ManagerShell active="vault">
@@ -28,8 +23,4 @@ export default async function Page({
       />
     </ManagerShell>
   );
-}
-
-function firstQueryValue(value: string | readonly string[] | undefined) {
-  return Array.isArray(value) ? value[0] : value;
 }

@@ -4,6 +4,7 @@ import {
   isAllowedMutationOrigin,
   managerMutationSchema,
   managerSetupRequestSchema,
+  parseManagerSetupSearchParams,
 } from "../lib/manager";
 import { serializePaymentCard } from "../lib/manager/payment-card";
 import {
@@ -59,6 +60,37 @@ describe("self-hosted manager", () => {
       label: "Personal login",
       setup: "vault",
     });
+
+    const addressUrl = new URL(
+      createManagerSetupUrl("https://assistant.example.com", {
+        kind: "address",
+        label: "Home address",
+        target: "vault",
+      })
+    );
+
+    expect(addressUrl.pathname).toBe("/vault");
+    expect(Object.fromEntries(addressUrl.searchParams)).toEqual({
+      kind: "address",
+      label: "Home address",
+      setup: "vault",
+    });
+    expect(
+      parseManagerSetupSearchParams(Object.fromEntries(addressUrl.searchParams))
+    ).toEqual({
+      data: {
+        kind: "address",
+        label: "Home address",
+        target: "vault",
+      },
+      success: true,
+    });
+    expect(
+      parseManagerSetupSearchParams({
+        ...Object.fromEntries(addressUrl.searchParams),
+        identifier_type: "email",
+      }).success
+    ).toBe(false);
   });
 
   it("accepts a selected gateway model", () => {
