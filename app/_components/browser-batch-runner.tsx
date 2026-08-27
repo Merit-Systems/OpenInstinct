@@ -57,7 +57,11 @@ export function BrowserBatchRunner() {
             one persistent dashboard.
           </p>
         </div>
-        <Button render={<Link href="/chat" />} variant="outline">
+        <Button
+          nativeButton={false}
+          render={<Link href="/chat" />}
+          variant="outline"
+        >
           Open chat
           <MessageSquareIcon data-icon="inline-end" />
         </Button>

@@ -101,6 +101,7 @@ function ChannelsSection({ browserReady }: { readonly browserReady: boolean }) {
         {browserReady ? (
           <Button
             className="h-11 justify-start"
+            nativeButton={false}
             render={<Link href="/chat" />}
             variant="outline"
           >
@@ -115,6 +116,7 @@ function ChannelsSection({ browserReady }: { readonly browserReady: boolean }) {
         )}
         <Button
           className="h-11 justify-start"
+          nativeButton={false}
           render={<a href={`sms:${LINQ_PHONE_NUMBER}`} />}
           variant="outline"
         >
