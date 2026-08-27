@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  claimConversationMessageRelay,
   conversationMessageFromActionResult,
   conversationMessageFromOutput,
 } from "../lib/conversation-message";
@@ -29,5 +30,18 @@ describe("conversation messages", () => {
         toolName: "anotherTool",
       })
     ).toBeUndefined();
+  });
+
+  it("relays identical messages only once per turn", () => {
+    const state = {};
+
+    expect(claimConversationMessageRelay(state, "turn-1", "Hello.")).toBe(true);
+    expect(claimConversationMessageRelay(state, "turn-1", "Hello.")).toBe(
+      false
+    );
+    expect(claimConversationMessageRelay(state, "turn-1", "Update.")).toBe(
+      true
+    );
+    expect(claimConversationMessageRelay(state, "turn-2", "Hello.")).toBe(true);
   });
 });

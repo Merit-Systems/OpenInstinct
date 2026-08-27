@@ -19,16 +19,21 @@ Personal agents are much more useful when they can sign in, book, buy and act on
 - Passwordless SMS sign-in with isolated personal workspaces
 
 The deploy flow provisions everything: [Kernel](https://kernel.sh) for cloud
-browsers, [Neon](https://neon.tech) for Postgres, and Vercel AI Gateway for
-inference. Usage is billed to your Vercel account. Set the remaining auth
-variables on the deployment:
+browsers, [Neon](https://neon.tech) for Postgres, [Linq](https://linq.app) for
+the iMessage line, and Vercel AI Gateway for inference. Usage is billed to your
+Vercel account. Set the remaining auth variables on the deployment:
 
 ```bash
 BETTER_AUTH_SECRET="$(openssl rand -base64 32)"
 BETTER_AUTH_URL=https://your-host
-TEXTBELT_API_KEY=your-textbelt-api-key
+DATABASE_URL=postgresql://user:password@host/database
 SECRET_ENCRYPTION_KEY="$(openssl rand -base64 32)"
 ```
+
+Link a Linq connector named `linq/eve-kernel` to the Vercel project and assign
+it a sending line. Eve uses that connector for both inbound iMessage
+conversations and outbound sign-in codes; no Linq API key belongs in the
+repository or project environment variables.
 
 Treat `SECRET_ENCRYPTION_KEY` as production key material — back it up
 separately; rotating it requires re-encrypting existing values.

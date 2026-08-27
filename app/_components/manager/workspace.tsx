@@ -36,6 +36,8 @@ const priceFormatter = new Intl.NumberFormat("en-US", {
   currency: "USD",
 });
 
+const LINQ_PHONE_NUMBER = "+12052611117";
+
 export function WorkspaceManager() {
   const { busy, error, mutate, snapshot } = useManager();
   const browserReady = snapshot?.browser.available === true;
@@ -111,15 +113,19 @@ function ChannelsSection({ browserReady }: { readonly browserReady: boolean }) {
             WebChat
           </Button>
         )}
-        <Button className="h-11 justify-start" variant="outline">
+        <Button
+          className="h-11 justify-start"
+          render={<a href={`sms:${LINQ_PHONE_NUMBER}`} />}
+          variant="outline"
+        >
           <MailIcon />
           iMessage
         </Button>
       </div>
       <p className="type-caption text-muted-foreground">
         {browserReady
-          ? "WebChat and iMessage are ready."
-          : "iMessage is ready. KERNEL_API_KEY is required to enable WebChat."}
+          ? "WebChat is ready. iMessage opens +1 (205) 261-1117."
+          : "iMessage opens +1 (205) 261-1117. KERNEL_API_KEY is required to enable WebChat."}
       </p>
     </section>
   );

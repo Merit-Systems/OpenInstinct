@@ -2,16 +2,30 @@
 import { connectLinqCredentials } from "@vercel/connect/eve";
 import { defaultLinqAuth, linqChannel } from "eve/channels/linq";
 import { accessScopeForUser } from "../../lib/access-scope.js";
-import { conversationMessageFromActionResult } from "../../lib/conversation-message.js";
+import {
+  claimConversationMessageRelay,
+  conversationMessageFromActionResult,
+} from "../../lib/conversation-message.js";
+import { LINQ_CONNECTOR } from "../../lib/linq.js";
+import { normalizeAuthPhoneNumber } from "../../lib/phone-number.js";
+import { findVerifiedAuthUserIdByPhoneNumber } from "../../lib/server/auth-user.js";
 
 export default linqChannel({
-  credentials: connectLinqCredentials("linq/eve-kernel"),
+  credentials: connectLinqCredentials(LINQ_CONNECTOR),
   events: {
-    async "action.result"(event, channel) {
+    async "action.result"(event, channel, ctx) {
       const message = conversationMessageFromActionResult(event.result);
-      if (message && channel.thread) {
-        await channel.thread.post({ markdown: message });
-      }
+      if (!message || !channel.thread) return;
+      if (
+        !claimConversationMessageRelay(
+          channel.state,
+          ctx.session.turn.id,
+          message
+        )
+      )
+        return;
+
+      await channel.thread.post({ markdown: message });
     },
     "message.appended"() {
       return undefined;
@@ -20,11 +34,22 @@ export default linqChannel({
       return undefined;
     },
   },
-  onMessage(_context, message) {
+  async onMessage(_context, message) {
     if (message.author.isBot) return null;
 
     const auth = defaultLinqAuth(message);
-    const scope = accessScopeForUser(auth.principalId);
+    const authorUserName: unknown = message.author.userName;
+    const phoneNumber =
+      typeof authorUserName === "string"
+        ? normalizeAuthPhoneNumber(authorUserName)
+        : undefined;
+    const verifiedUserId = phoneNumber
+      ? await findVerifiedAuthUserIdByPhoneNumber(phoneNumber)
+      : undefined;
+    const principalId = verifiedUserId
+      ? `better-auth:${verifiedUserId}`
+      : auth.principalId;
+    const scope = accessScopeForUser(principalId);
     return {
       auth: {
         ...auth,
@@ -32,6 +57,7 @@ export default linqChannel({
           ...auth.attributes,
           workspaceId: scope.workspaceId,
         },
+        principalId,
       },
     };
   },

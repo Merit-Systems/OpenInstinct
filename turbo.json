@@ -8,7 +8,6 @@
     "HOSTED_SECRET_ENCRYPTION_KEY",
     "SECRET_ENCRYPTION_KEY",
     "KERNEL_API_KEY",
-    "TEXTBELT_API_KEY",
     "VERCEL_ENV"
   ],
   "tasks": {
