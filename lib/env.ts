@@ -19,10 +19,6 @@ const runtimeEnv = createEnv({
       "BETTER_AUTH_URL must be an absolute URL"
     ),
     DATABASE_URL: databaseUrlSchema,
-    EVE_NEXT_PRODUCTION_ORIGIN: optionalValue.refine(
-      (value) => value === undefined || URL.canParse(value),
-      "EVE_NEXT_PRODUCTION_ORIGIN must be an absolute URL"
-    ),
     GOOGLE_CONNECTOR_UID: optionalValue,
     HOSTED_SECRET_ENCRYPTION_KEY: optionalValue,
     SECRET_ENCRYPTION_KEY: optionalValue,
