@@ -1,6 +1,6 @@
 # Application database
 
-This directory owns the eight application tables and their domain query
+This directory owns the nine application tables and their domain query
 services.
 Better Auth continues to own and migrate its tables independently in
 `auth.ts`.

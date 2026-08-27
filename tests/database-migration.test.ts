@@ -1,4 +1,4 @@
-import { readFile } from "node:fs/promises";
+import { readdir, readFile } from "node:fs/promises";
 import { PGlite } from "@electric-sql/pglite";
 import { afterEach, describe, expect, it } from "vitest";
 
@@ -12,8 +12,7 @@ describe("application database migration", () => {
   it("creates a validated schema and is idempotent on an empty database", async () => {
     const database = createDatabase();
 
-    await applyInitialMigration(database);
-    await applyInitialMigration(database);
+    await applyMigrations(database, { repeatInitial: true });
 
     const tables = await database.query<{ count: number }>(
       `SELECT count(*)::int AS count
@@ -27,12 +26,13 @@ describe("application database migration", () => {
            'agent_sessions',
            'browser_sessions',
            'chats',
-           'encrypted_secrets'
+           'encrypted_secrets',
+           'feedback'
          )`
     );
     const pendingConstraints = await pendingConstraintCount(database);
 
-    expect(tables.rows[0]?.count).toBe(8);
+    expect(tables.rows[0]?.count).toBe(9);
     expect(pendingConstraints).toBe(0);
   }, 15_000);
 
@@ -65,7 +65,7 @@ describe("application database migration", () => {
       );
       `);
 
-    await applyInitialMigration(database);
+    await applyMigrations(database);
 
     const vault = await database.query<{ id: string; kind: string }>(
       "SELECT id, kind FROM vault_items WHERE id = 'legacy-item'"
@@ -109,11 +109,22 @@ function createDatabase() {
   return database;
 }
 
-async function applyInitialMigration(database: PGlite) {
-  const migration = await readFile(
-    new URL("../db/migrations/0000_fluffy_the_spike.sql", import.meta.url),
-    "utf8"
-  );
+async function applyMigrations(
+  database: PGlite,
+  { repeatInitial = false }: { repeatInitial?: boolean } = {}
+) {
+  const directory = new URL("../db/migrations/", import.meta.url);
+  const migrations = (await readdir(directory))
+    .filter((name) => name.endsWith(".sql"))
+    .sort();
+  for (const [index, migration] of migrations.entries()) {
+    const sql = await readFile(new URL(migration, directory), "utf8");
+    if (repeatInitial && index === 0) await executeMigration(database, sql);
+    await executeMigration(database, sql);
+  }
+}
+
+async function executeMigration(database: PGlite, migration: string) {
   for (const statement of migration.split("--> statement-breakpoint")) {
     if (statement.trim()) await database.exec(statement);
   }
