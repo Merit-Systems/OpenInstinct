@@ -8,8 +8,8 @@ import type {
   VaultAutofillCommand,
   VaultAutofillExtensionResult,
   VaultAutofillFrameInspection,
-} from "../../lib/vault-autofill-protocol";
-import { vaultAutofillCommandSchema } from "../../lib/vault-autofill-protocol";
+} from "../../lib/manager/vault-autofill-protocol";
+import { vaultAutofillCommandSchema } from "../../lib/manager/vault-autofill-protocol";
 import { sendMessage } from "../lib/messaging";
 
 const paymentFrameHosts = [

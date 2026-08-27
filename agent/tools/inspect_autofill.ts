@@ -1,15 +1,15 @@
 import { defineTool } from "eve/tools";
 import { z } from "zod";
-import { scopeFromPrincipal } from "../../lib/access-scope.js";
-import { requireOwnedBrowserSession } from "../../lib/server/kernel-browser.js";
-import { listAutofillSuggestions } from "../../lib/server/vault-autofill.js";
-import { vaultAutofillProvider } from "../../lib/server/vault-autofill-provider.js";
-import { inspectWithVaultExtension } from "../../lib/server/vault-extension-autofill.js";
-import { inspectAutofillRequestSchema } from "../../lib/vault-autofill.js";
+import { requireOwnedBrowserSession } from "@/agent/extensions/kernel/browser-runtime";
+import { scopeFromPrincipal } from "@/lib/access-scope";
+import { listAutofillSuggestions } from "@/lib/manager/server/vault-autofill";
+import { vaultAutofillProvider } from "@/lib/manager/server/vault-autofill-provider";
+import { inspectWithVaultExtension } from "@/lib/manager/server/vault-extension-autofill";
+import { inspectAutofillRequestSchema } from "@/lib/manager/vault-autofill";
 import {
   autofillSurfaceKindSchema,
   autofillSuggestionSchema,
-} from "../../lib/vault-autofill-protocol.js";
+} from "@/lib/manager/vault-autofill-protocol";
 
 const outputSchema = z.object({
   origin: z.string(),

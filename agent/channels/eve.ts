@@ -4,10 +4,9 @@ import {
   UnauthenticatedError,
   type AuthFn,
 } from "eve/channels/auth";
-import type { AccessScope } from "../../lib/access-scope.js";
-import { sessionIdFromPath } from "../../lib/eve-session-path.js";
-import { getAppStore } from "../../lib/server/app-store.js";
-import { requestScopeFromRequest } from "../../lib/server/eve-request-scope.js";
+import { isSessionOwned } from "@/db/services/sessions";
+import { accessScopeForUser, type AccessScope } from "@/lib/access-scope";
+import { getAuthSession } from "@/lib/auth/session";
 
 function applicationAuth(): AuthFn {
   return async (request) => {
@@ -35,10 +34,26 @@ function applicationAuth(): AuthFn {
 
 export default eveChannel({ auth: [applicationAuth()] });
 
+function sessionIdFromPath(pathname: string) {
+  const match = /^\/eve\/v1\/session\/([^/]+)/.exec(pathname);
+  if (!match?.[1]) return;
+  try {
+    return decodeURIComponent(match[1]);
+  } catch {
+    return;
+  }
+}
+
+async function requestScopeFromRequest(request: Request) {
+  const session = await getAuthSession(request.headers);
+  return session
+    ? accessScopeForUser(`better-auth:${session.user.id}`)
+    : undefined;
+}
+
 async function waitForSessionOwnership(scope: AccessScope, sessionId: string) {
-  const store = await getAppStore();
   for (let attempt = 0; attempt < 5; attempt += 1) {
-    if (await store.isSessionOwned(scope, sessionId)) return true;
+    if (await isSessionOwned(scope, sessionId)) return true;
     await new Promise((resolve) => setTimeout(resolve, 50));
   }
   return false;

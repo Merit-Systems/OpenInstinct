@@ -2,13 +2,13 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { EveEvalResult, EveEvalRunSummary } from "eve/evals";
 import type { EvalReporter } from "eve/evals/reporters";
-import { getEnv } from "../../lib/runtime-env.js";
+import { env } from "@/lib/env";
 import {
   measureBrowserTask,
   readTaskCompletion,
   terminalBrowserMessage,
-} from "../../lib/browser-benchmark.js";
-import type { BrowserBenchmark } from "./benchmark-schema.js";
+} from "@/lib/browser/benchmark";
+import type { BrowserBenchmark } from "@/evals/browser/benchmark-schema";
 
 const tableWidths = [34, 8, 10, 12, 64] as const;
 const taskNames = new Map<string, string>();
@@ -114,7 +114,7 @@ async function buildBenchmark(
   )?.result.runtimeIdentity;
   const gitSha =
     runtimeIdentity?.build?.gitSha ?? (await readCurrentGitSha()) ?? null;
-  const environmentLabel = getEnv().BROWSER_BENCH_LABEL?.trim();
+  const environmentLabel = env.BROWSER_BENCH_LABEL?.trim();
 
   return {
     completedAt: summary.completedAt,

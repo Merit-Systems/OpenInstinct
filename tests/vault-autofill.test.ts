@@ -6,11 +6,11 @@ import {
   listAutofillSuggestions,
   materializeAutofillClaims,
   type AutofillVaultAdapter,
-} from "../lib/server/vault-autofill";
-import { extensionRuntimeCode } from "../lib/server/vault-extension-autofill";
-import { createVaultAutofillProvider } from "../lib/server/vault-autofill-provider";
-import { serializePaymentCard } from "../lib/payment-card";
-import { vaultAutofillCommandSchema } from "../lib/vault-autofill-protocol";
+} from "../lib/manager/server/vault-autofill";
+import { createVaultAutofillProvider } from "../lib/manager/server/vault-autofill-provider";
+import { extensionRuntimeCode } from "../lib/manager/server/vault-extension-autofill";
+import { serializePaymentCard } from "../lib/manager/payment-card";
+import { vaultAutofillCommandSchema } from "../lib/manager/vault-autofill-protocol";
 
 const scope: AccessScope = {
   userId: "user-1",

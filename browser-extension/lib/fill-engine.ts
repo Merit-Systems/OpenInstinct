@@ -1,7 +1,7 @@
 import type {
   AutofillClaimResult,
   VaultAutofillFrameFillRequest,
-} from "../../lib/vault-autofill-protocol";
+} from "../../lib/manager/vault-autofill-protocol";
 import { findBestAutofillElement } from "./field-detector";
 
 const fillActionDelayMilliseconds = 20;

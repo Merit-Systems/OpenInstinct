@@ -5,7 +5,7 @@ import {
   managerMutationSchema,
   managerSetupRequestSchema,
 } from "../lib/manager";
-import { serializePaymentCard } from "../lib/payment-card";
+import { serializePaymentCard } from "../lib/manager/payment-card";
 
 describe("self-hosted manager", () => {
   it("builds a vault form URL without accepting a secret", () => {

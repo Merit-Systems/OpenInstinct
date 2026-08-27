@@ -20,11 +20,8 @@ import {
 } from "@/components/ai-elements/prompt-input";
 import { Shimmer } from "@/components/ai-elements/shimmer";
 import { Button } from "@/components/ui/button";
-import {
-  formatChatUsage,
-  summarizeChatUsage,
-  type ChatUsage,
-} from "@/lib/chat";
+import { formatChatUsage, summarizeChatUsage } from "@/app/_lib/chat-usage";
+import type { ChatUsage } from "@/lib/chat";
 import { cn } from "@/lib/utils";
 import { AgentMessage } from "./agent-message";
 
@@ -68,8 +65,7 @@ export function AgentChat({
   });
 
   const isBusy = agent.status === "submitted" || agent.status === "streaming";
-  const isRestoring =
-    sessionId !== undefined && agent.events.length === 0 && isBusy;
+  const isRestoring = agent.status === "resuming";
   const isEmpty = agent.data.messages.length === 0;
   const lastMessage = agent.data.messages.at(-1);
   const isPendingAssistantShell =
@@ -80,7 +76,8 @@ export function AgentChat({
     (agent.status === "submitted" ||
       lastMessage?.role !== "assistant" ||
       isPendingAssistantShell);
-  const turnFailure = isBusy ? undefined : getLatestTurnFailure(agent.events);
+  const turnFailure =
+    isBusy || isRestoring ? undefined : getLatestTurnFailure(agent.events);
   const errorMessage =
     cancellationError ??
     (agent.error ? toErrorMessage(agent.error) : undefined) ??
@@ -190,7 +187,7 @@ export function AgentChat({
       ) : null}
       <PromptInputSubmit
         disabled={isRestoring}
-        status={isBusy ? undefined : agent.status}
+        status={isBusy || isRestoring ? undefined : agent.status}
       />
     </PromptInput>
   );
@@ -221,7 +218,7 @@ export function AgentChat({
               isPendingAssistantShell &&
               message.id === lastMessage.id ? null : (
                 <AgentMessage
-                  canRespond={!isBusy}
+                  canRespond={!isBusy && !isRestoring}
                   isStreaming={
                     agent.status === "streaming" &&
                     index === agent.data.messages.length - 1

@@ -1,14 +1,14 @@
 import { defineTool } from "eve/tools";
 import { z } from "zod";
-import { scopeFromPrincipal } from "../../lib/access-scope.js";
-import { requireOwnedBrowserSession } from "../../lib/server/kernel-browser.js";
-import { materializeAutofillClaims } from "../../lib/server/vault-autofill.js";
-import { vaultAutofillProvider } from "../../lib/server/vault-autofill-provider.js";
+import { requireOwnedBrowserSession } from "@/agent/extensions/kernel/browser-runtime";
+import { scopeFromPrincipal } from "@/lib/access-scope";
+import { materializeAutofillClaims } from "@/lib/manager/server/vault-autofill";
+import { vaultAutofillProvider } from "@/lib/manager/server/vault-autofill-provider";
 import {
   fillWithVaultExtension,
   inspectWithVaultExtension,
-} from "../../lib/server/vault-extension-autofill.js";
-import { fillFromVaultRequestSchema } from "../../lib/vault-autofill.js";
+} from "@/lib/manager/server/vault-extension-autofill";
+import { fillFromVaultRequestSchema } from "@/lib/manager/vault-autofill";
 
 const outputSchema = z.object({
   filledClaims: z.number().int().nonnegative(),

@@ -14,7 +14,10 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import type { BrowserRunGroup, BrowserRunTask } from "@/lib/browser-run-store";
+import type {
+  BrowserRunGroup,
+  BrowserRunTask,
+} from "@/app/_lib/browser-run-store";
 
 export function BrowserRunTable({
   emptyDescription,

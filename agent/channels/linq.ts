@@ -1,14 +1,20 @@
 /* oxlint-disable typescript/no-unsafe-call, typescript/no-unsafe-member-access -- Eve's Linq adapter exposes the thread through a transitive Chat SDK type; TypeScript still checks this contextual handler. */
 import { connectLinqCredentials } from "@vercel/connect/eve";
 import { defaultLinqAuth, linqChannel } from "eve/channels/linq";
-import { accessScopeForUser } from "../../lib/access-scope.js";
+import { z } from "zod";
+import { auth } from "@/auth";
+import { accessScopeForUser } from "@/lib/access-scope";
 import {
   claimConversationMessageRelay,
   conversationMessageFromActionResult,
-} from "../../lib/conversation-message.js";
-import { LINQ_CONNECTOR } from "../../lib/linq.js";
-import { normalizeAuthPhoneNumber } from "../../lib/phone-number.js";
-import { findVerifiedAuthUserIdByPhoneNumber } from "../../lib/server/auth-user.js";
+} from "@/lib/conversation-message";
+import { LINQ_CONNECTOR } from "@/lib/linq";
+import { normalizeAuthPhoneNumber } from "@/lib/auth/phone-number";
+
+const verifiedPhoneUserSchema = z.object({
+  id: z.string().min(1),
+  phoneNumberVerified: z.literal(true),
+});
 
 export default linqChannel({
   credentials: connectLinqCredentials(LINQ_CONNECTOR),
@@ -62,3 +68,13 @@ export default linqChannel({
     };
   },
 });
+
+async function findVerifiedAuthUserIdByPhoneNumber(phoneNumber: string) {
+  const context = await auth.$context;
+  const user = await context.adapter.findOne({
+    model: "user",
+    where: [{ field: "phoneNumber", value: phoneNumber }],
+  });
+  const parsed = verifiedPhoneUserSchema.safeParse(user);
+  return parsed.success ? parsed.data.id : undefined;
+}

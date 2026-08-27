@@ -2,7 +2,8 @@ import { redirect } from "next/navigation";
 import { headers } from "next/headers";
 import { PhoneAuthForm } from "@/app/sign-in/phone-auth-form";
 import { Logo } from "@/components/ui/logo";
-import { getAuthSession } from "@/lib/server/auth-session";
+import { isLocalPhoneAuthBypassEnabled } from "@/lib/env";
+import { getAuthSession } from "@/lib/auth/session";
 
 export default async function SignInPage({
   searchParams,
@@ -22,7 +23,10 @@ export default async function SignInPage({
       <section className="w-full max-w-sm">
         <Logo className="size-9" />
         <h1 className="type-page-title mt-6">Sign in</h1>
-        <PhoneAuthForm callbackUrl={callbackUrl} />
+        <PhoneAuthForm
+          callbackUrl={callbackUrl}
+          skipOtp={isLocalPhoneAuthBypassEnabled()}
+        />
       </section>
     </main>
   );

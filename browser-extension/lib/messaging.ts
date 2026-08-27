@@ -3,7 +3,7 @@ import type {
   VaultAutofillFrameFillRequest,
   VaultAutofillFrameFillResult,
   VaultAutofillFrameInspection,
-} from "../../lib/vault-autofill-protocol";
+} from "../../lib/manager/vault-autofill-protocol";
 
 interface VaultAutofillMessagingProtocol {
   fillFrame(input: VaultAutofillFrameFillRequest): VaultAutofillFrameFillResult;

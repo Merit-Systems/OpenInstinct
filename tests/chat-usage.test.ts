@@ -1,6 +1,6 @@
 import type { MessageStreamEvent } from "eve/client";
 import { describe, expect, it } from "vitest";
-import { combineChatUsage, summarizeChatUsage } from "../lib/chat";
+import { combineChatUsage, summarizeChatUsage } from "../app/_lib/chat-usage";
 
 describe("chat usage", () => {
   it("sums token and complete cost usage across model steps", () => {

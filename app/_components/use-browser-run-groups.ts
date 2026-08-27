@@ -5,7 +5,7 @@ import {
   browserRunStoreEvent,
   readBrowserRunGroups,
   type BrowserRunGroup,
-} from "@/lib/browser-run-store";
+} from "@/app/_lib/browser-run-store";
 
 export function useBrowserRunGroups() {
   const [groups, setGroups] = useState<readonly BrowserRunGroup[]>([]);

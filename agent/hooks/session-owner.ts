@@ -1,6 +1,7 @@
 import { defineHook } from "eve/hooks";
-import { scopeFromPrincipal } from "../../lib/access-scope.js";
-import { getAppStore } from "../../lib/server/app-store.js";
+import { ensureScope } from "@/db/services/scope";
+import { claimSession } from "@/db/services/sessions";
+import { scopeFromPrincipal } from "@/lib/access-scope";
 
 export default defineHook({
   events: {
@@ -9,9 +10,8 @@ export default defineHook({
       if (!initiator) return;
 
       const scope = scopeFromPrincipal(initiator);
-      const store = await getAppStore();
-      await store.ensureScope(scope);
-      await store.claimSession(scope, ctx.session.id);
+      await ensureScope(scope);
+      await claimSession(scope, ctx.session.id);
     },
   },
 });

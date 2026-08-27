@@ -9,12 +9,22 @@ import {
   summarizeBrowserRunTasks,
 } from "@/app/_components/browser-run-table";
 import { Button } from "@/components/ui/button";
-import type { BrowserRunGroup, BrowserRunTask } from "@/lib/browser-run-store";
+import type {
+  BrowserRunGroup,
+  BrowserRunTask,
+} from "@/app/_lib/browser-run-store";
 import {
   taskFromHistoryRun,
   taskHistoryPageSchema,
   type TaskHistoryRun,
-} from "@/lib/task-history";
+} from "@/app/_lib/task-history";
+
+async function fetchTaskHistoryPage(pageCursor?: string) {
+  const search = pageCursor ? `?cursor=${encodeURIComponent(pageCursor)}` : "";
+  const response = await fetch(`/api/tasks${search}`, { cache: "no-store" });
+  if (!response.ok) throw new Error("Task history request failed");
+  return taskHistoryPageSchema.parse(await response.json());
+}
 
 export function GlobalTaskHistory({
   localGroups,
@@ -68,29 +78,30 @@ export function GlobalTaskHistory({
     );
   }, []);
 
+  const commitPage = useCallback(
+    async (
+      page: Awaited<ReturnType<typeof fetchTaskHistoryPage>>,
+      replace: boolean
+    ) => {
+      setRuns((current) => {
+        const combined = replace ? page.runs : [...current, ...page.runs];
+        return [
+          ...new Map(combined.map((run) => [run.sessionId, run])).values(),
+        ];
+      });
+      setCursor(page.cursor);
+      setHasMore(page.hasMore);
+      await hydrate(page.runs);
+    },
+    [hydrate]
+  );
+
   const loadPage = useCallback(
     async (pageCursor?: string, replace = false) => {
       setLoading(true);
       setError(undefined);
       try {
-        const search = pageCursor
-          ? `?cursor=${encodeURIComponent(pageCursor)}`
-          : "";
-        const response = await fetch(`/api/tasks${search}`, {
-          cache: "no-store",
-        });
-        if (!response.ok) throw new Error("Task history request failed");
-        const page = taskHistoryPageSchema.parse(await response.json());
-
-        setRuns((current) => {
-          const combined = replace ? page.runs : [...current, ...page.runs];
-          return [
-            ...new Map(combined.map((run) => [run.sessionId, run])).values(),
-          ];
-        });
-        setCursor(page.cursor);
-        setHasMore(page.hasMore);
-        await hydrate(page.runs);
+        await commitPage(await fetchTaskHistoryPage(pageCursor), replace);
       } catch (loadError) {
         setError(
           loadError instanceof Error
@@ -101,12 +112,30 @@ export function GlobalTaskHistory({
         setLoading(false);
       }
     },
-    [hydrate]
+    [commitPage]
   );
 
   useEffect(() => {
-    void loadPage(undefined, true);
-  }, [loadPage]);
+    let cancelled = false;
+    void fetchTaskHistoryPage()
+      .then(async (page) => {
+        if (!cancelled) await commitPage(page, true);
+      })
+      .catch((loadError: unknown) => {
+        if (cancelled) return;
+        setError(
+          loadError instanceof Error
+            ? loadError.message
+            : "Unable to load task history"
+        );
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [commitPage]);
 
   const tableGroups = useMemo(
     () => historyTableGroups(runs, tasks, localGroups),

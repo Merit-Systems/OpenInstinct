@@ -4,15 +4,17 @@ import { useState, type FormEvent } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { authClient } from "@/lib/auth-client";
-import { normalizeAuthPhoneNumber } from "@/lib/phone-number";
+import { authClient } from "@/app/_lib/auth-client";
+import { normalizeAuthPhoneNumber } from "@/lib/auth/phone-number";
 
 type AuthStep = "phone-number" | "verification-code";
 
 export function PhoneAuthForm({
   callbackUrl,
+  skipOtp,
 }: {
   readonly callbackUrl: string;
+  readonly skipOtp: boolean;
 }) {
   const [error, setError] = useState<string>();
   const [loading, setLoading] = useState(false);
@@ -31,13 +33,21 @@ export function PhoneAuthForm({
     setPhoneNumber(normalizedPhoneNumber);
     setLoading(true);
     try {
+      if (skipOtp) {
+        await verifyPhoneNumber(normalizedPhoneNumber, "000000");
+        return;
+      }
       const result = await authClient.phoneNumber.sendOtp({
         phoneNumber: normalizedPhoneNumber,
       });
       if (result.error) throw new Error(result.error.message);
       setStep("verification-code");
     } catch {
-      setError("Unable to send a code. Please try again.");
+      setError(
+        skipOtp
+          ? "Unable to sign in locally. Please try again."
+          : "Unable to send a code. Please try again."
+      );
     } finally {
       setLoading(false);
     }
@@ -54,14 +64,7 @@ export function PhoneAuthForm({
 
     setLoading(true);
     try {
-      const verified = await authClient.phoneNumber.verify({
-        code,
-        disableSession: false,
-        phoneNumber,
-        updatePhoneNumber: false,
-      });
-      if (verified.error) throw new Error(verified.error.message);
-      navigateAfterAuth();
+      await verifyPhoneNumber(phoneNumber, code);
     } catch {
       setError(
         "That code could not be verified. Request a new code and try again."
@@ -69,6 +72,17 @@ export function PhoneAuthForm({
     } finally {
       setLoading(false);
     }
+  }
+
+  async function verifyPhoneNumber(phoneNumberValue: string, code: string) {
+    const verified = await authClient.phoneNumber.verify({
+      code,
+      disableSession: false,
+      phoneNumber: phoneNumberValue,
+      updatePhoneNumber: false,
+    });
+    if (verified.error) throw new Error(verified.error.message);
+    navigateAfterAuth();
   }
 
   function navigateAfterAuth() {
@@ -133,7 +147,13 @@ export function PhoneAuthForm({
         <p className="type-supporting-body text-destructive">{error}</p>
       ) : null}
       <Button className="w-full" disabled={loading} type="submit">
-        {loading ? "Sending…" : "Send code"}
+        {loading
+          ? skipOtp
+            ? "Signing in…"
+            : "Sending…"
+          : skipOtp
+            ? "Continue locally"
+            : "Send code"}
       </Button>
     </form>
   );

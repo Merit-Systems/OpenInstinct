@@ -2,8 +2,8 @@
 
 import { LogOutIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { authClient } from "@/lib/auth-client";
-import { browserRunStoreKeyForWorkspace } from "@/lib/browser-run-store";
+import { authClient } from "@/app/_lib/auth-client";
+import { browserRunStoreKeyForWorkspace } from "@/app/_lib/browser-run-store";
 
 export function AccountControl() {
   const { data: session } = authClient.useSession();

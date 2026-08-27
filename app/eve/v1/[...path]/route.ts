@@ -1,4 +1,4 @@
-import { getEnv } from "@/lib/runtime-env";
+import { env } from "@/lib/env";
 
 const LOCAL_EVE_ORIGIN = "http://127.0.0.1:4274";
 
@@ -21,7 +21,7 @@ async function forwardToEve(
   const requestUrl = new URL(request.url);
   const targetUrl = new URL(
     `/eve/v1/${path.map(encodeURIComponent).join("/")}${requestUrl.search}`,
-    getEnv().EVE_NEXT_PRODUCTION_ORIGIN ?? LOCAL_EVE_ORIGIN
+    env.EVE_NEXT_PRODUCTION_ORIGIN ?? LOCAL_EVE_ORIGIN
   );
   const headers = new Headers(request.headers);
   headers.delete("content-length");

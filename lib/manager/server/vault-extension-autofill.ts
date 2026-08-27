@@ -9,7 +9,7 @@ import {
   autofillInspectionSchema,
   vaultAutofillExtensionResultSchema,
 } from "../vault-autofill-protocol";
-import { getEnv } from "../runtime-env";
+import { env } from "../../env";
 
 const publicKeySchema = z.object({
   e: z.string().min(1),
@@ -84,10 +84,6 @@ async function executeExtensionOperation(
   argument: string | undefined,
   signal: AbortSignal | undefined
 ) {
-  const env = getEnv();
-  if (!env.KERNEL_API_KEY) {
-    throw new Error("The browser runtime is unavailable.");
-  }
   if (!env.KERNEL_VAULT_AUTOFILL_EXTENSION) {
     throw new Error(
       "Secure vault autofill is unavailable because the browser extension is not configured."

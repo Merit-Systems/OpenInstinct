@@ -1,51 +1,23 @@
 import { createHash } from "node:crypto";
 import { betterAuth } from "better-auth";
-import { getMigrations } from "better-auth/db/migration";
+import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { phoneNumber } from "better-auth/plugins/phone-number";
-import { Pool } from "pg";
-import { z } from "zod";
-import { isE164PhoneNumber } from "@/lib/phone-number";
-import { getEnv } from "@/lib/runtime-env";
-import { sendLinqText } from "@/lib/server/linq";
+import { getToken } from "@vercel/connect";
+import { account, db, session, user, verification } from "@/db";
+import { env, isLocalPhoneAuthBypassEnabled } from "@/lib/env";
+import { isE164PhoneNumber } from "@/lib/auth/phone-number";
+import { LINQ_CONNECTOR } from "@/lib/linq";
 
-const FALLBACK_DATABASE_URL =
-  "postgresql://unconfigured:unconfigured@127.0.0.1:1/unconfigured";
-const FALLBACK_AUTH_SECRET = "local-vault-assistant-auth-is-unconfigured";
-const AUTH_MIGRATION_LOCK_ID = 1_972_040_815;
-const AUTH_TABLE_NAMES = [
-  "account",
-  "session",
-  "user",
-  "verification",
-] as const;
-const authSchemaReadinessSchema = z.object({ ready: z.boolean() });
-
-const env = getEnv();
-const databaseUrl =
-  env.DATABASE_URL?.startsWith("postgres://") ||
-  env.DATABASE_URL?.startsWith("postgresql://")
-    ? withExplicitVerifiedSsl(env.DATABASE_URL)
-    : FALLBACK_DATABASE_URL;
-
-const authPool = new Pool({ connectionString: databaseUrl, max: 5 });
-
-function withExplicitVerifiedSsl(value: string) {
-  const url = new URL(value);
-  const sslMode = url.searchParams.get("sslmode");
-  if (
-    sslMode === "prefer" ||
-    sslMode === "require" ||
-    sslMode === "verify-ca"
-  ) {
-    url.searchParams.set("sslmode", "verify-full");
-  }
-  return url.toString();
-}
+const LINQ_MESSAGES_URL = "https://api.linqapp.com/api/partner/v3/messages";
+const localPhoneAuthBypass = isLocalPhoneAuthBypassEnabled(env);
 
 export const auth = betterAuth({
   appName: "Local Vault Assistant",
-  baseURL: env.BETTER_AUTH_URL ?? "http://auth-disabled.localhost",
-  database: authPool,
+  baseURL: env.BETTER_AUTH_URL,
+  database: drizzleAdapter(db, {
+    provider: "pg",
+    schema: { account, session, user, verification },
+  }),
   disabledPaths: [
     "/change-email",
     "/request-password-reset",
@@ -63,7 +35,9 @@ export const auth = betterAuth({
       expiresIn: 300,
       phoneNumberValidator: isE164PhoneNumber,
       requireVerification: true,
-      sendOTP: ({ code, phoneNumber: to }) => sendPhoneCode({ code, to }),
+      sendOTP: localPhoneAuthBypass
+        ? () => undefined
+        : ({ code, phoneNumber: to }) => sendPhoneCode({ code, to }),
       signUpOnVerification: {
         getTempEmail: (phoneNumberValue) =>
           `phone-${createHash("sha256")
@@ -71,83 +45,15 @@ export const auth = betterAuth({
             .digest("hex")}@local-vault.invalid`,
         getTempName: () => "Phone user",
       },
+      verifyOTP: localPhoneAuthBypass
+        ? ({ phoneNumber: value }) => isE164PhoneNumber(value)
+        : undefined,
     }),
   ],
-  secret: env.BETTER_AUTH_SECRET ?? FALLBACK_AUTH_SECRET,
+  secret: env.BETTER_AUTH_SECRET,
 });
 
-let migrationPromise: Promise<void> | undefined;
-
-export async function ensureAuthDatabase() {
-  requireAuthConfiguration();
-
-  const currentMigration = (migrationPromise ??= prepareAuthDatabase());
-  try {
-    await currentMigration;
-  } catch (error) {
-    if (migrationPromise === currentMigration) migrationPromise = undefined;
-    throw error;
-  }
-}
-
-async function prepareAuthDatabase() {
-  if (await isAuthSchemaReady()) return;
-  await runAuthMigrations();
-}
-
-async function isAuthSchemaReady() {
-  const readinessResult = await authPool.query(
-    `SELECT count(*) = $1 AS ready
-     FROM information_schema.tables
-     WHERE table_schema = current_schema()
-       AND table_name = ANY($2::text[])`,
-    [AUTH_TABLE_NAMES.length, AUTH_TABLE_NAMES]
-  );
-  const readiness = authSchemaReadinessSchema.parse(readinessResult.rows[0]);
-  return readiness.ready;
-}
-
-async function runAuthMigrations() {
-  const lockClient = await authPool.connect();
-  let lockAcquired = false;
-  try {
-    await lockClient.query("SELECT pg_advisory_lock($1)", [
-      AUTH_MIGRATION_LOCK_ID,
-    ]);
-    lockAcquired = true;
-    if (await isAuthSchemaReady()) return;
-    const { runMigrations } = await getMigrations(auth.options);
-    await runMigrations();
-  } finally {
-    try {
-      if (lockAcquired) {
-        await lockClient.query("SELECT pg_advisory_unlock($1)", [
-          AUTH_MIGRATION_LOCK_ID,
-        ]);
-      }
-    } finally {
-      lockClient.release();
-    }
-  }
-}
-
-function requireAuthConfiguration() {
-  if (
-    !env.DATABASE_URL?.startsWith("postgres://") &&
-    !env.DATABASE_URL?.startsWith("postgresql://")
-  ) {
-    throw new Error("A Postgres DATABASE_URL is required.");
-  }
-  if (!env.BETTER_AUTH_SECRET) {
-    throw new Error("BETTER_AUTH_SECRET is required.");
-  }
-  if (!env.BETTER_AUTH_URL) {
-    throw new Error("BETTER_AUTH_URL is required.");
-  }
-}
-
 async function sendPhoneCode({ code, to }: { code: string; to: string }) {
-  requireAuthConfiguration();
   await sendLinqText({
     idempotencyKey: `auth-otp-${createHash("sha256")
       .update(`${to}\u0000${code}`)
@@ -155,4 +61,35 @@ async function sendPhoneCode({ code, to }: { code: string; to: string }) {
     message: `Local Vault Assistant sign-in code: ${code}. Expires in 5 minutes.`,
     to,
   });
+}
+
+async function sendLinqText({
+  idempotencyKey,
+  message,
+  to,
+}: {
+  readonly idempotencyKey: string;
+  readonly message: string;
+  readonly to: string;
+}) {
+  const token = await getToken(LINQ_CONNECTOR, {
+    subject: { type: "app" },
+  });
+  const response = await fetch(LINQ_MESSAGES_URL, {
+    body: JSON.stringify({
+      message: { parts: [{ type: "text", value: message }] },
+      to: [to],
+    }),
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+      "Idempotency-Key": idempotencyKey,
+    },
+    method: "POST",
+  });
+  if (!response.ok) {
+    throw new Error(
+      `Linq message delivery failed with HTTP ${String(response.status)}.`
+    );
+  }
 }

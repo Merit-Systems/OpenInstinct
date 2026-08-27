@@ -1,16 +1,18 @@
 import { createCipheriv, createDecipheriv, randomBytes } from "node:crypto";
-import type { AccessScope } from "../access-scope";
-import { getEnv } from "../runtime-env";
-import { getAppStore } from "./app-store";
+import {
+  deleteEncryptedSecret,
+  readEncryptedSecret,
+  writeEncryptedSecret,
+} from "@/db/services/secrets";
+import type { AccessScope } from "../../access-scope";
+import { env } from "@/lib/env";
 
 export function secretStoreStatus() {
-  const available = optionalEncryptionKey() !== undefined;
   return {
-    available,
-    description: available
-      ? "Secrets are encrypted for this workspace before database storage."
-      : "Secret encryption is not configured.",
-    kind: available ? "Encrypted vault" : "Unavailable",
+    available: true,
+    description:
+      "Secrets are encrypted for this workspace before database storage.",
+    kind: "Encrypted vault",
   };
 }
 
@@ -24,9 +26,7 @@ export async function writeSecret({
   readonly scope: AccessScope;
   readonly value: string;
 }) {
-  await (
-    await getAppStore()
-  ).writeEncryptedSecret(scope, id, encryptSecret(scope, id, value));
+  await writeEncryptedSecret(scope, id, encryptSecret(scope, id, value));
 }
 
 export async function readSecret({
@@ -37,7 +37,7 @@ export async function readSecret({
   readonly namespace: "vault";
   readonly scope: AccessScope;
 }) {
-  const encrypted = await (await getAppStore()).readEncryptedSecret(scope, id);
+  const encrypted = await readEncryptedSecret(scope, id);
   return encrypted ? decryptSecret(scope, id, encrypted) : undefined;
 }
 
@@ -49,9 +49,7 @@ export async function hasSecret({
   readonly namespace: "vault";
   readonly scope: AccessScope;
 }) {
-  return (
-    (await (await getAppStore()).readEncryptedSecret(scope, id)) !== undefined
-  );
+  return (await readEncryptedSecret(scope, id)) !== undefined;
 }
 
 export async function deleteSecret({
@@ -62,32 +60,16 @@ export async function deleteSecret({
   readonly namespace: "vault";
   readonly scope: AccessScope;
 }) {
-  await (await getAppStore()).deleteEncryptedSecret(scope, id);
-}
-
-function optionalEncryptionKey() {
-  const env = getEnv();
-  const encoded = env.SECRET_ENCRYPTION_KEY ?? env.HOSTED_SECRET_ENCRYPTION_KEY;
-  if (!encoded) return;
-
-  const key = Buffer.from(encoded, "base64");
-  if (key.length !== 32) {
-    throw new Error(
-      "SECRET_ENCRYPTION_KEY must be a base64-encoded 32-byte key."
-    );
-  }
-  return key;
-}
-
-function encryptionKey() {
-  const key = optionalEncryptionKey();
-  if (!key) throw new Error("SECRET_ENCRYPTION_KEY is required.");
-  return key;
+  await deleteEncryptedSecret(scope, id);
 }
 
 function encryptSecret(scope: AccessScope, id: string, value: string) {
   const iv = randomBytes(12);
-  const cipher = createCipheriv("aes-256-gcm", encryptionKey(), iv);
+  const cipher = createCipheriv(
+    "aes-256-gcm",
+    Buffer.from(env.SECRET_ENCRYPTION_KEY, "base64"),
+    iv
+  );
   cipher.setAAD(secretAad(scope, id));
   const ciphertext = Buffer.concat([
     cipher.update(value, "utf8"),
@@ -109,7 +91,7 @@ function decryptSecret(scope: AccessScope, id: string, value: string) {
 
   const decipher = createDecipheriv(
     "aes-256-gcm",
-    encryptionKey(),
+    Buffer.from(env.SECRET_ENCRYPTION_KEY, "base64"),
     Buffer.from(encodedIv, "base64url")
   );
   decipher.setAAD(secretAad(scope, id));

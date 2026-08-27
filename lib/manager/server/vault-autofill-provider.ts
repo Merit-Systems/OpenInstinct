@@ -1,21 +1,8 @@
+import { listVaultItems, readVaultItem } from "@/db/services/vault";
 import { parsePaymentCardSecret } from "../payment-card";
 import type { DetectedAutofillSurface } from "../vault-autofill-protocol";
-import { getAppStore } from "./app-store";
 import { hasSecret, readSecret } from "./secret-store";
 import type { AutofillVaultAdapter } from "./vault-autofill";
-
-async function listVaultItems(
-  ...args: Parameters<Awaited<ReturnType<typeof getAppStore>>["listVaultItems"]>
-) {
-  return (await getAppStore()).listVaultItems(...args);
-}
-
-async function readVaultItem(
-  scope: Parameters<typeof listVaultItems>[0],
-  id: string
-) {
-  return (await listVaultItems(scope)).find((item) => item.id === id);
-}
 
 interface VaultAutofillCodec {
   readonly claims: (

@@ -1,4 +1,4 @@
-import type { AccessScope } from "../access-scope";
+import type { AccessScope } from "../../access-scope";
 import type {
   AutofillClaim,
   AutofillSuggestion,

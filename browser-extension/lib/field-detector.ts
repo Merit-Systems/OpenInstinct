@@ -2,7 +2,7 @@ import type {
   AutofillSurfaceKind,
   DetectedAutofillField,
   DetectedAutofillSurface,
-} from "../../lib/vault-autofill-protocol";
+} from "../../lib/manager/vault-autofill-protocol";
 
 export interface AutofillElementDescriptor {
   readonly autocomplete: string;
