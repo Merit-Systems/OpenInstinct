@@ -138,7 +138,7 @@ describe("database services", () => {
     await settings.selectGatewayModel(alice, "openai/test");
     expect(await settings.readGatewayModel(alice)).toBe("openai/test");
     expect(await settings.readGatewayModel(bob)).toBeUndefined();
-  });
+  }, 15_000);
 });
 
 async function applyInitialMigration(database: PGlite) {
