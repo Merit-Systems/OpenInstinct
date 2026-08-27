@@ -22,7 +22,7 @@ The result is a personal agent with useful browser capabilities and a much small
 - Recoverable parallel browser jobs with time, outcome, and model-cost tracking at `/tasks`
 - macOS Keychain storage for secret values and a private local database for metadata
 - Local or hosted OpenAI-compatible inference
-- Optional hosted mode with phone sign-in, SMS 2FA, and isolated personal workspaces
+- Optional hosted mode with passwordless SMS sign-in and isolated personal workspaces
 
 ## Run locally
 
@@ -88,9 +88,9 @@ DATABASE_URL=postgresql://user:password@host/database
 HOSTED_SECRET_ENCRYPTION_KEY="$(openssl rand -base64 32)"
 ```
 
-The hosted UI exposes phone number plus password as the first factor and a
-one-time SMS code as the required second factor. Phone numbers must use E.164
-format. Better Auth tables are migrated automatically when the hosted auth
+The hosted UI asks for a phone number and then signs the user in with a one-time
+SMS code. A user's first successful verification creates their account. Phone
+numbers must use E.164 format. Better Auth tables are migrated automatically when the hosted auth
 surface is first used. On Vercel, hosted mode is selected automatically;
 setting `LOCAL_VAULT_ASSISTANT_MODE=local` keeps the no-login experience for an
 explicitly local deployment and does not contact Better Auth or the SMS service.

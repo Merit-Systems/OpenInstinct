@@ -3,7 +3,6 @@ import { createSMSSender, type SMSTemplateId } from "@better-auth/infra";
 import { betterAuth } from "better-auth";
 import { getMigrations } from "better-auth/db/migration";
 import { phoneNumber } from "better-auth/plugins/phone-number";
-import { twoFactor } from "better-auth/plugins/two-factor";
 import { Pool } from "pg";
 import { z } from "zod";
 import { getDeploymentMode } from "@/lib/deployment-mode";
@@ -16,12 +15,10 @@ const AUTH_MIGRATION_LOCK_ID = 1_972_040_815;
 const AUTH_TABLE_NAMES = [
   "account",
   "session",
-  "twoFactor",
   "user",
   "verification",
 ] as const;
 const authSchemaReadinessSchema = z.object({ ready: z.boolean() });
-const phoneUserSchema = z.object({ phoneNumber: z.string().min(1) });
 
 const env = getEnv();
 const databaseUrl =
@@ -45,16 +42,8 @@ export const auth = betterAuth({
     "/sign-in/email",
     "/sign-in/social",
     "/sign-up/email",
-    "/two-factor/generate-backup-codes",
-    "/two-factor/get-totp-uri",
-    "/two-factor/verify-backup-code",
-    "/two-factor/verify-totp",
     "/verify-email",
   ],
-  emailAndPassword: {
-    enabled: true,
-    minPasswordLength: 12,
-  },
   plugins: [
     phoneNumber({
       allowedAttempts: 3,
@@ -63,8 +52,6 @@ export const auth = betterAuth({
       requireVerification: true,
       sendOTP: ({ code, phoneNumber: to }) =>
         sendPhoneCode({ code, template: "phone-verification", to }),
-      sendPasswordResetOTP: ({ code, phoneNumber: to }) =>
-        sendPhoneCode({ code, template: "phone-verification", to }),
       signUpOnVerification: {
         getTempEmail: (phoneNumberValue) =>
           `phone-${createHash("sha256")
@@ -72,34 +59,6 @@ export const auth = betterAuth({
             .digest("hex")}@local-vault.invalid`,
         getTempName: () => "Phone user",
       },
-    }),
-    twoFactor({
-      accountLockout: {
-        durationSeconds: 900,
-        enabled: true,
-        maxFailedAttempts: 5,
-      },
-      issuer: "Local Vault Assistant",
-      otpOptions: {
-        allowedAttempts: 3,
-        digits: 6,
-        period: 5,
-        sendOTP: ({ otp: code, user }) => {
-          const parsedUser = phoneUserSchema.safeParse(user);
-          if (!parsedUser.success) {
-            throw new Error("A verified phone number is required for 2FA.");
-          }
-          return sendPhoneCode({
-            code,
-            template: "two-factor",
-            to: parsedUser.data.phoneNumber,
-          });
-        },
-        storeOTP: "hashed",
-      },
-      totpOptions: { disable: true },
-      trustDeviceMaxAge: 0,
-      twoFactorCookieMaxAge: 600,
     }),
   ],
   secret: env.BETTER_AUTH_SECRET ?? LOCAL_UNUSED_SECRET,

@@ -3,14 +3,9 @@ export function isFullyAuthenticatedUser(
     | {
         phoneNumber?: string | null;
         phoneNumberVerified?: boolean | null;
-        twoFactorEnabled?: boolean | null;
       }
     | null
     | undefined
 ) {
-  return Boolean(
-    user?.phoneNumber &&
-    user.phoneNumberVerified === true &&
-    user.twoFactorEnabled === true
-  );
+  return Boolean(user?.phoneNumber && user.phoneNumberVerified === true);
 }

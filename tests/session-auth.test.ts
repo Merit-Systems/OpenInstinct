@@ -29,26 +29,22 @@ describe("multi-user request identity", () => {
     expect(sessionIdFromPath("/eve/v1/session")).toBeUndefined();
   });
 
-  it("accepts only phone-verified users with SMS 2FA enabled", () => {
+  it("accepts only users with a verified phone number", () => {
     expect(
       isFullyAuthenticatedUser({
         phoneNumber: "+12025550123",
         phoneNumberVerified: true,
-        twoFactorEnabled: true,
       })
     ).toBe(true);
     expect(
       isFullyAuthenticatedUser({
         phoneNumber: "+12025550123",
-        phoneNumberVerified: true,
-        twoFactorEnabled: false,
+        phoneNumberVerified: false,
       })
     ).toBe(false);
     expect(
       isFullyAuthenticatedUser({
-        phoneNumber: "+12025550123",
-        phoneNumberVerified: false,
-        twoFactorEnabled: true,
+        phoneNumberVerified: true,
       })
     ).toBe(false);
   });
