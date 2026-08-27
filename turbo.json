@@ -26,9 +26,6 @@
     "format:check": {
       "outputs": []
     },
-    "foundation:check": {
-      "outputs": []
-    },
     "knip": {
       "outputs": []
     },
@@ -44,26 +41,6 @@
     },
     "types:check:app": {
       "outputs": ["*.tsbuildinfo"]
-    },
-    "ui:check": {
-      "outputs": []
-    },
-    "ui:integrity": {
-      "env": [
-        "ACTIONS_ID_TOKEN_REQUEST_TOKEN",
-        "ACTIONS_ID_TOKEN_REQUEST_URL",
-        "MERIT_REGISTRY_OIDC_TOKEN"
-      ],
-      "inputs": [
-        "components.json",
-        "package.json",
-        "tsconfig.json",
-        "components/**",
-        "app/globals.css",
-        "foundation.config.ts",
-        "pnpm-lock.yaml"
-      ],
-      "outputs": []
     }
   }
 }

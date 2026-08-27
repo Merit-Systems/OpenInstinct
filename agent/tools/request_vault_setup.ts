@@ -15,7 +15,7 @@ export default defineTool({
 
     return {
       message:
-        "Open this page in your self-hosted Local Vault Assistant and complete the form. Do not send the secret in chat.",
+        "Open this page in your Local Vault Assistant deployment and complete the form. Do not send the secret in chat.",
       url: createManagerSetupUrl(baseUrl, request),
     };
   },

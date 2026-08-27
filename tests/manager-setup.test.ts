@@ -47,12 +47,6 @@ describe("self-hosted manager", () => {
   it("does not expose removed runtime mutations", () => {
     expect(
       managerMutationSchema.safeParse({
-        action: "browser.select",
-        mode: "local",
-      }).success
-    ).toBe(false);
-    expect(
-      managerMutationSchema.safeParse({
         action: "connection.create",
         input: {
           account: "qwen3.5:27b",

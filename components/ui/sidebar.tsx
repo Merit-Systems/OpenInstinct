@@ -1,6 +1,6 @@
 "use client";
 
-/* oxlint-disable typescript/consistent-type-definitions, merit-core/no-runtime-typeof, tailwindcss/enforce-shorthand, typescript/restrict-template-expressions, typescript/no-confusing-void-expression, typescript/no-unsafe-type-assertion -- generated shadcn Sidebar primitive */
+/* oxlint-disable typescript/consistent-type-definitions, tailwindcss/enforce-shorthand, typescript/restrict-template-expressions, typescript/no-confusing-void-expression, typescript/no-unsafe-type-assertion -- generated shadcn Sidebar primitive */
 
 import * as React from "react";
 import { mergeProps } from "@base-ui/react/merge-props";

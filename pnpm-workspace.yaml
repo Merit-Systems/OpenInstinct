@@ -4,7 +4,6 @@ minimumReleaseAgeExclude:
   # Eve 0.44.4's current official scaffold resolves the matching AI SDK release cohort.
   - "@ai-sdk/*"
   - ai
-  - "@merit-systems/*"
   - "@vercel/*"
   - "@onkernel/*"
   - eve
@@ -16,15 +15,6 @@ minimumReleaseAgeExclude:
   - picomatch
   - systeminformation
 allowBuilds:
-  better-sqlite3: true
   cbor-extract: false
   esbuild: true
   sharp: true
-
-catalogs:
-  foundation:
-    "@merit-systems/foundation": 0.15.3
-    "@merit-systems/oxfmt-config": 0.15.3
-    "@merit-systems/oxlint-config": 0.15.3
-    "@merit-systems/taze-config": 0.15.3
-    "@merit-systems/typescript-config": 0.15.3

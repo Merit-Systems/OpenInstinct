@@ -3,6 +3,7 @@
 import { LogOutIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { authClient } from "@/lib/auth-client";
+import { browserRunStoreKeyForWorkspace } from "@/lib/browser-run-store";
 
 export function AccountControl() {
   const { data: session } = authClient.useSession();
@@ -39,7 +40,5 @@ function maskPhoneNumber(phoneNumber: string | null | undefined) {
 function clearWorkspaceBrowserData() {
   const workspaceId = document.body.dataset.workspaceId;
   if (!workspaceId) return;
-  window.localStorage.removeItem(
-    `local-vault-assistant:browser-runs:v2:${workspaceId}`
-  );
+  window.localStorage.removeItem(browserRunStoreKeyForWorkspace(workspaceId));
 }

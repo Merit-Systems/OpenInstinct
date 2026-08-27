@@ -157,9 +157,9 @@ async function sendPhoneCode({ code, to }: { code: string; to: string }) {
   const response = await fetch("https://textbelt.com/text", {
     body: JSON.stringify({
       key: env.TEXTBELT_API_KEY,
-      message: `Eve sign-in code: ${code}. Expires in 5 minutes.`,
+      message: `Local Vault Assistant sign-in code: ${code}. Expires in 5 minutes.`,
       phone: to,
-      sender: "Eve",
+      sender: "Vault",
     }),
     headers: { "Content-Type": "application/json" },
     method: "POST",

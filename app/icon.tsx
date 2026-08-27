@@ -1,4 +1,4 @@
-import { MeritOpenGraphMark } from "@merit-systems/brand/opengraph";
+import { OpenGraphMark } from "./_components/og-mark";
 import { ImageResponse } from "next/og";
 
 export const size = {
@@ -21,7 +21,7 @@ export default function Icon() {
         width: "100%",
       }}
     >
-      <MeritOpenGraphMark color="#deddd7" foreground="#292927" size={24} />
+      <OpenGraphMark color="#deddd7" foreground="#292927" size={24} />
     </div>,
     size
   );

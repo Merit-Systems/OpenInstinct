@@ -47,11 +47,10 @@ async function forwardToEve(
       statusText: response.statusText,
     });
   } catch (error) {
-    console.error("Unable to reach the local Eve runtime", error);
+    console.error("Unable to reach the Eve runtime", error);
     return Response.json(
       {
-        error:
-          "The local agent runtime is unavailable. Restart the local assistant and try again.",
+        error: "The agent runtime is unavailable. Try again in a moment.",
         ok: false,
       },
       { status: 502 }

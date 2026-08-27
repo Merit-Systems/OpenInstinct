@@ -1,17 +1,438 @@
 {
-  "extends": ["./node_modules/@merit-systems/oxlint-config/next.jsonc"],
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "plugins": [
+    "typescript",
+    "unicorn",
+    "oxc",
+    "import",
+    "promise",
+    "node",
+    "vitest",
+    "react",
+    "jsx-a11y",
+    "nextjs"
+  ],
   "options": {
+    "denyWarnings": true,
+    "typeAware": true,
     "reportUnusedDisableDirectives": "off"
   },
+  "categories": {
+    "correctness": "error",
+    "suspicious": "error",
+    "perf": "error"
+  },
+  "jsPlugins": [
+    "eslint-plugin-turbo",
+    {
+      "name": "hooks",
+      "specifier": "eslint-plugin-react-hooks"
+    },
+    "oxlint-tailwindcss"
+  ],
   "settings": {
     "tailwindcss": {
       "entryPoint": "app/globals.css"
     }
   },
+  "rules": {
+    "hooks/config": "error",
+    "hooks/error-boundaries": "error",
+    "hooks/gating": "error",
+    "hooks/globals": "error",
+    "hooks/immutability": "error",
+    "hooks/incompatible-library": "warn",
+    "hooks/preserve-manual-memoization": "error",
+    "hooks/purity": "error",
+    "hooks/refs": "error",
+    "hooks/set-state-in-effect": "error",
+    "hooks/set-state-in-render": "error",
+    "hooks/static-components": "error",
+    "hooks/unsupported-syntax": "warn",
+    "hooks/use-memo": "error",
+    "import/no-cycle": "error",
+    "import/no-unassigned-import": "off",
+    "jsx-a11y/alt-text": "error",
+    "jsx-a11y/anchor-has-content": "error",
+    "jsx-a11y/anchor-is-valid": "error",
+    "jsx-a11y/aria-activedescendant-has-tabindex": "error",
+    "jsx-a11y/aria-props": "error",
+    "jsx-a11y/aria-proptypes": "error",
+    "jsx-a11y/aria-role": "error",
+    "jsx-a11y/aria-unsupported-elements": "error",
+    "jsx-a11y/autocomplete-valid": "error",
+    "jsx-a11y/click-events-have-key-events": "error",
+    "jsx-a11y/heading-has-content": "error",
+    "jsx-a11y/html-has-lang": "error",
+    "jsx-a11y/iframe-has-title": "error",
+    "jsx-a11y/img-redundant-alt": "error",
+    "jsx-a11y/interactive-supports-focus": [
+      "error",
+      {
+        "tabbable": [
+          "button",
+          "checkbox",
+          "link",
+          "searchbox",
+          "spinbutton",
+          "switch",
+          "textbox"
+        ]
+      }
+    ],
+    "jsx-a11y/label-has-associated-control": "error",
+    "jsx-a11y/media-has-caption": "error",
+    "jsx-a11y/mouse-events-have-key-events": "error",
+    "jsx-a11y/no-access-key": "error",
+    "jsx-a11y/no-autofocus": "error",
+    "jsx-a11y/no-distracting-elements": "error",
+    "jsx-a11y/no-interactive-element-to-noninteractive-role": [
+      "error",
+      {
+        "tr": ["none", "presentation"],
+        "canvas": ["img"]
+      }
+    ],
+    "jsx-a11y/no-noninteractive-element-interactions": [
+      "error",
+      {
+        "handlers": [
+          "onClick",
+          "onError",
+          "onLoad",
+          "onMouseDown",
+          "onMouseUp",
+          "onKeyPress",
+          "onKeyDown",
+          "onKeyUp"
+        ],
+        "alert": ["onKeyUp", "onKeyDown", "onKeyPress"],
+        "body": ["onError", "onLoad"],
+        "dialog": ["onKeyUp", "onKeyDown", "onKeyPress"],
+        "iframe": ["onError", "onLoad"],
+        "img": ["onError", "onLoad"]
+      }
+    ],
+    "jsx-a11y/no-noninteractive-element-to-interactive-role": [
+      "error",
+      {
+        "ul": [
+          "listbox",
+          "menu",
+          "menubar",
+          "radiogroup",
+          "tablist",
+          "tree",
+          "treegrid"
+        ],
+        "ol": [
+          "listbox",
+          "menu",
+          "menubar",
+          "radiogroup",
+          "tablist",
+          "tree",
+          "treegrid"
+        ],
+        "li": [
+          "menuitem",
+          "menuitemradio",
+          "menuitemcheckbox",
+          "option",
+          "row",
+          "tab",
+          "treeitem"
+        ],
+        "table": ["grid"],
+        "td": ["gridcell"],
+        "fieldset": ["radiogroup", "presentation"]
+      }
+    ],
+    "jsx-a11y/no-noninteractive-tabindex": [
+      "error",
+      {
+        "tags": [],
+        "roles": ["tabpanel"],
+        "allowExpressionValues": true
+      }
+    ],
+    "jsx-a11y/no-redundant-roles": "error",
+    "jsx-a11y/no-static-element-interactions": [
+      "error",
+      {
+        "allowExpressionValues": true,
+        "handlers": [
+          "onClick",
+          "onMouseDown",
+          "onMouseUp",
+          "onKeyPress",
+          "onKeyDown",
+          "onKeyUp"
+        ]
+      }
+    ],
+    "jsx-a11y/role-has-required-aria-props": "error",
+    "jsx-a11y/role-supports-aria-props": "error",
+    "jsx-a11y/scope": "error",
+    "jsx-a11y/tabindex-no-positive": "error",
+    "nextjs/google-font-display": "warn",
+    "nextjs/google-font-preconnect": "warn",
+    "nextjs/next-script-for-ga": "warn",
+    "nextjs/no-async-client-component": "warn",
+    "nextjs/no-before-interactive-script-outside-document": "warn",
+    "nextjs/no-css-tags": "warn",
+    "nextjs/no-head-element": "warn",
+    "nextjs/no-img-element": "warn",
+    "nextjs/no-page-custom-font": "warn",
+    "nextjs/no-styled-jsx-in-document": "warn",
+    "nextjs/no-title-in-document-head": "warn",
+    "nextjs/no-typos": "warn",
+    "nextjs/no-unwanted-polyfillio": "warn",
+    "no-array-constructor": "error",
+    "no-await-in-loop": "off",
+    "no-case-declarations": "error",
+    "no-empty": "error",
+    "no-empty-function": "error",
+    "no-fallthrough": "error",
+    "no-prototype-builtins": "error",
+    "no-redeclare": "error",
+    "no-regex-spaces": "error",
+    "no-restricted-properties": [
+      "error",
+      {
+        "object": "process",
+        "property": "env",
+        "message": "Read environment variables through an env.ts or env/ module validated with @t3-oss/env-nextjs for Next.js or @t3-oss/env-core for other runtimes."
+      }
+    ],
+    "no-shadow": "off",
+    "no-undef": "off",
+    "no-useless-assignment": "error",
+    "no-var": "error",
+    "oxc/no-map-spread": "off",
+    "prefer-const": "error",
+    "prefer-rest-params": "error",
+    "prefer-spread": "error",
+    "react/display-name": "error",
+    "react/exhaustive-deps": "warn",
+    "react/jsx-key": "error",
+    "react/jsx-no-comment-textnodes": "error",
+    "react/jsx-no-duplicate-props": "error",
+    "react/jsx-no-target-blank": "error",
+    "react/jsx-no-undef": "error",
+    "react/no-array-index-key": "off",
+    "react/no-children-prop": "error",
+    "react/no-danger-with-children": "error",
+    "react/no-direct-mutation-state": "error",
+    "react/no-find-dom-node": "error",
+    "react/no-is-mounted": "error",
+    "react/no-render-return-value": "error",
+    "react/no-string-refs": "error",
+    "react/no-unescaped-entities": "error",
+    "react/no-unknown-property": "error",
+    "react/react-in-jsx-scope": "off",
+    "react/require-render-return": "error",
+    "react/rules-of-hooks": "error",
+    "tailwindcss/enforce-consistent-important-position": "warn",
+    "tailwindcss/enforce-negative-arbitrary-values": "warn",
+    "tailwindcss/enforce-shorthand": "warn",
+    "tailwindcss/no-conflicting-classes": "error",
+    // Unsound under the cn()/twMerge + cva composition this codebase assumes.
+    // The rule reads one class string in isolation, so it cannot see that a
+    // "redundant" variant is there to override a class twMerge pulls in from a
+    // component's own variants. Acting on it removes the override and changes
+    // rendering.
+    "tailwindcss/no-contradicting-variants": "off",
+    "tailwindcss/no-deprecated-classes": "warn",
+    "tailwindcss/no-duplicate-classes": "error",
+    // The semantic typography utilities are hand-authored `@layer utilities`
+    // classes in app/styles/brand/typography.css.
+    "tailwindcss/no-unknown-classes": [
+      "warn",
+      {
+        "ignorePrefixes": ["type-"]
+      }
+    ],
+    "tailwindcss/no-unnecessary-arbitrary-value": "warn",
+    "turbo/no-undeclared-env-vars": "warn",
+    "typescript/adjacent-overload-signatures": "error",
+    "typescript/array-type": "error",
+    "typescript/ban-ts-comment": [
+      "error",
+      {
+        "minimumDescriptionLength": 10
+      }
+    ],
+    "typescript/ban-tslint-comment": "error",
+    "typescript/class-literal-property-style": "error",
+    "typescript/consistent-generic-constructors": "error",
+    "typescript/consistent-indexed-object-style": "error",
+    "typescript/consistent-return": "off",
+    "typescript/consistent-type-assertions": "error",
+    "typescript/consistent-type-definitions": "error",
+    "typescript/consistent-type-exports": "error",
+    "typescript/consistent-type-imports": [
+      "error",
+      {
+        "fixStyle": "separate-type-imports",
+        "prefer": "type-imports"
+      }
+    ],
+    "typescript/dot-notation": "error",
+    "typescript/no-confusing-void-expression": "error",
+    "typescript/no-deprecated": "error",
+    "typescript/no-dynamic-delete": "error",
+    "typescript/no-empty-object-type": "error",
+    "typescript/no-explicit-any": "error",
+    "typescript/no-import-type-side-effects": "error",
+    "typescript/no-inferrable-types": "error",
+    "typescript/no-invalid-void-type": "error",
+    "typescript/no-misused-promises": "error",
+    "typescript/no-mixed-enums": "error",
+    "typescript/no-namespace": "error",
+    "typescript/no-non-null-asserted-nullish-coalescing": "error",
+    "typescript/no-non-null-assertion": "error",
+    "typescript/no-require-imports": "error",
+    "typescript/no-unnecessary-condition": "error",
+    "typescript/no-unsafe-argument": "error",
+    "typescript/no-unsafe-assignment": "error",
+    "typescript/no-unsafe-call": "error",
+    "typescript/no-unsafe-function-type": "error",
+    "typescript/no-unsafe-member-access": "error",
+    "typescript/no-unsafe-return": "error",
+    "typescript/non-nullable-type-assertion-style": "error",
+    "typescript/only-throw-error": "error",
+    "typescript/prefer-find": "error",
+    "typescript/prefer-for-of": "error",
+    "typescript/prefer-function-type": "error",
+    "typescript/prefer-includes": "error",
+    "typescript/prefer-literal-enum-member": "error",
+    "typescript/prefer-nullish-coalescing": "error",
+    "typescript/prefer-optional-chain": "error",
+    "typescript/prefer-promise-reject-errors": "error",
+    "typescript/prefer-reduce-type-parameter": "error",
+    "typescript/prefer-regexp-exec": "error",
+    "typescript/prefer-return-this-type": "error",
+    "typescript/related-getter-setter-pairs": "error",
+    "typescript/restrict-plus-operands": [
+      "error",
+      {
+        "allowAny": false,
+        "allowBoolean": false,
+        "allowNullish": false,
+        "allowNumberAndString": false,
+        "allowRegExp": false
+      }
+    ],
+    "typescript/restrict-template-expressions": [
+      "error",
+      {
+        "allowAny": false,
+        "allowBoolean": false,
+        "allowNever": false,
+        "allowNullish": false,
+        "allowNumber": false,
+        "allowRegExp": false
+      }
+    ],
+    "typescript/return-await": ["error", "error-handling-correctness-only"],
+    "typescript/unified-signatures": "error",
+    "typescript/use-unknown-in-catch-callback-variable": "error",
+    "unicorn/consistent-function-scoping": "off",
+    "unicorn/no-array-sort": "off",
+    "unicorn/no-instanceof-builtins": [
+      "error",
+      {
+        "exclude": ["Function"]
+      }
+    ]
+  },
   "overrides": [
     {
-      // Foundation registry source uses shadcn behavior utilities that the
-      // Tailwind linter cannot resolve through package stylesheet imports.
+      "files": ["**/*.{js,mjs,cjs}"],
+      "rules": {
+        "typescript/await-thenable": "off",
+        "typescript/consistent-type-exports": "off",
+        "typescript/dot-notation": "off",
+        "typescript/no-array-delete": "off",
+        "typescript/no-base-to-string": "off",
+        "typescript/no-confusing-void-expression": "off",
+        "typescript/no-deprecated": "off",
+        "typescript/no-duplicate-type-constituents": "off",
+        "typescript/no-floating-promises": "off",
+        "typescript/no-for-in-array": "off",
+        "typescript/no-implied-eval": "off",
+        "typescript/no-meaningless-void-operator": "off",
+        "typescript/no-misused-promises": "off",
+        "typescript/no-misused-spread": "off",
+        "typescript/no-mixed-enums": "off",
+        "typescript/no-redundant-type-constituents": "off",
+        "typescript/no-unnecessary-boolean-literal-compare": "off",
+        "typescript/no-unnecessary-condition": "off",
+        "typescript/no-unnecessary-template-expression": "off",
+        "typescript/no-unnecessary-type-arguments": "off",
+        "typescript/no-unnecessary-type-assertion": "off",
+        "typescript/no-unnecessary-type-conversion": "off",
+        "typescript/no-unnecessary-type-parameters": "off",
+        "typescript/no-unsafe-argument": "off",
+        "typescript/no-unsafe-assignment": "off",
+        "typescript/no-unsafe-call": "off",
+        "typescript/no-unsafe-enum-comparison": "off",
+        "typescript/no-unsafe-member-access": "off",
+        "typescript/no-unsafe-return": "off",
+        "typescript/no-unsafe-type-assertion": "off",
+        "typescript/no-unsafe-unary-minus": "off",
+        "typescript/no-useless-default-assignment": "off",
+        "typescript/non-nullable-type-assertion-style": "off",
+        "typescript/only-throw-error": "off",
+        "typescript/prefer-find": "off",
+        "typescript/prefer-includes": "off",
+        "typescript/prefer-nullish-coalescing": "off",
+        "typescript/prefer-optional-chain": "off",
+        "typescript/prefer-promise-reject-errors": "off",
+        "typescript/prefer-reduce-type-parameter": "off",
+        "typescript/prefer-regexp-exec": "off",
+        "typescript/prefer-return-this-type": "off",
+        "typescript/related-getter-setter-pairs": "off",
+        "typescript/require-array-sort-compare": "off",
+        "typescript/restrict-plus-operands": "off",
+        "typescript/restrict-template-expressions": "off",
+        "typescript/return-await": "off",
+        "typescript/unbound-method": "off",
+        "typescript/use-unknown-in-catch-callback-variable": "off"
+      }
+    },
+    {
+      "files": [
+        "**/env.{js,cjs,mjs,ts,cts,mts}",
+        "**/env/**/*.{js,cjs,mjs,ts,cts,mts}"
+      ],
+      "rules": {
+        "no-restricted-properties": "off"
+      }
+    },
+    {
+      "files": ["**/tests/**/*.{ts,tsx,mts,cts}", "**/*.test.{ts,tsx,mts,cts}"],
+      "rules": {
+        "vitest/consistent-test-filename": [
+          "error",
+          {
+            "allTestPattern": ".*\\.(?:test|spec)\\.(?:js|jsx|mjs|cjs|ts|tsx|mts|cts)$",
+            "pattern": ".*\\.test\\.(?:ts|tsx|mts|cts)$"
+          }
+        ],
+        "vitest/no-disabled-tests": "warn",
+        "vitest/no-identical-title": "error",
+        "vitest/no-import-node-test": "error",
+        "vitest/no-interpolation-in-snapshots": "error",
+        "vitest/no-mocks-import": "error",
+        "vitest/no-unneeded-async-expect-function": "error",
+        "vitest/prefer-called-exactly-once-with": "error"
+      }
+    },
+    {
+      // shadcn registry source uses behavior utilities that the Tailwind
+      // linter cannot resolve through package stylesheet imports.
       "files": ["components/ui/**/*.tsx"],
       "rules": {
         "tailwindcss/no-unknown-classes": "off"
@@ -19,7 +440,7 @@
     },
     {
       // Eve owns this generated Web Chat scaffold. Keep it updateable from the
-      // framework while Foundation checks the installed primitive and CSS boundaries.
+      // framework.
       "files": ["app/**/*.tsx", "components/ai-elements/**/*.tsx"],
       "rules": {
         "eslint/no-empty-function": "off",
@@ -30,18 +451,6 @@
         "jsx-a11y/anchor-has-content": "off",
         "jsx-a11y/control-has-associated-label": "off",
         "jsx-a11y/heading-has-content": "off",
-        "merit-brand/no-direct-primitive-imports": "off",
-        "merit-brand/no-raw-interactive-elements": "off",
-        "merit-brand/no-raw-theme-colors": "off",
-        "merit-brand/no-visual-component-overrides": "off",
-        "merit-brand/typography-role": "off",
-        "merit-core/no-known-value-widening": "off",
-        "merit-core/no-runtime-typeof": "off",
-        "merit-core/no-unknown-parameters": "off",
-        "merit-core/no-unsafe-dictionary-type": "off",
-        "merit-next/no-route-private-imports": "off",
-        "merit-next/require-generated-route-props": "off",
-        "merit-next/require-page-route-group": "off",
         "nextjs/no-img-element": "off",
         "promise/always-return": "off",
         "tailwindcss/enforce-consistent-important-position": "off",

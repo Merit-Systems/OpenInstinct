@@ -8,21 +8,24 @@ export default {
     "agent/tools/**/*.ts",
     "evals/**/*.eval.ts",
     "evals/evals.config.ts",
-    "foundation.config.ts",
     "taze.config.ts",
   ],
   ignoreDependencies: [
     // Imported through the owning Tailwind stylesheet rather than TypeScript.
-    "@merit-systems/brand",
     "shadcn",
     "tailwindcss",
-    // Loaded from generated configuration and the Foundation Base UI baseline.
-    "@merit-systems/oxlint-config",
+    // Loaded as jsPlugins from .oxlintrc.jsonc rather than TypeScript.
+    "eslint-plugin-react-hooks",
+    "eslint-plugin-turbo",
+    "oxlint-tailwindcss",
+    // Loaded from generated configuration.
     "next-themes",
     "sonner",
+    // Invoked as a CLI.
+    "vercel",
   ],
   ignoreIssues: {
-    // Eve AI Elements and Foundation registry primitives intentionally expose
+    // Eve AI Elements and shadcn registry primitives intentionally expose
     // a reusable component surface wider than this minimal chat consumes.
     "components/ai-elements/**/*.tsx": ["exports", "files", "types"],
     "components/ui/**/*.tsx": ["exports", "files", "types"],

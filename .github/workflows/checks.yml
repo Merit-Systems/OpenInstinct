@@ -1,4 +1,3 @@
-# foundation:checks:v1
 name: Checks
 
 on:
@@ -13,25 +12,10 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  foundation:
-    name: Foundation
+  checks:
+    name: Checks
     permissions:
       contents: read
-      id-token: write
-      packages: read
-    uses: Merit-Systems/foundation/.github/workflows/checks.yml@v1
-    with:
-      # Source integrity runs below with the caller workflow's trusted OIDC
-      # identity; the reusable workflow has a distinct job_workflow_ref claim.
-      check-command: pnpm check:foundation
-    secrets: inherit
-
-  registry-integrity:
-    name: UI source integrity
-    permissions:
-      contents: read
-      id-token: write
-      packages: read
     runs-on: ubuntu-latest
     steps:
       - name: Check out repository
@@ -45,12 +29,9 @@ jobs:
         with:
           node-version-file: .node-version
           cache: pnpm
-          registry-url: https://npm.pkg.github.com
 
       - name: Install dependencies
-        env:
-          NODE_AUTH_TOKEN: ${{ github.token }}
         run: pnpm install --frozen-lockfile
 
-      - name: Verify Foundation UI sources
-        run: pnpm ui:integrity:github
+      - name: Run checks
+        run: pnpm check

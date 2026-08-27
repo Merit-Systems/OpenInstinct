@@ -1,9 +1,9 @@
 @import "tailwindcss";
 @import "shadcn/tailwind.css";
-@import "@merit-systems/brand/foundation.css";
-@import "@merit-systems/brand/typography.css";
-@import "@merit-systems/brand/shadcn.css";
-@import "@merit-systems/brand/motion.css";
+@import "./styles/brand/foundation.css";
+@import "./styles/brand/typography.css";
+@import "./styles/brand/shadcn.css";
+@import "./styles/brand/motion.css";
 @source "../node_modules/streamdown/dist/*.js";
 
 :root {

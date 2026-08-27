@@ -57,20 +57,18 @@ Run the validation the task requests. When it does not establish the behavior yo
 ## Repository contract
 
 - The repository root owns the single Next.js application, Eve agent, and shared UI contract.
-- Keep the stock Eve chat composition on `/`; Kernel browser capabilities belong under the official extension mount in `agent/extensions/kernel`.
+- The workspace manager lives on `/` and the agent chat on `/chat`; Kernel browser capabilities belong under the official extension mount in `agent/extensions/kernel`.
 - Validate runtime environment variables through `lib/runtime-env.ts`. `KERNEL_API_KEY` is required by the shared-key Kernel MCP connection.
 - Run `pnpm check` and `pnpm build` before handing off changes.
 
-## Merit design system
+## Design system
 
 Before planning or changing product UI:
 
-- Read `docs/brand/agent-guidance.md` and `docs/brand/design-system.md`.
-- Preserve the current `components.json` primitive base and local extensions.
-- Use `@merit` for supported core primitives. Use official shadcn only outside the documented Merit core.
-- Run `pnpm ui:check`, `pnpm ui:integrity`, and the repository's full required check before handing off.
-
-<!-- foundation:type-ownership:v1 -->
+- Build from the primitives in `components/ui` and the semantic `type-*`
+  typography utilities defined in `app/styles/brand/typography.css`.
+- Preserve the current `components.json` primitive base and local extensions;
+  add new primitives with the official shadcn CLI.
 
 ## Type ownership
 
@@ -83,8 +81,6 @@ Before planning or changing product UI:
   source, or meaningfully reused composition.
 - Do not mirror schemas, database rows, router inputs or outputs, SDK payloads,
   library exports, or function results with parallel interfaces.
-
-<!-- /foundation:type-ownership -->
 
 <!-- BEGIN:nextjs-agent-rules -->
 

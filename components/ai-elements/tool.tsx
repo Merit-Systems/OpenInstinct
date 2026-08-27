@@ -1,7 +1,5 @@
 "use client";
 
-/* oxlint-disable merit-core/no-runtime-typeof -- Tool output is an intentionally runtime-neutral presentation boundary for consumer-owned values. */
-
 import {
   Collapsible,
   CollapsibleContent,

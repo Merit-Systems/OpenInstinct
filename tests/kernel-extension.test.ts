@@ -12,7 +12,7 @@ describe("Kernel Eve extension", () => {
     expect(kernelToolAllowlist).toEqual([]);
   });
 
-  it("uses the system Kernel key independently of browser mode", () => {
+  it("uses the system Kernel key for cloud execution", () => {
     vi.stubEnv("KERNEL_API_KEY", "system-kernel-key");
     expect(getKernelSystemToken()).toBe("system-kernel-key");
   });

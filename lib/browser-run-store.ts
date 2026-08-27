@@ -41,16 +41,8 @@ export type BrowserRunTaskUpdate = Partial<
 
 export const browserRunStoreEvent = "eve-browser-runs-changed";
 
-const browserRunStoreKey = "local-vault-assistant:browser-runs:v1";
-const legacyBrowserRunStoreKey = "eve-kernel:browser-runs:v1";
-
 export function readBrowserRunGroups() {
-  const serialized =
-    window.localStorage.getItem(workspaceBrowserRunStoreKey()) ??
-    (currentWorkspaceId() === "local:personal"
-      ? window.localStorage.getItem(browserRunStoreKey)
-      : null) ??
-    window.localStorage.getItem(legacyBrowserRunStoreKey);
+  const serialized = window.localStorage.getItem(workspaceBrowserRunStoreKey());
   if (!serialized) return [];
 
   try {
@@ -137,13 +129,17 @@ function writeBrowserRunGroups(groups: readonly BrowserRunGroup[]) {
   window.dispatchEvent(new Event(browserRunStoreEvent));
 }
 
+export function browserRunStoreKeyForWorkspace(workspaceId: string) {
+  return `local-vault-assistant:browser-runs:v2:${workspaceId}`;
+}
+
 function workspaceBrowserRunStoreKey() {
-  return `local-vault-assistant:browser-runs:v2:${currentWorkspaceId()}`;
+  return browserRunStoreKeyForWorkspace(currentWorkspaceId());
 }
 
 function currentWorkspaceId() {
   const parsed = workspaceDocumentSchema.safeParse(window.document);
   return parsed.success
     ? (parsed.data.body.dataset.workspaceId ?? "anonymous")
-    : "local:personal";
+    : "anonymous";
 }

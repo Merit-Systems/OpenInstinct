@@ -1,10 +1,10 @@
-import { defineConfig } from "@merit-systems/taze-config";
-
-export default defineConfig({
-  maturityPeriodExclude: [
-    "@merit-systems/*",
-    "@onkernel/*",
-    "@vercel/*",
-    "eve",
-  ],
-});
+export default {
+  includeLocked: true,
+  maturityPeriodExclude: ["@onkernel/*", "@vercel/*", "eve"],
+  mode: "major",
+  packageMode: {
+    "@types/node": "minor",
+    typescript: "minor",
+  },
+  recursive: true,
+};

@@ -1,6 +1,6 @@
 # Browser benchmark
 
-Run the editable browser task suite concurrently against the local agent:
+Run the editable browser task suite concurrently against the dev server:
 
 ```sh
 BROWSER_BENCH_LABEL=baseline pnpm bench:browser

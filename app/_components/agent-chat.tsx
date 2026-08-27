@@ -335,7 +335,7 @@ function PendingThinking() {
 function toErrorMessage(error: unknown): string {
   if (!(error instanceof Error)) return "Unable to complete the request.";
   if (/<!doctype html|<html[\s>]/i.test(error.message)) {
-    return "The local agent runtime is unavailable. Restart the local assistant and try again.";
+    return "The agent runtime is unavailable. Try again in a moment.";
   }
   return error.message;
 }

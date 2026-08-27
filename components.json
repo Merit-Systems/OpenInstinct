@@ -17,13 +17,5 @@
     "ui": "@/components/ui",
     "lib": "@/lib",
     "hooks": "@/hooks"
-  },
-  "registries": {
-    "@merit": {
-      "url": "https://merit.engineering/r/{name}.json",
-      "headers": {
-        "x-vercel-trusted-oidc-idp-token": "${MERIT_REGISTRY_OIDC_TOKEN}"
-      }
-    }
   }
 }

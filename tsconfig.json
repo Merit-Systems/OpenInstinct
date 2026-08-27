@@ -1,11 +1,22 @@
 {
   "$schema": "https://json.schemastore.org/tsconfig",
-  "extends": "@merit-systems/typescript-config/next.json",
   "compilerOptions": {
     "allowImportingTsExtensions": true,
-    "lib": ["dom", "dom.iterable", "esnext"],
     "allowJs": true,
+    "esModuleInterop": true,
+    "incremental": true,
+    "isolatedModules": true,
+    "jsx": "react-jsx",
+    "lib": ["dom", "dom.iterable", "esnext"],
+    "module": "ESNext",
+    "moduleDetection": "force",
+    "moduleResolution": "Bundler",
     "noEmit": true,
+    "noUncheckedIndexedAccess": true,
+    "resolveJsonModule": true,
+    "skipLibCheck": true,
+    "strict": true,
+    "target": "ES2022",
     "plugins": [
       {
         "name": "next"
