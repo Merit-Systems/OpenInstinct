@@ -13,11 +13,11 @@
   "tasks": {
     "build:app": {
       "dependsOn": ["^build:app"],
-      "outputs": [".next/**", "!.next/cache/**"]
+      "outputs": [".next/**", "!.next/cache/**", "next-env.d.ts"]
     },
     "build:vercel": {
       "dependsOn": ["db:migrate"],
-      "outputs": [".next/**", "!.next/cache/**"]
+      "outputs": [".next/**", "!.next/cache/**", "next-env.d.ts"]
     },
     "db:migrate": {
       "cache": false,
@@ -48,7 +48,7 @@
       "outputs": []
     },
     "types:check:app": {
-      "outputs": ["*.tsbuildinfo"]
+      "outputs": [".next/types/**", "next-env.d.ts", "*.tsbuildinfo"]
     }
   }
 }
