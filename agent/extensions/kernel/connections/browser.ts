@@ -1,15 +1,7 @@
 import { defineMcpClientConnection } from "eve/connections";
-import { getEnv } from "../../../../lib/runtime-env.js";
+import { env } from "@/lib/env";
 
 export const kernelToolAllowlist: string[] = [];
-
-export function getKernelSystemToken() {
-  const token = getEnv().KERNEL_API_KEY;
-  if (!token) {
-    throw new Error("The browser runtime is unavailable.");
-  }
-  return token;
-}
 
 export default defineMcpClientConnection({
   url: "https://mcp.onkernel.com/mcp",
@@ -19,7 +11,7 @@ export default defineMcpClientConnection({
       if (principal.type !== "user") {
         throw new Error("An authenticated workspace user is required.");
       }
-      return { token: getKernelSystemToken() };
+      return { token: env.KERNEL_API_KEY };
     },
   },
   tools: { allow: kernelToolAllowlist },

@@ -1,6 +1,6 @@
 import { defineHook } from "eve/hooks";
-import { scopeFromPrincipal } from "../../lib/access-scope.js";
-import { getAppStore } from "../../lib/server/app-store.js";
+import { scopeFromPrincipal } from "@/lib/access-scope";
+import { getAppStore } from "@/lib/server/app-store";
 
 export default defineHook({
   events: {

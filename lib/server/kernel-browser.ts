@@ -11,7 +11,7 @@ import type {
   executePlaywrightInputSchema,
   manageBrowsersInputSchema,
 } from "../kernel-browser-contract";
-import { getEnv } from "../runtime-env";
+import { env } from "@/lib/env";
 import { getAppStore } from "./app-store";
 
 type ManageBrowsersInput = z.infer<typeof manageBrowsersInputSchema>;
@@ -22,7 +22,7 @@ export async function manageOwnedKernelBrowsers(
   input: ManageBrowsersInput,
   signal?: AbortSignal
 ) {
-  const client = kernelClient();
+  const client = new Kernel({ apiKey: env.KERNEL_API_KEY });
   const store = await getAppStore();
 
   switch (input.action) {
@@ -115,7 +115,7 @@ export async function executeOwnedKernelPlaywright(
   signal?: AbortSignal
 ) {
   await requireOwnedBrowserSession(scope, input.session_id);
-  return kernelClient().browsers.playwright.execute(
+  return new Kernel({ apiKey: env.KERNEL_API_KEY }).browsers.playwright.execute(
     input.session_id,
     { code: input.code, timeout_sec: 30 },
     { signal }
@@ -128,7 +128,7 @@ export async function executeOwnedKernelComputerAction(
   signal?: AbortSignal
 ) {
   await requireOwnedBrowserSession(scope, input.session_id);
-  const client = kernelClient();
+  const client = new Kernel({ apiKey: env.KERNEL_API_KEY });
   const computer = client.browsers.computer;
   const data: unknown[] = [];
   let screenshotBase64: string | undefined;
@@ -255,12 +255,6 @@ export async function requireOwnedBrowserSession(
   ).readBrowserSession(scope, sessionId);
   if (!record) throw new Error("Browser session not found.");
   return record;
-}
-
-function kernelClient() {
-  const apiKey = getEnv().KERNEL_API_KEY;
-  if (!apiKey) throw new Error("The browser runtime is unavailable.");
-  return new Kernel({ apiKey });
 }
 
 function requireSessionId(sessionId: string | undefined) {

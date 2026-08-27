@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { auth, ensureAuthDatabase } from "../../auth.js";
+import { auth, ensureAuthDatabase } from "@/auth";
 
 const verifiedPhoneUserSchema = z.object({
   id: z.string().min(1),
