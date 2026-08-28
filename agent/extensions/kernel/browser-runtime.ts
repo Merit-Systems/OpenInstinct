@@ -305,6 +305,7 @@ function lifecycleResult(browser: KernelBrowser) {
     next_actions: [
       `Use execute_playwright_code with session_id "${value.session_id}" for deterministic browser automation.`,
       `Use computer_action with session_id "${value.session_id}" for visual browser control.`,
+      `If the user explicitly asks for browser access, use get_browser_live_view with session_id "${value.session_id}".`,
       value.stealth
         ? "Kernel's managed CAPTCHA solver is active. Leave challenges untouched and wait for them to clear."
         : "This browser does not have Kernel's managed CAPTCHA solver active.",

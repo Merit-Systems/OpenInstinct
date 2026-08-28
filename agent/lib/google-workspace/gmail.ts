@@ -1,53 +1,11 @@
 import { createHash } from "node:crypto";
+import { gmail, type gmail_v1 } from "@googleapis/gmail";
 import type { ToolContext } from "eve/tools";
 import { z } from "zod";
-import {
-  decodeBase64Url,
-  encodeBase64Url,
-  googleWorkspaceFetch,
-  redactGoogleText,
-} from "./client";
+import { withGoogleAuth } from "./client";
 
-const gmailPartSchema = z.object({
-  body: z
-    .object({
-      attachmentId: z.string().optional(),
-      data: z.string().optional(),
-      size: z.number().optional(),
-    })
-    .optional(),
-  filename: z.string().optional(),
-  headers: z
-    .array(
-      z.object({
-        name: z.string().optional(),
-        value: z.string().optional(),
-      })
-    )
-    .optional(),
-  mimeType: z.string().optional(),
-  parts: z.array(z.unknown()).optional(),
-});
-
-const gmailMessageSchema = z.object({
-  id: z.string().optional(),
-  labelIds: z.array(z.string()).optional(),
-  payload: gmailPartSchema.optional(),
-  snippet: z.string().optional(),
-  threadId: z.string().optional(),
-});
-
-const gmailListSchema = z.object({
-  messages: z.array(z.object({ id: z.string() })).optional(),
-});
-
-const gmailThreadSchema = z.object({
-  id: z.string().optional(),
-  messages: z.array(gmailMessageSchema).optional(),
-});
-
-type GmailMessage = z.infer<typeof gmailMessageSchema>;
-type GmailPart = z.infer<typeof gmailPartSchema>;
+type GmailMessage = gmail_v1.Schema$Message;
+type GmailPart = gmail_v1.Schema$MessagePart;
 
 export const GMAIL_UPDATE_ACTIONS = [
   "archive",
@@ -75,37 +33,53 @@ export async function searchGmail(
   query: string,
   maxResults: number
 ) {
-  const listed = await googleWorkspaceFetch(
-    ctx,
-    `https://gmail.googleapis.com/gmail/v1/users/me/messages?q=${encodeURIComponent(query)}&maxResults=${String(maxResults)}`,
-    gmailListSchema
-  );
-  const messages = await Promise.all(
-    (listed.messages ?? []).map(({ id }) =>
-      googleWorkspaceFetch(
-        ctx,
-        `https://gmail.googleapis.com/gmail/v1/users/me/messages/${encodeURIComponent(id)}?format=metadata&metadataHeaders=From&metadataHeaders=To&metadataHeaders=Subject&metadataHeaders=Date&metadataHeaders=Message-ID`,
-        gmailMessageSchema
+  return withGmail(ctx, async (client) => {
+    const listed = await client.users.messages.list(
+      { maxResults, q: query, userId: "me" },
+      { signal: ctx.abortSignal }
+    );
+    const messages = await Promise.all(
+      (listed.data.messages ?? []).flatMap(({ id }) =>
+        id
+          ? [
+              client.users.messages.get(
+                {
+                  format: "metadata",
+                  id,
+                  metadataHeaders: [
+                    "From",
+                    "To",
+                    "Subject",
+                    "Date",
+                    "Message-ID",
+                  ],
+                  userId: "me",
+                },
+                { signal: ctx.abortSignal }
+              ),
+            ]
+          : []
       )
-    )
-  );
-  return messages.map(minimizeMessage);
+    );
+    return messages.map(({ data }) => minimizeMessage(data));
+  });
 }
 
 export async function readGmailThread(ctx: ToolContext, threadId: string) {
-  const thread = await googleWorkspaceFetch(
-    ctx,
-    `https://gmail.googleapis.com/gmail/v1/users/me/threads/${encodeURIComponent(threadId)}?format=full`,
-    gmailThreadSchema
-  );
-  return {
-    id: thread.id ?? threadId,
-    messages: (thread.messages ?? []).slice(-20).map((message) => ({
-      ...minimizeMessage(message),
-      attachments: collectAttachments(message.payload),
-      body: redactGoogleText(plainText(message.payload)),
-    })),
-  };
+  return withGmail(ctx, async (client) => {
+    const { data: thread } = await client.users.threads.get(
+      { format: "full", id: threadId, userId: "me" },
+      { signal: ctx.abortSignal }
+    );
+    return {
+      id: thread.id ?? threadId,
+      messages: (thread.messages ?? []).slice(-20).map((message) => ({
+        ...minimizeMessage(message),
+        attachments: collectAttachments(message.payload),
+        body: redactGoogleText(plainText(message.payload)),
+      })),
+    };
+  });
 }
 
 export async function updateGmail(
@@ -114,14 +88,14 @@ export async function updateGmail(
   action: GmailUpdateAction
 ) {
   const ids = [...new Set(messageIds)];
-  await googleWorkspaceFetch(
-    ctx,
-    "https://gmail.googleapis.com/gmail/v1/users/me/messages/batchModify",
-    z.void(),
-    {
-      body: JSON.stringify({ ids, ...gmailUpdateLabels(action) }),
-      method: "POST",
-    }
+  await withGmail(ctx, async (client) =>
+    client.users.messages.batchModify(
+      {
+        requestBody: { ids, ...gmailUpdateLabels(action) },
+        userId: "me",
+      },
+      { signal: ctx.abortSignal }
+    )
   );
   return { action, updatedCount: ids.length };
 }
@@ -154,19 +128,23 @@ export async function sendGmail(
     'Content-Type: text/plain; charset="UTF-8"',
     "Content-Transfer-Encoding: 8bit",
   ];
-  const raw = encodeBase64Url(`${headers.join("\r\n")}\r\n\r\n${payload.body}`);
-  return googleWorkspaceFetch(
-    ctx,
-    "https://gmail.googleapis.com/gmail/v1/users/me/messages/send",
-    z.object({ id: z.string(), threadId: z.string() }),
-    {
-      body: JSON.stringify({
-        raw,
-        ...(payload.threadId ? { threadId: payload.threadId } : {}),
-      }),
-      method: "POST",
-    }
-  );
+  const raw = Buffer.from(
+    `${headers.join("\r\n")}\r\n\r\n${payload.body}`,
+    "utf8"
+  ).toString("base64url");
+  return withGmail(ctx, async (client) => {
+    const { data } = await client.users.messages.send(
+      {
+        requestBody: {
+          raw,
+          ...(payload.threadId ? { threadId: payload.threadId } : {}),
+        },
+        userId: "me",
+      },
+      { signal: ctx.abortSignal }
+    );
+    return data;
+  });
 }
 
 export function gmailUpdateLabels(action: GmailUpdateAction) {
@@ -200,8 +178,7 @@ function plainText(part: GmailPart | undefined): string {
     return decodeBase64Url(part.body.data);
   }
   for (const child of part.parts ?? []) {
-    const parsed = gmailPartSchema.safeParse(child);
-    const text = parsed.success ? plainText(parsed.data) : "";
+    const text = plainText(child);
     if (text) return text;
   }
   if (part.mimeType === "text/html" && part.body?.data) {
@@ -243,12 +220,44 @@ function collectAttachments(part: GmailPart | undefined): {
         ]
       : [];
   const nested = (part.parts ?? []).flatMap((child) => {
-    const parsed = gmailPartSchema.safeParse(child);
-    return parsed.success ? collectAttachments(parsed.data) : [];
+    return collectAttachments(child);
   });
   return [...own, ...nested];
 }
 
 function safeHeader(value: string) {
   return value.replace(/[\r\n]+/gu, " ").trim();
+}
+
+function withGmail<T>(
+  ctx: ToolContext,
+  execute: (client: ReturnType<typeof gmail>) => Promise<T>
+) {
+  return withGoogleAuth(ctx, (auth) => execute(gmail({ auth, version: "v1" })));
+}
+
+function decodeBase64Url(value: string) {
+  return Buffer.from(value, "base64url").toString("utf8");
+}
+
+const secretPatterns: readonly (readonly [RegExp, string])[] = [
+  [/\b\d{6}\b/gu, "[six-digit code redacted]"],
+  [/\bsk-(?:proj-)?[A-Za-z0-9_-]{12,}\b/gu, "[api key redacted]"],
+  [/\bgh[pousr]_[A-Za-z0-9]{20,}\b/gu, "[github token redacted]"],
+  [/\b(?:AKIA|ASIA)[A-Z0-9]{16}\b/gu, "[aws key redacted]"],
+  [/\bAIza[A-Za-z0-9_-]{30,}\b/gu, "[google api key redacted]"],
+  [/\b(?:bearer\s+)[A-Za-z0-9._~+/-]+=*\b/giu, "Bearer [token redacted]"],
+  [
+    /\b(password|passcode|api[_ -]?key|access[_ -]?token|refresh[_ -]?token|client[_ -]?secret)\s*[:=]\s*(?:"[^"]*"|'[^']*'|[^\s,;]+)/giu,
+    "$1=[credential redacted]",
+  ],
+  [/\b(?:\d[ -]*?){13,19}\b/gu, "[payment number redacted]"],
+];
+
+function redactGoogleText(value: string, maxLength = 12_000) {
+  let redacted = value.slice(0, maxLength);
+  for (const [pattern, replacement] of secretPatterns) {
+    redacted = redacted.replace(pattern, replacement);
+  }
+  return redacted;
 }
