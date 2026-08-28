@@ -54,15 +54,6 @@ export function SubagentPanel({
   );
   const [selectedId, setSelectedId] = useState<string>();
   const [mobileOpen, setMobileOpen] = useState(false);
-  const subscriptions = useRef(
-    new Map<
-      string,
-      {
-        readonly callId: string;
-        readonly controller: AbortController;
-      }
-    >()
-  );
   const autoFocusedCoordinator = useRef<string | undefined>(undefined);
   const traceCloseButton = useRef<HTMLButtonElement>(null);
   const restoreFocusId = useRef<string | undefined>(undefined);
@@ -70,83 +61,62 @@ export function SubagentPanel({
     () => collectSubagentSessionTree(sessions, eventsBySession),
     [eventsBySession, sessions]
   );
+  const selectedNode = sessionNodes.find(
+    ({ session }) => session.childSessionId === selectedId
+  );
+  const selectedCallId = selectedNode?.session.callId;
+  const selectedSessionId = selectedNode?.session.childSessionId;
 
   useEffect(() => {
-    const desired = new Map(
-      sessionNodes.map(({ session }) => [session.childSessionId, session])
-    );
+    if (!selectedCallId || !selectedSessionId) return;
 
-    for (const [childSessionId, subscription] of subscriptions.current) {
-      if (desired.get(childSessionId)?.callId === subscription.callId) continue;
-      subscription.controller.abort();
-      subscriptions.current.delete(childSessionId);
-    }
+    const controller = new AbortController();
+    const child = client.sessions.attach(selectedSessionId);
 
-    for (const { session } of sessionNodes) {
-      const { callId, childSessionId } = session;
-      if (subscriptions.current.has(childSessionId)) continue;
-
-      const controller = new AbortController();
-      subscriptions.current.set(childSessionId, { callId, controller });
-      const child = client.sessions.attach(childSessionId);
-
-      void (async () => {
-        try {
-          for await (const event of child.stream({
-            signal: controller.signal,
-            startIndex: 0,
-          })) {
-            setStreamErrors((current) => {
-              if (!current.has(childSessionId)) return current;
-              const next = new Map(current);
-              next.delete(childSessionId);
-              return next;
-            });
-            setEventsBySession((current) => {
-              const events = current.get(childSessionId) ?? [];
-              if (
-                events.some((candidate) => candidate.meta.id === event.meta.id)
-              ) {
-                return current;
-              }
-              const next = new Map(current);
-              next.set(childSessionId, [...events, event]);
-              return next;
-            });
-          }
-        } catch (error) {
-          if (!controller.signal.aborted) {
-            setStreamErrors((current) => {
-              const next = new Map(current);
-              next.set(
-                childSessionId,
-                error instanceof Error
-                  ? error.message
-                  : "The task stream disconnected."
-              );
-              return next;
-            });
-          }
-        } finally {
-          if (
-            subscriptions.current.get(childSessionId)?.controller === controller
-          ) {
-            subscriptions.current.delete(childSessionId);
-          }
+    void (async () => {
+      try {
+        for await (const event of child.stream({
+          signal: controller.signal,
+          startIndex: 0,
+        })) {
+          setStreamErrors((current) => {
+            if (!current.has(selectedSessionId)) return current;
+            const next = new Map(current);
+            next.delete(selectedSessionId);
+            return next;
+          });
+          setEventsBySession((current) => {
+            const events = current.get(selectedSessionId) ?? [];
+            if (
+              events.some((candidate) => candidate.meta.id === event.meta.id)
+            ) {
+              return current;
+            }
+            const next = new Map(current);
+            next.set(selectedSessionId, [...events, event]);
+            return next;
+          });
         }
-      })();
-    }
-  }, [sessionNodes]);
-
-  useEffect(
-    () => () => {
-      for (const { controller } of subscriptions.current.values()) {
-        controller.abort();
+      } catch (error) {
+        if (!controller.signal.aborted) {
+          setStreamErrors((current) => {
+            const next = new Map(current);
+            next.set(
+              selectedSessionId,
+              error instanceof Error
+                ? error.message
+                : "The task stream disconnected."
+            );
+            return next;
+          });
+        }
       }
-      subscriptions.current.clear();
-    },
-    []
-  );
+    })();
+
+    return () => {
+      controller.abort();
+    };
+  }, [selectedCallId, selectedSessionId]);
 
   useEffect(() => {
     if (!window.matchMedia("(min-width: 48rem)").matches) return;
@@ -177,9 +147,6 @@ export function SubagentPanel({
     };
   }, [selectedId]);
 
-  const selectedNode = sessionNodes.find(
-    ({ session }) => session.childSessionId === selectedId
-  );
   const selected = selectedNode?.session;
   const statuses = useMemo(
     () =>
