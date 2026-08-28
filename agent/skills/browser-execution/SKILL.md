@@ -6,7 +6,7 @@ description: Complete a direct browser task, including recovery from blocked sit
 # Browser execution
 
 - Source of truth: use Kernel's current documentation directly for [browser sessions](https://kernel.sh/docs/introduction/create), [Playwright execution](https://kernel.sh/docs/browsers/playwright-execution), [computer controls](https://kernel.sh/docs/browsers/computer-controls), [stealth and CAPTCHA solving](https://kernel.sh/docs/browsers/bot-detection/stealth), and [live view](https://kernel.sh/docs/browsers/live-view). Do not infer a Kernel API shape from memory.
-- Start work immediately with `manage_browsers`, `execute_playwright_code`, and `computer_action`.
+- Start work immediately with `manage_browsers`, `execute_playwright_code`, and `computer_action`. Call `get_browser_live_view` only when the user explicitly asks for browser access.
 - Create one browser and reuse it for the full job. Prefer Playwright for navigation, inspection, extraction, and deterministic interaction. Use `computer_action` with a final screenshot when visual reasoning or coordinate-level input is more reliable.
 - Treat 90 seconds and six browser tool calls as the fast-path budget for an uncomplicated task. Batch related page inspection and interaction into one Playwright call when safe. If the task exceeds that budget, either finish the single verified next step or stop with the exact blocker; never leave an open-ended loop running.
 - Use names, email addresses, phone numbers, mailing addresses, and other non-credential form values directly when the user explicitly provides them in the task. Do not require the user to save those values in the vault first.

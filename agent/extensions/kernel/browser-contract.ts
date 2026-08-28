@@ -23,6 +23,10 @@ export const manageBrowsersInputSchema = z.object({
   offset: z.number().int().min(0).optional(),
 });
 
+export const browserLiveViewInputSchema = z.object({
+  session_id: z.string().min(1),
+});
+
 export const executePlaywrightInputSchema = z.object({
   code: z.string().min(1),
   session_id: z.string().min(1),
