@@ -49,15 +49,12 @@ build. See [`db/README.md`](db/README.md) for existing-database adoption,
 environment loading, and constraint-validation sequencing. Better Auth retains
 its separate migration path.
 
-Production Vercel builds also package the private vault-autofill extension and
-sync it into the Kernel project selected by `KERNEL_API_KEY`. This gives each
-self-hosted deployment its own extension instead of depending on an artifact in
-the source repository owner's Kernel account. Preview and local builds do not
-change Kernel resources. On another production host, sync it explicitly:
+The private vault-autofill extension can be packaged and synced manually into
+the Kernel project selected by `KERNEL_API_KEY`:
 
 ```bash
-pnpm build:extension
-pnpm sync:kernel-extension -- --force
+pnpm zip:extension
+pnpm sync:kernel-extension
 ```
 
 Treat `SECRET_ENCRYPTION_KEY` as production key material — back it up

@@ -13,7 +13,6 @@ export const kernelExtensionEnv = createEnv({
       .string()
       .min(1)
       .default("vault-autofill"),
-    VERCEL_ENV: z.enum(["production", "preview", "development"]).optional(),
   },
   experimental__runtimeEnv: {},
   emptyStringAsUndefined: true,

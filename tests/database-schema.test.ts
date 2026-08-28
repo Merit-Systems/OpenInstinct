@@ -128,9 +128,7 @@ describe("migration deployment policy", () => {
         )
       );
 
-    expect(packageManifest.scripts["build:vercel"]).toBe(
-      "pnpm build:extension && pnpm sync:kernel-extension && next build"
-    );
+    expect(packageManifest.scripts["build:vercel"]).toBe("next build");
     expect(packageManifest.scripts["db:check"]).toBe(
       "drizzle-kit check --config db/drizzle.config.ts"
     );

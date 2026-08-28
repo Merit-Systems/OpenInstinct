@@ -9,15 +9,7 @@ import {
 import { join } from "node:path";
 import { kernelExtensionEnv } from "./env/kernel-extension.ts";
 
-const force = process.argv.includes("--force");
-
-if (kernelExtensionEnv.VERCEL_ENV !== "production" && !force) {
-  console.log(
-    "Skipping Kernel extension sync outside a production deployment."
-  );
-} else {
-  await syncKernelExtension();
-}
+await syncKernelExtension();
 
 async function syncKernelExtension() {
   const apiKey = kernelExtensionEnv.KERNEL_API_KEY;
