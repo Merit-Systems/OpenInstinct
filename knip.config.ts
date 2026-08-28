@@ -2,6 +2,8 @@ import type { KnipConfig } from "knip";
 
 export default {
   entry: [
+    // Eve loads authored modules by filesystem convention rather than imports.
+    // Keep these entrypoints even when one of the directories is temporarily empty.
     "agent/channels/**/*.ts",
     "agent/hooks/**/*.ts",
     "agent/instructions/**/*.ts",
