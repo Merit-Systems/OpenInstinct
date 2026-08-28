@@ -1,4 +1,10 @@
-import { BotIcon, CloudIcon, MailIcon, MessageSquareIcon } from "lucide-react";
+import {
+  BotIcon,
+  CloudIcon,
+  ImageIcon,
+  MailIcon,
+  MessageSquareIcon,
+} from "lucide-react";
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -17,6 +23,9 @@ export default async function Page({ searchParams }: PageProps<"/">) {
     await readManagerSnapshot(scope)
   );
   const browserReady = snapshot.browser.available;
+  const imageStorageReady = Boolean(
+    env.BLOB_STORE_ID ?? env.BLOB_READ_WRITE_TOKEN
+  );
 
   return (
     <div className="mx-auto flex w-full max-w-4xl min-w-0 flex-col gap-8 px-4 py-6 sm:px-6 sm:py-8">
@@ -49,6 +58,20 @@ export default async function Page({ searchParams }: PageProps<"/">) {
             description="Run isolated browsers in your Kernel account."
             icon={<CloudIcon />}
             label="Kernel browser"
+          />
+          <ConnectorRow
+            action={
+              <span className="type-caption text-muted-foreground">
+                {imageStorageReady ? "Connected" : "Unavailable"}
+              </span>
+            }
+            description={
+              imageStorageReady
+                ? "Store browser images in a private Vercel Blob store."
+                : "Connect a private Vercel Blob store to share browser images."
+            }
+            icon={<ImageIcon />}
+            label="Vercel Blob"
           />
           <ConnectorRow
             action={<ModelSelector modelId={snapshot.runtime.inference} />}

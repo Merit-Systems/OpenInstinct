@@ -50,6 +50,50 @@ describe("collectSubagentSessions", () => {
     expect(sessions[0]?.callId).toBe("call_2");
     expect(sessions[0]?.completion?.output).toBe("Done");
   });
+
+  it("sorts the most recently called children first", () => {
+    const events = [
+      called,
+      {
+        ...called,
+        data: {
+          ...called.data,
+          callId: "call_2",
+          childSessionId: "child_2",
+        },
+        meta: { ...meta, id: "evt_02" },
+      },
+    ] satisfies readonly MessageStreamEvent[];
+
+    expect(
+      collectSubagentSessions(events).map(
+        ({ childSessionId }) => childSessionId
+      )
+    ).toEqual(["child_2", "child_1"]);
+  });
+
+  it("moves a continued child back to the front", () => {
+    const secondChild = {
+      ...called,
+      data: {
+        ...called.data,
+        callId: "call_2",
+        childSessionId: "child_2",
+      },
+      meta: { ...meta, id: "evt_02" },
+    } satisfies MessageStreamEvent;
+    const continuedFirstChild = {
+      ...called,
+      data: { ...called.data, callId: "call_3" },
+      meta: { ...meta, id: "evt_03" },
+    } satisfies MessageStreamEvent;
+
+    expect(
+      collectSubagentSessions([called, secondChild, continuedFirstChild]).map(
+        ({ childSessionId }) => childSessionId
+      )
+    ).toEqual(["child_1", "child_2"]);
+  });
 });
 
 describe("getSubagentSubscriptionKey", () => {
@@ -149,11 +193,15 @@ describe("getSubagentStatus", () => {
 });
 
 describe("getSubagentTask", () => {
-  it("uses the latest task after a child session is continued", () => {
+  it("keeps a concise original task after a child session is continued", () => {
     const events = [
       {
         type: "message.received",
-        data: { message: "First task", sequence: 0, turnId: "turn_1" },
+        data: {
+          message: "Task: First task\n\nFull assignment",
+          sequence: 0,
+          turnId: "turn_1",
+        },
         meta,
       },
       {
@@ -163,6 +211,6 @@ describe("getSubagentTask", () => {
       },
     ] satisfies readonly MessageStreamEvent[];
 
-    expect(getSubagentTask(events)).toBe("Continued task");
+    expect(getSubagentTask(events)).toBe("First task");
   });
 });

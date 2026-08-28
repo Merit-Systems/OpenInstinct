@@ -9,7 +9,6 @@ import {
   XIcon,
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type RefObject } from "react";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
@@ -67,16 +66,27 @@ export function SubagentPanel({
 
       void (async () => {
         try {
-          for await (const event of child.stream({
+          const snapshot = await child.snapshot({ signal: controller.signal });
+          if (controller.signal.aborted) return;
+
+          setStreamErrors((current) => {
+            if (!current.has(childSessionId)) return current;
+            const next = new Map(current);
+            next.delete(childSessionId);
+            return next;
+          });
+          setEventsBySession((current) => {
+            const next = new Map(current);
+            next.set(childSessionId, snapshot.events);
+            return next;
+          });
+
+          const liveChild = client.sessions.attach(childSessionId, {
+            streamIndex: snapshot.session.streamIndex,
+          });
+          for await (const event of liveChild.stream({
             signal: controller.signal,
-            startIndex: 0,
           })) {
-            setStreamErrors((current) => {
-              if (!current.has(childSessionId)) return current;
-              const next = new Map(current);
-              next.delete(childSessionId);
-              return next;
-            });
             setEventsBySession((current) => {
               const events = current.get(childSessionId) ?? [];
               if (
@@ -187,12 +197,12 @@ export function SubagentPanel({
         aria-hidden={selected !== undefined}
         className={cn(
           "relative hidden h-full shrink-0 overflow-hidden transition-[width] duration-200 ease-linear md:block",
-          selected ? "w-0" : "w-88"
+          selected ? "w-0" : "w-112"
         )}
       >
         <div
           className={cn(
-            "absolute inset-y-0 right-0 flex w-88 items-start p-4 transition-[opacity,transform] duration-200",
+            "absolute inset-y-0 right-0 flex w-112 items-start p-4 transition-[opacity,transform] duration-200",
             selected
               ? "pointer-events-none translate-x-6 opacity-0"
               : "translate-x-0 opacity-100"
@@ -339,7 +349,7 @@ function ActivityCard({
                   {doneCount} done
                 </span>
               </div>
-              <div className="divide-y">
+              <div>
                 {sessions.map((session) => {
                   const status =
                     statuses.get(session.childSessionId) ?? "starting";
@@ -348,22 +358,22 @@ function ActivityCard({
                   );
                   return (
                     <button
-                      className="group flex w-full items-center gap-3 py-3 text-left"
+                      aria-label={`${agentLabel(session.name)} task, ${status}`}
+                      className="group flex w-full items-center gap-3 rounded-md py-3 pr-2 pl-2 text-left"
                       data-task-session={session.childSessionId}
                       key={session.childSessionId}
                       onClick={() => onSelect(session.childSessionId)}
                       type="button"
                     >
-                      <StatusDot status={status} />
                       <span className="min-w-0 flex-1">
                         <span className="block truncate type-label">
-                          {task ?? session.name}
+                          {agentLabel(session.name)}
                         </span>
                         <span className="block truncate type-caption text-muted-foreground">
-                          {session.name}
+                          {task ?? "Waiting for assignment"}
                         </span>
                       </span>
-                      <Badge variant={statusVariant(status)}>{status}</Badge>
+                      <StatusIndicator status={status} />
                       <ChevronRightIcon className="size-4 text-muted-foreground transition-transform group-hover:translate-x-0.5" />
                     </button>
                   );
@@ -397,7 +407,9 @@ function TracePreview({
       <header className="flex h-14 shrink-0 items-center gap-3 border-b px-4">
         <SparklesIcon className="size-4 text-muted-foreground" />
         <div className="min-w-0 flex-1">
-          <h2 className="truncate type-card-title">{session.name}</h2>
+          <h2 className="truncate type-card-title">
+            {agentLabel(session.name)}
+          </h2>
           <p className="truncate type-caption text-muted-foreground">
             Full task trace
           </p>
@@ -425,7 +437,11 @@ function TracePreview({
   );
 }
 
-function StatusDot({ status }: { readonly status: SubagentStatus }) {
+function agentLabel(name: string) {
+  return `${name.charAt(0).toUpperCase()}${name.slice(1)}`;
+}
+
+function StatusIndicator({ status }: { readonly status: SubagentStatus }) {
   return (
     <span
       aria-hidden
@@ -441,12 +457,4 @@ function StatusDot({ status }: { readonly status: SubagentStatus }) {
       )}
     />
   );
-}
-
-function statusVariant(status: SubagentStatus) {
-  if (status === "failed") return "destructive" as const;
-  if (status === "working" || status === "starting") {
-    return "information" as const;
-  }
-  return "secondary" as const;
 }
