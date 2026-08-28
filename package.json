@@ -72,6 +72,7 @@
   "name": "local-vault-assistant",
   "packageManager": "pnpm@11.24.0",
   "scripts": {
+    "bench:ab": "node --env-file-if-exists=.env.local --experimental-strip-types scripts/run-browser-ab.ts",
     "bench:browser": "eve eval browser",
     "bench:compare": "node --experimental-strip-types scripts/compare-browser-benchmarks.ts",
     "boundaries": "turbo boundaries",

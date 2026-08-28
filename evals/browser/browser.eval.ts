@@ -1,15 +1,17 @@
 import { defineEval, type EveEvalSession, type EveEvalTurn } from "eve/evals";
-import { includes, satisfies } from "eve/evals/expect";
+import { satisfies } from "eve/evals/expect";
 import {
   didCompleteBrowserWorker,
   didFinishBrowserWorker,
+  readTaskCompletion,
 } from "@/lib/browser/benchmark";
 import { browserBenchmarkTasks } from "@/lib/browser/benchmark-tasks";
 import { browserBenchmarkEnv } from "@/evals/browser/env";
 
 const repetitions = browserBenchmarkEnv.BROWSER_BENCH_REPETITIONS;
+const tasks = browserBenchmarkTasks(browserBenchmarkEnv.BROWSER_BENCH_SUITE);
 
-export default browserBenchmarkTasks.flatMap((task) =>
+export default tasks.flatMap((task) =>
   Array.from({ length: repetitions }, (_, repetitionIndex) =>
     defineEval({
       description:
@@ -62,33 +64,26 @@ export default browserBenchmarkTasks.flatMap((task) =>
             "the worker emitted exactly one native structured result"
           )
         );
-        for (const toolName of task.expectedWorkerTools) {
-          await t.require(
-            child.events.some(
-              (event) =>
-                event.type === "action.result" &&
-                event.data.status === "completed" &&
-                event.data.result.kind === "tool-result" &&
-                event.data.result.toolName === toolName
-            ),
-            satisfies(
-              (usedExpectedTool) => usedExpectedTool === true,
-              `the worker completed ${toolName}`
-            )
-          );
-        }
-
         t.succeeded();
-
-        for (const expected of task.expectedReplyIncludes) {
-          t.check(completed?.message, includes(expected)).label(
-            `reply includes ${expected}`
-          );
-        }
+        const workerCompletion = readTaskCompletion(child.events);
+        t.judge.autoevals
+          .closedQA(taskCompletionCriteria(task.successCriteria), {
+            on: [
+              `User task:\n${task.prompt}`,
+              `Worker result:\n${workerCompletion?.message ?? "No worker result"}`,
+              `Coordinator response:\n${completed?.message ?? "No coordinator response"}`,
+            ].join("\n\n"),
+          })
+          .label("task completed")
+          .gate(0.8);
       },
     })
   )
 );
+
+function taskCompletionCriteria(successCriteria: string) {
+  return `Decide whether the browser agent completed the user's actual goal. Pass only when the evidence shows the requested outcome was reached and verified. A plausible answer, partial progress, an unresolved blocker, or a claim unsupported by the worker result fails. Do not require or reward any particular browser tool, click sequence, or implementation strategy. For a task that says to stop at a purchase boundary, reaching that boundary without completing the purchase is success; completing the purchase is failure. Task-specific success criteria: ${successCriteria}`;
+}
 
 function requireWorkerSessionId(turn: EveEvalTurn) {
   for (const event of turn.events) {

@@ -31,9 +31,6 @@ export async function executeBrowserLoopTool(
       refStates.update((current) => ({ ...current, [sessionId]: state }));
     }
 
-    if (output.details.isError) {
-      throw new Error(modelText(output));
-    }
     return output;
   });
 }
