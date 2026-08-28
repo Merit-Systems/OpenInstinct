@@ -1,9 +1,9 @@
 import type { MessageStreamEvent } from "eve/client";
 import { describe, expect, it } from "vitest";
 import {
+  collectSubagentSessionTree,
   collectSubagentSessions,
   getSubagentStatus,
-  getSubagentSubscriptionKey,
   getSubagentTask,
 } from "./subagent-sessions";
 
@@ -52,24 +52,37 @@ describe("collectSubagentSessions", () => {
   });
 });
 
-describe("getSubagentSubscriptionKey", () => {
-  it("changes when a continued child receives a new call", () => {
-    const [first] = collectSubagentSessions([called]);
-    const [continued] = collectSubagentSessions([
-      called,
-      {
-        ...called,
-        data: { ...called.data, callId: "call_2" },
-        meta: { ...meta, id: "evt_02" },
-      },
-    ]);
-    if (!first || !continued) {
-      throw new Error("Expected collected subagent sessions");
-    }
+describe("collectSubagentSessionTree", () => {
+  it("discovers nested specialists from their parent streams", () => {
+    const [coordinator] = collectSubagentSessions([called]);
+    if (!coordinator) throw new Error("Expected coordinator session");
 
-    expect(getSubagentSubscriptionKey([continued])).not.toBe(
-      getSubagentSubscriptionKey([first])
+    const browserCalled = {
+      ...called,
+      data: {
+        ...called.data,
+        childSessionId: "child_2",
+        childStreamPath: "/eve/v1/session/child_2/stream",
+        name: "browser",
+        sessionId: "child_1",
+        toolName: "browser",
+      },
+      meta: { ...meta, id: "evt_02" },
+    } satisfies MessageStreamEvent;
+    const nodes = collectSubagentSessionTree(
+      [coordinator],
+      new Map([["child_1", [browserCalled]]])
     );
+
+    expect(
+      nodes.map(({ depth, session }) => ({
+        depth,
+        id: session.childSessionId,
+      }))
+    ).toEqual([
+      { depth: 0, id: "child_1" },
+      { depth: 1, id: "child_2" },
+    ]);
   });
 });
 

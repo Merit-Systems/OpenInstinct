@@ -4,6 +4,7 @@ import { Client, type MessageStreamEvent } from "eve/client";
 import {
   ChevronRightIcon,
   CircleDotIcon,
+  CornerDownRightIcon,
   ListTreeIcon,
   SparklesIcon,
   XIcon,
@@ -21,10 +22,11 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import {
+  collectSubagentSessionTree,
   getSubagentStatus,
-  getSubagentSubscriptionKey,
   getSubagentTask,
   type SubagentSession,
+  type SubagentSessionNode,
   type SubagentStatus,
 } from "@/app/_lib/subagent-sessions";
 import { formatChatUsage } from "@/app/(authenticated)/(manager)/_lib/chat-usage";
@@ -53,16 +55,40 @@ export function SubagentPanel({
   );
   const [selectedId, setSelectedId] = useState<string>();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const subscriptions = useRef(
+    new Map<
+      string,
+      {
+        readonly callId: string;
+        readonly controller: AbortController;
+      }
+    >()
+  );
+  const autoFocusedCoordinator = useRef<string | undefined>(undefined);
   const traceCloseButton = useRef<HTMLButtonElement>(null);
   const restoreFocusId = useRef<string | undefined>(undefined);
-  const subscriptionKey = getSubagentSubscriptionKey(sessions);
+  const sessionNodes = useMemo(
+    () => collectSubagentSessionTree(sessions, eventsBySession),
+    [eventsBySession, sessions]
+  );
 
   useEffect(() => {
-    if (!subscriptionKey) return;
-    const controllers = subscriptionKey.split("\n").map((subscription) => {
-      const [encodedSessionId] = subscription.split(":");
-      const childSessionId = decodeURIComponent(encodedSessionId ?? "");
+    const desired = new Map(
+      sessionNodes.map(({ session }) => [session.childSessionId, session])
+    );
+
+    for (const [childSessionId, subscription] of subscriptions.current) {
+      if (desired.get(childSessionId)?.callId === subscription.callId) continue;
+      subscription.controller.abort();
+      subscriptions.current.delete(childSessionId);
+    }
+
+    for (const { session } of sessionNodes) {
+      const { callId, childSessionId } = session;
+      if (subscriptions.current.has(childSessionId)) continue;
+
       const controller = new AbortController();
+      subscriptions.current.set(childSessionId, { callId, controller });
       const child = client.sessions.attach(childSessionId);
 
       void (async () => {
@@ -102,16 +128,26 @@ export function SubagentPanel({
               return next;
             });
           }
+        } finally {
+          if (
+            subscriptions.current.get(childSessionId)?.controller === controller
+          ) {
+            subscriptions.current.delete(childSessionId);
+          }
         }
       })();
+    }
+  }, [sessionNodes]);
 
-      return controller;
-    });
-
-    return () => {
-      for (const controller of controllers) controller.abort();
-    };
-  }, [subscriptionKey]);
+  useEffect(
+    () => () => {
+      for (const { controller } of subscriptions.current.values()) {
+        controller.abort();
+      }
+      subscriptions.current.clear();
+    },
+    []
+  );
 
   useEffect(() => {
     if (!window.matchMedia("(min-width: 48rem)").matches) return;
@@ -142,26 +178,49 @@ export function SubagentPanel({
     };
   }, [selectedId]);
 
-  const selected = sessions.find(
-    (session) => session.childSessionId === selectedId
+  const selectedNode = sessionNodes.find(
+    ({ session }) => session.childSessionId === selectedId
   );
+  const selected = selectedNode?.session;
   const statuses = useMemo(
     () =>
       new Map(
-        sessions.map((session) => [
-          session.childSessionId,
-          getSubagentStatus(
+        sessionNodes.map(({ session }) => {
+          const status = getSubagentStatus(
             eventsBySession.get(session.childSessionId) ?? [],
             session
-          ),
-        ])
+          );
+          return [session.childSessionId, status] as const;
+        })
       ),
-    [eventsBySession, sessions]
+    [eventsBySession, sessionNodes]
   );
+  const activeCoordinator = sessionNodes.find(
+    ({ depth, session }) =>
+      depth === 0 &&
+      session.name === "coordinator" &&
+      ["starting", "working"].includes(
+        statuses.get(session.childSessionId) ?? "starting"
+      )
+  )?.session;
+
+  useEffect(() => {
+    if (!activeCoordinator || selectedId !== undefined) return;
+    const focusKey = `${activeCoordinator.childSessionId}:${activeCoordinator.callId}`;
+    if (
+      autoFocusedCoordinator.current === focusKey ||
+      !window.matchMedia("(min-width: 48rem)").matches
+    ) {
+      return;
+    }
+    autoFocusedCoordinator.current = focusKey;
+    setSelectedId(activeCoordinator.childSessionId);
+  }, [activeCoordinator, selectedId]);
+
   const workingCount = [...statuses.values()].filter((status) =>
     ["starting", "working"].includes(status)
   ).length;
-  const doneCount = sessions.length - workingCount;
+  const doneCount = sessionNodes.length - workingCount;
   const openTask = (sessionId: string) => {
     restoreFocusId.current = sessionId;
     setSelectedId(sessionId);
@@ -173,7 +232,8 @@ export function SubagentPanel({
       eventsBySession={eventsBySession}
       onSelect={openTask}
       onTraceViewChange={onTraceViewChange}
-      sessions={sessions}
+      selectedId={selectedId}
+      sessionNodes={sessionNodes}
       statuses={statuses}
       traceView={traceView}
       usage={usage}
@@ -284,7 +344,8 @@ function ActivityCard({
   eventsBySession,
   onSelect,
   onTraceViewChange,
-  sessions,
+  selectedId,
+  sessionNodes,
   statuses,
   traceView,
   usage,
@@ -294,7 +355,8 @@ function ActivityCard({
   readonly eventsBySession: ReadonlyMap<string, readonly MessageStreamEvent[]>;
   readonly onSelect: (sessionId: string) => void;
   readonly onTraceViewChange: (view: "imessage" | "trace") => void;
-  readonly sessions: readonly SubagentSession[];
+  readonly selectedId?: string;
+  readonly sessionNodes: readonly SubagentSessionNode[];
   readonly statuses: ReadonlyMap<string, SubagentStatus>;
   readonly traceView: "imessage" | "trace";
   readonly usage: ChatUsage;
@@ -326,7 +388,7 @@ function ActivityCard({
 
         <section className="mt-5 border-t pt-5">
           <h2 className="type-section-title text-muted-foreground">Tasks</h2>
-          {sessions.length === 0 ? (
+          {sessionNodes.length === 0 ? (
             <p className="type-supporting-body mt-4 text-muted-foreground">
               No tasks yet
             </p>
@@ -340,7 +402,7 @@ function ActivityCard({
                 </span>
               </div>
               <div className="divide-y">
-                {sessions.map((session) => {
+                {sessionNodes.map(({ depth, session }) => {
                   const status =
                     statuses.get(session.childSessionId) ?? "starting";
                   const task = getSubagentTask(
@@ -348,19 +410,29 @@ function ActivityCard({
                   );
                   return (
                     <button
-                      className="group flex w-full items-center gap-3 py-3 text-left"
+                      aria-label={`${agentLabel(session.name)} task, level ${String(depth + 1)}`}
+                      className={cn(
+                        "group flex w-full items-center gap-3 rounded-md py-3 pr-2 text-left",
+                        selectedId === session.childSessionId && "bg-muted/60"
+                      )}
                       data-task-session={session.childSessionId}
                       key={session.childSessionId}
                       onClick={() => onSelect(session.childSessionId)}
+                      style={{
+                        paddingInlineStart: `${0.5 + depth * 1.25}rem`,
+                      }}
                       type="button"
                     >
+                      {depth > 0 ? (
+                        <CornerDownRightIcon className="size-3.5 shrink-0 text-muted-foreground" />
+                      ) : null}
                       <StatusDot status={status} />
                       <span className="min-w-0 flex-1">
                         <span className="block truncate type-label">
                           {task ?? session.name}
                         </span>
                         <span className="block truncate type-caption text-muted-foreground">
-                          {session.name}
+                          {agentLabel(session.name)}
                         </span>
                       </span>
                       <Badge variant={statusVariant(status)}>{status}</Badge>
@@ -397,7 +469,9 @@ function TracePreview({
       <header className="flex h-14 shrink-0 items-center gap-3 border-b px-4">
         <SparklesIcon className="size-4 text-muted-foreground" />
         <div className="min-w-0 flex-1">
-          <h2 className="truncate type-card-title">{session.name}</h2>
+          <h2 className="truncate type-card-title">
+            {agentLabel(session.name)}
+          </h2>
           <p className="truncate type-caption text-muted-foreground">
             Full task trace
           </p>
@@ -423,6 +497,10 @@ function TracePreview({
       </div>
     </div>
   );
+}
+
+function agentLabel(name: string) {
+  return `${name.charAt(0).toUpperCase()}${name.slice(1)}`;
 }
 
 function StatusDot({ status }: { readonly status: SubagentStatus }) {

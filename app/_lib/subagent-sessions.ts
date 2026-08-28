@@ -8,6 +8,11 @@ export type SubagentSession = SubagentCalledStreamEvent["data"] & {
   readonly completion?: SubagentCompletedStreamEvent["data"];
 };
 
+export interface SubagentSessionNode {
+  readonly depth: number;
+  readonly session: SubagentSession;
+}
+
 export type SubagentStatus =
   | "cancelled"
   | "complete"
@@ -42,15 +47,29 @@ export function collectSubagentSessions(
   return [...sessions.values()];
 }
 
-export function getSubagentSubscriptionKey(
-  sessions: readonly SubagentSession[]
-) {
-  return sessions
-    .map(
-      (session) =>
-        `${encodeURIComponent(session.childSessionId)}:${encodeURIComponent(session.callId)}`
-    )
-    .join("\n");
+export function collectSubagentSessionTree(
+  rootSessions: readonly SubagentSession[],
+  eventsBySession: ReadonlyMap<string, readonly MessageStreamEvent[]>
+): readonly SubagentSessionNode[] {
+  const nodes: SubagentSessionNode[] = [];
+  const visited = new Set<string>();
+
+  function visit(sessions: readonly SubagentSession[], depth: number) {
+    for (const session of sessions) {
+      if (visited.has(session.childSessionId)) continue;
+      visited.add(session.childSessionId);
+      nodes.push({ depth, session });
+      visit(
+        collectSubagentSessions(
+          eventsBySession.get(session.childSessionId) ?? []
+        ),
+        depth + 1
+      );
+    }
+  }
+
+  visit(rootSessions, 0);
+  return nodes;
 }
 
 export function getSubagentStatus(
