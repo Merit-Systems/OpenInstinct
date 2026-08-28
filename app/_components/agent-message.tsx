@@ -15,7 +15,7 @@ import {
   KeyRoundIcon,
   XCircleIcon,
 } from "lucide-react";
-import { useState } from "react";
+import { type ReactNode, useState } from "react";
 import {
   Message,
   MessageContent,
@@ -56,6 +56,7 @@ export type AgentInputResponse = {
 type EveFilePart = Extract<EveMessagePart, { type: "file" }>;
 
 export function AgentMessage({
+  afterToolCalls,
   canRespond,
   deliveredAssistantMessages,
   isStreaming,
@@ -64,6 +65,7 @@ export function AgentMessage({
   timestamp,
   userVisibleOnly = false,
 }: {
+  readonly afterToolCalls?: ReadonlyMap<string, ReactNode>;
   readonly canRespond: boolean;
   readonly deliveredAssistantMessages?: ReadonlyMap<number, readonly string[]>;
   readonly isStreaming: boolean;
@@ -99,6 +101,7 @@ export function AgentMessage({
         {visibleParts.map((part, index) =>
           hasAssistantText && part.type === "reasoning" ? null : (
             <AgentMessagePart
+              afterToolCalls={afterToolCalls}
               canRespond={canRespond}
               key={partKey(part, index)}
               onInputResponses={onInputResponses}
@@ -184,12 +187,14 @@ function formatFullTimestamp(timestamp: string) {
 }
 
 function AgentMessagePart({
+  afterToolCalls,
   canRespond,
   onInputResponses,
   part,
   showCaret,
   userVisibleOnly,
 }: {
+  readonly afterToolCalls?: ReadonlyMap<string, ReactNode>;
   readonly canRespond: boolean;
   readonly onInputResponses: (
     responses: readonly AgentInputResponse[]
@@ -241,7 +246,7 @@ function AgentMessagePart({
         );
       }
 
-      return (
+      const tool = (
         <Tool
           defaultOpen={
             part.state === "approval-requested" ||
@@ -259,6 +264,15 @@ function AgentMessagePart({
             <ToolOutput errorText={part.errorText} output={part.output} />
           </ToolContent>
         </Tool>
+      );
+      const afterToolCall = afterToolCalls?.get(part.toolCallId);
+      return afterToolCall ? (
+        <>
+          {tool}
+          {afterToolCall}
+        </>
+      ) : (
+        tool
       );
     }
   }

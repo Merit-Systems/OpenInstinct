@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { classifyAutofillField } from "../browser-extension/lib/field-detector";
 import { fillCandidates } from "../browser-extension/lib/fill-engine";
+import { isAutofillFrame } from "../browser-extension/lib/frame-policy";
 import type { AccessScope } from "../lib/access-scope";
 import {
   listAutofillSuggestions,
@@ -197,6 +198,27 @@ describe("vault browser autofill", () => {
         type: "text",
       })
     ).toEqual({ kind: "payment-card", score: 100, token: "cc-exp-month" });
+  });
+
+  it("accepts detected autofill surfaces from any reachable frame origin", () => {
+    expect(
+      isAutofillFrame({
+        origin: "https://js.globalpay.com",
+        surfaces: [paymentSurface],
+      })
+    ).toBe(true);
+    expect(
+      isAutofillFrame({
+        origin: "https://unknown-payment-provider.example",
+        surfaces: [paymentSurface],
+      })
+    ).toBe(true);
+    expect(
+      isAutofillFrame({
+        origin: "https://analytics.example",
+        surfaces: [],
+      })
+    ).toBe(false);
   });
 
   it("falls back to labels without model-authored selectors", () => {
