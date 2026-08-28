@@ -246,12 +246,12 @@ export function SubagentPanel({
         aria-hidden={selected !== undefined}
         className={cn(
           "relative hidden h-full shrink-0 overflow-hidden transition-[width] duration-200 ease-linear md:block",
-          selected ? "w-0" : "w-96"
+          selected ? "w-0" : "w-112"
         )}
       >
         <div
           className={cn(
-            "absolute inset-y-0 right-0 flex w-96 items-start p-4 transition-[opacity,transform] duration-200",
+            "absolute inset-y-0 right-0 flex w-112 items-start p-4 transition-[opacity,transform] duration-200",
             selected
               ? "pointer-events-none translate-x-6 opacity-0"
               : "translate-x-0 opacity-100"
@@ -362,7 +362,7 @@ function ActivityCard({
   readonly workingCount: number;
 }) {
   return (
-    <Card className="max-h-full w-full gap-0 overflow-hidden">
+    <Card className="max-h-full w-full gap-0 overflow-hidden ring-0">
       <CardContent className="min-h-0 overflow-y-auto pr-6">
         <p className="type-section-title text-muted-foreground">Activity</p>
         <label
