@@ -50,6 +50,9 @@ describe("root, coordinator, and browser capability boundaries", () => {
     expect(rootInstructions).toContain(
       "Every initial or resumed `coordinator` call must set `outputSchema`"
     );
+    expect(rootInstructions).toContain(
+      "call `task_cancel` with its `taskId`, then call `coordinator` with the same `agentId`"
+    );
     expect(rootInstructions).not.toContain(
       "Perform public research, source discovery"
     );
@@ -89,6 +92,9 @@ describe("root, coordinator, and browser capability boundaries", () => {
     );
     expect(instructions).toContain("Try `web_fetch` before browser automation");
     expect(instructions).toContain("Call the browser inline");
+    expect(instructions).toContain(
+      "resume that same browser with its `agentId`"
+    );
   });
 
   it("gives the nested browser only browser and opaque-vault capabilities", () => {
