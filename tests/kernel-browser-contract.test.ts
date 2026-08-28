@@ -17,6 +17,11 @@ const mocks = vi.hoisted(() => ({
   >(),
   createBrowserSession:
     vi.fn<(_scope: unknown, _record: unknown) => Promise<void>>(),
+  deleteBrowserSession:
+    vi.fn<(_scope: unknown, _sessionId: string) => Promise<boolean>>(),
+  listBrowserSessions:
+    vi.fn<() => Promise<{ createdAt: string; sessionId: string }[]>>(),
+  retrieveBrowser: vi.fn<() => Promise<never>>(),
   requireWorkerScope: vi.fn<(_context: unknown) => Promise<unknown>>(),
 }));
 
@@ -26,12 +31,17 @@ vi.mock("@/agent/subagents/worker/lib/access", () => ({
 
 vi.mock("@/db/services/browsers", () => ({
   createBrowserSession: mocks.createBrowserSession,
-  deleteBrowserSession: vi.fn<() => Promise<boolean>>(),
-  listBrowserSessions: vi.fn<() => Promise<never[]>>(),
+  deleteBrowserSession: mocks.deleteBrowserSession,
+  listBrowserSessions: mocks.listBrowserSessions,
 }));
 
 vi.mock("@/lib/kernel", () => ({
-  kernel: { browsers: { create: mocks.createBrowser } },
+  kernel: {
+    browsers: {
+      create: mocks.createBrowser,
+      retrieve: mocks.retrieveBrowser,
+    },
+  },
 }));
 
 beforeEach(() => {
@@ -47,6 +57,8 @@ beforeEach(() => {
     session_id: "browser-1",
     viewport: null,
   });
+  mocks.deleteBrowserSession.mockResolvedValue(true);
+  mocks.listBrowserSessions.mockResolvedValue([]);
 });
 
 describe("Kernel browser contract", () => {
@@ -89,6 +101,26 @@ describe("Kernel browser contract", () => {
         viewport: undefined,
       },
       { signal: undefined }
+    );
+  });
+
+  it("prunes stale owned records when Kernel reports a missing browser", async () => {
+    mocks.listBrowserSessions.mockResolvedValue([
+      {
+        createdAt: "2026-08-27T00:00:00.000Z",
+        sessionId: "stale-browser",
+      },
+    ]);
+    mocks.retrieveBrowser.mockRejectedValue({ status: 404 });
+
+    const execute = manageBrowsers.execute;
+    // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- the tool context is external Eve runtime state; list only reads authorization through the mocked boundary.
+    const result = await execute({ action: "list" }, {} as never);
+
+    expect(result).toEqual({ has_more: false, items: [], next_offset: null });
+    expect(mocks.deleteBrowserSession).toHaveBeenCalledExactlyOnceWith(
+      { userId: "user-1", workspaceId: "workspace-1" },
+      "stale-browser"
     );
   });
 });

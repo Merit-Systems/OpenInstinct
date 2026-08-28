@@ -85,7 +85,10 @@ export default defineTool({
                 return null;
               }
               return value;
-            } catch {
+            } catch (error) {
+              if (isNotFoundError(error)) {
+                await deleteBrowserSession(scope, sessionId);
+              }
               return null;
             }
           })
@@ -104,7 +107,7 @@ export default defineTool({
         const sessionId = requireSessionId(input.session_id);
         await requireOwnedBrowserSession(scope, sessionId);
         return browserDescriptor(
-          await kernel.browsers.retrieve(sessionId, {}, { signal })
+          await retrieveBrowser(scope, sessionId, signal)
         );
       }
       case "update": {
@@ -113,13 +116,17 @@ export default defineTool({
         const viewport = browserViewport(input);
         const browser = viewport
           ? await kernel.browsers.update(sessionId, { viewport }, { signal })
-          : await kernel.browsers.retrieve(sessionId, {}, { signal });
+          : await retrieveBrowser(scope, sessionId, signal);
         return lifecycleResult(browser);
       }
       case "delete": {
         const sessionId = requireSessionId(input.session_id);
         await requireOwnedBrowserSession(scope, sessionId);
-        await kernel.browsers.deleteByID(sessionId, { signal });
+        await kernel.browsers
+          .deleteByID(sessionId, { signal })
+          .catch((error: unknown) => {
+            if (!isNotFoundError(error)) throw error;
+          });
         await deleteBrowserSession(scope, sessionId);
         return "Browser session deleted successfully";
       }
@@ -130,6 +137,32 @@ export default defineTool({
 function requireSessionId(sessionId: string | undefined) {
   if (!sessionId) throw new Error("A browser session ID is required.");
   return sessionId;
+}
+
+async function retrieveBrowser(
+  scope: Awaited<ReturnType<typeof requireWorkerScope>>,
+  sessionId: string,
+  signal?: AbortSignal
+) {
+  try {
+    return await kernel.browsers.retrieve(sessionId, {}, { signal });
+  } catch (error) {
+    if (!isNotFoundError(error)) throw error;
+    await deleteBrowserSession(scope, sessionId);
+    throw new Error(
+      "Browser session no longer exists. Its stale record was removed; create a fresh browser instead of retrying this session ID.",
+      { cause: error }
+    );
+  }
+}
+
+function isNotFoundError(error: unknown) {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "status" in error &&
+    error.status === 404
+  );
 }
 
 function browserViewport(input: z.infer<typeof inputSchema>) {
