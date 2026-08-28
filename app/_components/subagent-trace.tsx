@@ -1,26 +1,42 @@
 "use client";
 
-import type { SubagentCalledStreamEvent } from "eve/client";
-import { useEveAgent } from "eve/react";
+import {
+  defaultMessageReducer,
+  type MessageStreamEvent,
+  type SubagentCalledStreamEvent,
+} from "eve/client";
 import { BotIcon } from "lucide-react";
 import { useMemo } from "react";
 import { Shimmer } from "@/components/ai-elements/shimmer";
 import { Badge } from "@/components/ui/badge";
 import { getLatestTurnFailure } from "@/app/_lib/turn-failure";
+import type { SubagentStatus } from "@/app/_lib/subagent-sessions";
 import { AgentMessage } from "./agent-message";
 
+const messageReducer = defaultMessageReducer();
+
 export function SubagentTrace({
+  events,
+  streamError,
+  status,
   target,
 }: {
+  readonly events: readonly MessageStreamEvent[];
+  readonly streamError?: string;
+  readonly status: SubagentStatus;
   readonly target: SubagentCalledStreamEvent["data"];
 }) {
-  const trace = useEveAgent({
-    initialSession: { sessionId: target.childSessionId, streamIndex: 0 },
-    resume: true,
-  });
+  const data = useMemo(
+    () =>
+      events.reduce(
+        (current, event) => messageReducer.reduce(current, event),
+        messageReducer.initial()
+      ),
+    [events]
+  );
   const timestamps = useMemo(() => {
     const values = new Map<string, string>();
-    for (const event of trace.events) {
+    for (const event of events) {
       if (event.type === "message.received") {
         values.set(`${event.data.turnId}:user`, event.meta.at);
       }
@@ -32,17 +48,11 @@ export function SubagentTrace({
       }
     }
     return values;
-  }, [trace.events]);
-  const isRunning =
-    trace.status === "resuming" ||
-    trace.status === "submitted" ||
-    trace.status === "streaming";
-  const turnFailure = useMemo(
-    () => getLatestTurnFailure(trace.events),
-    [trace.events]
-  );
-  const error = trace.error?.message ?? turnFailure;
-  const status = error ? "Failed" : isRunning ? "Running" : "Settled";
+  }, [events]);
+  const isRunning = status === "starting" || status === "working";
+  const turnFailure = useMemo(() => getLatestTurnFailure(events), [events]);
+  const error = streamError ?? turnFailure;
+  const statusLabel = error ? "Failed" : isRunning ? "Running" : status;
   const badgeVariant = error
     ? "destructive"
     : isRunning
@@ -50,29 +60,26 @@ export function SubagentTrace({
       : "secondary";
 
   return (
-    <section className="mt-3 overflow-hidden rounded-lg border bg-muted/20">
-      <header className="flex items-center gap-2 px-3 py-2">
+    <section className="py-4">
+      <header className="flex items-center gap-2 rounded-lg bg-muted/50 px-3 py-2">
         <BotIcon className="size-4 text-muted-foreground" />
         <span className="min-w-0 flex-1 truncate type-label">
           {target.name} trace
         </span>
-        <Badge variant={badgeVariant}>{status}</Badge>
+        <Badge variant={badgeVariant}>{statusLabel}</Badge>
       </header>
-      <div className="space-y-4 border-t px-3 py-3">
-        {trace.data.messages.map((message, index) => (
+      <div className="space-y-5 py-5">
+        {data.messages.map((message, index) => (
           <AgentMessage
             canRespond={false}
-            isStreaming={
-              trace.status === "streaming" &&
-              index === trace.data.messages.length - 1
-            }
+            isStreaming={isRunning && index === data.messages.length - 1}
             key={message.id}
             message={message}
             onInputResponses={() => undefined}
             timestamp={timestamps.get(message.id)}
           />
         ))}
-        {isRunning && trace.data.messages.length === 0 ? (
+        {isRunning && data.messages.length === 0 ? (
           <Shimmer className="type-supporting-body" duration={1}>
             Loading task trace
           </Shimmer>
