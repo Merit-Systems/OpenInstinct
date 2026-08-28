@@ -268,8 +268,9 @@ export function AgentChat({
       <PromptInputFooter>
         <PromptInputTools />
         <PromptInputSubmit
-          disabled={isSubmitting || isRestoring}
-          status={isSubmitting ? "submitted" : undefined}
+          disabled={isRestoring}
+          onStop={() => void agent.cancel()}
+          status={isBusy ? agent.status : undefined}
         />
       </PromptInputFooter>
     </PromptInput>
