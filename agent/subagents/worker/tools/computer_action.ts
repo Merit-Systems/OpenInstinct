@@ -4,6 +4,7 @@ import { z } from "zod";
 import { kernel } from "@/lib/kernel";
 import { requireWorkerScope } from "@/agent/subagents/worker/lib/access";
 import { requireOwnedBrowserSession } from "@/agent/subagents/worker/lib/owned-browser";
+import { withVaultScreenshotMask } from "@/agent/subagents/worker/lib/vault-screenshot-mask";
 
 const actionSchema = z.object({
   type: z.enum([
@@ -156,22 +157,20 @@ export default defineTool({
           );
           break;
         case "screenshot": {
-          const removeMask = await maskVaultFields(
+          screenshotBase64 = await withVaultScreenshotMask(
             input.session_id,
-            context.abortSignal
+            context.abortSignal,
+            async () => {
+              const response = await computer.captureScreenshot(
+                input.session_id,
+                action.screenshot,
+                { signal: context.abortSignal }
+              );
+              return Buffer.from(await response.arrayBuffer()).toString(
+                "base64"
+              );
+            }
           );
-          try {
-            const response = await computer.captureScreenshot(
-              input.session_id,
-              action.screenshot,
-              { signal: context.abortSignal }
-            );
-            screenshotBase64 = Buffer.from(
-              await response.arrayBuffer()
-            ).toString("base64");
-          } finally {
-            await removeMask();
-          }
           break;
         }
         case "click_mouse":
@@ -267,43 +266,4 @@ function toBatchAction(
     case "write_clipboard":
       return null;
   }
-}
-
-async function maskVaultFields(sessionId: string, signal?: AbortSignal) {
-  const styleId = "vault-screenshot-mask";
-  const selector = '[data-vault-secret="true"]';
-  const addCode = `
-for (const currentContext of browser.contexts()) {
-  for (const currentPage of currentContext.pages()) {
-    for (const frame of currentPage.frames()) {
-      await frame.evaluate(({ styleId, selector }) => {
-        if (document.getElementById(styleId)) return;
-        const style = document.createElement("style");
-        style.id = styleId;
-        style.textContent = selector + " { color: transparent !important; text-shadow: 0 0 8px black !important; -webkit-text-security: disc !important; }";
-        document.documentElement.append(style);
-      }, ${JSON.stringify({ selector, styleId })}).catch(() => undefined);
-    }
-  }
-}
-return true;`;
-  await kernel.browsers.playwright.execute(
-    sessionId,
-    { code: addCode, timeout_sec: 10 },
-    { signal }
-  );
-  return async () => {
-    const removeCode = `
-for (const currentContext of browser.contexts()) {
-  for (const currentPage of currentContext.pages()) {
-    for (const frame of currentPage.frames()) {
-      await frame.evaluate((styleId) => document.getElementById(styleId)?.remove(), ${JSON.stringify(styleId)}).catch(() => undefined);
-    }
-  }
-}
-return true;`;
-    await kernel.browsers.playwright
-      .execute(sessionId, { code: removeCode, timeout_sec: 10 }, { signal })
-      .catch(() => undefined);
-  };
 }

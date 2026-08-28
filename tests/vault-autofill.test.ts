@@ -9,6 +9,7 @@ import {
 } from "../lib/manager/server/kernel-login-autofill";
 import {
   buildNativeAutofillPayload,
+  nativeAutofillSecretMarkingExpression,
   nativeAutofillTokens,
 } from "../lib/manager/server/kernel-native-autofill";
 import {
@@ -403,6 +404,51 @@ describe("vault browser autofill", () => {
       },
     });
   });
+
+  it.each(["address", "payment"])(
+    "marks every %s form control before native autofill",
+    () => {
+      class FakeInput {
+        readonly dataset: Record<string, string> = {};
+        disabled = false;
+        form: { querySelectorAll: () => FakeNodeList } | null = null;
+        readOnly = false;
+        type = "text";
+
+        constructor(readonly value: string) {}
+
+        closest() {
+          return this.form;
+        }
+      }
+      class FakeNodeList extends Array<FakeInput> {
+        item(index: number) {
+          return this[index] ?? null;
+        }
+      }
+      const controls = new FakeNodeList(
+        new FakeInput("4111111111111111"),
+        new FakeInput("09/31"),
+        new FakeInput("")
+      );
+      const form = { querySelectorAll: () => controls };
+      for (const control of controls) control.form = form;
+      const document = { querySelectorAll: () => controls };
+      // oxlint-disable-next-line typescript/no-implied-eval, typescript/no-unsafe-type-assertion -- execute the exact isolated-world expression against the DOM test double
+      const evaluate = Function(
+        "document",
+        "HTMLInputElement",
+        `return ${nativeAutofillSecretMarkingExpression(0)};`
+      ) as (documentValue: unknown, inputClass: unknown) => number;
+
+      expect(evaluate(document, FakeInput)).toBe(3);
+      expect(controls.map(({ dataset }) => dataset.vaultSecret)).toEqual([
+        "true",
+        "true",
+        "true",
+      ]);
+    }
+  );
 
   it("builds a Chromium address from the current free-form vault value", () => {
     expect(

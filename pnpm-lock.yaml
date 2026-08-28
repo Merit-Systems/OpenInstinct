@@ -56,6 +56,9 @@ importers:
       '@trpc/server':
         specifier: 11.18.0
         version: 11.18.0(typescript@6.0.3)
+      '@vercel/blob':
+        specifier: 2.8.0
+        version: 2.8.0
       '@vercel/connect':
         specifier: ^2.0.0
         version: 2.0.0(c8ba74d3560b66367327a185277b6d95)

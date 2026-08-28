@@ -45,6 +45,7 @@ describe("root and worker capability boundaries", () => {
   it("gives worker the browser and opaque-vault tools without messaging", () => {
     expect(toolFiles(workerTools)).toEqual([
       "ask_question.ts",
+      "capture_browser_image.ts",
       "computer_action.ts",
       "execute_playwright_code.ts",
       "fill_from_vault.ts",
@@ -65,6 +66,7 @@ describe("root and worker capability boundaries", () => {
       "@onkernel/eve-extension"
     );
     for (const tool of [
+      "capture_browser_image",
       "computer_action",
       "execute_playwright_code",
       "manage_browsers",
@@ -93,6 +95,7 @@ describe("root and worker capability boundaries", () => {
 
     expect(readFileSync("lib/kernel.ts", "utf8")).toContain("new Kernel(");
     for (const tool of [
+      "capture_browser_image",
       "computer_action",
       "execute_playwright_code",
       "manage_browsers",
@@ -113,7 +116,9 @@ describe("root and worker capability boundaries", () => {
     expect(rootInstructions).toContain(
       "Every initial or resumed `worker` call must set `outputSchema`"
     );
-    expect(rootInstructions).toContain('"required": ["status", "message"]');
+    expect(rootInstructions).toContain(
+      '"required": ["status", "message", "images"]'
+    );
     expect(rootInstructions).toContain(
       "including when passing an existing `agentId`"
     );

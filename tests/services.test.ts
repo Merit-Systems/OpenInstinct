@@ -18,6 +18,7 @@ describe("database services", () => {
     const client = new PGlite();
     databases.push(client);
     await applyInitialMigration(client);
+    await applyBrowserImageMigration(client);
 
     const pgliteDatabase = drizzle(client, { schema });
     // PGlite exposes the PostgreSQL query builders and transaction behavior
@@ -26,21 +27,102 @@ describe("database services", () => {
     const database = pgliteDatabase as unknown as typeof db;
     vi.doMock("@/db", () => ({ ...schema, db: database }));
 
-    const [browsers, chats, secrets, sessions, settings, scope, vault] =
-      await Promise.all([
-        import("@/db/services/browsers"),
-        import("@/db/services/chats"),
-        import("@/db/services/secrets"),
-        import("@/db/services/sessions"),
-        import("@/db/services/settings"),
-        import("@/db/services/scope"),
-        import("@/db/services/vault"),
-      ]);
+    const [
+      browserImages,
+      browsers,
+      chats,
+      secrets,
+      sessions,
+      settings,
+      scope,
+      vault,
+    ] = await Promise.all([
+      import("@/db/services/browser-images"),
+      import("@/db/services/browsers"),
+      import("@/db/services/chats"),
+      import("@/db/services/secrets"),
+      import("@/db/services/sessions"),
+      import("@/db/services/settings"),
+      import("@/db/services/scope"),
+      import("@/db/services/vault"),
+    ]);
     const alice = { userId: "alice", workspaceId: "workspace:alice" };
     const bob = { userId: "bob", workspaceId: "workspace:bob" };
 
     await scope.ensureScope(alice);
     await scope.ensureScope(bob);
+
+    const imageInput = {
+      browserSessionId: "browser-alice",
+      idempotencyKey: "worker-session:call-image",
+      label: "Product image",
+      rootSessionId: "session-alice",
+      sourceKind: "viewport",
+      workerSessionId: "worker-alice",
+    };
+    const firstReservation = await browserImages.reserveBrowserImageArtifact(
+      alice,
+      imageInput
+    );
+    const retryReservation = await browserImages.reserveBrowserImageArtifact(
+      alice,
+      imageInput
+    );
+    expect(firstReservation.status).toBe("pending");
+    expect(retryReservation).toEqual(firstReservation);
+    if (firstReservation.status !== "pending") {
+      throw new Error("Expected a pending browser image reservation.");
+    }
+    const finalized = await browserImages.finalizeBrowserImageArtifact(
+      alice,
+      firstReservation.reservation,
+      {
+        byteSize: 8,
+        contentHash: "content-hash",
+        filename: "product.png",
+        mediaType: "image/png",
+        sourceKind: "viewport",
+        storagePathname: `${firstReservation.reservation.storagePathname}/content-hash`,
+      }
+    );
+    const image = finalized.image;
+    expect(image).toMatchObject({
+      byteSize: 8,
+      label: "Product image",
+      mediaType: "image/png",
+    });
+    await expect(
+      browserImages.finalizeBrowserImageArtifact(
+        alice,
+        firstReservation.reservation,
+        {
+          byteSize: 9,
+          contentHash: "losing-content-hash",
+          filename: "losing.png",
+          mediaType: "image/png",
+          sourceKind: "viewport",
+          storagePathname: `${firstReservation.reservation.storagePathname}/losing-content-hash`,
+        }
+      )
+    ).resolves.toEqual(finalized);
+    expect(
+      await browserImages.readReadyBrowserImageArtifact(alice, image.id, {
+        rootSessionId: "session-alice",
+      })
+    ).toBeDefined();
+    expect(
+      await browserImages.readReadyBrowserImageArtifact(bob, image.id)
+    ).toBeUndefined();
+    expect(
+      await browserImages.reserveBrowserImageArtifact(alice, imageInput)
+    ).toEqual({ image, status: "ready" });
+    await expect(
+      browserImages.reserveBrowserImageArtifact(alice, {
+        ...imageInput,
+        workerSessionId: "different-worker",
+      })
+    ).rejects.toThrow("idempotency key is already in use");
+
     await sessions.claimSession(alice, "session-alice");
 
     expect(await sessions.isSessionOwned(alice, "session-alice")).toBe(true);
@@ -175,6 +257,16 @@ describe("database services", () => {
 async function applyInitialMigration(database: PGlite) {
   const migration = await readFile(
     new URL("../db/migrations/0000_fluffy_the_spike.sql", import.meta.url),
+    "utf8"
+  );
+  for (const statement of migration.split("--> statement-breakpoint")) {
+    if (statement.trim()) await database.exec(statement);
+  }
+}
+
+async function applyBrowserImageMigration(database: PGlite) {
+  const migration = await readFile(
+    new URL("../db/migrations/0003_unusual_fabian_cortez.sql", import.meta.url),
     "utf8"
   );
   for (const statement of migration.split("--> statement-breakpoint")) {
