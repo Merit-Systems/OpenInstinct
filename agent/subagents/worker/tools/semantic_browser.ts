@@ -11,9 +11,7 @@ import {
 } from "eve/tools";
 import { requireWorkerScope } from "@/agent/subagents/worker/lib/access";
 import { requireOwnedBrowserSession } from "@/agent/subagents/worker/lib/owned-browser";
-import { scopeFromPrincipal } from "@/lib/access-scope";
 import { executeBrowserLoopTool, modelText } from "@/lib/browser/semantic-loop";
-import { getModelSettings } from "@/lib/model-config";
 
 const browserSpecs = loop.toolsets.browser();
 const browserActSpec = loop.tools.browser.act();
@@ -22,15 +20,9 @@ const specsByName = new Map(allSpecs.map((spec) => [spec.name, spec]));
 
 export default defineDynamic({
   events: {
-    "turn.started": async (_event, context) => {
-      const caller =
-        context.session.auth.current ?? context.session.auth.initiator;
-      if (!caller) throw new Error("An authenticated user is required.");
-      const { modelId } = await getModelSettings(scopeFromPrincipal(caller));
-      const specs = supportsBrowserActModel(modelId) ? allSpecs : browserSpecs;
-
+    "session.started": () => {
       return Object.fromEntries(
-        specs.map((spec) => [
+        allSpecs.map((spec) => [
           spec.name,
           defineTool({
             description: spec.declaration.description,
@@ -43,10 +35,6 @@ export default defineDynamic({
     },
   },
 });
-
-export function supportsBrowserActModel(modelId: string) {
-  return !/(?:^|\/)moonshot(?:ai)?\//u.test(modelId.toLowerCase());
-}
 
 async function executeSemanticTool(
   input: Record<string, unknown>,
