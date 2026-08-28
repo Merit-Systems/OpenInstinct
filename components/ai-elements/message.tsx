@@ -20,7 +20,6 @@ import {
   Children,
   createContext,
   isValidElement,
-  memo,
   useCallback,
   useContext,
   useEffect,
@@ -338,24 +337,27 @@ const streamdownLinkSafety = {
   },
 };
 
-export const MessageResponse = memo(
-  ({ className, ...props }: MessageResponseProps) => (
-    <Streamdown
-      className={cn(
-        "size-full [&>*:first-child]:mt-0 [&>*:last-child]:mb-0",
-        className
-      )}
-      linkSafety={streamdownLinkSafety}
-      plugins={streamdownPlugins}
-      {...props}
-    />
-  ),
-  (prevProps, nextProps) =>
-    prevProps.children === nextProps.children &&
-    nextProps.isAnimating === prevProps.isAnimating
+// Streamdown already memoizes its own output. Once a response settles, switch
+// out of its incremental block renderer so the completed text is committed
+// synchronously instead of retaining an earlier streamed render.
+export const MessageResponse = ({
+  className,
+  isAnimating = false,
+  mode,
+  ...props
+}: MessageResponseProps) => (
+  <Streamdown
+    className={cn(
+      "size-full [&>*:first-child]:mt-0 [&>*:last-child]:mb-0",
+      className
+    )}
+    isAnimating={isAnimating}
+    linkSafety={streamdownLinkSafety}
+    mode={mode ?? (isAnimating ? "streaming" : "static")}
+    plugins={streamdownPlugins}
+    {...props}
+  />
 );
-
-MessageResponse.displayName = "MessageResponse";
 
 export type MessageToolbarProps = ComponentProps<"div">;
 

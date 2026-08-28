@@ -1,6 +1,7 @@
+import creditCardType from "credit-card-type";
 import { z } from "zod";
 
-const paymentCardSecretSchema = z.object({
+export const paymentCardSecretSchema = z.object({
   billingPostalCode: z.string().trim().min(1).max(20),
   cardholderName: z.string().trim().min(1).max(200),
   expirationMonth: z.number().int().min(1).max(12),
@@ -45,12 +46,13 @@ export function parsePaymentCardSecret(value: string) {
 }
 
 export function paymentCardBrand(number: string) {
+  return paymentCardType(number)?.niceType ?? "Card";
+}
+
+export function paymentCardType(number: string) {
   const digits = number.replaceAll(/\D/gu, "");
-  if (digits.startsWith("4")) return "Visa";
-  if (/^(5[1-5]|2(?:2[2-9]|[3-6]\d|7[01]|720))/u.test(digits)) {
-    return "Mastercard";
-  }
-  if (/^3[47]/u.test(digits)) return "American Express";
-  if (/^(6011|65|64[4-9])/u.test(digits)) return "Discover";
-  return "Card";
+  if (!digits) return undefined;
+
+  const matches = creditCardType(digits);
+  return matches.length === 1 ? matches[0] : undefined;
 }

@@ -40,7 +40,6 @@ describe("root and worker capability boundaries", () => {
       "computer_action.ts",
       "execute_playwright_code.ts",
       "fill_from_vault.ts",
-      "inspect_autofill.ts",
       "list_vault.ts",
       "manage_browsers.ts",
     ]);
@@ -71,7 +70,7 @@ describe("root and worker capability boundaries", () => {
     expect(existsSync(`${workerRoot}/skills/browser-execution/SKILL.md`)).toBe(
       true
     );
-    expect(readFileSync(`${workerRoot}/instructions.md`, "utf8")).toContain(
+    expect(readFileSync(`${workerRoot}/instructions.md`, "utf8")).not.toContain(
       "`inspect_autofill`"
     );
     expect(readFileSync(`${workerRoot}/instructions.md`, "utf8")).toContain(
@@ -91,9 +90,9 @@ describe("root and worker capability boundaries", () => {
       expect(source).toContain('from "@/lib/kernel"');
       expect(source).not.toContain("new Kernel(");
     }
-    expect(
-      readFileSync("lib/manager/server/vault-extension-autofill.ts", "utf8")
-    ).toContain('from "@/lib/kernel"');
+    expect(readFileSync(`${workerTools}/fill_from_vault.ts`, "utf8")).toContain(
+      'from "@/lib/manager/server/kernel-native-autofill"'
+    );
   });
 
   it("requires structured completion for initial and resumed worker calls", () => {

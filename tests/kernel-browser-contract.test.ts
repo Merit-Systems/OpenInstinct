@@ -30,10 +30,6 @@ vi.mock("@/db/services/browsers", () => ({
   listBrowserSessions: vi.fn<() => Promise<never[]>>(),
 }));
 
-vi.mock("@/lib/env", () => ({
-  env: { KERNEL_VAULT_AUTOFILL_EXTENSION: "vault-autofill" },
-}));
-
 vi.mock("@/lib/kernel", () => ({
   kernel: { browsers: { create: mocks.createBrowser } },
 }));
@@ -74,7 +70,7 @@ describe("Kernel browser contract", () => {
     ).toBe(true);
   });
 
-  it("mounts the private vault extension on created browsers", async () => {
+  it("returns the live-view URL for a created browser", async () => {
     const execute = manageBrowsers.execute;
 
     // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- the tool context is external Eve runtime state; create only reads abortSignal after the mocked authorization boundary.
@@ -86,9 +82,12 @@ describe("Kernel browser contract", () => {
     });
 
     expect(mocks.createBrowser).toHaveBeenCalledExactlyOnceWith(
-      expect.objectContaining({
-        extensions: [{ name: "vault-autofill" }],
-      }),
+      {
+        start_url: undefined,
+        stealth: true,
+        timeout_seconds: 900,
+        viewport: undefined,
+      },
       { signal: undefined }
     );
   });

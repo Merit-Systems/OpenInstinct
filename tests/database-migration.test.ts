@@ -9,13 +9,27 @@ afterEach(async () => {
 });
 
 describe("database migrations", () => {
-  it("creates a validated schema and is idempotent on an empty database", async () => {
+  it("creates a validated schema and keeps adoption migrations idempotent", async () => {
     const database = createDatabase();
 
     await applyMigration(database, "0000_fluffy_the_spike.sql");
     await applyMigration(database, "0001_better-auth.sql");
+    await applyMigration(database, "0002_heavy_celestials.sql");
     await applyMigration(database, "0000_fluffy_the_spike.sql");
     await applyMigration(database, "0001_better-auth.sql");
+
+    await database.exec(`
+      INSERT INTO workspaces VALUES ('workspace-1', '2026-01-01');
+      INSERT INTO vault_items VALUES (
+        'contact-1',
+        'workspace-1',
+        'contact',
+        'Checkout',
+        '',
+        '2026-01-01',
+        '2026-01-01'
+      );
+    `);
 
     const tables = await database.query<{ count: number }>(
       `SELECT count(*)::int AS count
@@ -40,6 +54,9 @@ describe("database migrations", () => {
 
     expect(tables.rows[0]?.count).toBe(12);
     expect(pendingConstraints).toBe(0);
+    await expect(
+      database.query("SELECT id FROM vault_items WHERE id = 'contact-1'")
+    ).resolves.toMatchObject({ rows: [{ id: "contact-1" }] });
   }, 15_000);
 
   it("preserves legacy rows while enforcing constraints for new writes", async () => {
@@ -72,6 +89,7 @@ describe("database migrations", () => {
       `);
 
     await applyMigration(database, "0000_fluffy_the_spike.sql");
+    await applyMigration(database, "0002_heavy_celestials.sql");
 
     const vault = await database.query<{ id: string; kind: string }>(
       "SELECT id, kind FROM vault_items WHERE id = 'legacy-item'"

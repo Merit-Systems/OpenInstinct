@@ -10,7 +10,6 @@ import {
   deleteBrowserSession,
   listBrowserSessions,
 } from "@/db/services/browsers";
-import { env } from "@/lib/env";
 import { kernel } from "@/lib/kernel";
 import { requireWorkerScope } from "@/agent/subagents/worker/lib/access";
 import { requireOwnedBrowserSession } from "@/agent/subagents/worker/lib/owned-browser";
@@ -46,7 +45,6 @@ export default defineTool({
       case "create": {
         const browser = await kernel.browsers.create(
           {
-            extensions: [{ name: env.KERNEL_VAULT_AUTOFILL_EXTENSION }],
             start_url: input.start_url,
             stealth: true,
             timeout_seconds:

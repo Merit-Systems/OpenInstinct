@@ -2,6 +2,7 @@
 
 import { type FormEvent, useState } from "react";
 import { z } from "zod";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   Field,
@@ -13,6 +14,7 @@ import { Input } from "@/components/ui/input";
 import type { ManagerMutation } from "@/lib/manager";
 import {
   paymentCardBrand,
+  paymentCardType,
   serializePaymentCard,
 } from "@/lib/manager/payment-card";
 
@@ -55,6 +57,7 @@ export function PaymentCardForm({
     expiration: "",
     nickname: initialLabel,
   });
+  const cardType = paymentCardType(form.cardNumber);
   const result = paymentCardFormSchema.safeParse(form);
   const errors =
     attempted && !result.success ? result.error.flatten().fieldErrors : {};
@@ -135,6 +138,7 @@ export function PaymentCardForm({
             }))
           }
           placeholder="1234 5678 9012 3456"
+          trailingLabel={cardType?.niceType}
           value={form.cardNumber}
         />
 
@@ -204,15 +208,24 @@ function CardField({
   id,
   label,
   onChange,
+  trailingLabel,
   ...inputProps
 }: Omit<React.ComponentProps<typeof Input>, "onChange"> & {
   readonly error?: string;
   readonly label: string;
   readonly onChange: (value: string) => void;
+  readonly trailingLabel?: string;
 }) {
   return (
     <Field className={className} data-invalid={error ? true : undefined}>
-      <FieldLabel htmlFor={id}>{label}</FieldLabel>
+      <div className="flex items-center justify-between gap-2">
+        <FieldLabel htmlFor={id}>{label}</FieldLabel>
+        {trailingLabel ? (
+          <Badge aria-live="polite" variant="outline">
+            {trailingLabel}
+          </Badge>
+        ) : null}
+      </div>
       <Input
         {...inputProps}
         aria-invalid={error ? true : undefined}
@@ -225,11 +238,13 @@ function CardField({
 }
 
 function formatCardNumber(value: string) {
-  return value
-    .replaceAll(/\D/gu, "")
-    .slice(0, 19)
-    .replaceAll(/(.{4})/gu, "$1 ")
-    .trim();
+  const digits = value.replaceAll(/\D/gu, "").slice(0, 19);
+  const gaps = new Set(paymentCardType(digits)?.gaps ?? [4, 8, 12]);
+
+  return digits
+    .split("")
+    .map((digit, index) => (gaps.has(index) ? ` ${digit}` : digit))
+    .join("");
 }
 
 function formatExpiration(value: string) {

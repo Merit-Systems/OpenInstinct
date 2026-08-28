@@ -15,16 +15,15 @@
     "@t3-oss/env-nextjs": "0.13.11",
     "@tailwindcss/postcss": "4.3.3",
     "@vercel/connect": "^2.0.0",
-    "@webext-core/messaging": "^4.0.0",
     "@workflow/world-vercel": "5.0.0-beta.40",
     "ai": "^7.0.79",
     "better-auth": "1.7.2",
     "class-variance-authority": "0.7.1",
     "clsx": "2.1.1",
     "cmdk": "1.1.1",
+    "credit-card-type": "^10.3.0",
     "drizzle-orm": "^0.45.2",
     "eve": "^0.46.1",
-    "jose": "^6.2.10",
     "lucide-react": "1.34.0",
     "motion": "13.1.1",
     "nanoid": "6.0.1",
@@ -58,8 +57,7 @@
     "turbo": "2.10.12",
     "typescript": "6.0.3",
     "vercel": "^59.6.2",
-    "vitest": "4.1.11",
-    "wxt": "^0.21.4"
+    "vitest": "4.1.11"
   },
   "engines": {
     "node": "24.x"
@@ -70,9 +68,8 @@
     "bench:browser": "eve eval browser",
     "bench:compare": "node --experimental-strip-types scripts/compare-browser-benchmarks.ts",
     "boundaries": "turbo boundaries",
-    "build": "pnpm build:extension && turbo run build:app",
+    "build": "turbo run build:app",
     "build:app": "next build",
-    "build:extension": "wxt build .",
     "build:vercel": "next build",
     "check": "turbo run lint:app types:check:app test:app format:check knip && turbo boundaries",
     "db:check": "drizzle-kit check --config db/drizzle.config.ts",
@@ -92,7 +89,6 @@
     "lint:fix": "oxlint . --fix",
     "start": "turbo run start:app",
     "start:app": "next start",
-    "sync:kernel-extension": "node --env-file-if-exists=.env.local --experimental-strip-types scripts/sync-kernel-extension.ts",
     "test": "turbo run test:app",
     "test:app": "vitest run",
     "types:check": "turbo run types:check:app",
@@ -100,8 +96,7 @@
     "types:check:app": "tsc --noEmit -p tsconfig.json",
     "build:eve": "eve build",
     "dev:eve": "eve dev",
-    "start:eve": "eve start",
-    "zip:extension": "wxt zip ."
+    "start:eve": "eve start"
   },
   "version": "0.0.0",
   "type": "module"

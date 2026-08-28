@@ -15,6 +15,13 @@
       "when": 1787859519370,
       "tag": "0001_better-auth",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1787869699520,
+      "tag": "0002_heavy_celestials",
+      "breakpoints": true
     }
   ]
 }

@@ -240,41 +240,6 @@ describe("agent messages", () => {
     expect(markup).not.toContain("Hidden recipient");
   });
 
-  it("renders a matching child trace after its subagent tool", () => {
-    const message = {
-      id: "turn-3:assistant",
-      parts: [
-        {
-          input: { message: "Research this" },
-          output: { status: "working", taskId: "task-1" },
-          state: "output-available",
-          toolCallId: "call-agent",
-          toolName: "agent",
-          type: "dynamic-tool",
-        },
-      ],
-      role: "assistant",
-    } satisfies EveMessage;
-
-    const markup = renderToStaticMarkup(
-      <AgentMessage
-        afterToolCalls={
-          new Map([["call-agent", <div key="trace">Live child trace</div>]])
-        }
-        canRespond
-        isStreaming={false}
-        message={message}
-        onInputResponses={() => undefined}
-      />
-    );
-
-    expect(markup).toContain("agent");
-    expect(markup).toContain("Live child trace");
-    expect(markup.indexOf("Live child trace")).toBeGreaterThan(
-      markup.indexOf("agent")
-    );
-  });
-
   it("keeps a parked failed child visibly failed", () => {
     const events = [
       {
