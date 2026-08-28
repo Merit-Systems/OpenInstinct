@@ -1,7 +1,6 @@
 "use client";
 
 import type { UserContent } from "ai";
-import { useEveAgent } from "eve/react";
 import { AlertCircleIcon, BrainIcon, PlusIcon, SquareIcon } from "lucide-react";
 import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -22,6 +21,7 @@ import { Button } from "@/components/ui/button";
 import { ButtonGroup } from "@/components/ui/button-group";
 import { formatChatUsage, summarizeChatUsage } from "@/app/_lib/chat-usage";
 import { getLatestTurnFailure } from "@/app/_lib/turn-failure";
+import { useDurableEveSession } from "@/app/_hooks/use-durable-eve-session";
 import type { ChatUsage } from "@/lib/chat";
 import { cn } from "@/lib/utils";
 import { AgentMessage } from "./agent-message";
@@ -41,7 +41,7 @@ export function AgentChat({
   const [cancellationError, setCancellationError] = useState<string>();
   const [traceView, setTraceView] = useState<"imessage" | "trace">("trace");
   const pendingChatTitle = useRef<string | undefined>(undefined);
-  const agent = useEveAgent({
+  const agent = useDurableEveSession({
     initialSession:
       sessionId === undefined
         ? undefined
@@ -49,9 +49,8 @@ export function AgentChat({
             sessionId,
             streamIndex: 0,
           },
-    resume: sessionId !== undefined,
     onSessionChange(session) {
-      if (sessionId === undefined && session !== undefined) {
+      if (sessionId === undefined) {
         void saveChat(session.sessionId, pendingChatTitle.current).catch(
           () => undefined
         );
@@ -227,7 +226,11 @@ export function AgentChat({
       ) : null}
       <PromptInputSubmit
         disabled={isRestoring}
-        status={isBusy || isRestoring ? undefined : agent.status}
+        status={
+          agent.status === "ready" || agent.status === "error"
+            ? agent.status
+            : undefined
+        }
       />
     </PromptInput>
   );
