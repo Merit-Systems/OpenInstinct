@@ -1,9 +1,12 @@
 "use client";
 
 import type { UserContent } from "ai";
+import type { MessageStreamEvent } from "eve/client";
+import type { EveMessage } from "eve/react";
 import { AlertCircleIcon, BrainIcon } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { api } from "@/trpc/client";
+import { z } from "zod";
 import {
   Conversation,
   ConversationContent,
@@ -30,6 +33,20 @@ import { collectSubagentSessions } from "@/app/_lib/subagent-sessions";
 import { SubagentPanel } from "./subagent-panel";
 
 const AGENT_NAME = "Local Vault Assistant";
+const backgroundWorkerDelivery =
+  /^Background task (\S+) \(worker\) (?:update: |needs input\.$|is cancelled\.$|is completed\.\n\nResult:\n|failed\.\n\nError:\n)/u;
+const backgroundWorkerAuthorization =
+  /^Background task (\S+) needs authorization\.$/u;
+const taskCancelResultSchema = z.object({
+  kind: z.literal("tool-result"),
+  output: z.object({ tasks: z.array(z.unknown()) }),
+  toolName: z.literal("task_cancel"),
+});
+const cancelledWorkerTaskSchema = z.object({
+  metadata: z.object({ name: z.literal("worker") }),
+  status: z.literal("cancelled"),
+  taskId: z.string(),
+});
 
 export function AgentChat({
   initialUsage,
@@ -152,6 +169,10 @@ export function AgentChat({
     () => collectSubagentSessions(agent.events),
     [agent.events]
   );
+  const messages = useMemo(
+    () => messagesForTraceView(agent.data.messages, agent.events, traceView),
+    [agent.data.messages, agent.events, traceView]
+  );
 
   useEffect(() => {
     if (activeSessionId === undefined || latestTerminalTurnAt === undefined) {
@@ -238,7 +259,7 @@ export function AgentChat({
             }
           >
             <ConversationContent className="mx-auto w-full max-w-3xl gap-6 px-4 pt-6 pb-36 sm:px-6">
-              {agent.data.messages.map((message, index) =>
+              {messages.map((message, index) =>
                 showPendingThinking &&
                 isPendingAssistantShell &&
                 message.id === lastMessage.id ? null : (
@@ -249,7 +270,7 @@ export function AgentChat({
                     )}
                     isStreaming={
                       agent.status === "streaming" &&
-                      index === agent.data.messages.length - 1
+                      index === messages.length - 1
                     }
                     key={message.id}
                     message={message}
@@ -295,6 +316,76 @@ export function AgentChat({
       />
     </div>
   );
+}
+
+export function messagesForTraceView(
+  messages: readonly EveMessage[],
+  events: readonly MessageStreamEvent[],
+  traceView: "imessage" | "trace"
+) {
+  if (traceView === "trace") return messages;
+  const hiddenMessageIds = backgroundWorkerDeliveryMessageIds(events);
+  return messages.filter((message) => !hiddenMessageIds.has(message.id));
+}
+
+export function backgroundWorkerDeliveryMessageIds(
+  events: readonly MessageStreamEvent[]
+) {
+  // Eve task deliveries currently share message.received with user input, so
+  // require both its exact framework grammar and a receipt from this worker.
+  const taskIds = new Set<string>();
+  const cancelledTaskIds = new Set<string>();
+
+  for (const event of events) {
+    if (
+      event.type === "subagent.completed" &&
+      event.data.subagentName === "worker" &&
+      event.data.backgroundTask !== undefined
+    ) {
+      taskIds.add(event.data.backgroundTask.taskId);
+      continue;
+    }
+
+    if (
+      event.type === "action.result" &&
+      event.data.result.kind === "subagent-result" &&
+      event.data.result.subagentName === "worker" &&
+      event.data.result.origin === "child" &&
+      event.data.result.backgroundTask !== undefined
+    ) {
+      taskIds.add(event.data.result.backgroundTask.taskId);
+    }
+  }
+
+  const messageIds = new Set<string>();
+  for (const event of events) {
+    if (event.type === "action.result") {
+      const result = taskCancelResultSchema.safeParse(event.data.result);
+      if (!result.success) continue;
+      for (const value of result.data.output.tasks) {
+        const task = cancelledWorkerTaskSchema.safeParse(value);
+        if (task.success) cancelledTaskIds.add(task.data.taskId);
+      }
+      continue;
+    }
+
+    if (event.type !== "message.received") continue;
+    const taskId =
+      backgroundWorkerDelivery.exec(event.data.message)?.[1] ??
+      backgroundWorkerAuthorization.exec(event.data.message)?.[1];
+    if (taskId && taskIds.has(taskId)) {
+      const isCancellation = event.data.message.endsWith(
+        "(worker) is cancelled."
+      );
+      if (!isCancellation) messageIds.add(`${event.data.turnId}:user`);
+      if (isCancellation && cancelledTaskIds.delete(taskId)) {
+        messageIds.add(`${event.data.turnId}:user`);
+        messageIds.add(`${event.data.turnId}:assistant`);
+      }
+    }
+  }
+
+  return messageIds;
 }
 
 function ErrorMessage({ message }: { readonly message: string }) {

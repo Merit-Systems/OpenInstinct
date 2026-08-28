@@ -1,30 +1,94 @@
-import { describe, expect, it } from "vitest";
-import {
-  browserLiveViewInputSchema,
-  browserTimeoutFloorSeconds,
-  manageBrowsersInputSchema,
-} from "../agent/extensions/kernel/browser-contract";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { z } from "zod";
+import manageBrowsers from "../agent/subagents/worker/tools/manage_browsers";
+
+const mocks = vi.hoisted(() => ({
+  createBrowser: vi.fn<
+    (
+      _input: unknown,
+      _options: unknown
+    ) => Promise<{
+      browser_live_view_url: string;
+      created_at: string;
+      deleted_at: null;
+      session_id: string;
+      viewport: null;
+    }>
+  >(),
+  createBrowserSession:
+    vi.fn<(_scope: unknown, _record: unknown) => Promise<void>>(),
+  requireWorkerScope: vi.fn<(_context: unknown) => Promise<unknown>>(),
+}));
+
+vi.mock("@/agent/subagents/worker/lib/access", () => ({
+  requireWorkerScope: mocks.requireWorkerScope,
+}));
+
+vi.mock("@/db/services/browsers", () => ({
+  createBrowserSession: mocks.createBrowserSession,
+  deleteBrowserSession: vi.fn<() => Promise<boolean>>(),
+  listBrowserSessions: vi.fn<() => Promise<never[]>>(),
+}));
+
+vi.mock("@/lib/kernel", () => ({
+  kernel: { browsers: { create: mocks.createBrowser } },
+}));
+
+beforeEach(() => {
+  vi.clearAllMocks();
+  mocks.requireWorkerScope.mockResolvedValue({
+    userId: "user-1",
+    workspaceId: "workspace-1",
+  });
+  mocks.createBrowser.mockResolvedValue({
+    browser_live_view_url: "https://live.kernel.test/browser-1",
+    created_at: "2026-08-27T00:00:00.000Z",
+    deleted_at: null,
+    session_id: "browser-1",
+    viewport: null,
+  });
+});
 
 describe("Kernel browser contract", () => {
   it("keeps agent-created browsers alive for at least 15 minutes", () => {
+    const inputSchema = manageBrowsers.inputSchema;
+    if (!(inputSchema instanceof z.ZodType)) {
+      throw new Error("manage_browsers must use a Zod input schema.");
+    }
+
     expect(
-      manageBrowsersInputSchema.safeParse({
+      inputSchema.safeParse({
         action: "create",
         timeout_seconds: 120,
       }).success
     ).toBe(false);
     expect(
-      manageBrowsersInputSchema.safeParse({
+      inputSchema.safeParse({
         action: "create",
-        timeout_seconds: browserTimeoutFloorSeconds,
+        timeout_seconds: 900,
       }).success
     ).toBe(true);
   });
 
-  it("requires an explicit browser session for live-view access", () => {
-    expect(browserLiveViewInputSchema.safeParse({}).success).toBe(false);
-    expect(
-      browserLiveViewInputSchema.safeParse({ session_id: "browser-1" }).success
-    ).toBe(true);
+  it("returns the live-view URL for a created browser", async () => {
+    const execute = manageBrowsers.execute;
+
+    // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- the tool context is external Eve runtime state; create only reads abortSignal after the mocked authorization boundary.
+    const result = await execute({ action: "create" }, {} as never);
+    expect(result).toMatchObject({
+      browser: {
+        browser_live_view_url: "https://live.kernel.test/browser-1",
+      },
+    });
+
+    expect(mocks.createBrowser).toHaveBeenCalledExactlyOnceWith(
+      {
+        start_url: undefined,
+        stealth: true,
+        timeout_seconds: 900,
+        viewport: undefined,
+      },
+      { signal: undefined }
+    );
   });
 });

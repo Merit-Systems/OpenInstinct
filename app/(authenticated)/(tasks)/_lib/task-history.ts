@@ -6,6 +6,7 @@ import type {
 } from "@/app/(authenticated)/_lib/browser-run-store";
 import {
   measureBrowserTask,
+  readBackgroundWorkerTasks,
   readTaskCompletion,
   terminalBrowserMessage,
 } from "@/lib/browser/benchmark";
@@ -16,29 +17,34 @@ export function taskFromHistoryRun(
   now = Date.now()
 ): BrowserRunTask {
   const received = events.find((event) => event.type === "message.received");
-  const startedAt = eventTime(received) ?? new Date(run.createdAt).getTime();
+  const startedAt = received
+    ? new Date(received.meta.at).getTime()
+    : new Date(run.createdAt).getTime();
   const completion = readTaskCompletion(events);
-  const terminalFailure = events.findLast(
-    (event) =>
-      event.type === "turn.failed" ||
-      event.type === "turn.cancelled" ||
-      event.type === "session.failed"
+  const sessionFailure = events.findLast(
+    (event) => event.type === "session.failed"
+  );
+  const turnTerminal = events.findLast(
+    (event) => event.type === "turn.failed" || event.type === "turn.cancelled"
   );
   const waiting = events.findLast(
     (event) =>
       event.type === "session.waiting" || event.type === "session.completed"
   );
+  const workerTasks = readBackgroundWorkerTasks(events);
+  const pendingWorker = workerTasks.some((task) => task.status === undefined);
+  const terminalWorkerAt = workerTasks.findLast(
+    (task) => task.terminalAt !== undefined
+  )?.terminalAt;
+  const terminalEvent = sessionFailure ?? turnTerminal ?? waiting;
   const settled =
     completion !== undefined ||
-    terminalFailure !== undefined ||
-    waiting !== undefined;
-  const terminalEvent = completion
-    ? events.findLast(
-        (event) =>
-          event.type === "action.result" &&
-          event.meta.at === completion.completedAt
-      )
-    : (terminalFailure ?? waiting);
+    sessionFailure !== undefined ||
+    (!pendingWorker &&
+      (turnTerminal !== undefined ||
+        workerTasks.some((task) => task.status !== undefined) ||
+        waiting?.type === "session.completed" ||
+        waiting?.type === "session.waiting"));
   const updatedAt = new Date(run.updatedAt).getTime();
   const metrics = measureBrowserTask(
     events,
@@ -47,10 +53,23 @@ export function taskFromHistoryRun(
   const message = events.findLast(
     (event) => event.type === "message.completed"
   );
-  const status = completion?.status ?? historyFallbackStatus(run, settled);
+  const status =
+    completion?.status ??
+    (events.length === 0
+      ? historyFallbackStatus(run, settled)
+      : run.status === "failed" || run.status === "cancelled" || settled
+        ? "failure"
+        : "running");
+  const completedAtTimestamp =
+    completion?.completedAt ?? terminalWorkerAt ?? terminalEvent?.meta.at;
+  const completedAt = settled
+    ? completedAtTimestamp
+      ? new Date(completedAtTimestamp).getTime()
+      : updatedAt
+    : undefined;
 
   return {
-    completedAt: settled ? (eventTime(terminalEvent) ?? updatedAt) : undefined,
+    completedAt,
     costComplete: metrics.costComplete,
     costUsd: metrics.costUsd,
     durationMs: metrics.durationMs,
@@ -89,10 +108,6 @@ function historyFallbackStatus(
     case "running":
       return settled ? "failure" : "running";
   }
-}
-
-function eventTime(event: MessageStreamEvent | undefined) {
-  return event === undefined ? undefined : new Date(event.meta.at).getTime();
 }
 
 export function historyTableGroups(

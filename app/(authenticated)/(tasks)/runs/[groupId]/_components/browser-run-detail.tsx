@@ -14,7 +14,9 @@ import { useBrowserRunGroups } from "@/app/(authenticated)/(tasks)/_components/u
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
+  didFinishBrowserWorker,
   measureBrowserTask,
+  readBackgroundWorkerTasks,
   readTaskCompletion,
   terminalBrowserMessage,
 } from "@/lib/browser/benchmark";
@@ -197,6 +199,8 @@ async function runPersistedTask(
 ) {
   const requestStartedAt = task.startedAt ?? Date.now();
   const events: MessageStreamEvent[] = [];
+  const streamController = new AbortController();
+  let timedOut = false;
   let timeout: number | undefined;
 
   const update = (taskUpdate: BrowserRunTaskUpdate) =>
@@ -207,13 +211,34 @@ async function runPersistedTask(
       const session = client.sessions.attach(task.sessionId, {
         streamIndex: 0,
       });
-      for await (const event of session.stream({ startIndex: 0 })) {
+      timeout = window.setTimeout(
+        () => {
+          timedOut = true;
+          streamController.abort();
+          void session.cancel();
+        },
+        Math.max(0, taskTimeoutMs - (Date.now() - requestStartedAt))
+      );
+
+      for await (const event of session.stream({
+        signal: streamController.signal,
+        startIndex: 0,
+      })) {
         events.push(event);
         projectTaskEvents(events, requestStartedAt, update);
+        if (
+          didFinishBrowserWorker(events) ||
+          event.type === "session.failed" ||
+          (event.type === "session.waiting" &&
+            readBackgroundWorkerTasks(events).length === 0)
+        ) {
+          break;
+        }
       }
     } else {
-      const { response } = await client.sessions.create({
+      const { response, session } = await client.sessions.create({
         message: task.prompt,
+        signal: streamController.signal,
       });
       update({
         sessionId: response.sessionId,
@@ -221,13 +246,28 @@ async function runPersistedTask(
         status: "running",
       });
       timeout = window.setTimeout(() => {
-        update({ terminalMessage: "Timed out after 15 minutes; cancelling…" });
-        void response.cancel();
+        timedOut = true;
+        streamController.abort();
+        void session.cancel();
       }, taskTimeoutMs);
 
       for await (const event of response) {
         events.push(event);
         projectTaskEvents(events, requestStartedAt, update);
+      }
+
+      if (
+        readBackgroundWorkerTasks(events).some(
+          (workerTask) => workerTask.status === undefined
+        )
+      ) {
+        for await (const event of session.stream({
+          signal: streamController.signal,
+        })) {
+          events.push(event);
+          projectTaskEvents(events, requestStartedAt, update);
+          if (didFinishBrowserWorker(events)) break;
+        }
       }
     }
 
@@ -241,7 +281,9 @@ async function runPersistedTask(
       costUsd: metrics.costUsd,
       durationMs: metrics.durationMs,
       status: completion?.status ?? "failure",
-      terminalMessage: completion?.message ?? toErrorMessage(error),
+      terminalMessage:
+        completion?.message ??
+        (timedOut ? "Timed out after 15 minutes." : toErrorMessage(error)),
     });
   } finally {
     if (timeout !== undefined) window.clearTimeout(timeout);
@@ -283,7 +325,7 @@ function completePersistedTask(
     terminalMessage:
       completion?.message ??
       (fallbackMessage === "No terminal message"
-        ? "Task ended without calling complete_task."
+        ? "Task ended without a structured worker result."
         : fallbackMessage),
   });
 }

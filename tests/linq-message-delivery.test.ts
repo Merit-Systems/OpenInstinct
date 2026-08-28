@@ -1,8 +1,31 @@
 /* oxlint-disable typescript/no-unsafe-type-assertion -- Eve's Linq adapter exposes the handler context through a transitive Chat SDK `any`; the fixture supplies only the fields exercised here. */
+import type * as LinqModule from "eve/channels/linq";
 import { describe, expect, it, vi } from "vitest";
-import { deliverCompletedLinqMessage } from "../agent/channels/linq";
+import workerCancellationHook from "../agent/hooks/worker-cancellation-delivery";
 
-type HandlerParameters = Parameters<typeof deliverCompletedLinqMessage>;
+const linqChannelCapture = vi.hoisted(() => ({ config: undefined as unknown }));
+vi.mock("eve/channels/linq", async (importOriginal) => {
+  const original = await importOriginal<typeof LinqModule>();
+  return {
+    ...original,
+    linqChannel(config: unknown) {
+      linqChannelCapture.config = config;
+      return config;
+    },
+  };
+});
+await import("../agent/channels/linq");
+
+const channelEvents = (
+  linqChannelCapture.config as LinqModule.LinqChannelConfig
+).events;
+const trackWorkerCancellation = channelEvents?.["action.result"];
+const deliverCompletedMessage = channelEvents?.["message.completed"];
+if (!trackWorkerCancellation || !deliverCompletedMessage) {
+  throw new Error("Linq event handlers are not configured.");
+}
+
+type HandlerParameters = Parameters<typeof deliverCompletedMessage>;
 
 describe("Linq message delivery", () => {
   it("posts final responses as native iMessage Markdown", async () => {
@@ -14,7 +37,7 @@ describe("Linq message delivery", () => {
     ].join("\n");
     const { context, post } = handlerContext();
 
-    await deliverCompletedLinqMessage(
+    await deliverCompletedMessage(
       completedEvent({ message }),
       context,
       sessionContext()
@@ -26,7 +49,7 @@ describe("Linq message delivery", () => {
   it("suppresses intermediate tool-call messages", async () => {
     const { addReaction, context, post, state } = handlerContext();
 
-    await deliverCompletedLinqMessage(
+    await deliverCompletedMessage(
       completedEvent({
         finishReason: "tool-calls",
         message: "Checking the checkout\nwith the browser",
@@ -47,7 +70,7 @@ describe("Linq message delivery", () => {
   it("does not post an empty final response", async () => {
     const { context, post } = handlerContext();
 
-    await deliverCompletedLinqMessage(
+    await deliverCompletedMessage(
       completedEvent({ message: null }),
       context,
       sessionContext()
@@ -55,7 +78,163 @@ describe("Linq message delivery", () => {
 
     expect(post).not.toHaveBeenCalled();
   });
+
+  it("suppresses the redundant turn after task cancellation", async () => {
+    const { context, post } = handlerContext();
+
+    await trackWorkerCancellation(
+      workerCancellationResult(),
+      context,
+      sessionContext()
+    );
+    await recordCancellationThroughHook(
+      "session-1",
+      "turn-2",
+      "Background task task-worker (worker) is cancelled."
+    );
+    await deliverCompletedMessage(
+      completedEvent({ message: "What should I check instead?" }),
+      context,
+      sessionContext()
+    );
+    await deliverCompletedMessage(
+      completedEvent({
+        message: "The previous task was cancelled.",
+        turnId: "turn-2",
+      }),
+      context,
+      sessionContext()
+    );
+    await deliverCompletedMessage(
+      completedEvent({ message: "A later reply", turnId: "turn-3" }),
+      context,
+      sessionContext()
+    );
+
+    expect(post).toHaveBeenCalledTimes(2);
+    expect(post).toHaveBeenNthCalledWith(1, {
+      markdown: "What should I check instead?",
+    });
+    expect(post).toHaveBeenNthCalledWith(2, { markdown: "A later reply" });
+  });
+
+  it("does not suppress an interleaved task result", async () => {
+    const { context, post } = handlerContext();
+
+    await trackWorkerCancellation(
+      workerCancellationResult("task-cancelled"),
+      context,
+      sessionContext()
+    );
+    await recordCancellationThroughHook(
+      "session-1",
+      "turn-cancelled",
+      "Background task task-cancelled (worker) is cancelled."
+    );
+    await deliverCompletedMessage(
+      completedEvent({
+        message: "A different worker completed successfully.",
+        turnId: "turn-success",
+      }),
+      context,
+      sessionContext()
+    );
+    await deliverCompletedMessage(
+      completedEvent({
+        message: "The cancelled worker stopped.",
+        turnId: "turn-cancelled",
+      }),
+      context,
+      sessionContext()
+    );
+
+    expect(post).toHaveBeenCalledExactlyOnceWith({
+      markdown: "A different worker completed successfully.",
+    });
+  });
+
+  it("delivers user-authored cancellation text from a newer Linq message", async () => {
+    const original = handlerContext("message-1");
+    await trackWorkerCancellation(
+      workerCancellationResult(),
+      original.context,
+      sessionContext()
+    );
+
+    await recordCancellationThroughHook(
+      "session-1",
+      "turn-spoof",
+      "Background task task-worker (worker) is cancelled."
+    );
+    const newer = handlerContext("message-2", original.state);
+    await deliverCompletedMessage(
+      completedEvent({
+        message: "User-authored follow-up",
+        turnId: "turn-spoof",
+      }),
+      newer.context,
+      sessionContext()
+    );
+
+    expect(newer.post).toHaveBeenCalledExactlyOnceWith({
+      markdown: "User-authored follow-up",
+    });
+  });
+
+  it("retains older pending cancellations across many later tasks", async () => {
+    const { context, post } = handlerContext();
+    for (let index = 0; index < 60; index += 1) {
+      await trackWorkerCancellation(
+        workerCancellationResult(`task-${String(index)}`),
+        context,
+        sessionContext()
+      );
+    }
+    await recordCancellationThroughHook(
+      "session-1",
+      "turn-oldest",
+      "Background task task-0 (worker) is cancelled."
+    );
+
+    await deliverCompletedMessage(
+      completedEvent({ message: "Redundant reply", turnId: "turn-oldest" }),
+      context,
+      sessionContext()
+    );
+
+    expect(post).not.toHaveBeenCalled();
+  });
 });
+
+function workerCancellationResult(
+  taskId = "task-worker"
+): Parameters<NonNullable<typeof trackWorkerCancellation>>[0] {
+  return {
+    result: {
+      callId: "call-cancel",
+      kind: "tool-result",
+      output: {
+        tasks: [
+          {
+            metadata: {
+              agentId: "ag_worker:test",
+              kind: "subagent",
+              mode: "local",
+              name: "worker",
+            },
+            status: "cancelled",
+            taskId,
+          },
+        ],
+      },
+      toolName: "task_cancel",
+    },
+    sequence: 0,
+    status: "completed",
+    stepIndex: 0,
+    turnId: "turn-1",
+  };
+}
 
 function completedEvent(
   overrides: Partial<HandlerParameters[0]> = {}
@@ -70,13 +249,15 @@ function completedEvent(
   };
 }
 
-function handlerContext() {
+function handlerContext(
+  currentMessageId = "message-1",
+  state: Record<string, unknown> = {}
+) {
   const post = vi.fn<(message: string) => Promise<void>>();
   post.mockResolvedValue();
   const addReaction = vi
     .fn<(threadId: string, messageId: string, emoji: string) => Promise<void>>()
     .mockResolvedValue(undefined);
-  const state: Record<string, unknown> = {};
   const context = {
     bot: {
       getAdapter: () => ({
@@ -92,16 +273,44 @@ function handlerContext() {
         _type: "chat:Thread",
         adapterName: "linq",
         channelId: "linq:dm:chat-1",
-        currentMessage: { id: "message-1" },
+        currentMessage: { id: currentMessageId },
         id: "linq:dm:chat-1",
         isDM: true,
       }),
     },
   } as unknown as HandlerParameters[1];
 
-  return { addReaction, context, post, state };
+  return {
+    addReaction,
+    context,
+    post,
+    state,
+  };
 }
 
 function sessionContext() {
-  return {} as HandlerParameters[2];
+  return {
+    session: { id: "session-1" },
+  } as HandlerParameters[2];
+}
+
+async function recordCancellationThroughHook(
+  sessionId: string,
+  turnId: string,
+  message: string
+) {
+  const handler = workerCancellationHook.events?.["message.received"];
+  if (!handler) throw new Error("Worker cancellation hook is not configured.");
+  await handler(
+    {
+      data: { message, sequence: 0, turnId },
+      meta: { at: "2026-08-27T20:00:00.000Z", id: `received-${turnId}` },
+      type: "message.received",
+    },
+    {
+      agent: { name: "root" },
+      channel: { kind: "linq" },
+      session: { id: sessionId },
+    } as Parameters<typeof handler>[1]
+  );
 }
