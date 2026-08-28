@@ -255,8 +255,8 @@ function VaultDialog({
         <PlusIcon />
         {addLabel}
       </DialogTrigger>
-      <DialogContent className="sm:max-w-lg">
-        <DialogHeader>
+      <DialogContent className="top-auto bottom-0 max-h-[calc(100dvh-0.5rem)] translate-y-0 overflow-y-auto overscroll-contain rounded-b-none pb-[max(1rem,env(safe-area-inset-bottom))] sm:top-1/2 sm:bottom-auto sm:max-h-[calc(100dvh-2rem)] sm:max-w-lg sm:-translate-y-1/2 sm:rounded-xl sm:pb-4 [&_[data-slot=dialog-close]]:top-3 [&_[data-slot=dialog-close]]:right-3 [&_[data-slot=dialog-close]]:size-10 sm:[&_[data-slot=dialog-close]]:top-2 sm:[&_[data-slot=dialog-close]]:right-2 sm:[&_[data-slot=dialog-close]]:size-7 [&_[data-slot=input]]:h-12 sm:[&_[data-slot=input]]:h-8 [&_[data-slot=select-trigger]]:h-12 sm:[&_[data-slot=select-trigger]]:h-8 [&_button[type=submit]]:h-12 [&_button[type=submit]]:w-full sm:[&_button[type=submit]]:h-8 sm:[&_button[type=submit]]:w-auto">
+        <DialogHeader className="pr-10 sm:pr-6">
           <DialogTitle>
             {initialSetup?.kind === "login"
               ? `Add ${initialSetup.label}`
