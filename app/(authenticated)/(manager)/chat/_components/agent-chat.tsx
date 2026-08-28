@@ -61,6 +61,7 @@ export function AgentChat({
   const [cancellationError, setCancellationError] = useState<string>();
   const [traceView, setTraceView] = useState<"imessage" | "trace">("imessage");
   const pendingChatTitle = useRef<string | undefined>(undefined);
+  const persistedUsageTurn = useRef<string | undefined>(undefined);
   const agent = useDurableEveSession({
     initialSession:
       sessionId === undefined
@@ -118,12 +119,12 @@ export function AgentChat({
     () => preferCompleteUsage(measuredUsage, initialUsage),
     [initialUsage, measuredUsage]
   );
-  const latestTerminalTurnAt = agent.events.findLast(
+  const latestTerminalTurnId = agent.events.findLast(
     (event) =>
       event.type === "turn.completed" ||
       event.type === "turn.failed" ||
       event.type === "turn.cancelled"
-  )?.meta.at;
+  )?.meta.id;
   const messageTimestamps = useMemo(() => {
     const timestamps = new Map<string, string>();
 
@@ -175,12 +176,15 @@ export function AgentChat({
   );
 
   useEffect(() => {
-    if (activeSessionId === undefined || latestTerminalTurnAt === undefined) {
+    if (activeSessionId === undefined || latestTerminalTurnId === undefined) {
       return;
     }
 
+    const terminalTurn = `${activeSessionId}:${latestTerminalTurnId}`;
+    if (persistedUsageTurn.current === terminalTurn) return;
+    persistedUsageTurn.current = terminalTurn;
     saveChat({ sessionId: activeSessionId, usage });
-  }, [activeSessionId, latestTerminalTurnAt, saveChat, usage]);
+  }, [activeSessionId, latestTerminalTurnId, saveChat, usage]);
 
   const requestCancellation = () => {
     setCancellationError(undefined);

@@ -4,20 +4,13 @@ import { kernel } from "@/lib/kernel";
 import { requireWorkerScope } from "@/agent/subagents/worker/lib/access";
 import { requireOwnedBrowserSession } from "@/agent/subagents/worker/lib/owned-browser";
 
-const defaultTimeoutSeconds = 12;
-const captchaTimeoutSeconds = 25;
+const playwrightTimeoutSeconds = 25;
 const modelResultCharacterLimit = 12_000;
 const modelLogCharacterLimit = 2_000;
 
 const inputSchema = z.object({
   code: z.string().min(1),
   session_id: z.string().min(1),
-  timeout_seconds: z
-    .number()
-    .int()
-    .min(1)
-    .max(captchaTimeoutSeconds)
-    .optional(),
 });
 
 const outputSchema = z.object({
@@ -30,7 +23,7 @@ const outputSchema = z.object({
 
 export default defineTool({
   description:
-    'Execute one bounded Playwright/TypeScript program against an existing browser session. Prefer one program per page state that inspects, performs all related safe actions, verifies the outcome, and returns one compact object. The default ceiling is 12 seconds; set timeout_seconds to 25 only for one managed CAPTCHA wait of at most 20 seconds. Use "domcontentloaded" or precise locator waits of at most five seconds, and never wait for "networkidle" or use fixed multi-second sleeps. Does not create or delete browsers.',
+    'Execute one bounded Playwright/TypeScript program against an existing browser session with a 25-second ceiling. Prefer one program per page state that inspects, performs all related safe actions, verifies the outcome, and returns one compact object. Use "domcontentloaded" or precise locator waits of at most five seconds, and never wait for "networkidle" or use fixed multi-second sleeps. Does not create or delete browsers.',
   inputSchema,
   outputSchema,
   async execute(input, context) {
@@ -41,7 +34,7 @@ export default defineTool({
         input.session_id,
         {
           code: input.code,
-          timeout_sec: input.timeout_seconds ?? defaultTimeoutSeconds,
+          timeout_sec: playwrightTimeoutSeconds,
         },
         { signal: context.abortSignal }
       )

@@ -82,11 +82,14 @@ describe("Kernel browser contract", () => {
     ).toBe(true);
   });
 
-  it("returns the live-view URL for a created browser", async () => {
+  it("starts at the target URL and returns the live-view URL", async () => {
     const execute = manageBrowsers.execute;
 
-    // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- the tool context is external Eve runtime state; create only reads abortSignal after the mocked authorization boundary.
-    const result = await execute({ action: "create" }, {} as never);
+    const result = await execute(
+      { action: "create", start_url: "https://example.com/checkout" },
+      // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- the tool context is external Eve runtime state; create only reads abortSignal after the mocked authorization boundary.
+      {} as never
+    );
     expect(result).toMatchObject({
       browser: {
         browser_live_view_url: "https://live.kernel.test/browser-1",
@@ -95,7 +98,7 @@ describe("Kernel browser contract", () => {
 
     expect(mocks.createBrowser).toHaveBeenCalledExactlyOnceWith(
       {
-        start_url: undefined,
+        start_url: "https://example.com/checkout",
         stealth: true,
         timeout_seconds: 900,
         viewport: undefined,

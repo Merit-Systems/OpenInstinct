@@ -101,45 +101,27 @@ describe("worker browser tools", () => {
     expect(result).toMatchObject({ data: [{ text: "clipboard value" }] });
   });
 
-  it("uses a short Playwright default and reserves the longer ceiling for explicit waits", async () => {
+  it("uses one fixed Playwright ceiling without asking the model to tune it", async () => {
     const execute = executePlaywrightCode.execute;
     await execute(
       { code: "return await page.title();", session_id: "browser-1" },
       {} as never
     );
-    await execute(
-      {
-        code: "return await page.title();",
-        session_id: "browser-1",
-        timeout_seconds: 25,
-      },
-      {} as never
-    );
 
-    expect(mocks.playwrightExecute).toHaveBeenNthCalledWith(
-      1,
-      "browser-1",
-      { code: "return await page.title();", timeout_sec: 12 },
-      { signal: undefined }
-    );
-    expect(mocks.playwrightExecute).toHaveBeenNthCalledWith(
-      2,
+    expect(mocks.playwrightExecute).toHaveBeenCalledExactlyOnceWith(
       "browser-1",
       { code: "return await page.title();", timeout_sec: 25 },
       { signal: undefined }
     );
 
     const inputSchema = executePlaywrightCode.inputSchema;
-    if (!(inputSchema instanceof z.ZodType)) {
+    if (!(inputSchema instanceof z.ZodObject)) {
       throw new Error("execute_playwright_code must use a Zod input schema.");
     }
-    expect(
-      inputSchema.safeParse({
-        code: "return true;",
-        session_id: "browser-1",
-        timeout_seconds: 26,
-      }).success
-    ).toBe(false);
+    expect(Object.keys(inputSchema.shape).toSorted()).toEqual([
+      "code",
+      "session_id",
+    ]);
   });
 
   it("keeps oversized Playwright results out of the next model prompt", () => {
