@@ -32,8 +32,15 @@ describe("root, coordinator, and browser capability boundaries", () => {
     }
 
     const rootConfig = readFileSync("agent/agent.ts", "utf8");
-    expect(rootConfig).toContain('model: "openai/gpt-5.6-sol-fast"');
-    expect(rootConfig).toContain('reasoning: "minimal"');
+    expect(rootConfig).toContain('model: "openai/gpt-5.6-luna"');
+    expect(rootConfig).toContain('reasoning: "low"');
+
+    const coordinatorConfig = readFileSync(
+      `${coordinatorRoot}/agent.ts`,
+      "utf8"
+    );
+    expect(coordinatorConfig).toContain("getModelSettings");
+    expect(coordinatorConfig).not.toContain("openai/gpt-5.6-luna");
 
     const rootInstructions = readFileSync("agent/instructions.md", "utf8");
     expect(rootInstructions).toContain(
