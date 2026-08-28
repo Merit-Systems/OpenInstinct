@@ -2,7 +2,7 @@
 
 import type { UserContent } from "ai";
 import { useEveAgent } from "eve/react";
-import { AlertCircleIcon, BrainIcon, PlusIcon, SquareIcon } from "lucide-react";
+import { AlertCircleIcon, BrainIcon, PlusIcon } from "lucide-react";
 import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import {
   Conversation,
@@ -12,10 +12,12 @@ import {
 import { Message, MessageContent } from "@/components/ai-elements/message";
 import {
   PromptInput,
-  PromptInputButton,
+  PromptInputBody,
+  PromptInputFooter,
   type PromptInputMessage,
   PromptInputSubmit,
   PromptInputTextarea,
+  PromptInputTools,
 } from "@/components/ai-elements/prompt-input";
 import { Shimmer } from "@/components/ai-elements/shimmer";
 import { Button } from "@/components/ui/button";
@@ -211,24 +213,21 @@ export function AgentChat({
 
   const composer = (
     <PromptInput onSubmit={handleSubmit}>
-      <PromptInputTextarea
-        disabled={isRestoring}
-        placeholder="Send a message…"
-      />
-      {isBusy && !isRestoring ? (
-        <PromptInputButton
-          aria-label="Stop"
-          className="absolute right-12 bottom-2.5 rounded-full"
-          onClick={requestCancellation}
-          variant="default"
-        >
-          <SquareIcon className="size-3 fill-current" />
-        </PromptInputButton>
-      ) : null}
-      <PromptInputSubmit
-        disabled={isRestoring}
-        status={isBusy || isRestoring ? undefined : agent.status}
-      />
+      <PromptInputBody>
+        <PromptInputTextarea
+          disabled={isRestoring}
+          placeholder="Send a message…"
+          className="min-h-0"
+        />
+      </PromptInputBody>
+      <PromptInputFooter>
+        <PromptInputTools />
+        <PromptInputSubmit
+          disabled={isRestoring}
+          onStop={requestCancellation}
+          status={isRestoring ? undefined : agent.status}
+        />
+      </PromptInputFooter>
     </PromptInput>
   );
 
