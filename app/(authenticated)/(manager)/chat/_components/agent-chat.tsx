@@ -2,7 +2,7 @@
 
 import type { UserContent } from "ai";
 import type { MessageStreamEvent } from "eve/client";
-import type { EveMessage } from "eve/react";
+import { useEveAgent, type EveMessage } from "eve/react";
 import { AlertCircleIcon, BrainIcon } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { api } from "@/trpc/client";
@@ -25,7 +25,6 @@ import {
 import { Shimmer } from "@/components/ai-elements/shimmer";
 import { summarizeChatUsage } from "@/app/(authenticated)/(manager)/_lib/chat-usage";
 import { getLatestTurnFailure } from "@/app/(authenticated)/(manager)/chat/_lib/turn-failure";
-import { useDurableEveSession } from "@/app/_hooks/use-durable-eve-session";
 import type { ChatUsage } from "@/lib/chat";
 import { cn } from "@/lib/utils";
 import { AgentMessage } from "./agent-message";
@@ -62,7 +61,7 @@ export function AgentChat({
   const [traceView, setTraceView] = useState<"imessage" | "trace">("imessage");
   const pendingChatTitle = useRef<string | undefined>(undefined);
   const persistedUsageTurn = useRef<string | undefined>(undefined);
-  const agent = useDurableEveSession({
+  const agent = useEveAgent({
     initialSession:
       sessionId === undefined
         ? undefined
@@ -70,8 +69,9 @@ export function AgentChat({
             sessionId,
             streamIndex: 0,
           },
+    resume: sessionId !== undefined,
     onSessionChange(session) {
-      if (sessionId === undefined) {
+      if (sessionId === undefined && session !== undefined) {
         saveChat({
           sessionId: session.sessionId,
           title: pendingChatTitle.current,
