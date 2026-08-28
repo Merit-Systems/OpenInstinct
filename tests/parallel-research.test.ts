@@ -1,6 +1,10 @@
 import { createServer } from "node:http";
 import type { RequestListener } from "node:http";
-import type { DynamicResolveContext, ToolContext } from "eve/tools";
+import type {
+  DynamicResolveContext,
+  DynamicToolEvents,
+  ToolContext,
+} from "eve/tools";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 
@@ -58,6 +62,7 @@ describe("Parallel research", () => {
       vi.stubEnv("PARALLEL_API_KEY", key);
       expect(await resolveResearch("session.started")).toBeNull();
       expect(await resolveResearch("turn.started")).toBeNull();
+      expect(await resolveResearch("step.started")).toBeNull();
       expect(fetchMock).not.toHaveBeenCalled();
     }
   );
@@ -431,7 +436,7 @@ describe("Parallel research", () => {
     );
   });
 
-  it.each(["session.started", "turn.started"] as const)(
+  it.each(["session.started", "turn.started", "step.started"] as const)(
     "resolves an optional tool on %s without making a request",
     async (event) => {
       const tool = await resolveResearch(event);
@@ -492,7 +497,7 @@ describe("Parallel research", () => {
 });
 
 async function resolveResearch(
-  event: "session.started" | "turn.started" = "session.started"
+  event: keyof DynamicToolEvents = "session.started"
 ) {
   const { default: definition } = await import("../agent/tools/web_research");
   const resolve = definition.events[event];

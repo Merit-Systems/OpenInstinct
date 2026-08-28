@@ -188,5 +188,8 @@ export default defineDynamic({
   events: {
     "session.started": availableResearchTool,
     "turn.started": availableResearchTool,
+    // A key enabled after session creation may have only turn-scoped tools.
+    // Rebind their executor before a model step resumes in a fresh process.
+    "step.started": availableResearchTool,
   },
 });
