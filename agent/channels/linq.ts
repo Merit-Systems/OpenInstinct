@@ -4,18 +4,31 @@ import {
   defaultLinqAuth,
   linqChannel,
   type LinqChannelCredentials,
-  type LinqChannelConfig,
 } from "eve/channels/linq";
 import { z } from "zod";
 import { auth } from "@/auth";
 import { normalizeAuthPhoneNumber } from "@/auth/phone-number";
 import { accessScopeForUser } from "@/lib/access-scope";
 import { env } from "@/lib/env";
+import { consumeWorkerCancellationTurn } from "../lib/worker-cancellation-delivery";
 
 const verifiedPhoneUserSchema = z.object({
   id: z.string().min(1),
   phoneNumberVerified: z.literal(true),
 });
+const taskCancelResultSchema = z.object({
+  kind: z.literal("tool-result"),
+  output: z.object({ tasks: z.array(z.unknown()) }),
+  toolName: z.literal("task_cancel"),
+});
+const cancelledWorkerTaskSchema = z.object({
+  metadata: z.object({ name: z.literal("worker") }),
+  status: z.literal("cancelled"),
+  taskId: z.string(),
+});
+const workerCancellationsSchema = z.array(
+  z.object({ sourceMessageId: z.string(), taskId: z.string() })
+);
 
 const credentials: LinqChannelCredentials = env.LINQ_CONNECTOR
   ? connectLinqCredentials(env.LINQ_CONNECTOR)
@@ -27,34 +40,88 @@ const credentials: LinqChannelCredentials = env.LINQ_CONNECTOR
       },
     };
 
-type LinqMessageCompletedHandler = NonNullable<
-  NonNullable<LinqChannelConfig["events"]>["message.completed"]
->;
-
-export const deliverCompletedLinqMessage: LinqMessageCompletedHandler = async (
-  event,
-  context
-) => {
-  if (event.finishReason === "tool-calls") {
-    context.state.pendingToolCallMessage = event.message
-      ? (firstNonEmptyLine(event.message) ?? null)
-      : null;
-    await acknowledgeLinqToolWork(context);
-    return;
-  }
-
-  context.state.pendingToolCallMessage = null;
-  if (!event.message || !context.thread) return;
-
-  // Eve's Linq adapter translates supported Markdown into native iMessage
-  // decorations, so recipients see styled text instead of literal markers.
-  await context.thread.post({ markdown: event.message });
-};
-
 export default linqChannel({
   credentials,
   events: {
-    "message.completed": deliverCompletedLinqMessage,
+    "action.result"(event, context) {
+      const result = taskCancelResultSchema.safeParse(event.result);
+      if (!result.success) return;
+
+      const sourceMessageId = context.thread?.toJSON().currentMessage?.id;
+      if (!sourceMessageId) return;
+
+      const storedCancellations = workerCancellationsSchema.safeParse(
+        context.state.workerCancellations
+      );
+      const cancellations = storedCancellations.success
+        ? storedCancellations.data
+        : [];
+      for (const value of result.data.output.tasks) {
+        const task = cancelledWorkerTaskSchema.safeParse(value);
+        if (task.success) {
+          cancellations.push({ sourceMessageId, taskId: task.data.taskId });
+        }
+      }
+      context.state.workerCancellations = cancellations;
+    },
+    async "message.completed"(event, context, session) {
+      if (event.finishReason === "tool-calls") {
+        context.state.pendingToolCallMessage = event.message
+          ? (event.message
+              .split(/\r?\n/u)
+              .map((line) => line.trim())
+              .find(Boolean) ?? null)
+          : null;
+        if (context.thread) {
+          const messageId = context.thread.toJSON().currentMessage?.id;
+          if (
+            messageId &&
+            context.state.acknowledgedLinqMessageId !== messageId
+          ) {
+            try {
+              await context.bot
+                .getAdapter("linq")
+                .addReaction(context.thread.id, messageId, "thumbs_up");
+              context.state.acknowledgedLinqMessageId = messageId;
+            } catch {
+              // SMS/RCS and some carrier paths do not support iMessage tapbacks.
+            }
+          }
+        }
+        return;
+      }
+
+      const cancelledTaskId = consumeWorkerCancellationTurn(
+        session.session.id,
+        event.turnId
+      );
+      const storedCancellations = workerCancellationsSchema.safeParse(
+        context.state.workerCancellations
+      );
+      const cancellations = storedCancellations.success
+        ? storedCancellations.data
+        : [];
+      const sourceMessageId = context.thread?.toJSON().currentMessage?.id;
+      const cancellation = cancellations.find(
+        (candidate) =>
+          candidate.taskId === cancelledTaskId &&
+          candidate.sourceMessageId === sourceMessageId
+      );
+      if (cancellation) {
+        context.state.workerCancellations = cancellations.filter(
+          (candidate) => candidate !== cancellation
+        );
+        context.state.pendingToolCallMessage = null;
+        return;
+      }
+
+      context.state.pendingToolCallMessage = null;
+      if (!event.message || !context.thread) return;
+
+      // Eve's Linq adapter translates supported Markdown into native iMessage
+      // decorations, so recipients see styled text instead of literal markers.
+      await context.thread.post({ markdown: event.message });
+    },
   },
   async onMessage(_context, message) {
     if (message.author.isBot) return null;
@@ -85,13 +152,6 @@ export default linqChannel({
   },
 });
 
-function firstNonEmptyLine(message: string) {
-  return message
-    .split(/\r?\n/u)
-    .map((line) => line.trim())
-    .find(Boolean);
-}
-
 async function findVerifiedAuthUserIdByPhoneNumber(phoneNumber: string) {
   const context = await auth.$context;
   const user = await context.adapter.findOne({
@@ -100,22 +160,4 @@ async function findVerifiedAuthUserIdByPhoneNumber(phoneNumber: string) {
   });
   const parsed = verifiedPhoneUserSchema.safeParse(user);
   return parsed.success ? parsed.data.id : undefined;
-}
-
-async function acknowledgeLinqToolWork(
-  context: Parameters<LinqMessageCompletedHandler>[1]
-) {
-  if (!context.thread) return;
-  const messageId = context.thread.toJSON().currentMessage?.id;
-  if (!messageId || context.state.acknowledgedLinqMessageId === messageId)
-    return;
-
-  try {
-    await context.bot
-      .getAdapter("linq")
-      .addReaction(context.thread.id, messageId, "thumbs_up");
-    context.state.acknowledgedLinqMessageId = messageId;
-  } catch {
-    // SMS/RCS and some carrier paths do not support iMessage tapbacks.
-  }
 }
