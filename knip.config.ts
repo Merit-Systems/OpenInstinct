@@ -3,6 +3,7 @@ import type { KnipConfig } from "knip";
 export default {
   entry: [
     "agent/channels/**/*.ts",
+    "agent/connections/**/*.ts",
     "agent/hooks/**/*.ts",
     "agent/subagents/**/*.ts",
     "agent/tools/**/*.ts",
