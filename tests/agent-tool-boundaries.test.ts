@@ -2,6 +2,7 @@ import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 const rootTools = "agent/tools";
+const rootMemory = "agent/memory/profile.ts";
 const workerRoot = "agent/subagents/worker";
 const workerTools = `${workerRoot}/tools`;
 
@@ -40,6 +41,13 @@ describe("root and worker capability boundaries", () => {
     expect(rootInstructions).toContain(
       "try `web_fetch` before browser automation"
     );
+  });
+
+  it("keeps durable memory scoped to the authenticated root user", () => {
+    const memory = readFileSync(rootMemory, "utf8");
+
+    expect(memory).toContain("defineMemory(");
+    expect(memory).toContain("scope: resolveProfileMemoryScope");
   });
 
   it("gives worker the browser and opaque-vault tools without messaging", () => {
