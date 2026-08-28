@@ -2,6 +2,14 @@ import Kernel from "@onkernel/sdk";
 import { z } from "zod";
 import { env } from "../../env";
 import type { AutofillClaim } from "../vault-autofill-protocol";
+import {
+  classifyNativeLoginControl,
+  nativeLoginAutofillTokens,
+  nativeLoginControlInspectionExpression,
+  nativeLoginFillFunctionDeclaration,
+  selectNativeLoginFills,
+  type ClassifiedNativeLoginControl,
+} from "./kernel-login-autofill";
 
 const targetListSchema = z.object({
   targetInfos: z.array(
@@ -30,6 +38,9 @@ const isolatedWorldSchema = z.object({ executionContextId: z.number() });
 const evaluatedValueSchema = z.object({
   result: z.object({ value: z.unknown() }),
 });
+const evaluatedBooleanSchema = z.object({
+  result: z.object({ value: z.boolean() }),
+});
 const evaluatedObjectSchema = z.object({
   result: z.object({ objectId: z.string().optional() }),
 });
@@ -41,6 +52,17 @@ const controlDescriptorsSchema = z.array(
     autocomplete: z.string(),
     focused: z.boolean(),
     index: z.number().int().nonnegative(),
+  })
+);
+const loginControlDescriptorsSchema = z.array(
+  z.object({
+    autocomplete: z.string(),
+    focused: z.boolean(),
+    formIndex: z.number().int().nonnegative().nullable(),
+    index: z.number().int().nonnegative(),
+    label: z.string(),
+    name: z.string(),
+    type: z.string(),
   })
 );
 
@@ -65,8 +87,11 @@ const addressTokenToChromiumField = {
 
 export const nativeAutofillTokens = {
   address: Object.keys(addressTokenToChromiumField),
+  login: nativeLoginAutofillTokens,
   payment: [...cardTokens],
 } as const;
+
+type NativeAutofillKind = "address" | "login" | "payment";
 
 export async function currentKernelPageOrigin({
   browserSessionId,
@@ -88,10 +113,11 @@ export async function fillWithKernelNativeAutofill({
   readonly browserSessionId: string;
   readonly claims: readonly AutofillClaim[];
   readonly expectedOrigin: string;
-  readonly kind: "address" | "payment";
+  readonly kind: NativeAutofillKind;
   readonly signal?: AbortSignal;
 }) {
-  const payload = buildNativeAutofillPayload(kind, claims);
+  const payload =
+    kind === "login" ? undefined : buildNativeAutofillPayload(kind, claims);
 
   return withKernelPage(
     browserSessionId,
@@ -101,6 +127,15 @@ export async function fillWithKernelNativeAutofill({
         throw new Error(
           "The active tab no longer matches the approved origin."
         );
+      }
+
+      if (kind === "login") {
+        const filledClaims = await fillNativeLoginControls(
+          connection,
+          sessionId,
+          claims
+        );
+        return { filledClaims, origin };
       }
 
       const controls = await inspectControls(connection, sessionId, kind);
@@ -132,6 +167,146 @@ export async function fillWithKernelNativeAutofill({
       );
     }
   );
+}
+
+async function fillNativeLoginControls(
+  connection: CdpConnection,
+  sessionIds: readonly string[],
+  claims: readonly AutofillClaim[]
+) {
+  const controls = await inspectNativeLoginControls(connection, sessionIds);
+  const focused = controls.find((control) => control.focused);
+  if (!focused) {
+    throw new Error(
+      "Focus a visible username, email, phone, or current-password field and retry."
+    );
+  }
+  const sameFrame = controls.filter(
+    (control) =>
+      control.frameId === focused.frameId &&
+      control.sessionId === focused.sessionId
+  );
+  const fills = selectNativeLoginFills(sameFrame, claims);
+  if (fills.length === 0) {
+    throw new Error(
+      "The focused login form does not accept a field available in this saved login."
+    );
+  }
+
+  for (const { control, value } of fills) {
+    const accepted = await fillNativeLoginControl(connection, control, value);
+    if (!accepted) {
+      throw new Error("The login form rejected secure credential autofill.");
+    }
+  }
+  return fills.length;
+}
+
+async function inspectNativeLoginControls(
+  connection: CdpConnection,
+  sessionIds: readonly string[]
+) {
+  return (
+    await Promise.all(
+      sessionIds.map(async (sessionId) => {
+        try {
+          await connection.send("Page.enable", undefined, sessionId);
+          const { frameTree } = frameTreeSchema.parse(
+            await connection.send("Page.getFrameTree", undefined, sessionId)
+          );
+          return (
+            await Promise.all(
+              flattenFrames(frameTree).map(({ id: frameId }) =>
+                inspectNativeLoginFrame(connection, sessionId, frameId).catch(
+                  () => []
+                )
+              )
+            )
+          ).flat();
+        } catch {
+          return [];
+        }
+      })
+    )
+  ).flat();
+}
+
+async function inspectNativeLoginFrame(
+  connection: CdpConnection,
+  sessionId: string,
+  frameId: string
+) {
+  const { executionContextId } = isolatedWorldSchema.parse(
+    await connection.send(
+      "Page.createIsolatedWorld",
+      { frameId, worldName: "open-instinct-login-autofill" },
+      sessionId
+    )
+  );
+  const response = evaluatedValueSchema.parse(
+    await connection.send(
+      "Runtime.evaluate",
+      {
+        contextId: executionContextId,
+        expression: nativeLoginControlInspectionExpression,
+        returnByValue: true,
+      },
+      sessionId
+    )
+  );
+  const descriptors = loginControlDescriptorsSchema.parse(
+    response.result.value
+  );
+  return descriptors.flatMap((descriptor) => {
+    const classified = classifyNativeLoginControl(descriptor);
+    return classified
+      ? [{ ...classified, executionContextId, frameId, sessionId }]
+      : [];
+  });
+}
+
+async function fillNativeLoginControl(
+  connection: CdpConnection,
+  control: ClassifiedNativeLoginControl & {
+    readonly executionContextId: number;
+    readonly frameId: string;
+    readonly sessionId: string;
+  },
+  value: string
+) {
+  const evaluated = evaluatedObjectSchema.parse(
+    await connection.send(
+      "Runtime.evaluate",
+      {
+        contextId: control.executionContextId,
+        expression: `document.querySelectorAll("input").item(${String(control.index)})`,
+      },
+      control.sessionId
+    )
+  );
+  const objectId = evaluated.result.objectId;
+  if (!objectId) return false;
+
+  try {
+    const response = evaluatedBooleanSchema.parse(
+      await connection.send(
+        "Runtime.callFunctionOn",
+        {
+          arguments: [{ value }],
+          awaitPromise: false,
+          functionDeclaration: nativeLoginFillFunctionDeclaration,
+          objectId,
+          returnByValue: true,
+        },
+        control.sessionId
+      )
+    );
+    return response.result.value;
+  } finally {
+    await connection
+      .send("Runtime.releaseObject", { objectId }, control.sessionId)
+      .catch(() => undefined);
+  }
 }
 
 export function buildNativeAutofillPayload(

@@ -319,7 +319,7 @@ async function maskVaultFields(
 ) {
   const styleId = "vault-screenshot-mask";
   const selector =
-    "input:-webkit-autofill, select:-webkit-autofill, textarea:-webkit-autofill";
+    '[data-vault-secret], input[type="password"], input:-webkit-autofill, select:-webkit-autofill, textarea:-webkit-autofill';
   const addCode = `
 for (const currentContext of browser.contexts()) {
   for (const currentPage of currentContext.pages()) {
