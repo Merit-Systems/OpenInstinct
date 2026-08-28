@@ -1,11 +1,11 @@
 export function browserBenchmarkTasks(suite: "all" | "live" | "smoke") {
   const smoke = [
     {
-      description: "Prepare a constrained demo-store checkout",
+      description: "Prepare a constrained demo-store cart",
       prompt:
-        "Use the browser worker at https://www.saucedemo.com/. Sign in as standard_user with password secret_sauce. Add the two least expensive distinct products to the cart, proceed through checkout using Ryan Benchmark and ZIP code 11201, and stop on the order overview before activating Finish. Report both items, subtotal, tax, and total.",
+        "Use the browser worker at https://www.demoblaze.com/ to prepare a cart containing the least expensive laptop and the least expensive monitor. Compare the available products in both categories, add exactly one of each winning item, verify the cart, and stop before activating Place Order. Report both product names, their prices, and the cart total.",
       successCriteria:
-        "The agent signed in, correctly selected the two least expensive distinct products, reached the checkout overview without finishing the order, and accurately reported both items, subtotal, tax, and total.",
+        "The agent compared the laptop and monitor categories, correctly selected the least expensive product in each, added exactly one of each to the cart, verified the cart and total, reported both names and prices, and did not activate Place Order.",
     },
     {
       description: "Research a product under multiple constraints",

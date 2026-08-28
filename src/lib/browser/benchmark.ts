@@ -111,6 +111,12 @@ export function readTaskCompletion(events: readonly MessageStreamEvent[]) {
   }
 
   for (const event of events.toReversed()) {
+    if (event.type === "result.completed") {
+      const completion = parseTaskCompletionOutput(event.data.result);
+      if (completion) return { ...completion, completedAt: event.meta.at };
+      continue;
+    }
+
     if (event.type === "subagent.completed") {
       if (
         event.data.subagentName === "worker" &&

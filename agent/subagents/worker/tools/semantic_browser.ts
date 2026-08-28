@@ -13,9 +13,13 @@ import { requireWorkerScope } from "@/agent/subagents/worker/lib/access";
 import { requireOwnedBrowserSession } from "@/agent/subagents/worker/lib/owned-browser";
 import { executeBrowserLoopTool, modelText } from "@/lib/browser/semantic-loop";
 
-const browserSpecs = loop.toolsets.browser();
-const browserActSpec = loop.tools.browser.act();
-const allSpecs = [...browserSpecs, browserActSpec];
+const allSpecs = [
+  loop.tools.browser.snapshot(),
+  loop.tools.browser.text(),
+  loop.tools.browser.find(),
+  loop.tools.browser.waitFor(),
+  loop.tools.browser.act(),
+];
 const specsByName = new Map(allSpecs.map((spec) => [spec.name, spec]));
 
 export default defineDynamic({

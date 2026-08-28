@@ -9,13 +9,17 @@ import {
   writeFile,
 } from "node:fs/promises";
 import { homedir, tmpdir } from "node:os";
-import { basename, join } from "node:path";
+import { basename, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import nextEnvironment from "@next/env";
+import { z } from "zod";
 import { browserBenchmarkEnv } from "../evals/browser/env.ts";
+
+const { loadEnvConfig } = nextEnvironment;
 
 const repositoryRoot = fileURLToPath(new URL("..", import.meta.url));
 // oxlint-disable-next-line eslint/no-restricted-properties -- the benchmark supervisor must forward credentials and provider configuration to isolated child revisions
-const inheritedEnvironment = { ...process.env };
+let inheritedEnvironment = { ...process.env };
 const options = parseArguments(process.argv.slice(2));
 const timestamp = new Date().toISOString().replaceAll(":", "-");
 const outputDirectory = join(repositoryRoot, ".eve", "browser-ab", timestamp);
@@ -32,6 +36,7 @@ for (const signal of ["SIGINT", "SIGTERM"] as const) {
 }
 
 try {
+  inheritedEnvironment = await refreshGatewayEnvironment();
   await mkdir(outputDirectory, { recursive: true });
   const [baselineSha, candidateSha] = await Promise.all([
     resolveCommit(options.baselineRef),
@@ -133,6 +138,10 @@ async function installBenchmarkChannel(worktree: string) {
   const sourcePath = join(repositoryRoot, "agent", "channels", "eve.ts");
   const targetPath = join(worktree, "agent", "channels", "eve.ts");
   await copyFile(sourcePath, targetPath);
+  await copyFile(
+    join(repositoryRoot, ".env.local"),
+    join(worktree, ".env.local")
+  );
 
   const principal = browserBenchmarkEnv.BROWSER_BENCH_SCOPE_PRINCIPAL?.trim();
   if (!principal) return;
@@ -147,6 +156,42 @@ async function installBenchmarkChannel(worktree: string) {
     targetPath,
     source.replace(marker, JSON.stringify(principal))
   );
+}
+
+async function refreshGatewayEnvironment() {
+  const commonGitDirectory = (
+    await output(
+      "git",
+      ["rev-parse", "--path-format=absolute", "--git-common-dir"],
+      { cwd: repositoryRoot }
+    )
+  ).trim();
+  const projectFile = join(
+    dirname(commonGitDirectory),
+    ".vercel",
+    "project.json"
+  );
+  const project = z
+    .object({ orgId: z.string().min(1), projectId: z.string().min(1) })
+    .parse(JSON.parse(await readFile(projectFile, "utf8")));
+
+  await run(
+    "node_modules/eve/bin/eve.js",
+    [
+      "link",
+      "--non-interactive",
+      "--project",
+      project.projectId,
+      "--team",
+      project.orgId,
+    ],
+    { cwd: repositoryRoot }
+  );
+
+  return {
+    ...loadEnvConfig(repositoryRoot, true, console, true).combinedEnv,
+    NODE_ENV: "development" as const,
+  };
 }
 
 async function startDatabase(current: ReturnType<typeof variant>) {
@@ -212,6 +257,7 @@ async function runBenchmark(current: ReturnType<typeof variant>) {
           join(homedir(), ".portless", "ca.pem"),
         NODE_ENV: "development",
       },
+      validExitCodes: [0, 1],
     }
   );
 
@@ -258,18 +304,24 @@ function start(
   args: string[],
   options: { cwd: string; env?: NodeJS.ProcessEnv }
 ) {
-  return spawn(command, args, {
+  const child = spawn(command, args, {
     cwd: options.cwd,
     detached: true,
     env: { ...inheritedEnvironment, ...options.env },
     stdio: "inherit",
   });
+  child.unref();
+  return child;
 }
 
 async function run(
   command: string,
   args: string[],
-  options: { cwd: string; env?: NodeJS.ProcessEnv }
+  options: {
+    cwd: string;
+    env?: NodeJS.ProcessEnv;
+    validExitCodes?: number[];
+  }
 ) {
   const child = spawn(command, args, {
     cwd: options.cwd,
@@ -280,7 +332,7 @@ async function run(
     child.once("error", reject);
     child.once("exit", resolveExit);
   });
-  if (code !== 0) {
+  if (!(options.validExitCodes ?? [0]).includes(code ?? -1)) {
     throw new Error(
       `${command} ${args.join(" ")} exited with ${String(code)}.`
     );
