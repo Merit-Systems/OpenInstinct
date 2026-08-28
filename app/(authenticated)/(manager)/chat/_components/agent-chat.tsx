@@ -33,8 +33,9 @@ import { collectSubagentSessions } from "@/app/_lib/subagent-sessions";
 import { SubagentPanel } from "./subagent-panel";
 
 const AGENT_NAME = "Local Vault Assistant";
+const backgroundTaskAgentNames = new Set(["coordinator", "worker"]);
 const backgroundWorkerDelivery =
-  /^Background task (\S+) \(worker\) (?:update: |needs input\.$|is cancelled\.$|is completed\.\n\nResult:\n|failed\.\n\nError:\n)/u;
+  /^Background task (\S+) \((?:coordinator|worker)\) (?:update: |needs input\.$|is cancelled\.$|is completed\.\n\nResult:\n|failed\.\n\nError:\n)/u;
 const backgroundWorkerAuthorization =
   /^Background task (\S+) needs authorization\.$/u;
 const taskCancelResultSchema = z.object({
@@ -43,7 +44,7 @@ const taskCancelResultSchema = z.object({
   toolName: z.literal("task_cancel"),
 });
 const cancelledWorkerTaskSchema = z.object({
-  metadata: z.object({ name: z.literal("worker") }),
+  metadata: z.object({ name: z.enum(["coordinator", "worker"]) }),
   status: z.literal("cancelled"),
   taskId: z.string(),
 });
@@ -343,7 +344,7 @@ export function backgroundWorkerDeliveryMessageIds(
   for (const event of events) {
     if (
       event.type === "subagent.completed" &&
-      event.data.subagentName === "worker" &&
+      backgroundTaskAgentNames.has(event.data.subagentName) &&
       event.data.backgroundTask !== undefined
     ) {
       taskIds.add(event.data.backgroundTask.taskId);
@@ -353,7 +354,7 @@ export function backgroundWorkerDeliveryMessageIds(
     if (
       event.type === "action.result" &&
       event.data.result.kind === "subagent-result" &&
-      event.data.result.subagentName === "worker" &&
+      backgroundTaskAgentNames.has(event.data.result.subagentName) &&
       event.data.result.origin === "child" &&
       event.data.result.backgroundTask !== undefined
     ) {
@@ -378,8 +379,8 @@ export function backgroundWorkerDeliveryMessageIds(
       backgroundWorkerDelivery.exec(event.data.message)?.[1] ??
       backgroundWorkerAuthorization.exec(event.data.message)?.[1];
     if (taskId && taskIds.has(taskId)) {
-      const isCancellation = event.data.message.endsWith(
-        "(worker) is cancelled."
+      const isCancellation = /\((?:coordinator|worker)\) is cancelled\.$/u.test(
+        event.data.message
       );
       if (!isCancellation) messageIds.add(`${event.data.turnId}:user`);
       if (isCancellation && cancelledTaskIds.delete(taskId)) {

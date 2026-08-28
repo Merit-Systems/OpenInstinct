@@ -9,7 +9,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { parseCalendarAvailability } from "@/agent/lib/google-workspace/calendar";
 import { googleWorkspaceAuthOptions } from "@/agent/lib/google-workspace/client";
 import { gmailUpdateLabels } from "@/agent/lib/google-workspace/gmail";
-import { googleWorkspaceWriteApproval } from "@/agent/tools/google_workspace_write";
+import { googleWorkspaceWriteApproval } from "@/agent/subagents/coordinator/tools/google_workspace_write";
 import {
   GOOGLE_WORKSPACE_SCOPES,
   googleWorkspaceSubject,

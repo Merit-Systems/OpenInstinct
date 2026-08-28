@@ -1,7 +1,7 @@
 import { defineTool } from "eve/tools";
 import { z } from "zod";
-import { requireOwnedBrowserSession } from "@/agent/subagents/worker/lib/owned-browser";
-import { requireWorkerScope } from "@/agent/subagents/worker/lib/access";
+import { requireOwnedBrowserSession } from "@/agent/subagents/coordinator/subagents/browser/lib/owned-browser";
+import { requireWorkerScope } from "@/agent/subagents/coordinator/subagents/browser/lib/access";
 import { readVaultItem } from "@/db/services/vault";
 import { materializeAutofillClaims } from "@/lib/manager/server/vault-autofill";
 import { vaultAutofillProvider } from "@/lib/manager/server/vault-autofill-provider";

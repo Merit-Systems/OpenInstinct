@@ -1,8 +1,8 @@
 import { defineTool, toolOutput } from "eve/tools";
 import { z } from "zod";
 import { kernel } from "@/lib/kernel";
-import { requireWorkerScope } from "@/agent/subagents/worker/lib/access";
-import { requireOwnedBrowserSession } from "@/agent/subagents/worker/lib/owned-browser";
+import { requireWorkerScope } from "@/agent/subagents/coordinator/subagents/browser/lib/access";
+import { requireOwnedBrowserSession } from "@/agent/subagents/coordinator/subagents/browser/lib/owned-browser";
 
 const playwrightTimeoutSeconds = 25;
 const modelResultCharacterLimit = 12_000;

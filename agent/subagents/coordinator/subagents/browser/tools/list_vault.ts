@@ -1,7 +1,7 @@
 import { defineTool } from "eve/tools";
 import { z } from "zod";
 import { readManagerVaultItems } from "@/lib/manager/server/vault";
-import { requireWorkerScope } from "@/agent/subagents/worker/lib/access";
+import { requireWorkerScope } from "@/agent/subagents/coordinator/subagents/browser/lib/access";
 
 export default defineTool({
   description:

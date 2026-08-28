@@ -2,8 +2,8 @@ import { defineTool, toolOutput, toolOutputPart } from "eve/tools";
 import type { ComputerBatchParams } from "@onkernel/sdk/resources/browsers/computer";
 import { z } from "zod";
 import { kernel } from "@/lib/kernel";
-import { requireWorkerScope } from "@/agent/subagents/worker/lib/access";
-import { requireOwnedBrowserSession } from "@/agent/subagents/worker/lib/owned-browser";
+import { requireWorkerScope } from "@/agent/subagents/coordinator/subagents/browser/lib/access";
+import { requireOwnedBrowserSession } from "@/agent/subagents/coordinator/subagents/browser/lib/owned-browser";
 
 const actionSchema = z.object({
   type: z.enum([

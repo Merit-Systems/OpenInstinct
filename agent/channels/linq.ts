@@ -22,7 +22,7 @@ const taskCancelResultSchema = z.object({
   toolName: z.literal("task_cancel"),
 });
 const cancelledWorkerTaskSchema = z.object({
-  metadata: z.object({ name: z.literal("worker") }),
+  metadata: z.object({ name: z.enum(["coordinator", "worker"]) }),
   status: z.literal("cancelled"),
   taskId: z.string(),
 });

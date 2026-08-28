@@ -10,7 +10,7 @@ vi.mock("@/db/services/sessions", () => ({
   isSessionOwned: mocks.isSessionOwned,
 }));
 
-import { requireWorkerScope } from "@/agent/subagents/worker/lib/access";
+import { requireWorkerScope } from "@/agent/subagents/coordinator/subagents/browser/lib/access";
 
 beforeEach(() => {
   vi.clearAllMocks();

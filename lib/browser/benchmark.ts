@@ -2,7 +2,9 @@ import { z } from "zod";
 import type { MessageStreamEvent } from "eve/client";
 import { taskCompletionSchema } from "../task-completion";
 
-const workerTaskNotificationPrefix = /^Background task (\S+) \(worker\) /u;
+const taskAgentNames = new Set(["browser", "coordinator", "worker"]);
+const workerTaskNotificationPrefix =
+  /^Background task (\S+) \((?:coordinator|worker)\) /u;
 const terminalTaskControlSchema = z.object({
   tasks: z.array(
     z.object({
@@ -113,7 +115,7 @@ export function readTaskCompletion(events: readonly MessageStreamEvent[]) {
   for (const event of events.toReversed()) {
     if (event.type === "subagent.completed") {
       if (
-        event.data.subagentName === "worker" &&
+        taskAgentNames.has(event.data.subagentName) &&
         event.data.backgroundTask === undefined
       ) {
         const completion = parseTaskCompletion(event.data.output);
@@ -129,7 +131,7 @@ export function readTaskCompletion(events: readonly MessageStreamEvent[]) {
     const result = event.data.result;
     if (result.kind === "subagent-result") {
       if (
-        result.subagentName === "worker" &&
+        taskAgentNames.has(result.subagentName) &&
         (result.origin !== "child" || result.backgroundTask === undefined)
       ) {
         const completion = parseTaskCompletion(result.output);
@@ -232,7 +234,7 @@ export function readBackgroundWorkerTasks(
 function readBackgroundWorkerReceiptTaskId(event: MessageStreamEvent) {
   if (
     event.type === "subagent.completed" &&
-    event.data.subagentName === "worker" &&
+    taskAgentNames.has(event.data.subagentName) &&
     event.data.backgroundTask !== undefined
   ) {
     return event.data.backgroundTask.taskId;
@@ -241,7 +243,7 @@ function readBackgroundWorkerReceiptTaskId(event: MessageStreamEvent) {
   if (
     event.type === "action.result" &&
     event.data.result.kind === "subagent-result" &&
-    event.data.result.subagentName === "worker" &&
+    taskAgentNames.has(event.data.result.subagentName) &&
     event.data.result.origin === "child" &&
     event.data.result.backgroundTask !== undefined
   ) {

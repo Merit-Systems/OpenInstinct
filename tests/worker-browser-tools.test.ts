@@ -23,13 +23,16 @@ const mocks = vi.hoisted(() => ({
     vi.fn<(_id: string, _body: unknown, _options: unknown) => Promise<void>>(),
 }));
 
-vi.mock("@/agent/subagents/worker/lib/access", () => ({
+vi.mock("@/agent/subagents/coordinator/subagents/browser/lib/access", () => ({
   requireWorkerScope: mocks.requireWorkerScope,
 }));
 
-vi.mock("@/agent/subagents/worker/lib/owned-browser", () => ({
-  requireOwnedBrowserSession: mocks.requireOwnedBrowserSession,
-}));
+vi.mock(
+  "@/agent/subagents/coordinator/subagents/browser/lib/owned-browser",
+  () => ({
+    requireOwnedBrowserSession: mocks.requireOwnedBrowserSession,
+  })
+);
 
 vi.mock("@/lib/kernel", () => ({
   kernel: {
@@ -44,8 +47,8 @@ vi.mock("@/lib/kernel", () => ({
   },
 }));
 
-import computerAction from "../agent/subagents/worker/tools/computer_action";
-import executePlaywrightCode from "../agent/subagents/worker/tools/execute_playwright_code";
+import computerAction from "../agent/subagents/coordinator/subagents/browser/tools/computer_action";
+import executePlaywrightCode from "../agent/subagents/coordinator/subagents/browser/tools/execute_playwright_code";
 
 beforeEach(() => {
   vi.clearAllMocks();

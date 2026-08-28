@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
-import manageBrowsers from "../agent/subagents/worker/tools/manage_browsers";
+import manageBrowsers from "../agent/subagents/coordinator/subagents/browser/tools/manage_browsers";
 
 const mocks = vi.hoisted(() => ({
   createBrowser: vi.fn<
@@ -25,7 +25,7 @@ const mocks = vi.hoisted(() => ({
   requireWorkerScope: vi.fn<(_context: unknown) => Promise<unknown>>(),
 }));
 
-vi.mock("@/agent/subagents/worker/lib/access", () => ({
+vi.mock("@/agent/subagents/coordinator/subagents/browser/lib/access", () => ({
   requireWorkerScope: mocks.requireWorkerScope,
 }));
 

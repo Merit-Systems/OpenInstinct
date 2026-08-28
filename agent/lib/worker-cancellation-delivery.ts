@@ -9,9 +9,10 @@ export function recordWorkerCancellationTurn(
   turnId: string,
   message: string
 ) {
-  const taskId = /^Background task (\S+) \(worker\) is cancelled\.$/u.exec(
-    message
-  )?.[1];
+  const taskId =
+    /^Background task (\S+) \((?:coordinator|worker)\) is cancelled\.$/u.exec(
+      message
+    )?.[1];
   if (taskId) cancellationTurns.set(turnKey(sessionId, turnId), taskId);
 }
 
