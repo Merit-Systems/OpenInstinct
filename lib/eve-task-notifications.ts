@@ -1,3 +1,4 @@
+// Eve announces background-task lifecycle only as prose messages; delete this once it emits typed events.
 type TaskNotification =
   | { readonly kind: "authorization"; readonly taskId: string }
   | TaskAgentNotification;
