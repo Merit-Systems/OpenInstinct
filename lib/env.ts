@@ -51,6 +51,9 @@ export const env = createEnv({
     // Optional
     BLOB_READ_WRITE_TOKEN: requiredValue.optional(),
     BLOB_STORE_ID: requiredValue.optional(),
+    COINBASE_ALLOWED_USER_IDS: requiredValue.optional(),
+    COINBASE_KEY_ID: requiredValue.optional(),
+    COINBASE_KEY_SECRET: requiredValue.optional(),
     GOOGLE_CONNECTOR_UID: requiredValue.default("google/open-instinct"),
     LINQ_CONNECTOR: requiredValue.optional(),
     LINQ_PHONE_NUMBER: requiredValue
@@ -74,6 +77,14 @@ if (
 ) {
   throw new Error(
     "LINQ_CONNECTOR and LINQ_PHONE_NUMBER must be configured together."
+  );
+}
+if (
+  (env.COINBASE_KEY_ID === undefined) !==
+  (env.COINBASE_KEY_SECRET === undefined)
+) {
+  throw new Error(
+    "COINBASE_KEY_ID and COINBASE_KEY_SECRET must be configured together."
   );
 }
 const authHostname = new URL(env.BETTER_AUTH_URL).hostname;

@@ -15,6 +15,7 @@ minimumReleaseAgeExclude:
   - picomatch
   - systeminformation
 allowBuilds:
+  "@coinbase/coinbase-cli": false
   cbor-extract: false
   esbuild: true
   sharp: true
