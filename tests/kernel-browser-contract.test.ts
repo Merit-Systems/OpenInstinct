@@ -137,6 +137,12 @@ describe("Kernel browser contract", () => {
         browser_live_view_url: "https://live.kernel.test/browser-1",
       },
     });
+    if (typeof result === "string" || !("next_actions" in result)) {
+      throw new Error("create must return browser lifecycle guidance");
+    }
+    expect(result.next_actions.join(" ")).toContain("browser_snapshot");
+    expect(result.next_actions.join(" ")).toContain("browser_act");
+    expect(JSON.stringify(result)).not.toContain("execute_playwright_code");
     expect(mocks.createBrowser).toHaveBeenCalledExactlyOnceWith(
       {
         profile: { id: "profile-1", save_changes: false },

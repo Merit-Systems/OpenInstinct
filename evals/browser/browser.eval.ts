@@ -62,23 +62,21 @@ export default browserBenchmarkTasks.flatMap((task) =>
             "the worker emitted exactly one native structured result"
           )
         );
-        await t.require(
-          child.events.some(
-            (event) =>
-              event.type === "action.result" &&
-              event.data.status === "completed" &&
-              event.data.result.kind === "tool-result" &&
-              [
-                "computer_action",
-                "execute_playwright_code",
-                "manage_browsers",
-              ].includes(event.data.result.toolName)
-          ),
-          satisfies(
-            (usedBrowserTool) => usedBrowserTool === true,
-            "the worker executed a browser tool"
-          )
-        );
+        for (const toolName of task.expectedWorkerTools) {
+          await t.require(
+            child.events.some(
+              (event) =>
+                event.type === "action.result" &&
+                event.data.status === "completed" &&
+                event.data.result.kind === "tool-result" &&
+                event.data.result.toolName === toolName
+            ),
+            satisfies(
+              (usedExpectedTool) => usedExpectedTool === true,
+              `the worker completed ${toolName}`
+            )
+          );
+        }
 
         t.succeeded();
 

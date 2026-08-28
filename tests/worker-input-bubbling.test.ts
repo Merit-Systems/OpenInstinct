@@ -10,8 +10,8 @@ describe("worker input bubbling", () => {
 
   it("ends the worker turn and routes the answer through its agent id", () => {
     const instructions = readFileSync("agent/instructions.md", "utf8");
-    const browserSkill = readFileSync(
-      "agent/subagents/worker/skills/browser-execution/SKILL.md",
+    const workerInstructions = readFileSync(
+      "agent/subagents/worker/instructions.md",
       "utf8"
     );
 
@@ -20,7 +20,9 @@ describe("worker input bubbling", () => {
     );
     expect(instructions).toContain("continue that worker with its `agentId`");
     expect(instructions).toContain("returns a `Needs user input:` blocker");
-    expect(browserSkill).toContain("native `final_output` with `failure`");
-    expect(browserSkill).toContain("End the turn immediately");
+    expect(workerInstructions).toContain(
+      "native `final_output` tool exactly once"
+    );
+    expect(workerInstructions).toContain("End the turn immediately");
   });
 });

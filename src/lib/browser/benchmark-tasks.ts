@@ -1,38 +1,23 @@
 export const browserBenchmarkTasks = [
   {
-    description: "Read a simple page heading",
-    expectedReplyIncludes: ["Example Domain"],
-    prompt:
-      "Open https://example.com in the browser and report the exact page heading.",
-  },
-  {
-    description: "Follow a link and inspect the destination",
+    description: "Follow a link with semantic verification",
     expectedReplyIncludes: ["IANA-managed Reserved Domains"],
+    expectedWorkerTools: ["browser_snapshot", "browser_act"],
     prompt:
-      "Open https://example.com, follow its More information link, and report the destination page heading.",
+      "Use the browser worker to open https://example.com, follow the More information link with semantic browser tools, verify the destination heading, and report it.",
   },
   {
-    description: "Extract two facts from a technical document",
-    expectedReplyIncludes: ["RFC 9110", "HTTP Semantics"],
+    description: "Fill and submit a deterministic web form",
+    expectedReplyIncludes: ["Form submitted", "Received!"],
+    expectedWorkerTools: ["browser_snapshot", "browser_act"],
     prompt:
-      "Open https://www.rfc-editor.org/rfc/rfc9110.html and report its RFC number and document title.",
+      "Use the browser worker to open https://www.selenium.dev/selenium/web/web-form.html, fill Text input with browser loop verified, submit the form with semantic browser tools, verify the resulting page, and report its heading and message.",
   },
   {
-    description: "Read a documentation page",
-    expectedReplyIncludes: ["Document Object Model"],
+    description: "Wait for dynamically revealed content",
+    expectedReplyIncludes: ["Reveal a new input", "visible"],
+    expectedWorkerTools: ["browser_snapshot", "browser_act"],
     prompt:
-      "Open https://developer.mozilla.org/en-US/docs/Web/API/Document_Object_Model and report the main page heading.",
-  },
-  {
-    description: "Extract facts from a public encyclopedia",
-    expectedReplyIncludes: ["Stan Lee", "Steve Ditko"],
-    prompt:
-      "Open https://en.wikipedia.org/wiki/Spider-Man and report the two credited creators of Spider-Man.",
-  },
-  {
-    description: "Handle a commercial movie page",
-    expectedReplyIncludes: ["Spider-Man", "2002"],
-    prompt:
-      "Open https://www.imdb.com/title/tt0145487/ and report the movie title and release year.",
+      "Use the browser worker to open https://www.selenium.dev/selenium/web/dynamic.html, activate Reveal a new input with browser_act, semantically verify that a new textbox becomes visible, and report the control label and visible state.",
   },
 ] as const;
