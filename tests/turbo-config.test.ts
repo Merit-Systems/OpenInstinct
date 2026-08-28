@@ -9,6 +9,7 @@ const applicationEnvironment = [
   "KERNEL_*",
   "LINQ_*",
   "NODE_ENV",
+  "PARALLEL_API_KEY",
   "SECRET_ENCRYPTION_KEY",
   "VERCEL_ENV",
 ];

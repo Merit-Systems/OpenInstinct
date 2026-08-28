@@ -49,6 +49,7 @@ export const env = createEnv({
     ),
 
     // Optional
+    PARALLEL_API_KEY: requiredValue.optional(),
     GOOGLE_CONNECTOR_UID: requiredValue.default("google/open-instinct"),
     LINQ_CONNECTOR: requiredValue.optional(),
     LINQ_PHONE_NUMBER: requiredValue
