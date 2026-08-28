@@ -1,6 +1,8 @@
 "use client";
 
 import type { UserContent } from "ai";
+import type { MessageStreamEvent } from "eve/client";
+import type { EveMessage } from "eve/react";
 import { AlertCircleIcon, BrainIcon, PlusIcon } from "lucide-react";
 import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -30,6 +32,10 @@ import { AgentMessage } from "./agent-message";
 import { SubagentTrace } from "./subagent-trace";
 
 const AGENT_NAME = "Local Vault Assistant";
+const backgroundWorkerDelivery =
+  /^Background task (\S+) \(worker\) (?:update: |needs input\.$|is cancelled\.$|is completed\.\n\nResult:\n|failed\.\n\nError:\n)/u;
+const backgroundWorkerAuthorization =
+  /^Background task (\S+) needs authorization\.$/u;
 
 export function AgentChat({
   initialUsage,
@@ -146,6 +152,10 @@ export function AgentChat({
 
     return deliveriesByMessage;
   }, [agent.events]);
+  const messages = useMemo(
+    () => messagesForTraceView(agent.data.messages, agent.events, traceView),
+    [agent.data.messages, agent.events, traceView]
+  );
   const subagentTraces = useMemo(() => {
     const traces = new Map<string, ReactNode>();
 
@@ -253,7 +263,7 @@ export function AgentChat({
           }
         >
           <ConversationContent className="mx-auto w-full max-w-3xl gap-6 px-4 pt-20 pb-36 sm:px-6">
-            {agent.data.messages.map((message, index) =>
+            {messages.map((message) =>
               showPendingThinking &&
               isPendingAssistantShell &&
               message.id === lastMessage.id ? null : (
@@ -267,7 +277,7 @@ export function AgentChat({
                   )}
                   isStreaming={
                     agent.status === "streaming" &&
-                    index === agent.data.messages.length - 1
+                    message.id === lastMessage?.id
                   }
                   key={message.id}
                   message={message}
@@ -306,6 +316,57 @@ export function AgentChat({
       </div>
     </main>
   );
+}
+
+export function messagesForTraceView(
+  messages: readonly EveMessage[],
+  events: readonly MessageStreamEvent[],
+  traceView: "imessage" | "trace"
+) {
+  if (traceView === "trace") return messages;
+  const hiddenMessageIds = backgroundWorkerDeliveryMessageIds(events);
+  return messages.filter((message) => !hiddenMessageIds.has(message.id));
+}
+
+export function backgroundWorkerDeliveryMessageIds(
+  events: readonly MessageStreamEvent[]
+) {
+  // Eve task deliveries currently share message.received with user input, so
+  // require both its exact framework grammar and a receipt from this worker.
+  const taskIds = new Set<string>();
+
+  for (const event of events) {
+    if (
+      event.type === "subagent.completed" &&
+      event.data.subagentName === "worker" &&
+      event.data.backgroundTask !== undefined
+    ) {
+      taskIds.add(event.data.backgroundTask.taskId);
+      continue;
+    }
+
+    if (
+      event.type === "action.result" &&
+      event.data.result.kind === "subagent-result" &&
+      event.data.result.subagentName === "worker" &&
+      event.data.result.origin === "child" &&
+      event.data.result.backgroundTask !== undefined
+    ) {
+      taskIds.add(event.data.result.backgroundTask.taskId);
+    }
+  }
+
+  const messageIds = new Set<string>();
+  for (const event of events) {
+    if (event.type !== "message.received") continue;
+    const taskId =
+      backgroundWorkerDelivery.exec(event.data.message)?.[1] ??
+      backgroundWorkerAuthorization.exec(event.data.message)?.[1];
+    if (taskId && taskIds.has(taskId))
+      messageIds.add(`${event.data.turnId}:user`);
+  }
+
+  return messageIds;
 }
 
 function ErrorMessage({ message }: { readonly message: string }) {
