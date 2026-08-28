@@ -19,7 +19,10 @@ describe("Turbo configuration", () => {
       .object({
         tasks: z.object({
           "build:app": z.object({ env: z.array(z.string()) }),
-          "build:vercel": z.object({ env: z.array(z.string()) }),
+          "build:vercel": z.object({
+            env: z.array(z.string()),
+            outputs: z.array(z.string()),
+          }),
           "dev:app": z.object({ passThroughEnv: z.array(z.string()) }),
           "start:app": z.object({ passThroughEnv: z.array(z.string()) }),
         }),
@@ -43,6 +46,9 @@ describe("Turbo configuration", () => {
     );
     expect(turbo.tasks["build:vercel"].env).toHaveLength(
       applicationEnvironment.length + 1
+    );
+    expect(turbo.tasks["build:vercel"].outputs).toContain(
+      ".output/*-chrome.zip"
     );
     expect(turbo.tasks["dev:app"].passThroughEnv).toEqual(
       applicationEnvironment

@@ -4,6 +4,8 @@ import type {
   BrowserRetrieveResponse,
   BrowserUpdateResponse,
 } from "@onkernel/sdk/resources/browsers";
+import { readFile, readdir } from "node:fs/promises";
+import { join } from "node:path";
 import type { z } from "zod";
 import {
   createBrowserSession,
@@ -32,11 +34,20 @@ export async function manageOwnedKernelBrowsers(
 
   switch (input.action) {
     case "create": {
+      const extensionArchive = await findPackagedVaultAutofillExtension();
       const extensionName = env.KERNEL_VAULT_AUTOFILL_EXTENSION;
+      const storedExtension =
+        extensionArchive === undefined
+          ? await client.extensions.get(extensionName, { signal })
+          : undefined;
       const browser = await client.browsers.create(
         {
-          extensions: extensionName ? [{ name: extensionName }] : undefined,
-          start_url: input.start_url,
+          extensions:
+            extensionArchive === undefined
+              ? [{ id: storedExtension?.id }]
+              : undefined,
+          start_url:
+            extensionArchive === undefined ? input.start_url : undefined,
           stealth: true,
           timeout_seconds: input.timeout_seconds ?? browserTimeoutFloorSeconds,
           viewport: browserViewport(input),
@@ -44,6 +55,25 @@ export async function manageOwnedKernelBrowsers(
         { signal }
       );
       try {
+        if (extensionArchive !== undefined) {
+          await loadPackagedVaultAutofillExtension(
+            client,
+            browser.session_id,
+            extensionArchive,
+            extensionName,
+            signal
+          );
+          if (input.start_url) {
+            await client.browsers.playwright.execute(
+              browser.session_id,
+              {
+                code: navigateToStartUrlCode(input.start_url),
+                timeout_sec: 30,
+              },
+              { signal }
+            );
+          }
+        }
         await createBrowserSession(scope, {
           createdAt: browser.created_at,
           sessionId: browser.session_id,
@@ -114,6 +144,66 @@ export async function manageOwnedKernelBrowsers(
       return "Browser session deleted successfully";
     }
   }
+}
+
+async function loadPackagedVaultAutofillExtension(
+  client: Kernel,
+  sessionId: string,
+  archive: string,
+  extensionName: string,
+  signal?: AbortSignal
+) {
+  const form = new FormData();
+  form.append("extensions[0].name", extensionName);
+  form.append(
+    "extensions[0].zip_file",
+    new File([await readFile(archive)], `${extensionName}.zip`, {
+      type: "application/zip",
+    })
+  );
+
+  // Kernel's live API expects bracket-dot multipart keys. SDK 0.96 emits
+  // bracket-bracket keys here, which the API rejects as invalid fields.
+  await client.post<unknown>(
+    `/browsers/${encodeURIComponent(sessionId)}/extensions`,
+    {
+      body: form,
+      headers: { Accept: "*/*" },
+      signal,
+    }
+  );
+}
+
+async function findPackagedVaultAutofillExtension() {
+  const outputDirectory = join(process.cwd(), ".output");
+  let archives: string[];
+  try {
+    archives = (await readdir(outputDirectory)).filter((name) =>
+      name.endsWith("-chrome.zip")
+    );
+  } catch (error) {
+    if (isNodeError(error) && error.code === "ENOENT") return undefined;
+    throw error;
+  }
+  if (archives.length === 0) return undefined;
+  if (archives.length > 1) {
+    throw new Error(
+      `Expected one packaged vault autofill extension, found ${String(archives.length)}.`
+    );
+  }
+  const archive = archives[0];
+  return archive ? join(outputDirectory, archive) : undefined;
+}
+
+function navigateToStartUrlCode(startUrl: string) {
+  return `
+const page = context.pages().at(-1) ?? await context.newPage();
+await page.goto(${JSON.stringify(startUrl)}, { waitUntil: "domcontentloaded" });
+`;
+}
+
+function isNodeError(error: unknown): error is NodeJS.ErrnoException {
+  return error instanceof Error && "code" in error;
 }
 
 export async function executeOwnedKernelPlaywright(

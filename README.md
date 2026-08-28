@@ -163,6 +163,24 @@ path as the Vercel deployment. Better Auth and vault encryption use stable
 local-only defaults when their variables are unset; deployments still require
 explicit secrets.
 
+### Kernel vault extension
+
+Production builds package the private vault-autofill extension with the
+application. When the app creates a Kernel browser, it uploads that ZIP directly
+into the new session with `KERNEL_API_KEY`, then navigates only after the
+extension is active. This does not consume Kernel's stored-extension quota and
+requires no separate GitHub secret, deployment job, or build-time mutation. The
+Vercel Marketplace supplies the key automatically for one-click deployments.
+
+For local development or recovery, authenticate the Kernel CLI and upload the
+stable fallback name before using browser autofill:
+
+```bash
+pnpm build:extension
+kernel login
+kernel extensions upload .output/chrome-mv3 --name vault-autofill
+```
+
 > [!WARNING]
 > This is not software intended for production use.
 
