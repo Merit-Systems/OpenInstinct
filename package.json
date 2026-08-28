@@ -90,6 +90,7 @@
     "lint:fix": "oxlint . --fix",
     "start": "turbo run start:app",
     "start:app": "next start",
+    "sync:kernel-extension": "node --env-file-if-exists=.env.local --experimental-strip-types scripts/sync-kernel-extension.ts",
     "test": "turbo run test:app",
     "test:app": "vitest run",
     "types:check": "turbo run types:check:app",

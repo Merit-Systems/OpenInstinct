@@ -49,6 +49,14 @@ build. See [`db/README.md`](db/README.md) for existing-database adoption,
 environment loading, and constraint-validation sequencing. Better Auth retains
 its separate migration path.
 
+The private vault-autofill extension can be packaged and synced manually into
+the Kernel project selected by `KERNEL_API_KEY`:
+
+```bash
+pnpm zip:extension
+pnpm sync:kernel-extension
+```
+
 Treat `SECRET_ENCRYPTION_KEY` as production key material — back it up
 separately; rotating it requires re-encrypting existing values.
 
