@@ -5,7 +5,7 @@ import { taskCompletionSchema } from "@/lib/task-completion";
 
 export default defineAgent({
   description:
-    "Execute one bounded browser assignment for the root coordinator, including secure vault autofill, transaction preparation, optional durable browser images, human-takeover handoff, cleanup, and a concise verified result. Every initial and resumed call must include the task-completion outputSchema required by the root instructions.",
+    "Complete one bounded task on a known website, using saved vault data and returning optional image evidence when needed.",
   model: defineDynamic({
     events: {
       "turn.started": async (_event, ctx) => {

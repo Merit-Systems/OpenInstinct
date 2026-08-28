@@ -35,10 +35,11 @@ describe("root and worker capability boundaries", () => {
     );
     const rootInstructions = readFileSync("agent/instructions.md", "utf8");
     expect(rootInstructions).toContain(
-      "Perform public research, source discovery, comparisons, and current-information lookups directly with `web_search`"
+      "`web_search` for public discovery and current facts"
     );
+    expect(rootInstructions).toContain("`web_fetch` for a known public page");
     expect(rootInstructions).toContain(
-      "try `web_fetch` before browser automation"
+      "delegate browser interaction to `worker`"
     );
   });
 
@@ -84,10 +85,10 @@ describe("root and worker capability boundaries", () => {
       "`inspect_autofill`"
     );
     expect(readFileSync(`${workerRoot}/instructions.md`, "utf8")).toContain(
-      "native `final_output` tool exactly once"
+      "Call `final_output` exactly once"
     );
     expect(readFileSync(`${workerRoot}/instructions.md`, "utf8")).toContain(
-      "Never use the browser for general web search"
+      "Never use a search engine or browse search results"
     );
     expect(existsSync(`${workerRoot}/lib/browser-contract.ts`)).toBe(false);
     expect(existsSync(`${workerRoot}/lib/browser-runtime.ts`)).toBe(false);
@@ -109,25 +110,18 @@ describe("root and worker capability boundaries", () => {
     );
   });
 
-  it("requires structured completion for initial and resumed worker calls", () => {
+  it("configures structured completion at the worker boundary", () => {
     const rootInstructions = readFileSync("agent/instructions.md", "utf8");
+    const workerInstructions = readFileSync(
+      `${workerRoot}/instructions.md`,
+      "utf8"
+    );
     const workerConfig = readFileSync(`${workerRoot}/agent.ts`, "utf8");
 
-    expect(rootInstructions).toContain(
-      "Every initial or resumed `worker` call must set `outputSchema`"
-    );
-    expect(rootInstructions).toContain(
-      '"required": ["status", "message", "images"]'
-    );
-    expect(rootInstructions).toContain(
-      "including when passing an existing `agentId`"
-    );
-    expect(rootInstructions).toContain(
-      "calling Eve's native `final_output` tool exactly once"
-    );
+    expect(rootInstructions).not.toContain("outputSchema");
+    expect(workerInstructions).toContain("{ status, message, images }");
+    expect(workerInstructions).toContain("Call `final_output` exactly once");
     expect(workerConfig).toContain("outputSchema: taskCompletionSchema");
-    expect(workerConfig).toContain(
-      "Every initial and resumed call must include the task-completion outputSchema"
-    );
+    expect(workerConfig).not.toContain("must include the task-completion");
   });
 });
