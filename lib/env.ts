@@ -51,6 +51,8 @@ export const env = createEnv({
     // Optional
     BLOB_READ_WRITE_TOKEN: requiredValue.optional(),
     BLOB_STORE_ID: requiredValue.optional(),
+    AGENTCASH_ALLOWED_USER_IDS: requiredValue.optional(),
+    AGENTCASH_MAX_PAYMENT_USD: z.coerce.number().positive().max(100).default(5),
     COINBASE_ALLOWED_USER_IDS: requiredValue.optional(),
     COINBASE_KEY_ID: requiredValue.optional(),
     COINBASE_KEY_SECRET: requiredValue.optional(),
@@ -66,6 +68,14 @@ export const env = createEnv({
       .enum(["development", "production", "test"])
       .default("production"),
     VERCEL_ENV: z.enum(["production", "preview", "development"]).optional(),
+    X402_PRIVATE_KEY: z
+      .string()
+      .regex(
+        /^0x[0-9a-fA-F]{64}$/u,
+        "X402_PRIVATE_KEY must be a 32-byte hex key."
+      )
+      .optional(),
+    X402_SOLANA_PRIVATE_KEY: requiredValue.optional(),
   },
   experimental__runtimeEnv: {},
   emptyStringAsUndefined: true,
