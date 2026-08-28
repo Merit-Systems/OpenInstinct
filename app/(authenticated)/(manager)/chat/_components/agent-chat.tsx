@@ -2,7 +2,7 @@
 
 import type { UserContent } from "ai";
 import type { MessageStreamEvent } from "eve/client";
-import type { EveMessage } from "eve/react";
+import { useEveAgent, type EveMessage } from "eve/react";
 import { AlertCircleIcon, BrainIcon } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { api } from "@/trpc/client";
@@ -25,7 +25,6 @@ import {
 import { Shimmer } from "@/components/ai-elements/shimmer";
 import { summarizeChatUsage } from "@/app/(authenticated)/(manager)/_lib/chat-usage";
 import { getLatestTurnFailure } from "@/app/(authenticated)/(manager)/chat/_lib/turn-failure";
-import { useDurableEveSession } from "@/app/_hooks/use-durable-eve-session";
 import type { ChatUsage } from "@/lib/chat";
 import { cn } from "@/lib/utils";
 import { AgentMessage } from "./agent-message";
@@ -58,11 +57,11 @@ export function AgentChat({
   readonly sessionless?: boolean;
 }) {
   const { mutate: saveChat } = api.chats.save.useMutation();
-  const [cancellationError, setCancellationError] = useState<string>();
   const [traceView, setTraceView] = useState<"imessage" | "trace">("imessage");
+  const backgroundCatchUp = useRef<Promise<void> | undefined>(undefined);
   const pendingChatTitle = useRef<string | undefined>(undefined);
   const persistedUsageTurn = useRef<string | undefined>(undefined);
-  const agent = useDurableEveSession({
+  const agent = useEveAgent({
     initialSession:
       sessionId === undefined
         ? undefined
@@ -70,8 +69,9 @@ export function AgentChat({
             sessionId,
             streamIndex: 0,
           },
+    resume: sessionId !== undefined,
     onSessionChange(session) {
-      if (sessionId === undefined) {
+      if (sessionId === undefined && session !== undefined) {
         saveChat({
           sessionId: session.sessionId,
           title: pendingChatTitle.current,
@@ -89,8 +89,10 @@ export function AgentChat({
   });
 
   const isBusy = agent.status === "submitted" || agent.status === "streaming";
-  const isRestoring = agent.status === "resuming";
+  const isSubmitting = agent.status === "submitted";
+  const isResuming = agent.status === "resuming";
   const isEmpty = agent.data.messages.length === 0;
+  const isRestoring = isResuming && isEmpty;
   const lastMessage = agent.data.messages.at(-1);
   const isPendingAssistantShell =
     lastMessage?.role === "assistant" &&
@@ -104,9 +106,7 @@ export function AgentChat({
   const turnFailure =
     isBusy || isRestoring ? undefined : getLatestTurnFailure(agent.events);
   const errorMessage =
-    cancellationError ??
-    (agent.error ? toErrorMessage(agent.error) : undefined) ??
-    turnFailure;
+    (agent.error ? toErrorMessage(agent.error) : undefined) ?? turnFailure;
   const hasConversationContent =
     sessionless || !isEmpty || errorMessage !== undefined;
   const showConversationLayout = isRestoring || hasConversationContent;
@@ -170,6 +170,10 @@ export function AgentChat({
     () => collectSubagentSessions(agent.events),
     [agent.events]
   );
+  const hasPendingWorker = useMemo(
+    () => hasPendingBackgroundWorker(agent.events),
+    [agent.events]
+  );
   const messages = useMemo(
     () => messagesForTraceView(agent.data.messages, agent.events, traceView),
     [agent.data.messages, agent.events, traceView]
@@ -186,20 +190,44 @@ export function AgentChat({
     saveChat({ sessionId: activeSessionId, usage });
   }, [activeSessionId, latestTerminalTurnId, saveChat, usage]);
 
-  const requestCancellation = () => {
-    setCancellationError(undefined);
-    void agent.cancel().catch((error: unknown) => {
-      setCancellationError(toErrorMessage(error));
-    });
-  };
+  useEffect(() => {
+    if (activeSessionId === undefined || !hasPendingWorker) return;
+
+    const interval = window.setInterval(() => {
+      if (agent.status !== "ready" || backgroundCatchUp.current !== undefined) {
+        return;
+      }
+
+      const catchUp = agent.resume().catch(() => undefined);
+      backgroundCatchUp.current = catchUp;
+      void catchUp.finally(() => {
+        if (backgroundCatchUp.current === catchUp) {
+          backgroundCatchUp.current = undefined;
+        }
+      });
+    }, 750);
+
+    return () => window.clearInterval(interval);
+  }, [activeSessionId, agent, hasPendingWorker]);
 
   const handleSubmit = async (message: PromptInputMessage) => {
     const text = message.text.trim();
-    if ((text.length === 0 && message.files.length === 0) || isRestoring)
+    if (
+      (text.length === 0 && message.files.length === 0) ||
+      isSubmitting ||
+      isRestoring
+    )
       return;
 
-    setCancellationError(undefined);
-    const options = isBusy ? { turnPolicy: "steer" as const } : undefined;
+    const catchUp = backgroundCatchUp.current;
+    if (catchUp !== undefined) {
+      await Promise.all([agent.cancel().catch(() => undefined), catchUp]);
+    }
+
+    const options =
+      isBusy || catchUp !== undefined
+        ? { turnPolicy: "steer" as const }
+        : undefined;
     const title = chatTitle(message);
     if (activeSessionId) {
       saveChat({ sessionId: activeSessionId });
@@ -232,7 +260,7 @@ export function AgentChat({
     <PromptInput onSubmit={handleSubmit}>
       <PromptInputBody>
         <PromptInputTextarea
-          disabled={isRestoring}
+          disabled={isSubmitting}
           placeholder="Send a message…"
           className="min-h-0"
         />
@@ -241,8 +269,8 @@ export function AgentChat({
         <PromptInputTools />
         <PromptInputSubmit
           disabled={isRestoring}
-          onStop={requestCancellation}
-          status={agent.status === "resuming" ? undefined : agent.status}
+          onStop={() => void agent.cancel()}
+          status={isBusy ? agent.status : undefined}
         />
       </PromptInputFooter>
     </PromptInput>
@@ -268,7 +296,7 @@ export function AgentChat({
                 isPendingAssistantShell &&
                 message.id === lastMessage.id ? null : (
                   <AgentMessage
-                    canRespond={!isBusy && !isRestoring}
+                    canRespond={!isBusy && !isResuming}
                     deliveredAssistantMessages={deliveredAssistantMessages.get(
                       message.id
                     )}
@@ -278,10 +306,9 @@ export function AgentChat({
                     }
                     key={message.id}
                     message={message}
-                    onInputResponses={(inputResponses) => {
-                      setCancellationError(undefined);
-                      return agent.respond(inputResponses);
-                    }}
+                    onInputResponses={(inputResponses) =>
+                      agent.respond(inputResponses)
+                    }
                     timestamp={messageTimestamps.get(message.id)}
                     userVisibleOnly={traceView === "imessage"}
                   />
@@ -390,6 +417,57 @@ export function backgroundWorkerDeliveryMessageIds(
   }
 
   return messageIds;
+}
+
+function hasPendingBackgroundWorker(events: readonly MessageStreamEvent[]) {
+  const taskIds = new Set<string>();
+
+  for (const event of events) {
+    if (
+      event.type === "subagent.completed" &&
+      event.data.subagentName === "worker" &&
+      event.data.backgroundTask !== undefined
+    ) {
+      taskIds.add(event.data.backgroundTask.taskId);
+      continue;
+    }
+
+    if (event.type === "action.result") {
+      const result = event.data.result;
+      if (
+        result.kind === "subagent-result" &&
+        result.subagentName === "worker" &&
+        result.origin === "child" &&
+        result.backgroundTask !== undefined
+      ) {
+        taskIds.add(result.backgroundTask.taskId);
+        continue;
+      }
+
+      const cancellation = taskCancelResultSchema.safeParse(result);
+      if (!cancellation.success) continue;
+      for (const value of cancellation.data.output.tasks) {
+        const task = cancelledWorkerTaskSchema.safeParse(value);
+        if (task.success) taskIds.delete(task.data.taskId);
+      }
+      continue;
+    }
+
+    if (event.type !== "message.received") continue;
+    const deliveredTaskId =
+      backgroundWorkerDelivery.exec(event.data.message)?.[1] ??
+      backgroundWorkerAuthorization.exec(event.data.message)?.[1];
+    if (
+      deliveredTaskId &&
+      !event.data.message.startsWith(
+        `Background task ${deliveredTaskId} (worker) update: `
+      )
+    ) {
+      taskIds.delete(deliveredTaskId);
+    }
+  }
+
+  return taskIds.size > 0;
 }
 
 function ErrorMessage({ message }: { readonly message: string }) {

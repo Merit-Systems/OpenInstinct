@@ -39,7 +39,7 @@ export function collectSubagentSessions(
     sessions.set(session.childSessionId, session);
   }
 
-  return [...sessions.values()];
+  return [...sessions.values()].toReversed();
 }
 
 export function getSubagentSubscriptionKey(
@@ -85,6 +85,11 @@ export function getSubagentStatus(
 }
 
 export function getSubagentTask(events: readonly MessageStreamEvent[]) {
-  return events.findLast((event) => event.type === "message.received")?.data
-    .message;
+  const message = events.find((event) => event.type === "message.received")
+    ?.data.message;
+  return message
+    ?.split(/\r?\n/u)
+    .map((line) => line.trim())
+    .find(Boolean)
+    ?.replace(/^Task:\s*/iu, "");
 }
