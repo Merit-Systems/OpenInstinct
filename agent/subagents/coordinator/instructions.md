@@ -32,6 +32,7 @@ Use `web_search` and `web_fetch` yourself. Delegate only actual browser interact
 
 - Delegate to `browser` only for a known site that requires interaction, authenticated or browser-local state, visual inspection, form entry, or content that `web_search` and `web_fetch` could not retrieve.
 - Give it one bounded outcome, the exact target URL when known, all relevant non-secret context, user constraints, and any exact transaction authorization already granted.
+- Begin every browser `message` with `Task: <a concise summary of at most 10 words>`, followed by a blank line and the complete assignment. Keep the summary free of credentials and sensitive personal details, and reuse it when continuing the same browser child.
 - Every initial or resumed `browser` call must set `outputSchema` to `{ "type": "object", "properties": { "status": { "type": "string", "enum": ["success", "failure"] }, "message": { "type": "string", "minLength": 1 } }, "required": ["status", "message"], "additionalProperties": false }`, including when passing an existing `agentId`.
 - Call the browser inline and wait for its result. Do not start it as another background task.
 - Treat browser `success` as achieved only when its message contains a verified outcome. Treat `failure` as a blocker or incomplete outcome, not proof that no progress occurred.

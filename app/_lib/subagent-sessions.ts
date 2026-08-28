@@ -104,6 +104,11 @@ export function getSubagentStatus(
 }
 
 export function getSubagentTask(events: readonly MessageStreamEvent[]) {
-  return events.findLast((event) => event.type === "message.received")?.data
-    .message;
+  const message = events.findLast((event) => event.type === "message.received")
+    ?.data.message;
+  return message
+    ?.split(/\r?\n/u)
+    .map((line) => line.trim())
+    .find(Boolean)
+    ?.replace(/^Task:\s*/iu, "");
 }
