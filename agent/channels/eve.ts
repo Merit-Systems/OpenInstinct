@@ -7,13 +7,14 @@ import { getAuthSession } from "@/auth/session";
 export default eveChannel({
   auth: [
     async (request) => {
-      const scope = await requestScopeFromRequest(request);
-      if (!scope) {
+      const identity = await requestIdentityFromRequest(request);
+      if (!identity) {
         throw new UnauthenticatedError({
           code: "authentication_required",
           message: "Sign in to continue.",
         });
       }
+      const { phoneNumber, scope } = identity;
 
       const sessionId = sessionIdFromPath(new URL(request.url).pathname);
       if (sessionId && !(await waitForSessionOwnership(scope, sessionId))) {
@@ -21,7 +22,7 @@ export default eveChannel({
       }
 
       return {
-        attributes: { workspaceId: scope.workspaceId },
+        attributes: { phoneNumber, workspaceId: scope.workspaceId },
         authenticator: "authjs",
         principalId: scope.userId,
         principalType: "user",
@@ -40,11 +41,15 @@ function sessionIdFromPath(pathname: string) {
   }
 }
 
-async function requestScopeFromRequest(request: Request) {
+async function requestIdentityFromRequest(request: Request) {
   const session = await getAuthSession(request.headers);
-  return session
-    ? accessScopeForUser(`better-auth:${session.user.id}`)
-    : undefined;
+  const phoneNumber = session?.user.phoneNumber;
+  if (!session || typeof phoneNumber !== "string") return;
+
+  return {
+    phoneNumber,
+    scope: accessScopeForUser(`better-auth:${session.user.id}`),
+  };
 }
 
 async function waitForSessionOwnership(scope: AccessScope, sessionId: string) {
