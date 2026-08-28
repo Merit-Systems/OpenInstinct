@@ -1,4 +1,4 @@
-// The chat UI, benchmarks, and iMessage relay all need task ids and terminal status from these prose messages; parse them here only.
+// Eve limitation: background-task delivery has no typed event, only these prose messages, forcing this custom parser.
 type TaskNotification =
   | { readonly kind: "authorization"; readonly taskId: string }
   | TaskAgentNotification;
