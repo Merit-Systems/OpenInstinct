@@ -45,6 +45,7 @@ import {
   ToolOutput,
 } from "@/components/ai-elements/tool";
 import { Button } from "@/components/ui/button";
+import { parseArtifactMessage } from "@/lib/artifacts";
 import { cn } from "@/lib/utils";
 
 export type AgentInputResponse = {
@@ -202,11 +203,7 @@ function AgentMessagePart({
     case "step-start":
       return null;
     case "text":
-      return (
-        <MessageResponse caret="block" isAnimating={showCaret}>
-          {part.text}
-        </MessageResponse>
-      );
+      return <ArtifactMessageText isAnimating={showCaret} text={part.text} />;
     case "reasoning":
       return (
         <Reasoning defaultOpen isStreaming={part.state === "streaming"}>
@@ -263,6 +260,50 @@ function AgentMessagePart({
       return tool;
     }
   }
+}
+
+function ArtifactMessageText({
+  isAnimating,
+  text,
+}: {
+  readonly isAnimating: boolean;
+  readonly text: string;
+}) {
+  return parseArtifactMessage(text).map((segment, index) =>
+    segment.type === "text" ? (
+      <MessageResponse
+        caret="block"
+        isAnimating={isAnimating && index === 0}
+        key={`text:${index}`}
+      >
+        {segment.text}
+      </MessageResponse>
+    ) : (
+      <div
+        className="my-3 overflow-hidden rounded-xl border bg-background shadow-sm"
+        key={segment.id}
+      >
+        <iframe
+          className="h-[28rem] w-full bg-background"
+          loading="lazy"
+          sandbox="allow-forms allow-scripts"
+          src={segment.url}
+          title="OpenInstinct artifact"
+        />
+        <div className="flex items-center justify-end border-t px-3 py-2">
+          <a
+            className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground"
+            href={segment.url}
+            rel="noreferrer"
+            target="_blank"
+          >
+            Open artifact
+            <ExternalLinkIcon className="size-3.5" />
+          </a>
+        </div>
+      </div>
+    )
+  );
 }
 
 function QuestionRequest({

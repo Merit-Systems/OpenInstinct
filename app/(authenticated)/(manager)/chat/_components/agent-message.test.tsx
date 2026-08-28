@@ -240,6 +240,27 @@ describe("agent messages", () => {
     expect(markup).not.toContain("Hidden recipient");
   });
 
+  it("renders a published artifact inline with a private open link", () => {
+    const artifactId = "018f08c6-8f07-7f72-934c-32f4e6fd8a21";
+    const markup = renderToStaticMarkup(
+      <AgentMessage
+        canRespond
+        isStreaming={false}
+        message={assistantMessage(
+          "turn-artifact",
+          `Here is the mini app.\n\n[[artifact:${artifactId}]]`
+        )}
+        onInputResponses={() => undefined}
+      />
+    );
+
+    expect(markup).toContain("Here is the mini app.");
+    expect(markup).toContain(`/artifacts/${artifactId}`);
+    expect(markup).toContain("Open artifact");
+    expect(markup).toContain('sandbox="allow-forms allow-scripts"');
+    expect(markup).not.toContain("[[artifact:");
+  });
+
   it("keeps a parked failed child visibly failed", () => {
     const events = [
       {
