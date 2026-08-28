@@ -44,7 +44,7 @@ export function collectSubagentSessions(
     sessions.set(session.childSessionId, session);
   }
 
-  return [...sessions.values()];
+  return [...sessions.values()].toReversed();
 }
 
 export function collectSubagentSessionTree(

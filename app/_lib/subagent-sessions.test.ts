@@ -50,6 +50,50 @@ describe("collectSubagentSessions", () => {
     expect(sessions[0]?.callId).toBe("call_2");
     expect(sessions[0]?.completion?.output).toBe("Done");
   });
+
+  it("sorts the most recently called children first", () => {
+    const events = [
+      called,
+      {
+        ...called,
+        data: {
+          ...called.data,
+          callId: "call_2",
+          childSessionId: "child_2",
+        },
+        meta: { ...meta, id: "evt_02" },
+      },
+    ] satisfies readonly MessageStreamEvent[];
+
+    expect(
+      collectSubagentSessions(events).map(
+        ({ childSessionId }) => childSessionId
+      )
+    ).toEqual(["child_2", "child_1"]);
+  });
+
+  it("moves a continued child back to the front", () => {
+    const secondChild = {
+      ...called,
+      data: {
+        ...called.data,
+        callId: "call_2",
+        childSessionId: "child_2",
+      },
+      meta: { ...meta, id: "evt_02" },
+    } satisfies MessageStreamEvent;
+    const continuedFirstChild = {
+      ...called,
+      data: { ...called.data, callId: "call_3" },
+      meta: { ...meta, id: "evt_03" },
+    } satisfies MessageStreamEvent;
+
+    expect(
+      collectSubagentSessions([called, secondChild, continuedFirstChild]).map(
+        ({ childSessionId }) => childSessionId
+      )
+    ).toEqual(["child_1", "child_2"]);
+  });
 });
 
 describe("collectSubagentSessionTree", () => {
