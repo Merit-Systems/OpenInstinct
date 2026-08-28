@@ -1,6 +1,9 @@
 /* oxlint-disable typescript/no-unsafe-type-assertion -- Eve's Linq adapter exposes the handler context through a transitive Chat SDK `any`; the fixture supplies only the fields exercised here. */
 import { describe, expect, it, vi } from "vitest";
-import { deliverCompletedLinqMessage } from "../agent/channels/linq";
+import {
+  deliverCompletedLinqMessage,
+  deliverLinqReaction,
+} from "../agent/channels/linq";
 
 type HandlerParameters = Parameters<typeof deliverCompletedLinqMessage>;
 
@@ -23,7 +26,7 @@ describe("Linq message delivery", () => {
     expect(post).toHaveBeenCalledExactlyOnceWith({ markdown: message });
   });
 
-  it("suppresses intermediate tool-call messages", async () => {
+  it("suppresses intermediate tool-call messages without reacting automatically", async () => {
     const { addReaction, context, post, state } = handlerContext();
 
     await deliverCompletedLinqMessage(
@@ -36,11 +39,7 @@ describe("Linq message delivery", () => {
     );
 
     expect(post).not.toHaveBeenCalled();
-    expect(addReaction).toHaveBeenCalledExactlyOnceWith(
-      "linq:dm:chat-1",
-      "message-1",
-      "thumbs_up"
-    );
+    expect(addReaction).not.toHaveBeenCalled();
     expect(state.pendingToolCallMessage).toBe("Checking the checkout");
   });
 
@@ -54,6 +53,33 @@ describe("Linq message delivery", () => {
     );
 
     expect(post).not.toHaveBeenCalled();
+  });
+
+  it("applies a reaction only when the model calls react_to_message", async () => {
+    const { addReaction, context } = handlerContext();
+
+    await deliverLinqReaction(
+      {
+        result: {
+          callId: "call-1",
+          kind: "tool-result",
+          output: { reaction: "laugh" },
+          toolName: "react_to_message",
+        },
+        sequence: 0,
+        status: "completed",
+        stepIndex: 0,
+        turnId: "turn-1",
+      },
+      context,
+      sessionContext()
+    );
+
+    expect(addReaction).toHaveBeenCalledExactlyOnceWith(
+      "linq:dm:chat-1",
+      "message-1",
+      "laugh"
+    );
   });
 });
 

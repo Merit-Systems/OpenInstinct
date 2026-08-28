@@ -11,6 +11,7 @@ import { auth } from "@/auth";
 import { normalizeAuthPhoneNumber } from "@/auth/phone-number";
 import { accessScopeForUser } from "@/lib/access-scope";
 import { env } from "@/lib/env";
+import { linqReactionRequestSchema } from "@/agent/lib/linq-reactions";
 
 const verifiedPhoneUserSchema = z.object({
   id: z.string().min(1),
@@ -30,6 +31,31 @@ const credentials: LinqChannelCredentials = env.LINQ_CONNECTOR
 type LinqMessageCompletedHandler = NonNullable<
   NonNullable<LinqChannelConfig["events"]>["message.completed"]
 >;
+type LinqActionResultHandler = NonNullable<
+  NonNullable<LinqChannelConfig["events"]>["action.result"]
+>;
+
+export const deliverLinqReaction: LinqActionResultHandler = async (
+  event,
+  context
+) => {
+  if (
+    event.status !== "completed" ||
+    event.result.kind !== "tool-result" ||
+    event.result.toolName !== "react_to_message" ||
+    !context.thread
+  ) {
+    return;
+  }
+
+  const request = linqReactionRequestSchema.safeParse(event.result.output);
+  const messageId = context.thread.toJSON().currentMessage?.id;
+  if (!request.success || !messageId) return;
+
+  await context.bot
+    .getAdapter("linq")
+    .addReaction(context.thread.id, messageId, request.data.reaction);
+};
 
 export const deliverCompletedLinqMessage: LinqMessageCompletedHandler = async (
   event,
@@ -39,7 +65,6 @@ export const deliverCompletedLinqMessage: LinqMessageCompletedHandler = async (
     context.state.pendingToolCallMessage = event.message
       ? (firstNonEmptyLine(event.message) ?? null)
       : null;
-    await acknowledgeLinqToolWork(context);
     return;
   }
 
@@ -54,6 +79,7 @@ export const deliverCompletedLinqMessage: LinqMessageCompletedHandler = async (
 export default linqChannel({
   credentials,
   events: {
+    "action.result": deliverLinqReaction,
     "message.completed": deliverCompletedLinqMessage,
   },
   async onMessage(_context, message) {
@@ -100,22 +126,4 @@ async function findVerifiedAuthUserIdByPhoneNumber(phoneNumber: string) {
   });
   const parsed = verifiedPhoneUserSchema.safeParse(user);
   return parsed.success ? parsed.data.id : undefined;
-}
-
-async function acknowledgeLinqToolWork(
-  context: Parameters<LinqMessageCompletedHandler>[1]
-) {
-  if (!context.thread) return;
-  const messageId = context.thread.toJSON().currentMessage?.id;
-  if (!messageId || context.state.acknowledgedLinqMessageId === messageId)
-    return;
-
-  try {
-    await context.bot
-      .getAdapter("linq")
-      .addReaction(context.thread.id, messageId, "thumbs_up");
-    context.state.acknowledgedLinqMessageId = messageId;
-  } catch {
-    // SMS/RCS and some carrier paths do not support iMessage tapbacks.
-  }
 }

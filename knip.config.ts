@@ -5,6 +5,7 @@ export default {
     "agent/channels/**/*.ts",
     "agent/extensions/**/*.ts",
     "agent/hooks/**/*.ts",
+    "agent/instructions/**/*.ts",
     "agent/tools/**/*.ts",
     "browser-extension/entrypoints/**/*.ts",
     "db/drizzle.config.ts",
