@@ -5,7 +5,7 @@ import { deliverCompletedLinqMessage } from "../agent/channels/linq";
 type HandlerParameters = Parameters<typeof deliverCompletedLinqMessage>;
 
 describe("Linq message delivery", () => {
-  it("posts final multiline responses as unchanged raw text", async () => {
+  it("posts final responses as native iMessage Markdown", async () => {
     const message = [
       "Still blocked. No order was submitted.",
       "The order remains unchanged:",
@@ -20,11 +20,11 @@ describe("Linq message delivery", () => {
       sessionContext()
     );
 
-    expect(post).toHaveBeenCalledExactlyOnceWith(message);
+    expect(post).toHaveBeenCalledExactlyOnceWith({ markdown: message });
   });
 
   it("suppresses intermediate tool-call messages", async () => {
-    const { context, post, state } = handlerContext();
+    const { addReaction, context, post, state } = handlerContext();
 
     await deliverCompletedLinqMessage(
       completedEvent({
@@ -36,6 +36,11 @@ describe("Linq message delivery", () => {
     );
 
     expect(post).not.toHaveBeenCalled();
+    expect(addReaction).toHaveBeenCalledExactlyOnceWith(
+      "linq:dm:chat-1",
+      "message-1",
+      "thumbs_up"
+    );
     expect(state.pendingToolCallMessage).toBe("Checking the checkout");
   });
 
@@ -68,13 +73,33 @@ function completedEvent(
 function handlerContext() {
   const post = vi.fn<(message: string) => Promise<void>>();
   post.mockResolvedValue();
+  const addReaction = vi
+    .fn<(threadId: string, messageId: string, emoji: string) => Promise<void>>()
+    .mockResolvedValue(undefined);
   const state: Record<string, unknown> = {};
   const context = {
+    bot: {
+      getAdapter: () => ({
+        addReaction,
+        decodeThreadId: () => ({ chatId: "chat-1", isGroup: false }),
+      }),
+    },
     state,
-    thread: { post },
+    thread: {
+      id: "linq:dm:chat-1",
+      post,
+      toJSON: () => ({
+        _type: "chat:Thread",
+        adapterName: "linq",
+        channelId: "linq:dm:chat-1",
+        currentMessage: { id: "message-1" },
+        id: "linq:dm:chat-1",
+        isDM: true,
+      }),
+    },
   } as unknown as HandlerParameters[1];
 
-  return { context, post, state };
+  return { addReaction, context, post, state };
 }
 
 function sessionContext() {
