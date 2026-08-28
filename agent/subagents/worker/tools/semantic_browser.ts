@@ -19,6 +19,7 @@ const allSpecs = [
   loop.tools.browser.find(),
   loop.tools.browser.waitFor(),
   loop.tools.browser.act(),
+  loop.tools.playwright(),
 ];
 const specsByName = new Map(allSpecs.map((spec) => [spec.name, spec]));
 
@@ -58,9 +59,31 @@ async function executeSemanticTool(
   return executeBrowserLoopTool(
     sessionId,
     spec,
-    toolInput,
+    boundedToolInput(spec, toolInput),
     context.abortSignal
   );
+}
+
+function boundedToolInput(spec: LoopToolSpec, input: Record<string, unknown>) {
+  if (spec.name === "browser_act") {
+    return {
+      ...input,
+      timeout_ms: boundedTimeout(input.timeout_ms, 12_000),
+    };
+  }
+  if (spec.name === "playwright_execute") {
+    return {
+      ...input,
+      timeout_sec: boundedTimeout(input.timeout_sec, 20),
+    };
+  }
+  return input;
+}
+
+function boundedTimeout(value: unknown, maximum: number) {
+  return typeof value === "number" && Number.isFinite(value)
+    ? Math.min(Math.max(value, 1), maximum)
+    : maximum;
 }
 
 function toModelOutput(output: LoopToolExecutionResult) {
