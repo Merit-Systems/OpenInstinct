@@ -59,6 +59,7 @@ export function AgentChat({
 }) {
   const { mutate: saveChat } = api.chats.save.useMutation();
   const [traceView, setTraceView] = useState<"imessage" | "trace">("imessage");
+  const backgroundCatchUp = useRef<Promise<void> | undefined>(undefined);
   const pendingChatTitle = useRef<string | undefined>(undefined);
   const persistedUsageTurn = useRef<string | undefined>(undefined);
   const agent = useEveAgent({
@@ -90,8 +91,9 @@ export function AgentChat({
 
   const isBusy = agent.status === "submitted" || agent.status === "streaming";
   const isSubmitting = agent.status === "submitted";
-  const isRestoring = agent.status === "resuming";
+  const isResuming = agent.status === "resuming";
   const isEmpty = agent.data.messages.length === 0;
+  const isRestoring = isResuming && isEmpty;
   const lastMessage = agent.data.messages.at(-1);
   const isPendingAssistantShell =
     lastMessage?.role === "assistant" &&
@@ -169,6 +171,10 @@ export function AgentChat({
     () => collectSubagentSessions(agent.events),
     [agent.events]
   );
+  const hasPendingCoordinator = useMemo(
+    () => hasPendingBackgroundCoordinator(agent.events),
+    [agent.events]
+  );
   const messages = useMemo(
     () => messagesForTraceView(agent.data.messages, agent.events, traceView),
     [agent.data.messages, agent.events, traceView]
@@ -185,6 +191,26 @@ export function AgentChat({
     saveChat({ sessionId: activeSessionId, usage });
   }, [activeSessionId, latestTerminalTurnId, saveChat, usage]);
 
+  useEffect(() => {
+    if (activeSessionId === undefined || !hasPendingCoordinator) return;
+
+    const interval = window.setInterval(() => {
+      if (agent.status !== "ready" || backgroundCatchUp.current !== undefined) {
+        return;
+      }
+
+      const catchUp = agent.resume().catch(() => undefined);
+      backgroundCatchUp.current = catchUp;
+      void catchUp.finally(() => {
+        if (backgroundCatchUp.current === catchUp) {
+          backgroundCatchUp.current = undefined;
+        }
+      });
+    }, 750);
+
+    return () => window.clearInterval(interval);
+  }, [activeSessionId, agent, hasPendingCoordinator]);
+
   const handleSubmit = async (message: PromptInputMessage) => {
     const text = message.text.trim();
     if (
@@ -194,7 +220,15 @@ export function AgentChat({
     )
       return;
 
-    const options = isBusy ? { turnPolicy: "steer" as const } : undefined;
+    const catchUp = backgroundCatchUp.current;
+    if (catchUp !== undefined) {
+      await Promise.all([agent.cancel().catch(() => undefined), catchUp]);
+    }
+
+    const options =
+      isBusy || catchUp !== undefined
+        ? { turnPolicy: "steer" as const }
+        : undefined;
     const title = chatTitle(message);
     if (activeSessionId) {
       saveChat({ sessionId: activeSessionId });
@@ -262,7 +296,7 @@ export function AgentChat({
                 isPendingAssistantShell &&
                 message.id === lastMessage.id ? null : (
                   <AgentMessage
-                    canRespond={!isBusy && !isRestoring}
+                    canRespond={!isBusy && !isResuming}
                     deliveredAssistantMessages={deliveredAssistantMessages.get(
                       message.id
                     )}
@@ -383,6 +417,38 @@ export function backgroundWorkerDeliveryMessageIds(
   }
 
   return messageIds;
+}
+
+function hasPendingBackgroundCoordinator(
+  events: readonly MessageStreamEvent[]
+) {
+  let taskId: string | undefined;
+
+  for (const event of events) {
+    if (
+      event.type === "subagent.completed" &&
+      event.data.subagentName === "coordinator" &&
+      event.data.backgroundTask !== undefined
+    ) {
+      taskId = event.data.backgroundTask.taskId;
+      continue;
+    }
+
+    if (event.type !== "message.received" || taskId === undefined) continue;
+    const deliveredTaskId =
+      backgroundWorkerDelivery.exec(event.data.message)?.[1] ??
+      backgroundWorkerAuthorization.exec(event.data.message)?.[1];
+    if (
+      deliveredTaskId === taskId &&
+      !event.data.message.startsWith(
+        `Background task ${taskId} (coordinator) update: `
+      )
+    ) {
+      taskId = undefined;
+    }
+  }
+
+  return taskId !== undefined;
 }
 
 function ErrorMessage({ message }: { readonly message: string }) {
