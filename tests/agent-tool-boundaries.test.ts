@@ -40,6 +40,15 @@ describe("root and worker capability boundaries", () => {
     expect(rootInstructions).toContain(
       "try `web_fetch` before browser automation"
     );
+    expect(rootInstructions).toContain(
+      "Treat a missing detail as a research task before treating it as a question for the user"
+    );
+    expect(rootInstructions).toContain(
+      "Never ask for information you can reliably find yourself"
+    );
+    expect(rootInstructions).toContain(
+      "Check available read-only profile or connected-service context"
+    );
   });
 
   it("gives worker the browser and opaque-vault tools without messaging", () => {
