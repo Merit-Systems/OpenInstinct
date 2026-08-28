@@ -1,8 +1,8 @@
 "use client";
 
 import type { UserContent } from "ai";
-import { AlertCircleIcon, BrainIcon, PlusIcon } from "lucide-react";
-import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
+import { AlertCircleIcon, BrainIcon } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Conversation,
   ConversationContent,
@@ -19,15 +19,14 @@ import {
   PromptInputTools,
 } from "@/components/ai-elements/prompt-input";
 import { Shimmer } from "@/components/ai-elements/shimmer";
-import { Button } from "@/components/ui/button";
-import { ButtonGroup } from "@/components/ui/button-group";
-import { formatChatUsage, summarizeChatUsage } from "@/app/_lib/chat-usage";
+import { summarizeChatUsage } from "@/app/_lib/chat-usage";
 import { getLatestTurnFailure } from "@/app/_lib/turn-failure";
 import { useDurableEveSession } from "@/app/_hooks/use-durable-eve-session";
 import type { ChatUsage } from "@/lib/chat";
 import { cn } from "@/lib/utils";
 import { AgentMessage } from "./agent-message";
-import { SubagentTrace } from "./subagent-trace";
+import { collectSubagentSessions } from "@/app/_lib/subagent-sessions";
+import { SubagentPanel } from "./subagent-panel";
 
 const AGENT_NAME = "Local Vault Assistant";
 
@@ -41,7 +40,7 @@ export function AgentChat({
   readonly sessionless?: boolean;
 }) {
   const [cancellationError, setCancellationError] = useState<string>();
-  const [traceView, setTraceView] = useState<"imessage" | "trace">("trace");
+  const [traceView, setTraceView] = useState<"imessage" | "trace">("imessage");
   const pendingChatTitle = useRef<string | undefined>(undefined);
   const agent = useDurableEveSession({
     initialSession:
@@ -146,19 +145,10 @@ export function AgentChat({
 
     return deliveriesByMessage;
   }, [agent.events]);
-  const subagentTraces = useMemo(() => {
-    const traces = new Map<string, ReactNode>();
-
-    for (const event of agent.events) {
-      if (event.type !== "subagent.called") continue;
-      traces.set(
-        event.data.callId,
-        <SubagentTrace key={event.data.childSessionId} target={event.data} />
-      );
-    }
-
-    return traces;
-  }, [agent.events]);
+  const subagentSessions = useMemo(
+    () => collectSubagentSessions(agent.events),
+    [agent.events]
+  );
 
   useEffect(() => {
     if (activeSessionId === undefined || latestTerminalTurnAt === undefined) {
@@ -231,80 +221,76 @@ export function AgentChat({
   );
 
   return (
-    <main className="relative flex h-full min-h-0 flex-col overflow-hidden bg-background text-foreground">
-      {showConversationLayout ? (
-        <ChatHeader
-          canStartNewChat={activeSessionId !== undefined}
-          onTraceViewChange={setTraceView}
-          traceView={traceView}
-          usage={usage}
-        />
-      ) : null}
+    <div className="relative flex h-full min-h-0 overflow-hidden bg-background text-foreground">
+      <main className="relative flex min-w-0 flex-1 flex-col overflow-hidden">
+        {showConversationLayout ? (
+          <Conversation
+            className="min-h-0 flex-1"
+            initial={sessionId === undefined ? undefined : false}
+            resize={activeSessionId === undefined ? "smooth" : "instant"}
+            scrollRestorationKey={
+              isEmpty || activeSessionId === undefined
+                ? undefined
+                : `eve:web-chat-scroll:${activeSessionId}`
+            }
+          >
+            <ConversationContent className="mx-auto w-full max-w-3xl gap-6 px-4 pt-6 pb-36 sm:px-6">
+              {agent.data.messages.map((message, index) =>
+                showPendingThinking &&
+                isPendingAssistantShell &&
+                message.id === lastMessage.id ? null : (
+                  <AgentMessage
+                    canRespond={!isBusy && !isRestoring}
+                    deliveredAssistantMessages={deliveredAssistantMessages.get(
+                      message.id
+                    )}
+                    isStreaming={
+                      agent.status === "streaming" &&
+                      index === agent.data.messages.length - 1
+                    }
+                    key={message.id}
+                    message={message}
+                    onInputResponses={(inputResponses) => {
+                      setCancellationError(undefined);
+                      return agent.respond(inputResponses);
+                    }}
+                    timestamp={messageTimestamps.get(message.id)}
+                    userVisibleOnly={traceView === "imessage"}
+                  />
+                )
+              )}
+              {showPendingThinking ? <PendingThinking /> : null}
+              {errorMessage ? <ErrorMessage message={errorMessage} /> : null}
+            </ConversationContent>
+            <ConversationScrollButton />
+          </Conversation>
+        ) : null}
 
-      {showConversationLayout ? (
-        <Conversation
-          className="min-h-0 flex-1"
-          initial={sessionId === undefined ? undefined : false}
-          resize={activeSessionId === undefined ? "smooth" : "instant"}
-          scrollRestorationKey={
-            isEmpty || activeSessionId === undefined
-              ? undefined
-              : `eve:web-chat-scroll:${activeSessionId}`
-          }
+        <div
+          className={cn(
+            "mx-auto w-full px-4 sm:px-6",
+            showConversationLayout
+              ? "absolute bottom-0 left-1/2 z-20 max-w-3xl -translate-x-1/2 bg-gradient-to-t from-background via-background to-transparent pt-4 pb-6"
+              : "flex max-w-xl flex-1 flex-col items-center justify-center gap-8 pb-[10vh]"
+          )}
         >
-          <ConversationContent className="mx-auto w-full max-w-3xl gap-6 px-4 pt-20 pb-36 sm:px-6">
-            {agent.data.messages.map((message, index) =>
-              showPendingThinking &&
-              isPendingAssistantShell &&
-              message.id === lastMessage.id ? null : (
-                <AgentMessage
-                  afterToolCalls={
-                    traceView === "trace" ? subagentTraces : undefined
-                  }
-                  canRespond={!isBusy && !isRestoring}
-                  deliveredAssistantMessages={deliveredAssistantMessages.get(
-                    message.id
-                  )}
-                  isStreaming={
-                    agent.status === "streaming" &&
-                    index === agent.data.messages.length - 1
-                  }
-                  key={message.id}
-                  message={message}
-                  onInputResponses={(inputResponses) => {
-                    setCancellationError(undefined);
-                    return agent.respond(inputResponses);
-                  }}
-                  timestamp={messageTimestamps.get(message.id)}
-                  userVisibleOnly={traceView === "imessage"}
-                />
-              )
-            )}
-            {showPendingThinking ? <PendingThinking /> : null}
-            {errorMessage ? <ErrorMessage message={errorMessage} /> : null}
-          </ConversationContent>
-          <ConversationScrollButton />
-        </Conversation>
-      ) : null}
-
-      <div
-        className={cn(
-          "mx-auto w-full px-4 sm:px-6",
-          showConversationLayout
-            ? "absolute bottom-0 left-1/2 z-20 max-w-3xl -translate-x-1/2 bg-gradient-to-t from-background via-background to-transparent pt-4 pb-6"
-            : "flex max-w-xl flex-1 flex-col items-center justify-center gap-8 pb-[10vh]"
-        )}
-      >
-        {showConversationLayout ? null : (
-          <div className="flex flex-col items-start gap-3">
-            <h1 className="text-5xl font-medium tracking-tighter">
-              {AGENT_NAME}
-            </h1>
-          </div>
-        )}
-        <div className="w-full">{composer}</div>
-      </div>
-    </main>
+          {showConversationLayout ? null : (
+            <div className="flex flex-col items-start gap-3">
+              <h1 className="text-5xl font-medium tracking-tighter">
+                {AGENT_NAME}
+              </h1>
+            </div>
+          )}
+          <div className="w-full">{composer}</div>
+        </div>
+      </main>
+      <SubagentPanel
+        onTraceViewChange={setTraceView}
+        sessions={subagentSessions}
+        traceView={traceView}
+        usage={usage}
+      />
+    </div>
   );
 }
 
@@ -324,67 +310,6 @@ function ErrorMessage({ message }: { readonly message: string }) {
         </div>
       </MessageContent>
     </Message>
-  );
-}
-
-function ChatHeader({
-  canStartNewChat,
-  onTraceViewChange,
-  traceView,
-  usage,
-}: {
-  readonly canStartNewChat: boolean;
-  readonly onTraceViewChange: (view: "imessage" | "trace") => void;
-  readonly traceView: "imessage" | "trace";
-  readonly usage: ChatUsage;
-}) {
-  return (
-    <header className="pointer-events-none absolute top-0 right-0 left-0 z-20 h-14">
-      <div className="relative mx-auto flex h-full w-full max-w-3xl items-center justify-start bg-background px-4">
-        <div className="min-w-0">
-          <span className="block truncate text-sm text-muted-foreground">
-            {AGENT_NAME}
-          </span>
-          <span className="block type-label text-muted-foreground">
-            Usage {formatChatUsage(usage)}
-          </span>
-        </div>
-        <div className="pointer-events-auto ml-auto flex items-center gap-2">
-          <ButtonGroup aria-label="Trace view">
-            <Button
-              aria-pressed={traceView === "imessage"}
-              onClick={() => onTraceViewChange("imessage")}
-              size="sm"
-              type="button"
-              variant={traceView === "imessage" ? "secondary" : "outline"}
-            >
-              iMessage
-            </Button>
-            <Button
-              aria-pressed={traceView === "trace"}
-              onClick={() => onTraceViewChange("trace")}
-              size="sm"
-              type="button"
-              variant={traceView === "trace" ? "secondary" : "outline"}
-            >
-              Full trace
-            </Button>
-          </ButtonGroup>
-          {canStartNewChat ? (
-            <Button
-              aria-label="Start a new chat"
-              onClick={() => window.location.assign("/chat")}
-              size="sm"
-              type="button"
-              variant="ghost"
-            >
-              <PlusIcon className="size-4" />
-              <span className="hidden sm:inline">New chat</span>
-            </Button>
-          ) : null}
-        </div>
-      </div>
-    </header>
   );
 }
 
