@@ -142,13 +142,25 @@ Gotchas:
 
 ## Local development
 
-Docker Desktop (or another Docker Compose installation) is required. Configure
-the non-database variables in `.env.example`, then:
+Prerequisites:
+
+- Node.js 24 and pnpm 11
+- Docker Desktop or another Docker Compose installation, with Docker running
+- A Kernel API key
+
+Docker runs the local PostgreSQL database and Eve task sandboxes. Create a
+loadable local environment file before starting the app:
 
 ```bash
 git clone https://github.com/Merit-Systems/open-instinct.git
 cd open-instinct
 pnpm install
+cp .env.example .env.local
+```
+
+Set `KERNEL_API_KEY` in `.env.local`, then start the development environment:
+
+```bash
 pnpm dev
 ```
 

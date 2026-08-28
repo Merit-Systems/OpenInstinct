@@ -16,6 +16,20 @@ afterEach(async () => {
 });
 
 describe("local development", () => {
+  it("documents the required tools and loaded environment file", async () => {
+    const readme = await readFile(
+      new URL("../README.md", import.meta.url),
+      "utf8"
+    );
+
+    expect(readme).toContain("Node.js 24 and pnpm 11");
+    expect(readme).toContain("with Docker running");
+    expect(readme).toContain("A Kernel API key");
+    expect(readme).toContain("cp .env.example .env.local");
+    expect(readme).toContain("Set `KERNEL_API_KEY` in `.env.local`");
+    expect(readme).toContain("Eve task sandboxes");
+  });
+
   it("owns the PostgreSQL lifecycle around the application process", async () => {
     const [compose, developmentScript, packageManifestSource] =
       await Promise.all([
