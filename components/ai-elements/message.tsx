@@ -24,10 +24,14 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 import { Streamdown, type Components } from "streamdown";
-import { isBrowserImageArtifactUrl } from "@/lib/browser-image-path";
+import {
+  browserImageArtifactAttemptUrl,
+  isBrowserImageArtifactUrl,
+} from "@/lib/browser-image-path";
 
 export type MessageProps = HTMLAttributes<HTMLDivElement> & {
   from: UIMessage["role"];
@@ -322,20 +326,54 @@ export type MessageResponseProps = ComponentProps<typeof Streamdown>;
 
 const streamdownPlugins = { cjk, code, math, mermaid };
 const streamdownComponents: Components = { img: ArtifactMessageImage };
+const artifactImageRetryDelayMs = 1000;
 
 export function ArtifactMessageImage({
   alt,
   className,
   node: _node,
+  onError,
+  onLoad,
   src,
   ...props
 }: ComponentProps<"img"> & { readonly node?: unknown }) {
   void _node;
+  const retryTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const [loadState, setLoadState] = useState({
+    attempt: 0,
+    source: src,
+    status: "loading" as "failed" | "loading" | "waiting",
+  });
+  const currentLoadState =
+    loadState.source === src
+      ? loadState
+      : { attempt: 0, source: src, status: "loading" as const };
+
+  useEffect(
+    () => () => {
+      if (typeof src === "string" && retryTimer.current) {
+        clearTimeout(retryTimer.current);
+        retryTimer.current = undefined;
+      }
+    },
+    [src]
+  );
+
   if (typeof src !== "string" || !isBrowserImageArtifactUrl(src)) {
     return (
       <span className="text-muted-foreground">
         Image not displayed: {alt || "external image"}
       </span>
+    );
+  }
+
+  if (currentLoadState.status !== "loading") {
+    return (
+      <output className="my-3 inline-flex min-h-24 max-w-full items-center rounded-lg border bg-muted px-4 py-3 text-muted-foreground">
+        {currentLoadState.status === "waiting"
+          ? "Retrying image…"
+          : `Image unavailable: ${alt || "Browser image"}`}
+      </output>
     );
   }
 
@@ -350,8 +388,32 @@ export function ArtifactMessageImage({
         )}
         decoding="async"
         loading="lazy"
+        onError={(event) => {
+          onError?.(event);
+          if (currentLoadState.attempt > 0) {
+            setLoadState({
+              ...currentLoadState,
+              status: "failed",
+            });
+            return;
+          }
+          if (retryTimer.current) {
+            return;
+          }
+
+          setLoadState({ ...currentLoadState, status: "waiting" });
+          retryTimer.current = setTimeout(() => {
+            retryTimer.current = undefined;
+            setLoadState((state) =>
+              state.source === src
+                ? { ...state, attempt: 1, status: "loading" }
+                : state
+            );
+          }, artifactImageRetryDelayMs);
+        }}
+        onLoad={onLoad}
         referrerPolicy="no-referrer"
-        src={src}
+        src={browserImageArtifactAttemptUrl(src, currentLoadState.attempt)}
       />
     </a>
   );

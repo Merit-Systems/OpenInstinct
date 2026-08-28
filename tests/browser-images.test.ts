@@ -8,7 +8,10 @@ import {
   sniffBrowserImageMediaType,
   stripBrowserImageMarkdownReferences,
 } from "../lib/browser-images";
-import { isBrowserImageArtifactUrl } from "../lib/browser-image-path";
+import {
+  browserImageArtifactAttemptUrl,
+  isBrowserImageArtifactUrl,
+} from "../lib/browser-image-path";
 import {
   parseTaskCompletionOutput,
   taskCompletionSchema,
@@ -38,6 +41,15 @@ describe("browser image contracts", () => {
         url: "/artifacts/206c3a7e-c0b8-4317-9e34-552cff646673",
       }).success
     ).toBe(false);
+  });
+
+  it("cache-busts only retry attempts", () => {
+    const artifactUrl = `/artifacts/${artifactId}`;
+
+    expect(browserImageArtifactAttemptUrl(artifactUrl, 0)).toBe(artifactUrl);
+    expect(browserImageArtifactAttemptUrl(artifactUrl, 1)).toBe(
+      `${artifactUrl}?attempt=1`
+    );
   });
 
   it("extracts and strips only exact artifact image markdown", () => {

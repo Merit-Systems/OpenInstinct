@@ -9,3 +9,7 @@ export const browserImageArtifactPathPattern = new RegExp(
 export function isBrowserImageArtifactUrl(value: string) {
   return browserImageArtifactPathPattern.test(value);
 }
+
+export function browserImageArtifactAttemptUrl(value: string, attempt: number) {
+  return attempt === 0 ? value : `${value}?attempt=${String(attempt)}`;
+}
