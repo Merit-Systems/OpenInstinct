@@ -334,6 +334,7 @@ export function backgroundWorkerDeliveryMessageIds(
   // Eve task deliveries currently share message.received with user input, so
   // require both its exact framework grammar and a receipt from this worker.
   const taskIds = new Set<string>();
+  const cancelledTaskIds = new Set<string>();
 
   for (const event of events) {
     if (
@@ -353,17 +354,55 @@ export function backgroundWorkerDeliveryMessageIds(
       event.data.result.backgroundTask !== undefined
     ) {
       taskIds.add(event.data.result.backgroundTask.taskId);
+      continue;
     }
   }
 
   const messageIds = new Set<string>();
   for (const event of events) {
+    if (
+      event.type === "action.result" &&
+      event.data.result.kind === "tool-result" &&
+      event.data.result.toolName === "task_cancel" &&
+      typeof event.data.result.output === "object" &&
+      event.data.result.output !== null &&
+      "tasks" in event.data.result.output &&
+      Array.isArray(event.data.result.output.tasks)
+    ) {
+      for (const task of event.data.result.output.tasks) {
+        if (
+          typeof task === "object" &&
+          task !== null &&
+          "status" in task &&
+          task.status === "cancelled" &&
+          "taskId" in task &&
+          typeof task.taskId === "string" &&
+          "metadata" in task &&
+          typeof task.metadata === "object" &&
+          task.metadata !== null &&
+          "name" in task.metadata &&
+          task.metadata.name === "worker"
+        ) {
+          cancelledTaskIds.add(task.taskId);
+        }
+      }
+      continue;
+    }
+
     if (event.type !== "message.received") continue;
     const taskId =
       backgroundWorkerDelivery.exec(event.data.message)?.[1] ??
       backgroundWorkerAuthorization.exec(event.data.message)?.[1];
-    if (taskId && taskIds.has(taskId))
-      messageIds.add(`${event.data.turnId}:user`);
+    if (taskId && taskIds.has(taskId)) {
+      const isCancellation = event.data.message.endsWith(
+        "(worker) is cancelled."
+      );
+      if (!isCancellation) messageIds.add(`${event.data.turnId}:user`);
+      if (isCancellation && cancelledTaskIds.delete(taskId)) {
+        messageIds.add(`${event.data.turnId}:user`);
+        messageIds.add(`${event.data.turnId}:assistant`);
+      }
+    }
   }
 
   return messageIds;

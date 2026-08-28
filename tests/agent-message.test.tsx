@@ -11,41 +11,49 @@ import { getLatestTurnFailure } from "../app/_lib/turn-failure";
 
 describe("agent messages", () => {
   it.each([
-    ["update", "update: Checking availability"],
-    ["input", "needs input."],
-    ["cancelled", "is cancelled."],
+    ["update", "update: Checking availability", false],
+    ["input", "needs input.", false],
+    ["cancelled", "is cancelled.", true],
     [
       "completed",
       'is completed.\n\nResult:\n{"status":"success","message":"Done"}',
+      false,
     ],
-    ["failed", 'failed.\n\nError:\n{"message":"Worker failed"}'],
-  ])("identifies a worker task %s delivery", (_label, notification) => {
-    const events = [
-      {
-        data: {
-          backgroundTask: { status: "working", taskId: "task_worker" },
-          callId: "call_worker",
-          output: '{"status":"working","taskId":"task_worker"}',
-          subagentName: "worker",
+    ["failed", 'failed.\n\nError:\n{"message":"Worker failed"}', false],
+  ])(
+    "identifies a worker task %s delivery",
+    (_label, notification, hidesResponse) => {
+      const events = [
+        {
+          data: {
+            backgroundTask: { status: "working", taskId: "task_worker" },
+            callId: "call_worker",
+            output: '{"status":"working","taskId":"task_worker"}',
+            subagentName: "worker",
+          },
+          meta: { at: "2026-08-27T20:00:00.000Z", id: "receipt" },
+          type: "subagent.completed",
         },
-        meta: { at: "2026-08-27T20:00:00.000Z", id: "receipt" },
-        type: "subagent.completed",
-      },
-      {
-        data: {
-          message: `Background task task_worker (worker) ${notification}`,
-          sequence: 0,
-          turnId: "task-delivery",
+        ...(hidesResponse ? [workerCancellationResult("task_worker")] : []),
+        {
+          data: {
+            message: `Background task task_worker (worker) ${notification}`,
+            sequence: 0,
+            turnId: "task-delivery",
+          },
+          meta: { at: "2026-08-27T20:00:01.000Z", id: "delivery" },
+          type: "message.received",
         },
-        meta: { at: "2026-08-27T20:00:01.000Z", id: "delivery" },
-        type: "message.received",
-      },
-    ] satisfies MessageStreamEvent[];
+      ] satisfies MessageStreamEvent[];
 
-    expect(backgroundWorkerDeliveryMessageIds(events)).toEqual(
-      new Set(["task-delivery:user"])
-    );
-  });
+      expect(backgroundWorkerDeliveryMessageIds(events)).toEqual(
+        new Set([
+          "task-delivery:user",
+          ...(hidesResponse ? ["task-delivery:assistant"] : []),
+        ])
+      );
+    }
+  );
 
   it("identifies authorization delivery for a known worker task", () => {
     const events = [
@@ -67,6 +75,7 @@ describe("agent messages", () => {
       "Background task task_someone_else (worker) is cancelled.";
     const events = [
       workerActionReceipt("task_worker"),
+      workerCancellationResult("task_worker"),
       receivedMessage("task-delivery", deliveryText),
       receivedMessage("ordinary-user-message", ordinaryText),
     ] satisfies MessageStreamEvent[];
@@ -78,9 +87,28 @@ describe("agent messages", () => {
 
     expect(messagesForTraceView(messages, events, "imessage")).toEqual([
       messages[1],
-      messages[2],
     ]);
     expect(messagesForTraceView(messages, events, "trace")).toBe(messages);
+  });
+
+  it("keeps identical user-authored cancellation text visible", () => {
+    const text = "Background task task_worker (worker) is cancelled.";
+    const events = [
+      workerActionReceipt("task_worker"),
+      receivedMessage("user-spoof", text),
+      workerCancellationResult("task_worker"),
+      receivedMessage("framework-delivery", text),
+    ] satisfies MessageStreamEvent[];
+    const messages = [
+      userMessage("user-spoof", text),
+      assistantMessage("user-spoof", "Visible reply"),
+      userMessage("framework-delivery", text),
+      assistantMessage("framework-delivery", "Hidden redundant reply"),
+    ];
+
+    expect(messagesForTraceView(messages, events, "imessage")).toEqual(
+      messages.slice(0, 2)
+    );
   });
 
   it("renders ordinary assistant text without a delivery tool result", () => {
@@ -300,6 +328,38 @@ function workerActionReceipt(taskId: string): MessageStreamEvent {
       turnId: "turn_worker",
     },
     meta: { at: "2026-08-27T20:00:00.000Z", id: "worker-receipt" },
+    type: "action.result",
+  };
+}
+
+function workerCancellationResult(taskId: string): MessageStreamEvent {
+  return {
+    data: {
+      result: {
+        callId: "call_cancel",
+        kind: "tool-result",
+        output: {
+          tasks: [
+            {
+              metadata: {
+                agentId: "agent_worker",
+                kind: "subagent",
+                mode: "local",
+                name: "worker",
+              },
+              status: "cancelled",
+              taskId,
+            },
+          ],
+        },
+        toolName: "task_cancel",
+      },
+      sequence: 2,
+      status: "completed",
+      stepIndex: 1,
+      turnId: "turn_cancel",
+    },
+    meta: { at: "2026-08-27T20:00:00.500Z", id: "cancel-result" },
     type: "action.result",
   };
 }
