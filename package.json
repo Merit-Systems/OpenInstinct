@@ -3,6 +3,9 @@
   "license": "MIT",
   "dependencies": {
     "@base-ui/react": "^1.7.0",
+    "@googleapis/calendar": "^16.0.0",
+    "@googleapis/gmail": "^18.0.0",
+    "@googleapis/people": "^8.0.0",
     "@onkernel/eve-extension": "^0.1.4",
     "@onkernel/sdk": "^0.96.0",
     "@opentelemetry/api": "^1.9.1",
