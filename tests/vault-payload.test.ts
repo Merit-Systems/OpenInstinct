@@ -4,6 +4,7 @@ import {
   contactVaultPayloadStringSchema,
   loginAccountHint,
   loginIdentifierSchema,
+  loginOriginSchema,
   loginVaultPayloadStringSchema,
   parseAddressVaultPayload,
   parseContactVaultPayload,
@@ -57,6 +58,11 @@ describe("versioned vault payloads", () => {
         value: "not-an-email",
       }).success
     ).toBe(false);
+  });
+
+  it("rejects an invalid login origin without throwing", () => {
+    expect(() => loginOriginSchema.safeParse("")).not.toThrow();
+    expect(loginOriginSchema.safeParse("").success).toBe(false);
   });
 
   it("reads legacy logins but does not accept them for new writes", () => {

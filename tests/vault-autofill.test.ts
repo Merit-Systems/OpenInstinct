@@ -34,12 +34,14 @@ const credentialsSurface = surface("credentials", [
 ]);
 const contactSurface = surface("contact", ["email", "tel"]);
 const addressSurface = surface("postal-address", [
+  "street-address",
   "address-line1",
   "address-line2",
   "address-level2",
   "address-level1",
   "postal-code",
   "country",
+  "country-name",
 ]);
 
 describe("vault browser autofill", () => {
@@ -239,7 +241,9 @@ describe("vault browser autofill", () => {
       "address-line1": "12 St James's Square",
       "address-line2": "Floor 2",
       country: "GB",
+      "country-name": "United Kingdom",
       "postal-code": "SW1Y 4LB",
+      "street-address": "12 St James's Square\nFloor 2",
     });
 
     const contact = vaultItem("contact", "Checkout", "");

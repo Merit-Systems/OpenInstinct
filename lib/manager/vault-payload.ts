@@ -11,6 +11,7 @@ const optionalBoundedValue = z
 export const loginIdentifierTypeSchema = z.enum(["email", "phone", "username"]);
 
 export const loginOriginSchema = z.url().refine((value) => {
+  if (!URL.canParse(value)) return false;
   const url = new URL(value);
   return ["http:", "https:"].includes(url.protocol) && url.origin === value;
 }, "Enter a website origin such as https://www.ubereats.com.");

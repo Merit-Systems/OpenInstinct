@@ -92,7 +92,7 @@ const codecs: readonly VaultAutofillCodec[] = [
         ["address-level1", address.region],
         ["postal-code", address.postalCode],
         ["country", address.countryCode],
-        ["country-name", address.countryCode],
+        ["country-name", countryName(address.countryCode)],
       ]);
       if (address.line2) values.set("address-line2", address.line2);
       return values;
@@ -274,12 +274,16 @@ function requireBoundLogin(secret: string, origin: string) {
 function formatStreetAddress(
   address: NonNullable<ReturnType<typeof parseAddressVaultPayload>>
 ) {
-  return [
-    address.line1,
-    address.line2,
-    `${address.city}, ${address.region} ${address.postalCode}`,
-    address.countryCode,
-  ]
-    .filter(Boolean)
-    .join("\n");
+  return [address.line1, address.line2].filter(Boolean).join("\n");
+}
+
+function countryName(countryCode: string) {
+  try {
+    return (
+      new Intl.DisplayNames("en", { type: "region" }).of(countryCode) ??
+      countryCode
+    );
+  } catch {
+    return countryCode;
+  }
 }
