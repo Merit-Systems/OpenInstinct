@@ -68,10 +68,10 @@
     "bench:browser": "eve eval browser",
     "bench:compare": "node --experimental-strip-types scripts/compare-browser-benchmarks.ts",
     "boundaries": "turbo boundaries",
-    "build": "pnpm build:extension && turbo run build:app",
+    "build": "pnpm build:extension && pnpm sync:kernel-extension && turbo run build:app",
     "build:app": "next build",
-    "build:extension": "wxt build .",
-    "build:vercel": "next build",
+    "build:extension": "wxt zip .",
+    "build:vercel": "pnpm build:extension && pnpm sync:kernel-extension && next build",
     "check": "turbo run lint:app types:check:app test:app format:check knip && turbo boundaries",
     "db:check": "drizzle-kit check --config db/drizzle.config.ts",
     "db:generate": "drizzle-kit generate --config db/drizzle.config.ts",
@@ -90,6 +90,7 @@
     "lint:fix": "oxlint . --fix",
     "start": "turbo run start:app",
     "start:app": "next start",
+    "sync:kernel-extension": "node --env-file-if-exists=.env.local --experimental-strip-types scripts/sync-kernel-extension.ts",
     "test": "turbo run test:app",
     "test:app": "vitest run",
     "types:check": "turbo run types:check:app",
@@ -98,7 +99,7 @@
     "build:eve": "eve build",
     "dev:eve": "eve dev",
     "start:eve": "eve start",
-    "zip:extension": "wxt zip ."
+    "zip:extension": "pnpm build:extension"
   },
   "version": "0.0.0",
   "type": "module"
