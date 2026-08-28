@@ -1,6 +1,6 @@
 "use client";
 
-import { LogOutIcon } from "lucide-react";
+import { LogOutIcon, UserIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { authClient } from "@/app/_lib/auth-client";
 import { browserRunStoreKeyForWorkspace } from "@/app/(authenticated)/_lib/browser-run-store";
@@ -11,8 +11,9 @@ export function AuthenticatedAccountControl() {
 
   return (
     <div className="flex items-center gap-2 border-t border-sidebar-border px-3 py-3">
+      <UserIcon className="size-4 shrink-0 text-muted-foreground" />
       <span className="min-w-0 flex-1 truncate type-label text-muted-foreground">
-        {maskPhoneNumber(session.user.phoneNumber)}
+        {session.user.phoneNumber ?? "Signed in"}
       </span>
       <Button
         aria-label="Sign out"
@@ -30,11 +31,6 @@ export function AuthenticatedAccountControl() {
       </Button>
     </div>
   );
-}
-
-function maskPhoneNumber(phoneNumber: string | null | undefined) {
-  if (!phoneNumber) return "Signed in";
-  return `Phone ending in ${phoneNumber.slice(-4)}`;
 }
 
 function clearWorkspaceBrowserData() {
