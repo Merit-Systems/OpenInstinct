@@ -1,52 +1,22 @@
 import { createHash } from "node:crypto";
 import { betterAuth } from "better-auth";
-import { getMigrations } from "better-auth/db/migration";
+import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { phoneNumber } from "better-auth/plugins/phone-number";
-import { Pool } from "pg";
-import { z } from "zod";
+import { authSchema } from "@/lib/db/schema";
 import { isE164PhoneNumber } from "@/lib/phone-number";
 import { getEnv, isLocalPhoneAuthBypassEnabled } from "@/lib/runtime-env";
+import { database, db } from "@/lib/server/database";
 import { sendLinqText } from "@/lib/server/linq";
 
-const FALLBACK_DATABASE_URL =
-  "postgresql://unconfigured:unconfigured@127.0.0.1:1/unconfigured";
 const FALLBACK_AUTH_SECRET = "local-vault-assistant-auth-is-unconfigured";
-const AUTH_MIGRATION_LOCK_ID = 1_972_040_815;
-const AUTH_TABLE_NAMES = [
-  "account",
-  "session",
-  "user",
-  "verification",
-] as const;
-const authSchemaReadinessSchema = z.object({ ready: z.boolean() });
 
 const env = getEnv();
 const localPhoneAuthBypass = isLocalPhoneAuthBypassEnabled(env);
-const databaseUrl =
-  env.DATABASE_URL?.startsWith("postgres://") ||
-  env.DATABASE_URL?.startsWith("postgresql://")
-    ? withExplicitVerifiedSsl(env.DATABASE_URL)
-    : FALLBACK_DATABASE_URL;
-
-const authPool = new Pool({ connectionString: databaseUrl, max: 5 });
-
-function withExplicitVerifiedSsl(value: string) {
-  const url = new URL(value);
-  const sslMode = url.searchParams.get("sslmode");
-  if (
-    sslMode === "prefer" ||
-    sslMode === "require" ||
-    sslMode === "verify-ca"
-  ) {
-    url.searchParams.set("sslmode", "verify-full");
-  }
-  return url.toString();
-}
 
 export const auth = betterAuth({
   appName: "Local Vault Assistant",
   baseURL: env.BETTER_AUTH_URL ?? "http://auth-disabled.localhost",
-  database: authPool,
+  database: drizzleAdapter(db, { provider: "pg", schema: authSchema }),
   disabledPaths: [
     "/change-email",
     "/request-password-reset",
@@ -82,59 +52,9 @@ export const auth = betterAuth({
   secret: env.BETTER_AUTH_SECRET ?? FALLBACK_AUTH_SECRET,
 });
 
-let migrationPromise: Promise<void> | undefined;
-
-export async function ensureAuthDatabase() {
+export function ensureAuthDatabase() {
   requireAuthConfiguration();
-
-  const currentMigration = (migrationPromise ??= prepareAuthDatabase());
-  try {
-    await currentMigration;
-  } catch (error) {
-    if (migrationPromise === currentMigration) migrationPromise = undefined;
-    throw error;
-  }
-}
-
-async function prepareAuthDatabase() {
-  if (await isAuthSchemaReady()) return;
-  await runAuthMigrations();
-}
-
-async function isAuthSchemaReady() {
-  const readinessResult = await authPool.query(
-    `SELECT count(*) = $1 AS ready
-     FROM information_schema.tables
-     WHERE table_schema = current_schema()
-       AND table_name = ANY($2::text[])`,
-    [AUTH_TABLE_NAMES.length, AUTH_TABLE_NAMES]
-  );
-  const readiness = authSchemaReadinessSchema.parse(readinessResult.rows[0]);
-  return readiness.ready;
-}
-
-async function runAuthMigrations() {
-  const lockClient = await authPool.connect();
-  let lockAcquired = false;
-  try {
-    await lockClient.query("SELECT pg_advisory_lock($1)", [
-      AUTH_MIGRATION_LOCK_ID,
-    ]);
-    lockAcquired = true;
-    if (await isAuthSchemaReady()) return;
-    const { runMigrations } = await getMigrations(auth.options);
-    await runMigrations();
-  } finally {
-    try {
-      if (lockAcquired) {
-        await lockClient.query("SELECT pg_advisory_unlock($1)", [
-          AUTH_MIGRATION_LOCK_ID,
-        ]);
-      }
-    } finally {
-      lockClient.release();
-    }
-  }
+  database();
 }
 
 function requireAuthConfiguration() {

@@ -4,7 +4,7 @@ export const SEND_MESSAGE_TOOL_NAME = "sendMessage";
 
 const CONVERSATION_MESSAGE_RELAYS_STATE_KEY = "conversationMessageRelays";
 
-export const conversationMessageSchema = z.object({
+const conversationMessageSchema = z.object({
   message: z.string().trim().min(1),
 });
 

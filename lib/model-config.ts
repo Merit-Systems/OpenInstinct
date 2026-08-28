@@ -1,10 +1,8 @@
 import type { AccessScope } from "./access-scope";
-import { getAppStore } from "./server/app-store";
+import { readGatewayModel } from "./server/settings-data";
 
 export async function getModelSettings(scope: AccessScope) {
   return {
-    modelId:
-      (await (await getAppStore()).readGatewayModel(scope)) ??
-      "openai/gpt-5.6-sol-fast",
+    modelId: (await readGatewayModel(scope)) ?? "openai/gpt-5.6-sol-fast",
   };
 }

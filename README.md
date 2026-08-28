@@ -52,6 +52,18 @@ approval of the exact order and price before filling payment secrets, then
 submits without another confirmation unless the price increases or a material
 order term changes.
 
+Production Vercel builds package the private vault-autofill extension and sync
+it into the Kernel project selected by `KERNEL_API_KEY`. This gives each
+self-hosted deployment its own extension instead of depending on an artifact in
+the source repository owner's Kernel account. Preview and local builds do not
+change Kernel resources. On another production host, sync the built extension
+explicitly:
+
+```bash
+pnpm build:extension
+pnpm sync:kernel-extension -- --force
+```
+
 ## Configure authentication
 
 The self-hosted deployment uses Better Auth, the same Linq line as its iMessage
@@ -101,10 +113,20 @@ Local development uses the same Postgres database, encrypted vault, Better Auth,
 Kernel browser, and AI Gateway model path as the Vercel deployment. There is no
 separate local-only runtime.
 
+Drizzle owns the Postgres schema and migrations. `pnpm dev` and `pnpm build`
+apply committed migrations before starting the application. After changing
+`lib/db/schema.ts`, generate and validate a migration with:
+
+```bash
+pnpm db:generate
+pnpm db:check
+```
+
 ## Implementation details
 
 - [Eve](https://eve.dev) provides durable agent sessions, streaming, tools, and the web conversation protocol.
 - [Kernel](https://kernel.sh) provides cloud browsers, Playwright, computer use, profiles, proxies, and browser execution.
+- Drizzle provides the typed Postgres schema, queries, and versioned migrations over Neon.
 - Next.js provides the manager, chat, and batch-runner interfaces.
 - The application uses workspace-scoped Postgres rows and encrypted secret values in every environment.
 

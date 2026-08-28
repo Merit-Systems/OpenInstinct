@@ -8,9 +8,13 @@
     "HOSTED_SECRET_ENCRYPTION_KEY",
     "SECRET_ENCRYPTION_KEY",
     "KERNEL_API_KEY",
+    "KERNEL_VAULT_AUTOFILL_EXTENSION",
     "VERCEL_ENV"
   ],
   "tasks": {
+    "db:check": {
+      "outputs": []
+    },
     "build:app": {
       "dependsOn": ["^build:app"],
       "outputs": [".next/**", "!.next/cache/**"]

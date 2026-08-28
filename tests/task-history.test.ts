@@ -61,7 +61,7 @@ describe("durable task history", () => {
     });
   });
 
-  it("marks a settled run without complete_task as a failure", () => {
+  it("uses a completed turn as success without a completion tool", () => {
     const events = [
       {
         data: { message: run.prompt, sequence: 0, turnId: "turn_0" },
@@ -80,15 +80,15 @@ describe("durable task history", () => {
         type: "message.completed",
       },
       {
-        data: { continuationToken: "wrun_test", wait: "next-user-message" },
+        data: { sequence: 0, turnId: "turn_0" },
         meta: { at: "2026-08-25T20:00:05.000Z", id: "evt_waiting" },
-        type: "session.waiting",
+        type: "turn.completed",
       },
     ] satisfies readonly MessageStreamEvent[];
     const task = taskFromHistoryRun(run, events);
 
     expect(task).toMatchObject({
-      status: "failure",
+      status: "success",
       terminalMessage: "I stopped before completion.",
     });
   });

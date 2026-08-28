@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { paymentCardSecretStringSchema } from "./payment-card";
 
-export const vaultItemKindSchema = z.enum([
+const vaultItemKindSchema = z.enum([
   "login",
   "payment",
   "address",

@@ -1,6 +1,9 @@
 import { defineHook } from "eve/hooks";
 import { scopeFromPrincipal } from "../../lib/access-scope.js";
-import { getAppStore } from "../../lib/server/app-store.js";
+import {
+  claimAgentSession,
+  ensureWorkspace,
+} from "../../lib/server/workspace-data.js";
 
 export default defineHook({
   events: {
@@ -9,9 +12,8 @@ export default defineHook({
       if (!initiator) return;
 
       const scope = scopeFromPrincipal(initiator);
-      const store = await getAppStore();
-      await store.ensureScope(scope);
-      await store.claimSession(scope, ctx.session.id);
+      await ensureWorkspace(scope);
+      await claimAgentSession(scope, ctx.session.id);
     },
   },
 });

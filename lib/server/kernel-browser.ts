@@ -11,8 +11,14 @@ import type {
   executePlaywrightInputSchema,
   manageBrowsersInputSchema,
 } from "../kernel-browser-contract";
+import { browserTimeoutFloorSeconds } from "../kernel-browser-contract";
 import { getEnv } from "../runtime-env";
-import { getAppStore } from "./app-store";
+import {
+  createBrowserSession,
+  deleteBrowserSession,
+  listBrowserSessions,
+  readBrowserSession,
+} from "./workspace-data";
 
 type ManageBrowsersInput = z.infer<typeof manageBrowsersInputSchema>;
 type ComputerActionInput = z.infer<typeof computerActionInputSchema>;
@@ -23,21 +29,22 @@ export async function manageOwnedKernelBrowsers(
   signal?: AbortSignal
 ) {
   const client = kernelClient();
-  const store = await getAppStore();
 
   switch (input.action) {
     case "create": {
+      const extensionName = getEnv().KERNEL_VAULT_AUTOFILL_EXTENSION;
       const browser = await client.browsers.create(
         {
+          extensions: extensionName ? [{ name: extensionName }] : undefined,
           start_url: input.start_url,
           stealth: true,
-          timeout_seconds: input.timeout_seconds ?? 900,
+          timeout_seconds: input.timeout_seconds ?? browserTimeoutFloorSeconds,
           viewport: browserViewport(input),
         },
         { signal }
       );
       try {
-        await store.createBrowserSession(scope, {
+        await createBrowserSession(scope, {
           createdAt: browser.created_at,
           sessionId: browser.session_id,
         });
@@ -50,7 +57,7 @@ export async function manageOwnedKernelBrowsers(
       return lifecycleResult(browser);
     }
     case "list": {
-      const records = await store.listBrowserSessions(scope);
+      const records = await listBrowserSessions(scope);
       const includeDeleted = input.status !== "active";
       const browsers = await Promise.all(
         records.map(async ({ sessionId }) => {
@@ -103,7 +110,7 @@ export async function manageOwnedKernelBrowsers(
       const sessionId = requireSessionId(input.session_id);
       await requireOwnedBrowserSession(scope, sessionId);
       await client.browsers.deleteByID(sessionId, { signal });
-      await store.deleteBrowserSession(scope, sessionId);
+      await deleteBrowserSession(scope, sessionId);
       return "Browser session deleted successfully";
     }
   }
@@ -250,9 +257,7 @@ export async function requireOwnedBrowserSession(
   scope: AccessScope,
   sessionId: string
 ) {
-  const record = await (
-    await getAppStore()
-  ).readBrowserSession(scope, sessionId);
+  const record = await readBrowserSession(scope, sessionId);
   if (!record) throw new Error("Browser session not found.");
   return record;
 }

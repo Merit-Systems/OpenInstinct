@@ -1,21 +1,47 @@
 import type { AccessScope } from "../access-scope";
-import { resolveVaultAutofillValues } from "../vault-autofill";
-import { getAppStore } from "./app-store";
-import { readSecret } from "./secret-store";
+import type {
+  AutofillClaim,
+  AutofillSuggestion,
+  DetectedAutofillSurface,
+} from "../vault-autofill-protocol";
 
-export async function prepareVaultAutofill(
+export interface AutofillFillTarget {
+  readonly availableTokens: ReadonlySet<string>;
+  readonly origin: string;
+  readonly surface: DetectedAutofillSurface;
+}
+
+export interface AutofillVaultAdapter {
+  listSuggestions(
+    scope: AccessScope,
+    origin: string,
+    surface: DetectedAutofillSurface
+  ): Promise<readonly AutofillSuggestion[]>;
+  materializeClaims(
+    scope: AccessScope,
+    candidateId: string,
+    target: AutofillFillTarget
+  ): Promise<readonly AutofillClaim[]>;
+}
+
+export async function listAutofillSuggestions(
   scope: AccessScope,
-  vaultItemId: string,
-  fields: Parameters<typeof resolveVaultAutofillValues>[2]
+  origin: string,
+  surface: DetectedAutofillSurface,
+  adapter: AutofillVaultAdapter
 ) {
-  const item = (await (await getAppStore()).listVaultItems(scope)).find(
-    ({ id }) => id === vaultItemId
-  );
-  if (!item) throw new Error("The selected vault item no longer exists.");
+  return adapter.listSuggestions(scope, origin, surface);
+}
 
-  const secret = await readSecret({ id: item.id, namespace: "vault", scope });
-  if (secret === undefined) {
-    throw new Error("The selected vault item no longer has a secret value.");
+export async function materializeAutofillClaims(
+  scope: AccessScope,
+  candidateId: string,
+  target: AutofillFillTarget,
+  adapter: AutofillVaultAdapter
+) {
+  const claims = await adapter.materializeClaims(scope, candidateId, target);
+  if (claims.length === 0) {
+    throw new Error("The selected vault item has no values for this form.");
   }
-  return resolveVaultAutofillValues(item, secret, fields);
+  return claims;
 }

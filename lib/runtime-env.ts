@@ -35,6 +35,7 @@ export function getEnv() {
       HOSTED_SECRET_ENCRYPTION_KEY: optionalValue,
       SECRET_ENCRYPTION_KEY: optionalValue,
       KERNEL_API_KEY: optionalValue,
+      KERNEL_VAULT_AUTOFILL_EXTENSION: optionalValue,
       NODE_ENV: z
         .enum(["development", "production", "test"])
         .default("production"),

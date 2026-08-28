@@ -34,7 +34,7 @@ export default defineDynamic({
       return {
         manage_browsers: defineTool({
           description:
-            'Manage browser sessions. Create one browser and reuse it for the assignment; use "list" or "get" to inspect sessions and "delete" when finished. Keep a browser open only for a pending human action or transaction approval.',
+            'Manage browser sessions. Create one browser with at least a 15-minute timeout and reuse it for the assignment; use "list" or "get" to inspect sessions and "delete" when finished. Keep a browser open only for a pending human action or transaction approval.',
           inputSchema: manageBrowsersInputSchema,
           execute: (input, context) =>
             manageOwnedKernelBrowsers(scope, input, context.abortSignal),

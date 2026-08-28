@@ -61,12 +61,14 @@ type EveFilePart = Extract<EveMessagePart, { type: "file" }>;
 
 export function AgentMessage({
   canRespond,
+  debug = false,
   isStreaming,
   message,
   onInputResponses,
   timestamp,
 }: {
   readonly canRespond: boolean;
+  readonly debug?: boolean;
   readonly isStreaming: boolean;
   readonly message: EveMessage;
   readonly onInputResponses: (
@@ -77,25 +79,11 @@ export function AgentMessage({
   const [optimisticTimestamp] = useState(() => new Date().toISOString());
   const displayedTimestamp =
     timestamp ?? (message.role === "user" ? optimisticTimestamp : undefined);
-  const conversationMessages = new Set<string>();
-  const visibleParts = message.parts.filter((part) => {
-    if (message.role === "assistant" && part.type === "text") return false;
-    if (part.type !== "dynamic-tool") return true;
-    if (part.toolName !== SEND_MESSAGE_TOOL_NAME) return true;
-
-    const conversationMessage = conversationMessageFromOutput(
-      part.toolName,
-      part.output
-    );
-    if (
-      conversationMessage === undefined ||
-      conversationMessages.has(conversationMessage)
-    )
-      return false;
-
-    conversationMessages.add(conversationMessage);
-    return true;
-  });
+  const visibleParts = debug
+    ? message.parts.filter(
+        (part) => part.type !== "reasoning" && part.type !== "step-start"
+      )
+    : filteredMessageParts(message);
   const lastTextIndex = visibleParts.reduce(
     (last, part, index) => (part.type === "text" ? index : last),
     -1
@@ -116,6 +104,7 @@ export function AgentMessage({
           hasAssistantText && part.type === "reasoning" ? null : (
             <AgentMessagePart
               canRespond={canRespond}
+              debug={debug}
               key={partKey(part, index)}
               onInputResponses={onInputResponses}
               part={part}
@@ -166,11 +155,13 @@ function formatFullTimestamp(timestamp: string) {
 
 function AgentMessagePart({
   canRespond,
+  debug,
   onInputResponses,
   part,
   showCaret,
 }: {
   readonly canRespond: boolean;
+  readonly debug: boolean;
   readonly onInputResponses: (
     responses: readonly AgentInputResponse[]
   ) => void | Promise<void>;
@@ -202,7 +193,28 @@ function AgentMessagePart({
         part.toolName,
         part.output
       );
-      if (part.toolName === SEND_MESSAGE_TOOL_NAME) {
+      if (debug) {
+        return (
+          <div className="space-y-2">
+            <Tool>
+              <ToolHeader status={part.state} title={part.toolName} />
+              <ToolContent>
+                <ToolInput input={part.input} />
+                <InputRequestActions
+                  canRespond={canRespond}
+                  part={part}
+                  onInputResponses={onInputResponses}
+                />
+                <ToolOutput errorText={part.errorText} output={part.output} />
+              </ToolContent>
+            </Tool>
+            {part.toolName === SEND_MESSAGE_TOOL_NAME && conversationMessage ? (
+              <MessageResponse>{conversationMessage}</MessageResponse>
+            ) : null}
+          </div>
+        );
+      }
+      if (!debug && part.toolName === SEND_MESSAGE_TOOL_NAME) {
         return conversationMessage ? (
           <MessageResponse>{conversationMessage}</MessageResponse>
         ) : null;
@@ -241,6 +253,28 @@ function AgentMessagePart({
       );
     }
   }
+}
+
+function filteredMessageParts(message: EveMessage) {
+  const conversationMessages = new Set<string>();
+
+  return message.parts.filter((part) => {
+    if (part.type !== "dynamic-tool") return true;
+    if (part.toolName !== SEND_MESSAGE_TOOL_NAME) return true;
+
+    const conversationMessage = conversationMessageFromOutput(
+      part.toolName,
+      part.output
+    );
+    if (
+      conversationMessage === undefined ||
+      conversationMessages.has(conversationMessage)
+    )
+      return false;
+
+    conversationMessages.add(conversationMessage);
+    return true;
+  });
 }
 
 function QuestionRequest({

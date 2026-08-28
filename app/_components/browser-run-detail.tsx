@@ -283,7 +283,7 @@ function completePersistedTask(
     terminalMessage:
       completion?.message ??
       (fallbackMessage === "No terminal message"
-        ? "Task ended without calling complete_task."
+        ? "Task ended without a terminal result."
         : fallbackMessage),
   });
 }

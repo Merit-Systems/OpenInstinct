@@ -8,7 +8,7 @@ export const POST = withAuthDatabase(handlers.POST);
 
 function withAuthDatabase(handler: (request: Request) => Promise<Response>) {
   return async (request: Request) => {
-    await ensureAuthDatabase();
+    ensureAuthDatabase();
     return handler(request);
   };
 }

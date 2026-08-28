@@ -6,6 +6,7 @@ node_modules
 .next
 .turbo
 .output
+.wxt
 .nitro
 dist
 .DS_Store

@@ -6,6 +6,7 @@ export default {
     "agent/extensions/**/*.ts",
     "agent/hooks/**/*.ts",
     "agent/tools/**/*.ts",
+    "browser-extension/entrypoints/**/*.ts",
     "evals/**/*.eval.ts",
     "evals/evals.config.ts",
     "taze.config.ts",
@@ -29,6 +30,10 @@ export default {
     // a reusable component surface wider than this minimal chat consumes.
     "components/ai-elements/**/*.tsx": ["exports", "files", "types"],
     "components/ui/**/*.tsx": ["exports", "files", "types"],
+    // Reserved for the vault-owned autofill provider implementation.
+    "lib/payment-card.ts": ["exports"],
+    "lib/server/secret-store.ts": ["exports"],
+    "lib/server/vault-data.ts": ["exports"],
   },
   project: ["**/*.{ts,tsx,mts,cts,js,jsx,mjs,cjs}"],
 } satisfies KnipConfig;

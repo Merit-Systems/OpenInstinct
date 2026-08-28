@@ -66,6 +66,7 @@ export function terminalBrowserMessage(
 }
 
 export function readTaskCompletion(events: readonly MessageStreamEvent[]) {
+  // Preserve explicit outcomes from sessions created before complete_task was removed.
   for (const event of events.toReversed()) {
     if (
       event.type !== "action.result" ||
@@ -82,7 +83,40 @@ export function readTaskCompletion(events: readonly MessageStreamEvent[]) {
     }
   }
 
-  return undefined;
+  const terminal = events.findLast(
+    (event) =>
+      event.type === "turn.completed" ||
+      event.type === "turn.failed" ||
+      event.type === "turn.cancelled" ||
+      event.type === "session.failed"
+  );
+  if (!terminal) return undefined;
+
+  if (terminal.type === "turn.completed") {
+    const message = events.findLast(
+      (event) =>
+        event.type === "message.completed" &&
+        event.data.turnId === terminal.data.turnId &&
+        event.data.message?.trim()
+    );
+    return {
+      completedAt: terminal.meta.at,
+      message:
+        message?.type === "message.completed" && message.data.message
+          ? message.data.message
+          : "Task completed.",
+      status: "success" as const,
+    };
+  }
+
+  return {
+    completedAt: terminal.meta.at,
+    message:
+      terminal.type === "turn.cancelled"
+        ? "Task cancelled."
+        : terminal.data.message,
+    status: "failure" as const,
+  };
 }
 
 function isTerminalFailureEvent(event: MessageStreamEvent) {

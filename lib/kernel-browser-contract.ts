@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+export const browserTimeoutFloorSeconds = 900;
+
 // Names and computer-action shapes follow Kernel's open-source MCP server.
 // The session-management subset is the invariant surface every executor owns.
 // Source: https://github.com/onkernel/kernel-mcp-server (MIT).
@@ -8,7 +10,12 @@ export const manageBrowsersInputSchema = z.object({
   action: z.enum(["create", "update", "list", "get", "delete"]),
   session_id: z.string().optional(),
   start_url: z.url().optional(),
-  timeout_seconds: z.number().int().min(10).max(259_200).optional(),
+  timeout_seconds: z
+    .number()
+    .int()
+    .min(browserTimeoutFloorSeconds)
+    .max(259_200)
+    .optional(),
   viewport_width: z.number().int().min(1).optional(),
   viewport_height: z.number().int().min(1).optional(),
   status: z.enum(["active", "deleted", "all"]).optional(),
