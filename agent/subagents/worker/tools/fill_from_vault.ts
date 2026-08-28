@@ -3,6 +3,7 @@ import { z } from "zod";
 import { requireOwnedBrowserSession } from "@/agent/subagents/worker/lib/owned-browser";
 import { requireWorkerScope } from "@/agent/subagents/worker/lib/access";
 import { readVaultItem } from "@/db/services/vault";
+import { kernel } from "@/lib/kernel";
 import { materializeAutofillClaims } from "@/lib/manager/server/vault-autofill";
 import { vaultAutofillProvider } from "@/lib/manager/server/vault-autofill-provider";
 import {
@@ -38,6 +39,18 @@ export default defineTool({
       throw new Error(
         "Native browser autofill currently supports only logins, cards, and addresses."
       );
+    }
+    if (item.kind === "login") {
+      const browser = await kernel.browsers.retrieve(
+        input.browserSessionId,
+        {},
+        { signal: context.abortSignal }
+      );
+      if (!browser.profile_save_changes) {
+        throw new Error(
+          "Login autofill requires a browser created with save_changes: true. Delete this browser, create a writable browser at the same URL, then focus and fill again."
+        );
+      }
     }
 
     const origin = await currentKernelPageOrigin({

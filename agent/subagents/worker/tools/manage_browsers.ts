@@ -1,3 +1,5 @@
+import { createHash } from "node:crypto";
+import { ConflictError, NotFoundError } from "@onkernel/sdk";
 import type {
   BrowserCreateResponse,
   BrowserRetrieveResponse,
@@ -9,6 +11,7 @@ import {
   createBrowserSession,
   deleteBrowserSession,
   listBrowserSessions,
+  withBrowserProfileWriteLock,
 } from "@/db/services/browsers";
 import { kernel } from "@/lib/kernel";
 import { requireWorkerScope } from "@/agent/subagents/worker/lib/access";
@@ -18,6 +21,7 @@ const browserTimeoutFloorSeconds = 15 * 60;
 
 const inputSchema = z.object({
   action: z.enum(["create", "update", "list", "get", "delete"]),
+  save_changes: z.boolean().optional(),
   session_id: z.string().optional(),
   start_url: z.url().optional(),
   timeout_seconds: z
@@ -35,7 +39,7 @@ const inputSchema = z.object({
 
 export default defineTool({
   description:
-    'Manage browser sessions. Create one browser and reuse it for the assignment; when the target URL is known, pass it as start_url to avoid a separate initial navigation. Use "list" or "get" to inspect sessions and "delete" when finished. Keep a browser open only for a pending human action or transaction approval.',
+    'Manage browser sessions backed by the workspace persistent profile. Create read-only browsers by default so tasks can run in parallel. Immediately before a login, replace that task browser with one created using save_changes: true, then delete it after authentication so the session is saved. Only one profile writer may be active. Use "list" or "get" to inspect sessions.',
   inputSchema,
   async execute(input, context) {
     const scope = await requireWorkerScope(context);
@@ -43,28 +47,52 @@ export default defineTool({
 
     switch (input.action) {
       case "create": {
-        const browser = await kernel.browsers.create(
-          {
-            start_url: input.start_url,
-            stealth: true,
-            timeout_seconds:
-              input.timeout_seconds ?? browserTimeoutFloorSeconds,
-            viewport: browserViewport(input),
-          },
-          { signal }
-        );
-        try {
-          await createBrowserSession(scope, {
-            createdAt: browser.created_at,
-            sessionId: browser.session_id,
-          });
-        } catch (error) {
-          await kernel.browsers
-            .deleteByID(browser.session_id, { signal })
-            .catch(() => undefined);
-          throw error;
-        }
-        return lifecycleResult(browser);
+        const create = async () => {
+          const profile = await ensureWorkspaceProfile(
+            scope.workspaceId,
+            signal
+          );
+          if (input.save_changes) {
+            const activeWriter = await findActiveProfileWriter(
+              profile.id,
+              signal
+            );
+            if (activeWriter) {
+              throw new Error(
+                `Browser session ${activeWriter.session_id} is already saving login state for this workspace. Retry after it finishes.`
+              );
+            }
+          }
+          const browser = await kernel.browsers.create(
+            {
+              profile: {
+                id: profile.id,
+                save_changes: input.save_changes ?? false,
+              },
+              start_url: input.start_url,
+              stealth: true,
+              timeout_seconds:
+                input.timeout_seconds ?? browserTimeoutFloorSeconds,
+              viewport: browserViewport(input),
+            },
+            { signal }
+          );
+          try {
+            await createBrowserSession(scope, {
+              createdAt: browser.created_at,
+              sessionId: browser.session_id,
+            });
+          } catch (error) {
+            await kernel.browsers
+              .deleteByID(browser.session_id, { signal })
+              .catch(() => undefined);
+            throw error;
+          }
+          return lifecycleResult(browser);
+        };
+        return input.save_changes
+          ? withBrowserProfileWriteLock(scope, create)
+          : create();
       }
       case "list": {
         const records = await listBrowserSessions(scope);
@@ -199,4 +227,46 @@ function lifecycleResult(browser: KernelBrowser) {
       `Use manage_browsers with action "delete" and session_id "${value.session_id}" when finished.`,
     ],
   };
+}
+
+export function kernelProfileNameForWorkspace(workspaceId: string) {
+  return `openinstinct-${createHash("sha256")
+    .update(`kernel-profile\0${workspaceId}`)
+    .digest("hex")
+    .slice(0, 40)}`;
+}
+
+async function ensureWorkspaceProfile(
+  workspaceId: string,
+  signal?: AbortSignal
+) {
+  const name = kernelProfileNameForWorkspace(workspaceId);
+  try {
+    return await kernel.profiles.retrieve(name, { signal });
+  } catch (error) {
+    if (!(error instanceof NotFoundError)) throw error;
+  }
+
+  try {
+    return await kernel.profiles.create({ name }, { signal });
+  } catch (error) {
+    if (!(error instanceof ConflictError)) throw error;
+    return kernel.profiles.retrieve(name, { signal });
+  }
+}
+
+async function findActiveProfileWriter(
+  profileId: string | undefined,
+  signal?: AbortSignal
+) {
+  if (!profileId) return undefined;
+  for await (const browser of kernel.browsers.list(
+    { query: profileId, status: "active" },
+    { signal }
+  )) {
+    if (browser.profile?.id === profileId && browser.profile_save_changes) {
+      return browser;
+    }
+  }
+  return undefined;
 }
