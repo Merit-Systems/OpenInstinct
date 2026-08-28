@@ -1,7 +1,9 @@
 import { createHash } from "node:crypto";
+import { calendar, type calendar_v3 } from "@googleapis/calendar";
+import { people } from "@googleapis/people";
 import type { ToolContext } from "eve/tools";
 import { z } from "zod";
-import { googleWorkspaceFetch } from "./client";
+import { googleApiErrorStatus, withGoogleAuth } from "./client";
 
 export const calendarEventSchema = z.object({
   attendees: z.array(z.email()).max(50).default([]),
@@ -14,27 +16,6 @@ export const calendarEventSchema = z.object({
   timezone: z.string().min(1).default("UTC"),
 });
 
-const calendarAvailabilitySchema = z.object({
-  calendars: z
-    .record(
-      z.string(),
-      z.object({
-        busy: z
-          .array(z.object({ end: z.string(), start: z.string() }))
-          .optional(),
-        errors: z
-          .array(
-            z.object({
-              domain: z.string().optional(),
-              reason: z.string().optional(),
-            })
-          )
-          .optional(),
-      })
-    )
-    .optional(),
-});
-
 export async function listCalendarEvents(
   ctx: ToolContext,
   input: {
@@ -44,21 +25,22 @@ export async function listCalendarEvents(
     timeMin: string;
   }
 ) {
-  const params = new URLSearchParams({
-    fields:
-      "items(id,status,summary,description,location,start,end,attendees(email,responseStatus),htmlLink)",
-    maxResults: String(input.maxResults),
-    orderBy: "startTime",
-    singleEvents: "true",
-    timeMax: input.timeMax,
-    timeMin: input.timeMin,
+  return withCalendar(ctx, async (client) => {
+    const { data } = await client.events.list(
+      {
+        calendarId: input.calendarId,
+        fields:
+          "items(id,status,summary,description,location,start,end,attendees(email,responseStatus),htmlLink)",
+        maxResults: input.maxResults,
+        orderBy: "startTime",
+        singleEvents: true,
+        timeMax: input.timeMax,
+        timeMin: input.timeMin,
+      },
+      { signal: ctx.abortSignal }
+    );
+    return { events: data.items ?? [] };
   });
-  const response = await googleWorkspaceFetch(
-    ctx,
-    `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(input.calendarId)}/events?${params}`,
-    z.object({ items: z.array(z.unknown()).optional() })
-  );
-  return { events: response.items ?? [] };
 }
 
 export async function checkCalendarAvailability(
@@ -70,26 +52,26 @@ export async function checkCalendarAvailability(
     timezone: string;
   }
 ) {
-  const response = await googleWorkspaceFetch(
-    ctx,
-    "https://www.googleapis.com/calendar/v3/freeBusy",
-    z.unknown(),
-    {
-      body: JSON.stringify({
-        items: input.calendars.map((id) => ({ id })),
-        timeMax: input.timeMax,
-        timeMin: input.timeMin,
-        timeZone: input.timezone,
-      }),
-      method: "POST",
-    }
-  );
-  return parseCalendarAvailability(response);
+  return withCalendar(ctx, async (client) => {
+    const { data } = await client.freebusy.query(
+      {
+        requestBody: {
+          items: input.calendars.map((id) => ({ id })),
+          timeMax: input.timeMax,
+          timeMin: input.timeMin,
+          timeZone: input.timezone,
+        },
+      },
+      { signal: ctx.abortSignal }
+    );
+    return parseCalendarAvailability(data);
+  });
 }
 
-export function parseCalendarAvailability(value: unknown) {
-  const result = calendarAvailabilitySchema.parse(value);
-  const failures = Object.entries(result.calendars ?? {}).flatMap(
+export function parseCalendarAvailability(
+  value: calendar_v3.Schema$FreeBusyResponse
+) {
+  const failures = Object.entries(value.calendars ?? {}).flatMap(
     ([calendarId, calendar]) =>
       (calendar.errors ?? []).map(
         (error) => `${calendarId}: ${error.reason ?? error.domain ?? "unknown"}`
@@ -100,7 +82,7 @@ export function parseCalendarAvailability(value: unknown) {
       `Google Calendar could not read availability for ${failures.join(", ")}.`
     );
   }
-  return result;
+  return value;
 }
 
 export async function createCalendarEvent(
@@ -111,37 +93,36 @@ export async function createCalendarEvent(
     .update(`${ctx.session.id}:${ctx.callId}`)
     .digest("hex")
     .slice(0, 32);
-  const path = `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(payload.calendarId)}/events`;
-  try {
-    return await googleWorkspaceFetch(
-      ctx,
-      `${path}?sendUpdates=${payload.attendees.length ? "all" : "none"}`,
-      z.record(z.string(), z.unknown()),
-      {
-        body: JSON.stringify({
-          attendees: payload.attendees.map((email) => ({ email })),
-          description: payload.description,
-          end: { dateTime: payload.end, timeZone: payload.timezone },
-          id: eventId,
-          location: payload.location,
-          start: { dateTime: payload.start, timeZone: payload.timezone },
-          status: "confirmed",
-          summary: payload.summary,
-          visibility: "private",
-        }),
-        method: "POST",
-      }
-    );
-  } catch (error) {
-    if (!(error instanceof Error) || !error.message.includes("HTTP 409")) {
-      throw error;
+  return withCalendar(ctx, async (client) => {
+    try {
+      const { data } = await client.events.insert(
+        {
+          calendarId: payload.calendarId,
+          requestBody: {
+            attendees: payload.attendees.map((email) => ({ email })),
+            description: payload.description,
+            end: { dateTime: payload.end, timeZone: payload.timezone },
+            id: eventId,
+            location: payload.location,
+            start: { dateTime: payload.start, timeZone: payload.timezone },
+            status: "confirmed",
+            summary: payload.summary,
+            visibility: "private",
+          },
+          sendUpdates: payload.attendees.length ? "all" : "none",
+        },
+        { signal: ctx.abortSignal }
+      );
+      return data;
+    } catch (error) {
+      if (googleApiErrorStatus(error) !== 409) throw error;
+      const { data } = await client.events.get(
+        { calendarId: payload.calendarId, eventId },
+        { signal: ctx.abortSignal }
+      );
+      return data;
     }
-    return googleWorkspaceFetch(
-      ctx,
-      `${path}/${eventId}`,
-      z.record(z.string(), z.unknown())
-    );
-  }
+  });
 }
 
 export async function searchGoogleContacts(
@@ -150,20 +131,23 @@ export async function searchGoogleContacts(
   pageSize: number
 ) {
   const readMask = "names,emailAddresses,phoneNumbers,organizations";
-  await googleWorkspaceFetch(
-    ctx,
-    `https://people.googleapis.com/v1/people:searchContacts?query=&readMask=${readMask}`,
-    z.unknown()
-  );
-  const params = new URLSearchParams({
-    pageSize: String(pageSize),
-    query,
-    readMask,
+  return withGoogleAuth(ctx, async (auth) => {
+    const client = people({ auth, version: "v1" });
+    const options = { signal: ctx.abortSignal };
+    await client.people.searchContacts({ query: "", readMask }, options);
+    const { data } = await client.people.searchContacts(
+      { pageSize, query, readMask },
+      options
+    );
+    return { contacts: data.results ?? [] };
   });
-  const response = await googleWorkspaceFetch(
-    ctx,
-    `https://people.googleapis.com/v1/people:searchContacts?${params}`,
-    z.object({ results: z.array(z.unknown()).optional() })
+}
+
+function withCalendar<T>(
+  ctx: ToolContext,
+  execute: (client: ReturnType<typeof calendar>) => Promise<T>
+) {
+  return withGoogleAuth(ctx, (auth) =>
+    execute(calendar({ auth, version: "v3" }))
   );
-  return { contacts: response.results ?? [] };
 }

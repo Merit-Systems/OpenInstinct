@@ -1,6 +1,6 @@
+import { auth } from "@googleapis/gmail";
 import { connect, type EveAuthorizationOptions } from "@vercel/connect/eve";
 import type { ToolContext } from "eve/tools";
-import type { output, ZodType } from "zod";
 import { env } from "@/lib/env";
 import {
   googleWorkspaceSubject,
@@ -23,66 +23,29 @@ export const googleWorkspaceAuthOptions = {
 
 const googleWorkspaceAuth = connect(googleWorkspaceAuthOptions);
 
-export async function googleWorkspaceFetch<TSchema extends ZodType>(
+export async function withGoogleAuth<T>(
   ctx: ToolContext,
-  url: string,
-  schema: TSchema,
-  init: RequestInit = {}
-): Promise<output<TSchema>> {
+  execute: (authClient: InstanceType<typeof auth.OAuth2>) => Promise<T>
+) {
   const { token } = await ctx.getToken(googleWorkspaceAuth);
-  const headers = new Headers(init.headers);
-  headers.set("accept", "application/json");
-  headers.set("authorization", `Bearer ${token}`);
-  if (init.body && !headers.has("content-type")) {
-    headers.set("content-type", "application/json");
-  }
-  const response = await fetch(url, {
-    ...init,
-    headers,
-    signal: ctx.abortSignal,
-  });
+  const authClient = new auth.OAuth2();
+  authClient.setCredentials({ access_token: token });
 
-  if (response.status === 401) ctx.requireAuth(googleWorkspaceAuth);
-  if (!response.ok) {
-    const detail = await response.text().catch(() => "");
-    throw new Error(
-      `Google Workspace returned HTTP ${String(response.status)}: ${detail.slice(0, 500)}`
-    );
+  try {
+    return await execute(authClient);
+  } catch (error) {
+    if (googleApiErrorStatus(error) === 401) {
+      ctx.requireAuth(googleWorkspaceAuth);
+    }
+    throw error;
   }
-  const body: unknown =
-    response.status === 204 ? undefined : await response.json();
-  return schema.parse(body);
 }
 
-export function decodeBase64Url(value: string) {
-  return Buffer.from(
-    value.replace(/-/gu, "+").replace(/_/gu, "/"),
-    "base64"
-  ).toString("utf8");
-}
-
-export function encodeBase64Url(value: string) {
-  return Buffer.from(value, "utf8").toString("base64url");
-}
-
-const secretPatterns: readonly (readonly [RegExp, string])[] = [
-  [/\b\d{6}\b/gu, "[six-digit code redacted]"],
-  [/\bsk-(?:proj-)?[A-Za-z0-9_-]{12,}\b/gu, "[api key redacted]"],
-  [/\bgh[pousr]_[A-Za-z0-9]{20,}\b/gu, "[github token redacted]"],
-  [/\b(?:AKIA|ASIA)[A-Z0-9]{16}\b/gu, "[aws key redacted]"],
-  [/\bAIza[A-Za-z0-9_-]{30,}\b/gu, "[google api key redacted]"],
-  [/\b(?:bearer\s+)[A-Za-z0-9._~+/-]+=*\b/giu, "Bearer [token redacted]"],
-  [
-    /\b(password|passcode|api[_ -]?key|access[_ -]?token|refresh[_ -]?token|client[_ -]?secret)\s*[:=]\s*(?:"[^"]*"|'[^']*'|[^\s,;]+)/giu,
-    "$1=[credential redacted]",
-  ],
-  [/\b(?:\d[ -]*?){13,19}\b/gu, "[payment number redacted]"],
-];
-
-export function redactGoogleText(value: string, maxLength = 12_000) {
-  let redacted = value.slice(0, maxLength);
-  for (const [pattern, replacement] of secretPatterns) {
-    redacted = redacted.replace(pattern, replacement);
+export function googleApiErrorStatus(error: unknown) {
+  if (!error || typeof error !== "object" || !("response" in error)) return;
+  const { response } = error;
+  if (!response || typeof response !== "object" || !("status" in response)) {
+    return;
   }
-  return redacted;
+  return typeof response.status === "number" ? response.status : undefined;
 }
