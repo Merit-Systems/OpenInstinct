@@ -16,6 +16,7 @@ export default async function Page({ searchParams }: PageProps<"/vault">) {
 
   return (
     <VaultManager
+      initialChromeImport={firstQueryValue(query.import) === "chrome"}
       initialSetup={
         requestedSetup.success && requestedSetup.data.target === "vault"
           ? requestedSetup.data
@@ -24,4 +25,8 @@ export default async function Page({ searchParams }: PageProps<"/vault">) {
       initialSnapshot={initialSnapshot}
     />
   );
+}
+
+function firstQueryValue(value: string | readonly string[] | undefined) {
+  return typeof value === "string" ? value : value?.[0];
 }

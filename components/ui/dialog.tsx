@@ -26,13 +26,15 @@ function DialogClose({ ...props }: DialogPrimitive.Close.Props) {
 
 function DialogOverlay({
   className,
+  animated = true,
   ...props
-}: DialogPrimitive.Backdrop.Props) {
+}: DialogPrimitive.Backdrop.Props & { animated?: boolean }) {
   return (
     <DialogPrimitive.Backdrop
       data-slot="dialog-overlay"
       className={cn(
         "data-open:animate-in data-open:fade-in-0 data-closed:animate-out data-closed:fade-out-0 fixed inset-0 isolate z-50 bg-foreground/10 duration-100 supports-backdrop-filter:backdrop-blur-xs",
+        !animated && "animate-none! duration-0!",
         className
       )}
       {...props}
@@ -56,18 +58,23 @@ const dialogContentVariants = cva(
 function DialogContent({
   className,
   children,
+  animated = true,
   showCloseButton = true,
   variant,
   ...props
 }: DialogPrimitive.Popup.Props & {
+  animated?: boolean;
   showCloseButton?: boolean;
 } & VariantProps<typeof dialogContentVariants>) {
   return (
     <DialogPortal>
-      <DialogOverlay />
+      <DialogOverlay animated={animated} />
       <DialogPrimitive.Popup
         data-slot="dialog-content"
-        className={cn(dialogContentVariants({ variant, className }))}
+        className={cn(
+          dialogContentVariants({ variant, className }),
+          !animated && "animate-none! duration-0!"
+        )}
         {...props}
       >
         {children}

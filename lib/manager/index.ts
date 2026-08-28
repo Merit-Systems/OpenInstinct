@@ -102,6 +102,17 @@ export const managerMutationSchema = z.discriminatedUnion("action", [
     modelId: z.string().trim().min(1).max(300),
   }),
   z.object({ action: z.literal("vault.create"), input: vaultItemInputSchema }),
+  z.object({
+    action: z.literal("vault.import"),
+    items: z
+      .array(
+        vaultItemInputSchema.refine((item) => item.kind === "login", {
+          message: "Bulk imports support login credentials only.",
+        })
+      )
+      .min(1)
+      .max(3_000),
+  }),
   z.object({ action: z.literal("vault.delete"), id: z.string().min(1) }),
 ]);
 
@@ -141,6 +152,12 @@ export function createManagerSetupUrl(
     url.searchParams.set("identifier_type", request.identifierType);
     url.searchParams.set("origin", request.origin);
   }
+  return url.toString();
+}
+
+export function createManagerImportUrl(baseUrl: string) {
+  const url = new URL("/vault", baseUrl);
+  url.searchParams.set("import", "chrome");
   return url.toString();
 }
 

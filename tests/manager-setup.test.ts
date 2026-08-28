@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  createManagerImportUrl,
   createManagerSetupUrl,
   managerMutationSchema,
   managerSetupRequestSchema,
@@ -7,12 +8,19 @@ import {
 } from "../lib/manager";
 import { isSameOrigin } from "../lib/same-origin";
 import { serializePaymentCard } from "../lib/manager/payment-card";
+import { parseChromePasswordsCsv } from "../lib/manager/chrome-passwords";
 import {
   serializeContactVaultPayload,
   serializeLoginVaultPayload,
 } from "../lib/manager/vault-payload";
 
 describe("self-hosted manager", () => {
+  it("builds a direct Chrome import URL", () => {
+    expect(createManagerImportUrl("https://assistant.example.com")).toBe(
+      "https://assistant.example.com/vault?import=chrome"
+    );
+  });
+
   it("builds a vault form URL without accepting a secret", () => {
     expect(
       managerSetupRequestSchema.safeParse({
@@ -104,6 +112,68 @@ describe("self-hosted manager", () => {
         modelId: "anthropic/claude-sonnet-4.5",
       }).success
     ).toBe(true);
+  });
+
+  it("accepts only login credentials in a bulk vault import", () => {
+    expect(
+      managerMutationSchema.safeParse({
+        action: "vault.import",
+        items: [
+          {
+            account: "",
+            kind: "login",
+            label: "GitHub",
+            secret: serializeLoginVaultPayload({
+              authentication: {
+                password: "correct horse battery staple",
+                type: "password",
+              },
+              identifier: { type: "email", value: "person@example.com" },
+              kind: "login",
+              origin: "https://github.com",
+              version: 2,
+            }),
+          },
+        ],
+      }).success
+    ).toBe(true);
+    expect(
+      managerMutationSchema.safeParse({
+        action: "vault.import",
+        items: [
+          {
+            account: "",
+            kind: "phone",
+            label: "Mobile",
+            secret: "+1 555 555 5555",
+          },
+        ],
+      }).success
+    ).toBe(false);
+  });
+
+  it("normalizes Chrome CSV rows into origin-bound vault logins", () => {
+    const result = parseChromePasswordsCsv(
+      '\uFEFFname,url,username,password,note\r\nGitHub,https://github.com,octo@example.com,"comma,quote""and\nnewline",ignored\r\n'
+    );
+
+    expect(result.skipped).toBe(0);
+    expect(result.items).toHaveLength(1);
+    expect(result.items[0]).toMatchObject({
+      account: "",
+      kind: "login",
+      label: "GitHub",
+    });
+    expect(JSON.parse(result.items[0]?.secret ?? "")).toEqual({
+      authentication: {
+        password: 'comma,quote"and\nnewline',
+        type: "password",
+      },
+      identifier: { type: "email", value: "octo@example.com" },
+      kind: "login",
+      origin: "https://github.com",
+      version: 2,
+    });
   });
 
   it("does not expose removed runtime mutations", () => {
