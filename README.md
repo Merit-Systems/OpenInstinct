@@ -28,7 +28,7 @@ reading the code!
 
 The deploy button provisions [Kernel](https://kernel.sh) for cloud browsers,
 [Neon](https://neon.tech) for Postgres, and a private Vercel Blob store for
-browser images. Vercel AI Gateway handles inference.
+browser images and per-user memory. Vercel AI Gateway handles inference.
 [Linq](https://linq.app) is optional and requires the setup below before
 iMessage or production phone sign-in is available. Usage is billed to your
 Vercel account. Set the remaining auth variables on the deployment:
@@ -53,11 +53,15 @@ its separate migration path.
 Treat `SECRET_ENCRYPTION_KEY` as production key material — back it up
 separately; rotating it requires re-encrypting existing values.
 
-### Browser image storage
+### Blob storage
 
 The one-click deploy creates and connects a private Blob store automatically.
 Vercel supplies `BLOB_STORE_ID` and a short-lived `VERCEL_OIDC_TOKEN` to each
 deployment, so there is no long-lived Blob credential to copy.
+
+OpenInstinct uses this store for persistent per-user memory and browser images.
+Production conversations require it because memory is recalled before each agent
+turn. Local Eve development uses process-local memory instead.
 
 For an existing Vercel project, link it first with
 `eve link --project <your-vercel-project> --non-interactive`, then create and
@@ -68,9 +72,8 @@ pnpm exec vercel blob create-store open-instinct-images --access private --yes -
 ```
 
 Outside Vercel, set `BLOB_READ_WRITE_TOKEN` from a private Blob store instead.
-Browser image storage is optional at build time; without either configuration,
-the rest of OpenInstinct runs normally and image capture returns an actionable
-setup error.
+The memory provider uses that token explicitly, and browser image capture uses the
+same store.
 
 ### Linq iMessage setup
 
