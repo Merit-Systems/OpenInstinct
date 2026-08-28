@@ -57,7 +57,6 @@ export function AgentChat({
   readonly sessionless?: boolean;
 }) {
   const { mutate: saveChat } = api.chats.save.useMutation();
-  const [cancellationError, setCancellationError] = useState<string>();
   const [traceView, setTraceView] = useState<"imessage" | "trace">("imessage");
   const pendingChatTitle = useRef<string | undefined>(undefined);
   const persistedUsageTurn = useRef<string | undefined>(undefined);
@@ -89,6 +88,7 @@ export function AgentChat({
   });
 
   const isBusy = agent.status === "submitted" || agent.status === "streaming";
+  const isSubmitting = agent.status === "submitted";
   const isRestoring = agent.status === "resuming";
   const isEmpty = agent.data.messages.length === 0;
   const lastMessage = agent.data.messages.at(-1);
@@ -104,9 +104,7 @@ export function AgentChat({
   const turnFailure =
     isBusy || isRestoring ? undefined : getLatestTurnFailure(agent.events);
   const errorMessage =
-    cancellationError ??
-    (agent.error ? toErrorMessage(agent.error) : undefined) ??
-    turnFailure;
+    (agent.error ? toErrorMessage(agent.error) : undefined) ?? turnFailure;
   const hasConversationContent =
     sessionless || !isEmpty || errorMessage !== undefined;
   const showConversationLayout = isRestoring || hasConversationContent;
@@ -186,19 +184,15 @@ export function AgentChat({
     saveChat({ sessionId: activeSessionId, usage });
   }, [activeSessionId, latestTerminalTurnId, saveChat, usage]);
 
-  const requestCancellation = () => {
-    setCancellationError(undefined);
-    void agent.cancel().catch((error: unknown) => {
-      setCancellationError(toErrorMessage(error));
-    });
-  };
-
   const handleSubmit = async (message: PromptInputMessage) => {
     const text = message.text.trim();
-    if ((text.length === 0 && message.files.length === 0) || isRestoring)
+    if (
+      (text.length === 0 && message.files.length === 0) ||
+      isSubmitting ||
+      isRestoring
+    )
       return;
 
-    setCancellationError(undefined);
     const options = isBusy ? { turnPolicy: "steer" as const } : undefined;
     const title = chatTitle(message);
     if (activeSessionId) {
@@ -232,7 +226,7 @@ export function AgentChat({
     <PromptInput onSubmit={handleSubmit}>
       <PromptInputBody>
         <PromptInputTextarea
-          disabled={isRestoring}
+          disabled={isSubmitting}
           placeholder="Send a message…"
           className="min-h-0"
         />
@@ -240,9 +234,8 @@ export function AgentChat({
       <PromptInputFooter>
         <PromptInputTools />
         <PromptInputSubmit
-          disabled={isRestoring}
-          onStop={requestCancellation}
-          status={agent.status === "resuming" ? undefined : agent.status}
+          disabled={isSubmitting || isRestoring}
+          status={isSubmitting ? "submitted" : undefined}
         />
       </PromptInputFooter>
     </PromptInput>
@@ -278,10 +271,9 @@ export function AgentChat({
                     }
                     key={message.id}
                     message={message}
-                    onInputResponses={(inputResponses) => {
-                      setCancellationError(undefined);
-                      return agent.respond(inputResponses);
-                    }}
+                    onInputResponses={(inputResponses) =>
+                      agent.respond(inputResponses)
+                    }
                     timestamp={messageTimestamps.get(message.id)}
                     userVisibleOnly={traceView === "imessage"}
                   />
