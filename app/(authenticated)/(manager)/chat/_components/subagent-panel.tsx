@@ -4,7 +4,6 @@ import { Client, type MessageStreamEvent } from "eve/client";
 import {
   ChevronRightIcon,
   CircleDotIcon,
-  CornerDownRightIcon,
   ListTreeIcon,
   SparklesIcon,
   XIcon,
@@ -247,12 +246,12 @@ export function SubagentPanel({
         aria-hidden={selected !== undefined}
         className={cn(
           "relative hidden h-full shrink-0 overflow-hidden transition-[width] duration-200 ease-linear md:block",
-          selected ? "w-0" : "w-88"
+          selected ? "w-0" : "w-96"
         )}
       >
         <div
           className={cn(
-            "absolute inset-y-0 right-0 flex w-88 items-start p-4 transition-[opacity,transform] duration-200",
+            "absolute inset-y-0 right-0 flex w-96 items-start p-4 transition-[opacity,transform] duration-200",
             selected
               ? "pointer-events-none translate-x-6 opacity-0"
               : "translate-x-0 opacity-100"
@@ -419,13 +418,10 @@ function ActivityCard({
                       key={session.childSessionId}
                       onClick={() => onSelect(session.childSessionId)}
                       style={{
-                        paddingInlineStart: `${0.5 + depth * 1.25}rem`,
+                        paddingInlineStart: `${0.5 + depth * 0.5}rem`,
                       }}
                       type="button"
                     >
-                      {depth > 0 ? (
-                        <CornerDownRightIcon className="size-3.5 shrink-0 text-muted-foreground" />
-                      ) : null}
                       <StatusDot status={status} />
                       <span className="min-w-0 flex-1">
                         <span className="block truncate type-label">
