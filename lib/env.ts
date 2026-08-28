@@ -79,5 +79,6 @@ const authHostname = new URL(env.BETTER_AUTH_URL).hostname;
 export const localPhoneAuthBypassEnabled =
   localDevelopment &&
   (authHostname === "localhost" ||
+    authHostname.endsWith(".localhost") ||
     authHostname === "127.0.0.1" ||
     authHostname === "[::1]");
