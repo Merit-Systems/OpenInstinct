@@ -8,7 +8,7 @@ import {
   rm,
   writeFile,
 } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { homedir, tmpdir } from "node:os";
 import { basename, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { browserBenchmarkEnv } from "../evals/browser/env.ts";
@@ -207,6 +207,9 @@ async function runBenchmark(current: ReturnType<typeof variant>) {
         BROWSER_BENCH_LABEL: label,
         BROWSER_BENCH_REPETITIONS: String(options.repetitions),
         BROWSER_BENCH_SUITE: options.suite,
+        NODE_EXTRA_CA_CERTS:
+          inheritedEnvironment.NODE_EXTRA_CA_CERTS ??
+          join(homedir(), ".portless", "ca.pem"),
         NODE_ENV: "development",
       },
     }
