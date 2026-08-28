@@ -1,8 +1,10 @@
 import { defineTool, toolOutput, toolOutputPart } from "eve/tools";
+import type { ComputerBatchParams } from "@onkernel/sdk/resources/browsers/computer";
 import { z } from "zod";
 import { kernel } from "@/lib/kernel";
 import { requireWorkerScope } from "@/agent/subagents/worker/lib/access";
 import { requireOwnedBrowserSession } from "@/agent/subagents/worker/lib/owned-browser";
+import { withVaultScreenshotMask } from "@/agent/subagents/worker/lib/vault-screenshot-mask";
 
 const actionSchema = z.object({
   type: z.enum([
@@ -89,7 +91,7 @@ const actionSchema = z.object({
 
 const inputSchema = z.object({
   session_id: z.string().min(1),
-  actions: z.array(actionSchema).min(1),
+  actions: z.array(actionSchema).min(1).max(20),
 });
 
 const outputSchema = z.object({
@@ -110,75 +112,29 @@ export default defineTool({
 
     const computer = kernel.browsers.computer;
     const data: unknown[] = [];
+    let pendingActions: ComputerBatchParams.Action[] = [];
     let screenshotBase64: string | undefined;
 
+    const flushPendingActions = async () => {
+      if (pendingActions.length === 0) return;
+      const actions = pendingActions;
+      pendingActions = [];
+      await computer.batch(
+        input.session_id,
+        { actions },
+        { signal: context.abortSignal }
+      );
+    };
+
     for (const action of input.actions) {
+      const batchAction = toBatchAction(action);
+      if (batchAction) {
+        pendingActions.push(batchAction);
+        continue;
+      }
+
+      await flushPendingActions();
       switch (action.type) {
-        case "click_mouse":
-          await computer.clickMouse(
-            input.session_id,
-            requiredAction(action.click_mouse, action.type),
-            { signal: context.abortSignal }
-          );
-          break;
-        case "move_mouse":
-          await computer.moveMouse(
-            input.session_id,
-            requiredAction(action.move_mouse, action.type),
-            { signal: context.abortSignal }
-          );
-          break;
-        case "type_text":
-          await computer.typeText(
-            input.session_id,
-            requiredAction(action.type_text, action.type),
-            { signal: context.abortSignal }
-          );
-          break;
-        case "press_key":
-          await computer.pressKey(
-            input.session_id,
-            requiredAction(action.press_key, action.type),
-            { signal: context.abortSignal }
-          );
-          break;
-        case "scroll":
-          await computer.scroll(
-            input.session_id,
-            requiredAction(action.scroll, action.type),
-            { signal: context.abortSignal }
-          );
-          break;
-        case "drag_mouse":
-          await computer.dragMouse(
-            input.session_id,
-            requiredAction(action.drag_mouse, action.type),
-            { signal: context.abortSignal }
-          );
-          break;
-        case "set_cursor":
-          data.push(
-            await computer.setCursorVisibility(
-              input.session_id,
-              requiredAction(action.set_cursor, action.type),
-              { signal: context.abortSignal }
-            )
-          );
-          break;
-        case "sleep":
-          await computer.batch(
-            input.session_id,
-            {
-              actions: [
-                {
-                  sleep: requiredAction(action.sleep, action.type),
-                  type: "sleep",
-                },
-              ],
-            },
-            { signal: context.abortSignal }
-          );
-          break;
         case "write_clipboard":
           await computer.writeClipboard(
             input.session_id,
@@ -201,26 +157,34 @@ export default defineTool({
           );
           break;
         case "screenshot": {
-          const removeMask = await maskVaultFields(
+          screenshotBase64 = await withVaultScreenshotMask(
             input.session_id,
-            context.abortSignal
+            context.abortSignal,
+            async () => {
+              const response = await computer.captureScreenshot(
+                input.session_id,
+                action.screenshot,
+                { signal: context.abortSignal }
+              );
+              return Buffer.from(await response.arrayBuffer()).toString(
+                "base64"
+              );
+            }
           );
-          try {
-            const response = await computer.captureScreenshot(
-              input.session_id,
-              action.screenshot,
-              { signal: context.abortSignal }
-            );
-            screenshotBase64 = Buffer.from(
-              await response.arrayBuffer()
-            ).toString("base64");
-          } finally {
-            await removeMask();
-          }
           break;
         }
+        case "click_mouse":
+        case "drag_mouse":
+        case "move_mouse":
+        case "press_key":
+        case "scroll":
+        case "set_cursor":
+        case "sleep":
+        case "type_text":
+          throw new Error(`Computer action ${action.type} was not batched.`);
       }
     }
+    await flushPendingActions();
 
     return outputSchema.parse({
       data: data.length > 0 ? data : undefined,
@@ -252,41 +216,54 @@ function requiredAction<T>(value: T | undefined, action: string): T {
   return value;
 }
 
-async function maskVaultFields(sessionId: string, signal?: AbortSignal) {
-  const styleId = "vault-screenshot-mask";
-  const selector = '[data-vault-secret="true"]';
-  const addCode = `
-for (const currentContext of browser.contexts()) {
-  for (const currentPage of currentContext.pages()) {
-    for (const frame of currentPage.frames()) {
-      await frame.evaluate(({ styleId, selector }) => {
-        if (document.getElementById(styleId)) return;
-        const style = document.createElement("style");
-        style.id = styleId;
-        style.textContent = selector + " { color: transparent !important; text-shadow: 0 0 8px black !important; -webkit-text-security: disc !important; }";
-        document.documentElement.append(style);
-      }, ${JSON.stringify({ selector, styleId })}).catch(() => undefined);
-    }
+function toBatchAction(
+  action: z.infer<typeof actionSchema>
+): ComputerBatchParams.Action | null {
+  switch (action.type) {
+    case "click_mouse":
+      return {
+        click_mouse: requiredAction(action.click_mouse, action.type),
+        type: action.type,
+      };
+    case "move_mouse":
+      return {
+        move_mouse: requiredAction(action.move_mouse, action.type),
+        type: action.type,
+      };
+    case "type_text":
+      return {
+        type: action.type,
+        type_text: requiredAction(action.type_text, action.type),
+      };
+    case "press_key":
+      return {
+        press_key: requiredAction(action.press_key, action.type),
+        type: action.type,
+      };
+    case "scroll":
+      return {
+        scroll: requiredAction(action.scroll, action.type),
+        type: action.type,
+      };
+    case "drag_mouse":
+      return {
+        drag_mouse: requiredAction(action.drag_mouse, action.type),
+        type: action.type,
+      };
+    case "set_cursor":
+      return {
+        set_cursor: requiredAction(action.set_cursor, action.type),
+        type: action.type,
+      };
+    case "sleep":
+      return {
+        sleep: requiredAction(action.sleep, action.type),
+        type: action.type,
+      };
+    case "get_mouse_position":
+    case "read_clipboard":
+    case "screenshot":
+    case "write_clipboard":
+      return null;
   }
-}
-return true;`;
-  await kernel.browsers.playwright.execute(
-    sessionId,
-    { code: addCode, timeout_sec: 10 },
-    { signal }
-  );
-  return async () => {
-    const removeCode = `
-for (const currentContext of browser.contexts()) {
-  for (const currentPage of currentContext.pages()) {
-    for (const frame of currentPage.frames()) {
-      await frame.evaluate((styleId) => document.getElementById(styleId)?.remove(), ${JSON.stringify(styleId)}).catch(() => undefined);
-    }
-  }
-}
-return true;`;
-    await kernel.browsers.playwright
-      .execute(sessionId, { code: removeCode, timeout_sec: 10 }, { signal })
-      .catch(() => undefined);
-  };
 }

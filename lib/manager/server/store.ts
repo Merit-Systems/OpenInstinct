@@ -43,6 +43,9 @@ export async function applyManagerMutation(
     case "vault.create":
       await createVaultItem(scope, mutation.input);
       break;
+    case "vault.import":
+      for (const item of mutation.items) await createVaultItem(scope, item);
+      break;
     case "vault.delete":
       await removeVaultItem(scope, mutation.id);
       break;

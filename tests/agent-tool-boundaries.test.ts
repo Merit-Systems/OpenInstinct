@@ -2,6 +2,7 @@ import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 const rootTools = "agent/tools";
+const rootMemory = "agent/memory/profile.ts";
 const workerRoot = "agent/subagents/worker";
 const workerTools = `${workerRoot}/tools`;
 
@@ -18,6 +19,7 @@ describe("root and worker capability boundaries", () => {
       "ask_question.ts",
       "google_workspace_read.ts",
       "google_workspace_write.ts",
+      "request_vault_import.ts",
       "request_vault_setup.ts",
     ]);
     expect(existsSync(`${rootTools}/sendMessage.ts`)).toBe(false);
@@ -32,11 +34,26 @@ describe("root and worker capability boundaries", () => {
     expect(readFileSync(`${rootTools}/ask_question.ts`, "utf8")).toContain(
       "disableTool()"
     );
+    const rootInstructions = readFileSync("agent/instructions.md", "utf8");
+    expect(rootInstructions).toContain(
+      "Perform public research, source discovery, comparisons, and current-information lookups directly with `web_search`"
+    );
+    expect(rootInstructions).toContain(
+      "try `web_fetch` before browser automation"
+    );
+  });
+
+  it("keeps durable memory scoped to the authenticated root user", () => {
+    const memory = readFileSync(rootMemory, "utf8");
+
+    expect(memory).toContain("defineMemory(");
+    expect(memory).toContain("scope: resolveProfileMemoryScope");
   });
 
   it("gives worker the browser and opaque-vault tools without messaging", () => {
     expect(toolFiles(workerTools)).toEqual([
       "ask_question.ts",
+      "capture_browser_image.ts",
       "computer_action.ts",
       "execute_playwright_code.ts",
       "fill_from_vault.ts",
@@ -57,6 +74,7 @@ describe("root and worker capability boundaries", () => {
       "@onkernel/eve-extension"
     );
     for (const tool of [
+      "capture_browser_image",
       "computer_action",
       "execute_playwright_code",
       "manage_browsers",
@@ -76,12 +94,16 @@ describe("root and worker capability boundaries", () => {
     expect(readFileSync(`${workerRoot}/instructions.md`, "utf8")).toContain(
       "native `final_output` tool exactly once"
     );
+    expect(readFileSync(`${workerRoot}/instructions.md`, "utf8")).toContain(
+      "Never use the browser for general web search"
+    );
     expect(existsSync(`${workerRoot}/lib/browser-contract.ts`)).toBe(false);
     expect(existsSync(`${workerRoot}/lib/browser-runtime.ts`)).toBe(false);
     expect(existsSync(`${workerRoot}/lib/owned-browser.ts`)).toBe(true);
 
     expect(readFileSync("lib/kernel.ts", "utf8")).toContain("new Kernel(");
     for (const tool of [
+      "capture_browser_image",
       "computer_action",
       "execute_playwright_code",
       "manage_browsers",
@@ -102,7 +124,9 @@ describe("root and worker capability boundaries", () => {
     expect(rootInstructions).toContain(
       "Every initial or resumed `worker` call must set `outputSchema`"
     );
-    expect(rootInstructions).toContain('"required": ["status", "message"]');
+    expect(rootInstructions).toContain(
+      '"required": ["status", "message", "images"]'
+    );
     expect(rootInstructions).toContain(
       "including when passing an existing `agentId`"
     );

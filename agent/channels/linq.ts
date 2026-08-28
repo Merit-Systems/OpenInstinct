@@ -3,14 +3,20 @@ import { connectLinqCredentials } from "@vercel/connect/eve";
 import {
   defaultLinqAuth,
   linqChannel,
+  type LinqChannelConfig,
   type LinqChannelCredentials,
 } from "eve/channels/linq";
 import { z } from "zod";
 import { auth } from "@/auth";
 import { normalizeAuthPhoneNumber } from "@/auth/phone-number";
-import { accessScopeForUser } from "@/lib/access-scope";
+import { accessScopeForUser, scopeFromPrincipal } from "@/lib/access-scope";
+import {
+  extractBrowserImageMarkdownReferences,
+  stripBrowserImageMarkdownReferences,
+} from "@/lib/browser-images";
 import { env } from "@/lib/env";
 import { consumeWorkerCancellationTurn } from "../lib/worker-cancellation-delivery";
+import { prepareLinqBrowserImageDelivery } from "../lib/linq-browser-image-delivery";
 
 const verifiedPhoneUserSchema = z.object({
   id: z.string().min(1),
@@ -29,6 +35,43 @@ const cancelledWorkerTaskSchema = z.object({
 const workerCancellationsSchema = z.array(
   z.object({ sourceMessageId: z.string(), taskId: z.string() })
 );
+const markdownListItemPattern = /^\s*(?:[-+*]|\d+[.)])\s+/u;
+
+function splitLinqReply(message: string) {
+  return message
+    .trim()
+    .split(/\r?\n[\t ]*\r?\n/u)
+    .flatMap((block) => {
+      const lines = block.split(/\r?\n/u);
+      return lines.every((line) => markdownListItemPattern.test(line))
+        ? lines
+        : block;
+    })
+    .map((part) => part.trim())
+    .filter(Boolean);
+}
+
+async function postLinqReply(
+  thread: NonNullable<
+    Parameters<
+      NonNullable<NonNullable<LinqChannelConfig["events"]>["message.completed"]>
+    >[1]["thread"]
+  >,
+  markdown: string,
+  files: readonly unknown[] = []
+) {
+  const bubbles = splitLinqReply(markdown);
+  if (bubbles.length === 0) {
+    if (files.length > 0) await thread.post({ files, markdown: "" });
+    return;
+  }
+  for (const [index, bubble] of bubbles.entries()) {
+    await thread.post({
+      markdown: bubble,
+      ...(index === bubbles.length - 1 && files.length > 0 ? { files } : {}),
+    });
+  }
+}
 
 const credentials: LinqChannelCredentials = env.LINQ_CONNECTOR
   ? connectLinqCredentials(env.LINQ_CONNECTOR)
@@ -120,7 +163,42 @@ export default linqChannel({
 
       // Eve's Linq adapter translates supported Markdown into native iMessage
       // decorations, so recipients see styled text instead of literal markers.
-      await context.thread.post({ markdown: event.message });
+      const caller =
+        session.session.auth.current ?? session.session.auth.initiator;
+      if (!caller) {
+        const references = extractBrowserImageMarkdownReferences(event.message);
+        const markdown =
+          references.length === 0
+            ? event.message
+            : [
+                stripBrowserImageMarkdownReferences(event.message),
+                "I couldn't attach the image.",
+              ]
+                .filter(Boolean)
+                .join("\n\n");
+        await postLinqReply(context.thread, markdown);
+        return;
+      }
+      const delivery = await prepareLinqBrowserImageDelivery(event.message, {
+        rootSessionId: session.session.id,
+        scope: scopeFromPrincipal(caller),
+      });
+      if (delivery.failedArtifactIds.length > 0) {
+        console.warn("[linq] browser image delivery failed", {
+          artifactIds: delivery.failedArtifactIds,
+          sessionId: session.session.id,
+        });
+      }
+      const failureMessage =
+        delivery.failedArtifactIds.length === 0
+          ? ""
+          : delivery.failedArtifactIds.length === 1
+            ? "I couldn't attach one image."
+            : `I couldn't attach ${String(delivery.failedArtifactIds.length)} images.`;
+      const markdown = [delivery.markdown, failureMessage]
+        .filter(Boolean)
+        .join("\n\n");
+      await postLinqReply(context.thread, markdown, delivery.files);
     },
   },
   async onMessage(_context, message) {
@@ -144,6 +222,7 @@ export default linqChannel({
         ...auth,
         attributes: {
           ...auth.attributes,
+          ...(verifiedUserId && phoneNumber ? { phoneNumber } : {}),
           workspaceId: scope.workspaceId,
         },
         principalId,

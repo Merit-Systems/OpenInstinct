@@ -8,6 +8,7 @@ import {
   pgTable,
   primaryKey,
   text,
+  uniqueIndex,
 } from "drizzle-orm/pg-core";
 
 export const workspaces = pgTable("workspaces", {
@@ -128,6 +129,58 @@ export const browserSessions = pgTable(
       ],
     }).onDelete("cascade"),
     index("browser_sessions_workspace_idx").on(
+      table.workspaceId,
+      table.createdAt.desc().nullsFirst()
+    ),
+  ]
+);
+
+export const browserImageArtifacts = pgTable(
+  "browser_image_artifacts",
+  {
+    id: text("id").primaryKey(),
+    workspaceId: text("workspace_id").notNull(),
+    createdByUserId: text("created_by_user_id").notNull(),
+    rootSessionId: text("root_session_id").notNull(),
+    workerSessionId: text("worker_session_id").notNull(),
+    browserSessionId: text("browser_session_id").notNull(),
+    status: text("status").notNull(),
+    label: text("label").notNull(),
+    filename: text("filename"),
+    mediaType: text("media_type"),
+    byteSize: integer("byte_size"),
+    contentHash: text("content_hash"),
+    storagePathname: text("storage_pathname").notNull(),
+    sourceKind: text("source_kind").notNull(),
+    idempotencyKey: text("idempotency_key").notNull(),
+    createdAt: text("created_at").notNull(),
+  },
+  (table) => [
+    foreignKey({
+      name: "browser_image_artifacts_membership_fkey",
+      columns: [table.workspaceId, table.createdByUserId],
+      foreignColumns: [
+        workspaceMemberships.workspaceId,
+        workspaceMemberships.userId,
+      ],
+    }).onDelete("cascade"),
+    check(
+      "browser_image_artifacts_status_check",
+      sql`${table.status} IN ('pending', 'ready')`
+    ),
+    check(
+      "browser_image_artifacts_source_kind_check",
+      sql`${table.sourceKind} IN ('element', 'full_page', 'image_resource', 'viewport')`
+    ),
+    check(
+      "browser_image_artifacts_ready_fields_check",
+      sql`${table.status} = 'pending' OR (${table.filename} IS NOT NULL AND ${table.mediaType} IS NOT NULL AND ${table.byteSize} > 0 AND ${table.contentHash} IS NOT NULL)`
+    ),
+    uniqueIndex("browser_image_artifacts_workspace_idempotency_uidx").on(
+      table.workspaceId,
+      table.idempotencyKey
+    ),
+    index("browser_image_artifacts_workspace_created_idx").on(
       table.workspaceId,
       table.createdAt.desc().nullsFirst()
     ),

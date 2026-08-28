@@ -1,6 +1,6 @@
 import { z } from "zod";
 import type { MessageStreamEvent } from "eve/client";
-import { taskCompletionSchema } from "../task-completion";
+import { parseTaskCompletionOutput } from "../task-completion";
 
 const workerTaskNotificationPrefix = /^Background task (\S+) \(worker\) /u;
 const terminalTaskControlSchema = z.object({
@@ -104,7 +104,7 @@ export function readTaskCompletion(events: readonly MessageStreamEvent[]) {
 
     const latest = backgroundTasks.at(-1);
     if (latest?.status === "completed" && latest.output && latest.terminalAt) {
-      const completion = parseTaskCompletion(latest.output);
+      const completion = parseTaskCompletionOutput(latest.output);
       if (completion) return { ...completion, completedAt: latest.terminalAt };
     }
     return undefined;
@@ -116,7 +116,7 @@ export function readTaskCompletion(events: readonly MessageStreamEvent[]) {
         event.data.subagentName === "worker" &&
         event.data.backgroundTask === undefined
       ) {
-        const completion = parseTaskCompletion(event.data.output);
+        const completion = parseTaskCompletionOutput(event.data.output);
         if (completion) return { ...completion, completedAt: event.meta.at };
       }
       continue;
@@ -132,7 +132,7 @@ export function readTaskCompletion(events: readonly MessageStreamEvent[]) {
         result.subagentName === "worker" &&
         (result.origin !== "child" || result.backgroundTask === undefined)
       ) {
-        const completion = parseTaskCompletion(result.output);
+        const completion = parseTaskCompletionOutput(result.output);
         if (completion) return { ...completion, completedAt: event.meta.at };
       }
       continue;
@@ -249,19 +249,6 @@ function readBackgroundWorkerReceiptTaskId(event: MessageStreamEvent) {
   }
 
   return undefined;
-}
-
-function parseTaskCompletion(output: unknown) {
-  const direct = taskCompletionSchema.safeParse(output);
-  if (direct.success) return direct.data;
-  if (typeof output !== "string") return undefined;
-
-  try {
-    const parsed = taskCompletionSchema.safeParse(JSON.parse(output));
-    return parsed.success ? parsed.data : undefined;
-  } catch {
-    return undefined;
-  }
 }
 
 function elapsedMs(start: string, end: string) {

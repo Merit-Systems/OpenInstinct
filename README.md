@@ -10,7 +10,7 @@ You stay in control of your passwords, credit cards and context.
 It's Open Source, self-hostable, and can use any model.
 One-click deploy to Vercel and get rolling.
 
-[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2FMerit-Systems%2Fopen-instinct&project-name=open-instinct&repository-name=open-instinct&products=%5B%7B%22type%22%3A%22integration%22%2C%22protocol%22%3A%22other%22%2C%22productSlug%22%3A%22kernel%22%2C%22integrationSlug%22%3A%22kernel%22%7D%2C%7B%22type%22%3A%22integration%22%2C%22protocol%22%3A%22storage%22%2C%22productSlug%22%3A%22neon%22%2C%22integrationSlug%22%3A%22neon%22%7D%5D)
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2FMerit-Systems%2Fopen-instinct&project-name=open-instinct&repository-name=open-instinct&products=%5B%7B%22type%22%3A%22integration%22%2C%22protocol%22%3A%22other%22%2C%22productSlug%22%3A%22kernel%22%2C%22integrationSlug%22%3A%22kernel%22%7D%2C%7B%22type%22%3A%22integration%22%2C%22protocol%22%3A%22storage%22%2C%22productSlug%22%3A%22neon%22%2C%22integrationSlug%22%3A%22neon%22%7D%5D&stores=%5B%7B%22type%22%3A%22blob%22%2C%22access%22%3A%22private%22%7D%5D)
 
 <img src=".github/demo.png" alt="OpenInstinct booking movie tickets over iMessage — it walks Fandango to checkout and reports the theater, showtime, seat, and total" width="640">
 
@@ -26,8 +26,9 @@ reading the code!
 
 ## Deployment
 
-The deploy button provisions [Kernel](https://kernel.sh) for cloud browsers and
-[Neon](https://neon.tech) for Postgres. Vercel AI Gateway handles inference.
+The deploy button provisions [Kernel](https://kernel.sh) for cloud browsers,
+[Neon](https://neon.tech) for Postgres, and a private Vercel Blob store for
+browser images and per-user memory. Vercel AI Gateway handles inference.
 [Linq](https://linq.app) is optional and requires the setup below before
 iMessage or production phone sign-in is available. Usage is billed to your
 Vercel account. Set the remaining auth variables on the deployment:
@@ -51,6 +52,28 @@ its separate migration path.
 
 Treat `SECRET_ENCRYPTION_KEY` as production key material — back it up
 separately; rotating it requires re-encrypting existing values.
+
+### Blob storage
+
+The one-click deploy creates and connects a private Blob store automatically.
+Vercel supplies `BLOB_STORE_ID` and a short-lived `VERCEL_OIDC_TOKEN` to each
+deployment, so there is no long-lived Blob credential to copy.
+
+OpenInstinct uses this store for persistent per-user memory and browser images.
+Production conversations require it because memory is recalled before each agent
+turn. Local Eve development uses process-local memory instead.
+
+For an existing Vercel project, link it first with
+`eve link --project <your-vercel-project> --non-interactive`, then create and
+connect the store with one command:
+
+```bash
+pnpm exec vercel blob create-store open-instinct-images --access private --yes --environment production --environment preview --environment development
+```
+
+Outside Vercel, set `BLOB_READ_WRITE_TOKEN` from a private Blob store instead.
+The memory provider uses that token explicitly, and browser image capture uses the
+same store.
 
 ### Linq iMessage setup
 

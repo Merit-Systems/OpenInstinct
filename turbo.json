@@ -5,6 +5,7 @@
       "dependsOn": ["^build:app"],
       "env": [
         "BETTER_AUTH_*",
+        "BLOB_*",
         "DATABASE_URL",
         "EVE_NEXT_*",
         "*_CONNECTOR_UID",
@@ -20,6 +21,7 @@
       "dependsOn": ["db:migrate"],
       "env": [
         "BETTER_AUTH_*",
+        "BLOB_*",
         "DATABASE_URL",
         "*_CONNECTOR_UID",
         "KERNEL_*",
@@ -40,13 +42,15 @@
       "cache": false,
       "passThroughEnv": [
         "BETTER_AUTH_*",
+        "BLOB_*",
         "DATABASE_URL",
         "*_CONNECTOR_UID",
         "KERNEL_*",
         "LINQ_*",
         "NODE_ENV",
         "SECRET_ENCRYPTION_KEY",
-        "VERCEL_ENV"
+        "VERCEL_ENV",
+        "VERCEL_OIDC_TOKEN"
       ],
       "persistent": true
     },
@@ -66,13 +70,15 @@
       "cache": false,
       "passThroughEnv": [
         "BETTER_AUTH_*",
+        "BLOB_*",
         "DATABASE_URL",
         "*_CONNECTOR_UID",
         "KERNEL_*",
         "LINQ_*",
         "NODE_ENV",
         "SECRET_ENCRYPTION_KEY",
-        "VERCEL_ENV"
+        "VERCEL_ENV",
+        "VERCEL_OIDC_TOKEN"
       ],
       "persistent": true
     },

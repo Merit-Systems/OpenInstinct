@@ -3,7 +3,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   getAuthSession:
-    vi.fn<(_headers: Headers) => Promise<{ user: { id: string } } | null>>(),
+    vi.fn<
+      (
+        _headers: Headers
+      ) => Promise<{ user: { id: string; phoneNumber: string } } | null>
+    >(),
   isSessionOwned:
     vi.fn<(_scope: unknown, _sessionId: string) => Promise<boolean>>(),
 }));
@@ -21,7 +25,9 @@ import eveChannel from "../agent/channels/eve";
 beforeEach(() => {
   vi.useFakeTimers();
   vi.clearAllMocks();
-  mocks.getAuthSession.mockResolvedValue({ user: { id: "user-1" } });
+  mocks.getAuthSession.mockResolvedValue({
+    user: { id: "user-1", phoneNumber: "+12025550123" },
+  });
   mocks.isSessionOwned.mockResolvedValue(false);
 });
 

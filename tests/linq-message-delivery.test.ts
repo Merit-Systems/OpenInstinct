@@ -1,9 +1,15 @@
-/* oxlint-disable typescript/no-unsafe-type-assertion -- Eve's Linq adapter exposes the handler context through a transitive Chat SDK `any`; the fixture supplies only the fields exercised here. */
+/* oxlint-disable typescript/no-unsafe-type-assertion, vitest/require-mock-type-parameters -- Eve's Linq adapter exposes the handler context through a transitive Chat SDK `any`; the fixture supplies only the fields exercised here. */
 import type * as LinqModule from "eve/channels/linq";
 import { describe, expect, it, vi } from "vitest";
 import workerCancellationHook from "../agent/hooks/worker-cancellation-delivery";
 
-const linqChannelCapture = vi.hoisted(() => ({ config: undefined as unknown }));
+const linqChannelCapture = vi.hoisted(() => ({
+  config: undefined as unknown,
+  readImage: vi.fn(),
+}));
+vi.mock("@/lib/browser-images/server", () => ({
+  readBrowserImageBytes: linqChannelCapture.readImage,
+}));
 vi.mock("eve/channels/linq", async (importOriginal) => {
   const original = await importOriginal<typeof LinqModule>();
   return {
@@ -44,6 +50,120 @@ describe("Linq message delivery", () => {
     );
 
     expect(post).toHaveBeenCalledExactlyOnceWith({ markdown: message });
+  });
+
+  it("replaces scoped artifact markdown with native iMessage files", async () => {
+    const artifactId = "0d01e667-d128-4bb7-a248-1ae21db72f4f";
+    linqChannelCapture.readImage.mockResolvedValue({
+      bytes: new Uint8Array([1, 2, 3]),
+      filename: "product.png",
+      id: artifactId,
+      mediaType: "image/png",
+    });
+    const { context, post } = handlerContext();
+
+    await deliverCompletedMessage(
+      completedEvent({
+        message: `Here it is.\n\n![Product](/artifacts/${artifactId})`,
+      }),
+      context,
+      sessionContext()
+    );
+
+    expect(linqChannelCapture.readImage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        userId: "user-1",
+        workspaceId: "workspace-1",
+      }),
+      artifactId,
+      { rootSessionId: "session-1", signal: undefined }
+    );
+    expect(post).toHaveBeenCalledExactlyOnceWith({
+      files: [
+        {
+          data: Buffer.from([1, 2, 3]),
+          filename: "product.png",
+          mimeType: "image/png",
+        },
+      ],
+      markdown: "Here it is.",
+    });
+  });
+
+  it("sends multiple artifact images as one native attachment gallery", async () => {
+    const firstArtifactId = "0d01e667-d128-4bb7-a248-1ae21db72f4f";
+    const secondArtifactId = "206c3a7e-c0b8-4317-9e34-552cff646673";
+    linqChannelCapture.readImage.mockImplementation(
+      async (_scope: unknown, artifactId: string) => ({
+        bytes: new Uint8Array(
+          artifactId === firstArtifactId ? [1, 2, 3] : [4, 5, 6]
+        ),
+        filename: artifactId === firstArtifactId ? "first.png" : "second.png",
+        id: artifactId,
+        mediaType: "image/png",
+      })
+    );
+    const { context, post } = handlerContext();
+
+    await deliverCompletedMessage(
+      completedEvent({
+        message: [
+          "Two good options.",
+          `![First](/artifacts/${firstArtifactId})`,
+          `![Second](/artifacts/${secondArtifactId})`,
+        ].join("\n"),
+      }),
+      context,
+      sessionContext()
+    );
+
+    expect(post).toHaveBeenCalledExactlyOnceWith({
+      files: [
+        {
+          data: Buffer.from([1, 2, 3]),
+          filename: "first.png",
+          mimeType: "image/png",
+        },
+        {
+          data: Buffer.from([4, 5, 6]),
+          filename: "second.png",
+          mimeType: "image/png",
+        },
+      ],
+      markdown: "Two good options.",
+    });
+  });
+
+  it("keeps reply bubbles and attaches images to the final bubble", async () => {
+    const artifactId = "0d01e667-d128-4bb7-a248-1ae21db72f4f";
+    linqChannelCapture.readImage.mockResolvedValue({
+      bytes: new Uint8Array([1, 2, 3]),
+      filename: "product.png",
+      id: artifactId,
+      mediaType: "image/png",
+    });
+    const { context, post } = handlerContext();
+
+    await deliverCompletedMessage(
+      completedEvent({
+        message: `First thought.\n\nSecond thought.\n\n![Product](/artifacts/${artifactId})`,
+      }),
+      context,
+      sessionContext()
+    );
+
+    expect(post).toHaveBeenCalledTimes(2);
+    expect(post).toHaveBeenNthCalledWith(1, { markdown: "First thought." });
+    expect(post).toHaveBeenNthCalledWith(2, {
+      files: [
+        {
+          data: Buffer.from([1, 2, 3]),
+          filename: "product.png",
+          mimeType: "image/png",
+        },
+      ],
+      markdown: "Second thought.",
+    });
   });
 
   it("suppresses intermediate tool-call messages", async () => {
@@ -253,7 +373,7 @@ function handlerContext(
   currentMessageId = "message-1",
   state: Record<string, unknown> = {}
 ) {
-  const post = vi.fn<(message: string) => Promise<void>>();
+  const post = vi.fn<(message: unknown) => Promise<void>>();
   post.mockResolvedValue();
   const addReaction = vi
     .fn<(threadId: string, messageId: string, emoji: string) => Promise<void>>()
@@ -290,8 +410,16 @@ function handlerContext(
 
 function sessionContext() {
   return {
-    session: { id: "session-1" },
-  } as HandlerParameters[2];
+    session: {
+      auth: {
+        current: {
+          attributes: { workspaceId: "workspace-1" },
+          id: "user-1",
+        },
+      },
+      id: "session-1",
+    },
+  } as unknown as HandlerParameters[2];
 }
 
 async function recordCancellationThroughHook(

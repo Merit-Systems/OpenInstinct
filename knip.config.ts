@@ -5,6 +5,8 @@ export default {
     "agent/channels/**/*.ts",
     "agent/connections/**/*.ts",
     "agent/hooks/**/*.ts",
+    "agent/instructions/**/*.ts",
+    "agent/memory/**/*.ts",
     "agent/subagents/**/*.ts",
     "agent/tools/**/*.ts",
     "db/drizzle.config.ts",

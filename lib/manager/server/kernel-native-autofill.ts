@@ -41,6 +41,9 @@ const evaluatedValueSchema = z.object({
 const evaluatedBooleanSchema = z.object({
   result: z.object({ value: z.boolean() }),
 });
+const evaluatedNumberSchema = z.object({
+  result: z.object({ value: z.number().int().nonnegative() }),
+});
 const evaluatedObjectSchema = z.object({
   result: z.object({ objectId: z.string().optional() }),
 });
@@ -146,6 +149,7 @@ export async function fillWithKernelNativeAutofill({
       let lastError: unknown;
       for (const control of controls) {
         try {
+          await markNativeAutofilledControls(connection, control);
           await connection.send(
             "Autofill.trigger",
             {
@@ -155,10 +159,11 @@ export async function fillWithKernelNativeAutofill({
             },
             control.sessionId
           );
-          return { filledClaims: claims.length, origin };
         } catch (error) {
           lastError = error;
+          continue;
         }
+        return { filledClaims: claims.length, origin };
       }
 
       throw new Error(
@@ -426,8 +431,10 @@ async function inspectFrameControls(
           );
           return {
             backendNodeId: described.node.backendNodeId,
+            executionContextId,
             focused: descriptor.focused,
             frameId,
+            index: descriptor.index,
             order,
             sessionId,
             standard: standardAutocomplete(kind, descriptor.autocomplete),
@@ -452,6 +459,49 @@ const controlInspectionExpression = `(() => {
     return [{ autocomplete: element.autocomplete || "", focused: document.activeElement === element, index }];
   });
 })()`;
+
+export function nativeAutofillSecretMarkingExpression(index: number) {
+  return `(() => {
+    const controls = document.querySelectorAll("input, select, textarea");
+    const anchor = controls.item(${String(index)});
+    if (!anchor) return 0;
+    const root = anchor.form || anchor.closest("form") || document;
+    let marked = 0;
+    for (const element of root.querySelectorAll("input, select, textarea")) {
+      if (element.disabled || ("readOnly" in element && element.readOnly)) continue;
+      if (element instanceof HTMLInputElement && ["hidden", "submit", "button", "reset", "file", "image", "checkbox", "radio"].includes(element.type)) continue;
+      element.dataset.vaultSecret = "true";
+      marked += 1;
+    }
+    return marked;
+  })()`;
+}
+
+async function markNativeAutofilledControls(
+  connection: CdpConnection,
+  control: {
+    readonly executionContextId: number;
+    readonly index: number;
+    readonly sessionId: string;
+  }
+) {
+  const response = evaluatedNumberSchema.parse(
+    await connection.send(
+      "Runtime.evaluate",
+      {
+        contextId: control.executionContextId,
+        expression: nativeAutofillSecretMarkingExpression(control.index),
+        returnByValue: true,
+      },
+      control.sessionId
+    )
+  );
+  if (response.result.value === 0) {
+    throw new Error(
+      "Vault-filled controls could not be marked for screenshot masking."
+    );
+  }
+}
 
 async function withKernelPage<T>(
   browserSessionId: string,

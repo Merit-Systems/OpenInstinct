@@ -49,6 +49,8 @@ export const env = createEnv({
     ),
 
     // Optional
+    BLOB_READ_WRITE_TOKEN: requiredValue.optional(),
+    BLOB_STORE_ID: requiredValue.optional(),
     GOOGLE_CONNECTOR_UID: requiredValue.default("google/open-instinct"),
     LINQ_CONNECTOR: requiredValue.optional(),
     LINQ_PHONE_NUMBER: requiredValue
@@ -79,5 +81,6 @@ const authHostname = new URL(env.BETTER_AUTH_URL).hostname;
 export const localPhoneAuthBypassEnabled =
   localDevelopment &&
   (authHostname === "localhost" ||
+    authHostname.endsWith(".localhost") ||
     authHostname === "127.0.0.1" ||
     authHostname === "[::1]");

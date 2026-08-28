@@ -15,6 +15,7 @@ describe("database migrations", () => {
     await applyMigration(database, "0000_fluffy_the_spike.sql");
     await applyMigration(database, "0001_better-auth.sql");
     await applyMigration(database, "0002_heavy_celestials.sql");
+    await applyMigration(database, "0003_unusual_fabian_cortez.sql");
     await applyMigration(database, "0000_fluffy_the_spike.sql");
     await applyMigration(database, "0001_better-auth.sql");
 
@@ -41,6 +42,7 @@ describe("database migrations", () => {
            'vault_items',
            'settings',
            'agent_sessions',
+           'browser_image_artifacts',
            'browser_sessions',
            'chats',
            'encrypted_secrets',
@@ -52,7 +54,7 @@ describe("database migrations", () => {
     );
     const pendingConstraints = await pendingConstraintCount(database);
 
-    expect(tables.rows[0]?.count).toBe(12);
+    expect(tables.rows[0]?.count).toBe(13);
     expect(pendingConstraints).toBe(0);
     await expect(
       database.query("SELECT id FROM vault_items WHERE id = 'contact-1'")

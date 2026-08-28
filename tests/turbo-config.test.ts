@@ -4,6 +4,7 @@ import { z } from "zod";
 
 const applicationEnvironment = [
   "BETTER_AUTH_*",
+  "BLOB_*",
   "DATABASE_URL",
   "*_CONNECTOR_UID",
   "KERNEL_*",
@@ -12,6 +13,7 @@ const applicationEnvironment = [
   "SECRET_ENCRYPTION_KEY",
   "VERCEL_ENV",
 ];
+const runtimeEnvironment = [...applicationEnvironment, "VERCEL_OIDC_TOKEN"];
 
 describe("Turbo configuration", () => {
   it("scopes application environment variables to their owning tasks", async () => {
@@ -44,11 +46,33 @@ describe("Turbo configuration", () => {
     expect(turbo.tasks["build:vercel"].env).toHaveLength(
       applicationEnvironment.length + 1
     );
-    expect(turbo.tasks["dev:app"].passThroughEnv).toEqual(
-      applicationEnvironment
+    expect(turbo.tasks["dev:app"].passThroughEnv).toEqual(runtimeEnvironment);
+    expect(turbo.tasks["start:app"].passThroughEnv).toEqual(runtimeEnvironment);
+  });
+
+  it("provisions private Blob storage through one-click and existing-project setup", async () => {
+    const readme = await readFile(
+      new URL("../README.md", import.meta.url),
+      "utf8"
     );
-    expect(turbo.tasks["start:app"].passThroughEnv).toEqual(
-      applicationEnvironment
+    const blobSetup = readme
+      .split("### Blob storage", 2)[1]
+      ?.split("### Linq iMessage setup", 1)[0];
+
+    expect(readme).toContain(
+      "stores=%5B%7B%22type%22%3A%22blob%22%2C%22access%22%3A%22private%22%7D%5D"
     );
+    expect(blobSetup).toContain(
+      "vercel blob create-store open-instinct-images --access private --yes"
+    );
+    expect(blobSetup).toContain("BLOB_STORE_ID");
+    expect(blobSetup).toContain("BLOB_READ_WRITE_TOKEN");
+    expect(blobSetup).toContain("VERCEL_OIDC_TOKEN");
+    expect(blobSetup).toContain("persistent per-user memory");
+    expect(blobSetup).toContain("Production conversations require it");
+    expect(blobSetup).not.toContain("vercel env pull");
+    expect(
+      blobSetup?.match(/^pnpm exec vercel blob create-store .+$/gmu)
+    ).toHaveLength(1);
   });
 });
