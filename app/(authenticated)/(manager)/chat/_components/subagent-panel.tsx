@@ -63,7 +63,6 @@ export function SubagentPanel({
       }
     >()
   );
-  const autoFocusedCoordinator = useRef<string | undefined>(undefined);
   const traceCloseButton = useRef<HTMLButtonElement>(null);
   const restoreFocusId = useRef<string | undefined>(undefined);
   const sessionNodes = useMemo(
@@ -92,16 +91,27 @@ export function SubagentPanel({
 
       void (async () => {
         try {
-          for await (const event of child.stream({
+          const snapshot = await child.snapshot({ signal: controller.signal });
+          if (controller.signal.aborted) return;
+
+          setStreamErrors((current) => {
+            if (!current.has(childSessionId)) return current;
+            const next = new Map(current);
+            next.delete(childSessionId);
+            return next;
+          });
+          setEventsBySession((current) => {
+            const next = new Map(current);
+            next.set(childSessionId, snapshot.events);
+            return next;
+          });
+
+          const liveChild = client.sessions.attach(childSessionId, {
+            streamIndex: snapshot.session.streamIndex,
+          });
+          for await (const event of liveChild.stream({
             signal: controller.signal,
-            startIndex: 0,
           })) {
-            setStreamErrors((current) => {
-              if (!current.has(childSessionId)) return current;
-              const next = new Map(current);
-              next.delete(childSessionId);
-              return next;
-            });
             setEventsBySession((current) => {
               const events = current.get(childSessionId) ?? [];
               if (
@@ -194,27 +204,6 @@ export function SubagentPanel({
       ),
     [eventsBySession, sessionNodes]
   );
-  const activeCoordinator = sessionNodes.find(
-    ({ depth, session }) =>
-      depth === 0 &&
-      session.name === "coordinator" &&
-      ["starting", "working"].includes(
-        statuses.get(session.childSessionId) ?? "starting"
-      )
-  )?.session;
-
-  useEffect(() => {
-    if (!activeCoordinator || selectedId !== undefined) return;
-    const focusKey = `${activeCoordinator.childSessionId}:${activeCoordinator.callId}`;
-    if (
-      autoFocusedCoordinator.current === focusKey ||
-      !window.matchMedia("(min-width: 48rem)").matches
-    ) {
-      return;
-    }
-    autoFocusedCoordinator.current = focusKey;
-    setSelectedId(activeCoordinator.childSessionId);
-  }, [activeCoordinator, selectedId]);
 
   const workingCount = [...statuses.values()].filter((status) =>
     ["starting", "working"].includes(status)

@@ -29,6 +29,21 @@ const cancelledWorkerTaskSchema = z.object({
 const workerCancellationsSchema = z.array(
   z.object({ sourceMessageId: z.string(), taskId: z.string() })
 );
+const markdownListItemPattern = /^\s*(?:[-+*]|\d+[.)])\s+/u;
+
+function splitLinqReply(message: string) {
+  return message
+    .trim()
+    .split(/\r?\n[\t ]*\r?\n/u)
+    .flatMap((block) => {
+      const lines = block.split(/\r?\n/u);
+      return lines.every((line) => markdownListItemPattern.test(line))
+        ? lines
+        : block;
+    })
+    .map((part) => part.trim())
+    .filter(Boolean);
+}
 
 const credentials: LinqChannelCredentials = env.LINQ_CONNECTOR
   ? connectLinqCredentials(env.LINQ_CONNECTOR)
@@ -118,9 +133,9 @@ export default linqChannel({
       context.state.pendingToolCallMessage = null;
       if (!event.message || !context.thread) return;
 
-      // Eve's Linq adapter translates supported Markdown into native iMessage
-      // decorations, so recipients see styled text instead of literal markers.
-      await context.thread.post({ markdown: event.message });
+      for (const markdown of splitLinqReply(event.message)) {
+        await context.thread.post({ markdown });
+      }
     },
   },
   async onMessage(_context, message) {

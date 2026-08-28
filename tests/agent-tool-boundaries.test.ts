@@ -65,6 +65,7 @@ describe("root, coordinator, and browser capability boundaries", () => {
       "google_workspace_read.ts",
       "google_workspace_write.ts",
       "read_file.ts",
+      "request_vault_import.ts",
       "request_vault_setup.ts",
       "todo.ts",
       "write_file.ts",

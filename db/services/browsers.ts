@@ -1,4 +1,4 @@
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, sql } from "drizzle-orm";
 import type { AccessScope } from "@/lib/access-scope";
 import { browserSessions, db } from "@/db";
 
@@ -64,4 +64,21 @@ export async function deleteBrowserSession(
     )
     .returning({ sessionId: browserSessions.sessionId });
   return rows.length > 0;
+}
+
+export async function withBrowserProfileWriteLock<T>(
+  scope: AccessScope,
+  operation: () => Promise<T>
+) {
+  return db.transaction(async (transaction) => {
+    const result = await transaction.execute<{ acquired: boolean }>(
+      sql`SELECT pg_try_advisory_xact_lock(hashtextextended(${scope.workspaceId}, 0)) AS "acquired"`
+    );
+    if (result.rows[0]?.acquired !== true) {
+      throw new Error(
+        "Another browser profile update is starting for this workspace. Retry after it finishes."
+      );
+    }
+    return operation();
+  });
 }

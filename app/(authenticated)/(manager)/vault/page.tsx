@@ -1,19 +1,14 @@
 import { VaultManager } from "./_components/vault-manager";
 import { requireRequestScope } from "@/lib/request-scope";
 import {
-  managerSetupRequestSchema,
   managerSnapshotSchema,
+  parseManagerSetupSearchParams,
 } from "@/lib/manager";
 import { readManagerSnapshot } from "@/lib/manager/server/store";
 
 export default async function Page({ searchParams }: PageProps<"/vault">) {
   const query = await searchParams;
-  const requestedSetup = managerSetupRequestSchema.safeParse({
-    account: firstQueryValue(query.account),
-    kind: firstQueryValue(query.kind),
-    label: firstQueryValue(query.label),
-    target: firstQueryValue(query.setup),
-  });
+  const requestedSetup = parseManagerSetupSearchParams(query);
   const scope = await requireRequestScope();
   const initialSnapshot = managerSnapshotSchema.parse(
     await readManagerSnapshot(scope)
@@ -21,6 +16,7 @@ export default async function Page({ searchParams }: PageProps<"/vault">) {
 
   return (
     <VaultManager
+      initialChromeImport={firstQueryValue(query.import) === "chrome"}
       initialSetup={
         requestedSetup.success && requestedSetup.data.target === "vault"
           ? requestedSetup.data
@@ -32,5 +28,5 @@ export default async function Page({ searchParams }: PageProps<"/vault">) {
 }
 
 function firstQueryValue(value: string | readonly string[] | undefined) {
-  return Array.isArray(value) ? value[0] : value;
+  return typeof value === "string" ? value : value?.[0];
 }
