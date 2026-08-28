@@ -427,10 +427,10 @@ function ActivityCard({
                       ) : null}
                       <span className="min-w-0 flex-1">
                         <span className="block truncate type-label">
-                          {task ?? session.name}
+                          {agentLabel(session.name)}
                         </span>
                         <span className="block truncate type-caption text-muted-foreground">
-                          {agentLabel(session.name)}
+                          {task ?? "Waiting for assignment"}
                         </span>
                       </span>
                       <StatusIndicator status={status} />
