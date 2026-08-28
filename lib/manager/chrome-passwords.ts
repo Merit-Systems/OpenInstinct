@@ -1,3 +1,4 @@
+import Papa from "papaparse";
 import type { ManagerMutation } from ".";
 import {
   loginIdentifierSchema,
@@ -15,13 +16,8 @@ type VaultImportItem = Extract<
 >["items"][number];
 
 export function parseChromePasswordsCsv(csv: string) {
-  const rows = parseCsv(csv);
-  const headers = rows.shift()?.map((header) =>
-    header
-      .replace(/^\uFEFF/, "")
-      .trim()
-      .toLowerCase()
-  );
+  const rows = Papa.parse<string[]>(csv.replace(/^\uFEFF/u, "")).data;
+  const headers = rows.shift()?.map((header) => header.trim().toLowerCase());
   if (!headers) throw new Error("Choose a Chrome passwords CSV file.");
 
   const indexes = {
@@ -115,50 +111,4 @@ function originFromUrl(value: string) {
   } catch {
     return undefined;
   }
-}
-
-function parseCsv(csv: string) {
-  const rows: string[][] = [];
-  let field = "";
-  let quoted = false;
-  let row: string[] = [];
-
-  for (let index = 0; index < csv.length; index += 1) {
-    const character = csv.charAt(index);
-    if (quoted) {
-      if (character === '"') {
-        if (csv[index + 1] === '"') {
-          field += '"';
-          index += 1;
-        } else {
-          quoted = false;
-        }
-      } else {
-        field += character;
-      }
-      continue;
-    }
-
-    if (character === '"' && field.length === 0) {
-      quoted = true;
-    } else if (character === ",") {
-      row.push(field);
-      field = "";
-    } else if (character === "\n" || character === "\r") {
-      if (character === "\r" && csv[index + 1] === "\n") index += 1;
-      row.push(field);
-      rows.push(row);
-      field = "";
-      row = [];
-    } else {
-      field += character;
-    }
-  }
-
-  if (quoted) throw new Error("This CSV has an unfinished quoted value.");
-  if (field.length > 0 || row.length > 0) {
-    row.push(field);
-    rows.push(row);
-  }
-  return rows;
 }

@@ -1,8 +1,8 @@
 import { z } from "zod";
 import type { MessageStreamEvent } from "eve/client";
+import { parseWorkerTaskNotification } from "../eve-task-notifications";
 import { parseTaskCompletionOutput } from "../task-completion";
 
-const workerTaskNotificationPrefix = /^Background task (\S+) \(worker\) /u;
 const terminalTaskControlSchema = z.object({
   tasks: z.array(
     z.object({
@@ -144,34 +144,19 @@ export function readTaskCompletion(events: readonly MessageStreamEvent[]) {
 
 function readWorkerTaskNotification(event: MessageStreamEvent) {
   if (event.type !== "message.received") return undefined;
-  const match = workerTaskNotificationPrefix.exec(event.data.message);
-  if (!match) return undefined;
-  const [, taskId] = match;
-  if (!taskId) return undefined;
-  const message = event.data.message.slice(match[0].length);
-
-  if (message === "is cancelled.")
-    return { status: "cancelled" as const, taskId };
-
-  const completedPrefix = "is completed.\n\nResult:\n";
-  if (message.startsWith(completedPrefix)) {
-    return {
-      output: message.slice(completedPrefix.length),
-      status: "completed" as const,
-      taskId,
-    };
+  const notification = parseWorkerTaskNotification(event.data.message);
+  if (
+    notification?.kind !== "cancelled" &&
+    notification?.kind !== "completed" &&
+    notification?.kind !== "failed"
+  ) {
+    return undefined;
   }
-
-  const failedPrefix = "failed.\n\nError:\n";
-  if (message.startsWith(failedPrefix)) {
-    return {
-      output: message.slice(failedPrefix.length),
-      status: "failed" as const,
-      taskId,
-    };
-  }
-
-  return undefined;
+  return {
+    output: notification.output,
+    status: notification.kind,
+    taskId: notification.taskId,
+  };
 }
 
 export function readBackgroundWorkerTasks(

@@ -26,16 +26,13 @@ import { Shimmer } from "@/components/ai-elements/shimmer";
 import { summarizeChatUsage } from "@/app/(authenticated)/(manager)/_lib/chat-usage";
 import { getLatestTurnFailure } from "@/app/(authenticated)/(manager)/chat/_lib/turn-failure";
 import type { ChatUsage } from "@/lib/chat";
+import { parseWorkerTaskNotification } from "@/lib/eve-task-notifications";
 import { cn } from "@/lib/utils";
 import { AgentMessage } from "./agent-message";
 import { collectSubagentSessions } from "@/app/_lib/subagent-sessions";
 import { SubagentPanel } from "./subagent-panel";
 
 const AGENT_NAME = "Local Vault Assistant";
-const backgroundWorkerDelivery =
-  /^Background task (\S+) \(worker\) (?:update: |needs input\.$|is cancelled\.$|is completed\.\n\nResult:\n|failed\.\n\nError:\n)/u;
-const backgroundWorkerAuthorization =
-  /^Background task (\S+) needs authorization\.$/u;
 const taskCancelResultSchema = z.object({
   kind: z.literal("tool-result"),
   output: z.object({ tasks: z.array(z.unknown()) }),
@@ -401,13 +398,10 @@ export function backgroundWorkerDeliveryMessageIds(
     }
 
     if (event.type !== "message.received") continue;
-    const taskId =
-      backgroundWorkerDelivery.exec(event.data.message)?.[1] ??
-      backgroundWorkerAuthorization.exec(event.data.message)?.[1];
+    const notification = parseWorkerTaskNotification(event.data.message);
+    const taskId = notification?.taskId;
     if (taskId && taskIds.has(taskId)) {
-      const isCancellation = event.data.message.endsWith(
-        "(worker) is cancelled."
-      );
+      const isCancellation = notification.kind === "cancelled";
       if (!isCancellation) messageIds.add(`${event.data.turnId}:user`);
       if (isCancellation && cancelledTaskIds.delete(taskId)) {
         messageIds.add(`${event.data.turnId}:user`);
@@ -454,16 +448,9 @@ function hasPendingBackgroundWorker(events: readonly MessageStreamEvent[]) {
     }
 
     if (event.type !== "message.received") continue;
-    const deliveredTaskId =
-      backgroundWorkerDelivery.exec(event.data.message)?.[1] ??
-      backgroundWorkerAuthorization.exec(event.data.message)?.[1];
-    if (
-      deliveredTaskId &&
-      !event.data.message.startsWith(
-        `Background task ${deliveredTaskId} (worker) update: `
-      )
-    ) {
-      taskIds.delete(deliveredTaskId);
+    const notification = parseWorkerTaskNotification(event.data.message);
+    if (notification && notification.kind !== "update") {
+      taskIds.delete(notification.taskId);
     }
   }
 

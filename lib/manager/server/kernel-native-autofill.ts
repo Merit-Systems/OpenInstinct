@@ -1,4 +1,5 @@
 import Kernel from "@onkernel/sdk";
+import CDP from "chrome-remote-interface";
 import { z } from "zod";
 import { env } from "../../env";
 import type { AutofillClaim } from "../vault-autofill-protocol";
@@ -573,127 +574,58 @@ async function withKernelPage<T>(
   }
 }
 
-class CdpConnection {
-  readonly #pending = new Map<
-    number,
-    {
-      readonly reject: (reason?: unknown) => void;
-      readonly resolve: (value: unknown) => void;
-    }
-  >();
-  #nextId = 1;
+type RawCdpSend = (
+  method: string,
+  params?: object,
+  sessionId?: string
+) => Promise<unknown>;
 
-  private constructor(
-    private readonly socket: WebSocket,
-    signal: AbortSignal | undefined
-  ) {
-    socket.addEventListener("message", (event) => {
-      this.#onMessage(event);
-    });
-    socket.addEventListener("close", () => {
-      this.#rejectPending(new Error("The Kernel CDP connection closed."));
-    });
-    signal?.addEventListener(
-      "abort",
-      () => {
-        this.close();
-      },
-      { once: true }
-    );
+class CdpConnection {
+  private readonly rawSend: RawCdpSend;
+
+  private constructor(private readonly client: CDP.Client) {
+    this.rawSend = client.send.bind(client);
   }
 
   static async connect(url: string, signal?: AbortSignal) {
-    const socket = new WebSocket(url);
-    await new Promise<void>((resolve, reject) => {
-      const cleanup = () => {
-        socket.removeEventListener("open", onOpen);
-        socket.removeEventListener("error", onError);
-        signal?.removeEventListener("abort", onAbort);
-      };
-      const onOpen = () => {
-        cleanup();
-        resolve();
-      };
-      const onError = () => {
-        cleanup();
-        reject(new Error("Could not connect to the Kernel browser over CDP."));
-      };
-      const onAbort = () => {
-        cleanup();
-        socket.close();
-        reject(
-          signal?.reason instanceof Error
-            ? signal.reason
-            : new Error("The CDP connection was aborted.")
-        );
-      };
-      socket.addEventListener("open", onOpen, { once: true });
-      socket.addEventListener("error", onError, { once: true });
-      signal?.addEventListener("abort", onAbort, { once: true });
-    });
-    return new CdpConnection(socket, signal);
+    signal?.throwIfAborted();
+    const client = await CDP({ local: true, target: url }).catch(
+      (cause: unknown) => {
+        throw new Error("Could not connect to the Kernel browser over CDP.", {
+          cause,
+        });
+      }
+    );
+    signal?.addEventListener(
+      "abort",
+      () => {
+        void client.close().catch(() => undefined);
+      },
+      { once: true }
+    );
+    return new CdpConnection(client);
   }
 
-  send(method: string, params?: object, sessionId?: string) {
-    const id = this.#nextId++;
-    return new Promise<unknown>((resolve, reject) => {
-      const timeout = setTimeout(() => {
-        this.#pending.delete(id);
-        reject(new Error(`Chromium did not respond to ${method}.`));
-      }, 15_000);
-      this.#pending.set(id, {
-        reject(reason) {
-          clearTimeout(timeout);
-          reject(
-            reason instanceof Error
-              ? reason
-              : new Error("The Chromium command failed.")
-          );
-        },
-        resolve(value) {
-          clearTimeout(timeout);
-          resolve(value);
-        },
-      });
-      this.socket.send(JSON.stringify({ id, method, params, sessionId }));
-    });
+  async send(method: string, params?: object, sessionId?: string) {
+    let deadline: ReturnType<typeof setTimeout> | undefined;
+    try {
+      return await Promise.race([
+        this.rawSend(method, params, sessionId),
+        new Promise<never>((_, reject) => {
+          deadline = setTimeout(() => {
+            reject(new Error(`Chromium did not respond to ${method}.`));
+          }, 15_000);
+        }),
+      ]);
+    } finally {
+      clearTimeout(deadline);
+    }
   }
 
   close() {
-    this.socket.close();
-  }
-
-  #onMessage(event: MessageEvent) {
-    if (typeof event.data !== "string") return;
-    let rawMessage: unknown;
-    try {
-      rawMessage = JSON.parse(event.data);
-    } catch {
-      return;
-    }
-    const message = cdpResponseSchema.safeParse(rawMessage);
-    if (!message.success || message.data.id === undefined) return;
-    const pending = this.#pending.get(message.data.id);
-    if (!pending) return;
-    this.#pending.delete(message.data.id);
-    if (message.data.error) {
-      pending.reject(new Error(message.data.error.message));
-    } else {
-      pending.resolve(message.data.result);
-    }
-  }
-
-  #rejectPending(error: Error) {
-    for (const { reject } of this.#pending.values()) reject(error);
-    this.#pending.clear();
+    void this.client.close().catch(() => undefined);
   }
 }
-
-const cdpResponseSchema = z.object({
-  error: z.object({ message: z.string() }).optional(),
-  id: z.number().int().optional(),
-  result: z.unknown().optional(),
-});
 
 function flattenFrames(
   node: z.infer<typeof frameTreeNodeSchema>

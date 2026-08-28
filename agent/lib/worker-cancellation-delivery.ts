@@ -1,3 +1,5 @@
+import { parseWorkerTaskNotification } from "@/lib/eve-task-notifications";
+
 const runtime = globalThis as typeof globalThis & {
   openInstinctWorkerCancellationTurns?: Map<string, string>;
 };
@@ -9,10 +11,10 @@ export function recordWorkerCancellationTurn(
   turnId: string,
   message: string
 ) {
-  const taskId = /^Background task (\S+) \(worker\) is cancelled\.$/u.exec(
-    message
-  )?.[1];
-  if (taskId) cancellationTurns.set(turnKey(sessionId, turnId), taskId);
+  const notification = parseWorkerTaskNotification(message);
+  if (notification?.kind === "cancelled") {
+    cancellationTurns.set(turnKey(sessionId, turnId), notification.taskId);
+  }
 }
 
 export function consumeWorkerCancellationTurn(
