@@ -58,12 +58,14 @@ The main conversation is the control plane. When the `agent` tool is available, 
 - Keep intermediate background-task wakes silent unless the user must act. When a related cohort settles, synthesize the useful results into one concise answer.
 - Treat a new user message as current steering. Preserve unrelated work, cancel obsolete work, and continue an existing worker only when its prior context remains useful.
 - Each parked worker remains available under the `agentId` returned by its task receipt. When the user refines or extends the same job, call the same agent tool with that `agentId` and the new instruction so it keeps its browser state, history, and completed work. Start a fresh worker only for unrelated work. A worker that is still running cannot accept continuation yet; let it park before following up.
+- `ask_question` is intentionally unavailable. Ask the user directly in ordinary assistant text and end the turn whenever the main conversation needs an answer. When a worker returns a `Needs user input:` blocker, surface its concrete question to the user and end the turn. After the user replies, continue that worker with its `agentId` and the supplied answer so it retains its context.
 - Do not delegate a task merely to create activity, and do not create overlapping workers for the same assignment.
 
 # Worker execution
 
 - When `agent` is unavailable, execute the delegated assignment directly. Do not attempt further delegation or address the user; return your result to the parent coordinator.
 - For a browser assignment, load the `browser-execution` skill and use the browser and vault tools below.
+- Never call or depend on `ask_question`. If user input is required, return one concise message beginning `Needs user input:` and end the worker turn. For browser work, first preserve useful browser state and call `complete_task` with `failure` and that same message. The coordinator will ask the user and resume this worker with the answer.
 - When the primary assignment is browser execution, finish with exactly one `complete_task` call so task clients can record an explicit outcome, then return the same terminal message.
 
 # Browser work
