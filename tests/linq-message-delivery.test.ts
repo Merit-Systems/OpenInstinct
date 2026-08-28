@@ -90,6 +90,50 @@ describe("Linq message delivery", () => {
     });
   });
 
+  it("sends multiple artifact images as one native attachment gallery", async () => {
+    const firstArtifactId = "0d01e667-d128-4bb7-a248-1ae21db72f4f";
+    const secondArtifactId = "206c3a7e-c0b8-4317-9e34-552cff646673";
+    linqChannelCapture.readImage.mockImplementation(
+      async (_scope: unknown, artifactId: string) => ({
+        bytes: new Uint8Array(
+          artifactId === firstArtifactId ? [1, 2, 3] : [4, 5, 6]
+        ),
+        filename: artifactId === firstArtifactId ? "first.png" : "second.png",
+        id: artifactId,
+        mediaType: "image/png",
+      })
+    );
+    const { context, post } = handlerContext();
+
+    await deliverCompletedMessage(
+      completedEvent({
+        message: [
+          "Two good options.",
+          `![First](/artifacts/${firstArtifactId})`,
+          `![Second](/artifacts/${secondArtifactId})`,
+        ].join("\n"),
+      }),
+      context,
+      sessionContext()
+    );
+
+    expect(post).toHaveBeenCalledExactlyOnceWith({
+      files: [
+        {
+          data: Buffer.from([1, 2, 3]),
+          filename: "first.png",
+          mimeType: "image/png",
+        },
+        {
+          data: Buffer.from([4, 5, 6]),
+          filename: "second.png",
+          mimeType: "image/png",
+        },
+      ],
+      markdown: "Two good options.",
+    });
+  });
+
   it("keeps reply bubbles and attaches images to the final bubble", async () => {
     const artifactId = "0d01e667-d128-4bb7-a248-1ae21db72f4f";
     linqChannelCapture.readImage.mockResolvedValue({
