@@ -3,6 +3,11 @@ import type { AccessScope } from "../lib/access-scope";
 import type { VaultItemKind } from "../lib/manager";
 import { serializePaymentCard } from "../lib/manager/payment-card";
 import {
+  classifyNativeLoginControl,
+  selectNativeLoginFills,
+  type NativeLoginControlDescriptor,
+} from "../lib/manager/server/kernel-login-autofill";
+import {
   buildNativeAutofillPayload,
   nativeAutofillTokens,
 } from "../lib/manager/server/kernel-native-autofill";
@@ -415,10 +420,123 @@ describe("vault browser autofill", () => {
       },
     });
   });
+
+  it("classifies current login controls without accepting OTP or new-password fields", () => {
+    expect(
+      classifyNativeLoginControl(
+        loginControl({ autocomplete: "username webauthn" })
+      )
+    ).toMatchObject({ score: 100, token: "username" });
+    expect(
+      classifyNativeLoginControl(loginControl({ type: "password" }))
+    ).toMatchObject({ score: 90, token: "current-password" });
+    expect(
+      classifyNativeLoginControl(
+        loginControl({ autocomplete: "one-time-code", type: "text" })
+      )
+    ).toBeNull();
+    expect(
+      classifyNativeLoginControl(
+        loginControl({ autocomplete: "new-password", type: "password" })
+      )
+    ).toBeNull();
+  });
+
+  it("selects one identifier and current password from the focused login form", () => {
+    const controls = [
+      classifiedLoginControl({
+        focused: true,
+        formIndex: 0,
+        index: 0,
+        token: "email",
+      }),
+      classifiedLoginControl({
+        formIndex: 0,
+        index: 1,
+        token: "current-password",
+      }),
+      classifiedLoginControl({
+        formIndex: 1,
+        index: 2,
+        score: 100,
+        token: "current-password",
+      }),
+    ];
+
+    expect(
+      selectNativeLoginFills(controls, [
+        claim("email", "ada@example.com"),
+        claim("current-password", "correct horse"),
+      ])
+    ).toEqual([
+      { control: controls[0], value: "ada@example.com" },
+      { control: controls[1], value: "correct horse" },
+    ]);
+  });
+
+  it("requires a focused login control and supports identifier-only steps", () => {
+    const identifier = classifiedLoginControl({ token: "username" });
+    expect(
+      selectNativeLoginFills([identifier], [claim("username", "member-1")])
+    ).toEqual([]);
+
+    const focusedIdentifier = { ...identifier, focused: true };
+    expect(
+      selectNativeLoginFills(
+        [focusedIdentifier],
+        [
+          claim("username", "member-1"),
+          claim("current-password", "correct horse"),
+        ]
+      )
+    ).toEqual([{ control: focusedIdentifier, value: "member-1" }]);
+  });
+
+  it("fills a username into a combined email-or-membership field", () => {
+    const combinedIdentifier = classifiedLoginControl({
+      focused: true,
+      label: "Email or MileagePlus number",
+      token: "email",
+    });
+    expect(
+      selectNativeLoginFills(
+        [combinedIdentifier],
+        [claim("username", "member-1")]
+      )
+    ).toEqual([{ control: combinedIdentifier, value: "member-1" }]);
+  });
 });
 
 function claim(token: string, value: string) {
   return { token, value };
+}
+
+function loginControl(
+  overrides: Partial<NativeLoginControlDescriptor> = {}
+): NativeLoginControlDescriptor {
+  return {
+    autocomplete: "",
+    focused: false,
+    formIndex: 0,
+    index: 0,
+    label: "",
+    name: "",
+    type: "text",
+    ...overrides,
+  };
+}
+
+function classifiedLoginControl(
+  overrides: Partial<
+    NonNullable<ReturnType<typeof classifyNativeLoginControl>>
+  > = {}
+) {
+  return {
+    ...loginControl(),
+    score: 70,
+    token: "username" as const,
+    ...overrides,
+  };
 }
 
 function surface(kind: string, tokens: readonly string[]) {

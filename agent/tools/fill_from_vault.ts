@@ -14,14 +14,14 @@ import { fillFromVaultRequestSchema } from "@/lib/manager/vault-autofill";
 
 const outputSchema = z.object({
   filledClaims: z.number().int().nonnegative(),
-  kind: z.enum(["address", "payment"]),
+  kind: z.enum(["address", "login", "payment"]),
   origin: z.string(),
   success: z.literal(true),
 });
 
 export default defineTool({
   description:
-    "Fill a card or address form with an opaque handle returned by list_vault. Chromium tries the focused field first, then standard autocomplete controls, then other visible controls. Never supply vault fields, selectors, origins, or secret values.",
+    "Fill a login, card, or address form with an opaque handle returned by list_vault. Focus one control in the intended form first. Never supply vault fields, selectors, origins, or secret values.",
   inputSchema: fillFromVaultRequestSchema,
   outputSchema,
   async execute(input, context) {
@@ -33,9 +33,13 @@ export default defineTool({
     await requireOwnedBrowserSession(scope, input.browserSessionId);
     const item = await readVaultItem(scope, input.candidateId);
     if (!item) throw new Error("The selected vault item was not found.");
-    if (item.kind !== "address" && item.kind !== "payment") {
+    if (
+      item.kind !== "address" &&
+      item.kind !== "login" &&
+      item.kind !== "payment"
+    ) {
       throw new Error(
-        "Native Chromium autofill currently supports only cards and addresses."
+        "Native browser autofill currently supports only logins, cards, and addresses."
       );
     }
 
@@ -44,7 +48,11 @@ export default defineTool({
       signal: context.abortSignal,
     });
     const surfaceKind =
-      item.kind === "payment" ? "payment-card" : "postal-address";
+      item.kind === "payment"
+        ? "payment-card"
+        : item.kind === "login"
+          ? "credentials"
+          : "postal-address";
     const tokens = nativeAutofillTokens[item.kind];
     const surface = {
       fields: tokens.map((token) => ({ score: 100, token })),
