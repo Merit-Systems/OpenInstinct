@@ -179,6 +179,7 @@ describe("environment", () => {
 
   it.each([
     ["http://localhost:3000", "development", undefined, true],
+    ["https://openinstinct.localhost", "development", undefined, true],
     ["http://localhost:3000", "production", undefined, false],
     ["http://localhost:3000", "development", "development", false],
     ["https://preview.example.com", "development", undefined, false],
