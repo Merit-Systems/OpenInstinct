@@ -1,4 +1,4 @@
-// Eve announces background-task lifecycle only as prose messages; delete this once it emits typed events.
+// The chat UI, benchmarks, and iMessage relay all need task ids and terminal status from these prose messages; parse them here only.
 type TaskNotification =
   | { readonly kind: "authorization"; readonly taskId: string }
   | TaskAgentNotification;
