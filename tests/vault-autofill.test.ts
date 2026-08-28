@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { AccessScope } from "../lib/access-scope";
+import type { VaultItemKind } from "../lib/manager";
 import { serializePaymentCard } from "../lib/manager/payment-card";
 import {
   buildNativeAutofillPayload,
@@ -11,6 +12,11 @@ import {
   type AutofillVaultAdapter,
 } from "../lib/manager/server/vault-autofill";
 import { createVaultAutofillProvider } from "../lib/manager/server/vault-autofill-provider";
+import {
+  serializeAddressVaultPayload,
+  serializeContactVaultPayload,
+  serializeLoginVaultPayload,
+} from "../lib/manager/vault-payload";
 
 const scope: AccessScope = {
   userId: "user-1",
@@ -25,6 +31,21 @@ const paymentSurface = {
   id: "payment-card",
   kind: "payment-card" as const,
 };
+const credentialsSurface = surface("credentials", [
+  "username",
+  "current-password",
+]);
+const contactSurface = surface("contact", ["email", "tel"]);
+const addressSurface = surface("postal-address", [
+  "street-address",
+  "address-line1",
+  "address-line2",
+  "address-level2",
+  "address-level1",
+  "postal-code",
+  "country",
+  "country-name",
+]);
 
 describe("vault browser autofill", () => {
   it("uses the encrypted local vault instead of a development card fixture", async () => {
@@ -94,6 +115,175 @@ describe("vault browser autofill", () => {
       "cc-name": "Grace Hopper",
       "cc-number": "4111111111111111",
       "postal-code": "10001",
+    });
+  });
+
+  it("keeps structured logins bound to their saved origin", async () => {
+    const login = vaultItem(
+      "login",
+      "Primary login",
+      "checkout.example · a•••@example.com"
+    );
+    const provider = providerFor(
+      login,
+      serializeLoginVaultPayload({
+        authentication: { password: "correct horse", type: "password" },
+        identifier: { type: "email", value: "ada@example.com" },
+        kind: "login",
+        origin: "https://checkout.example",
+        version: 2,
+      })
+    );
+
+    await expect(
+      provider.listSuggestions(
+        scope,
+        "https://checkout.example",
+        credentialsSurface
+      )
+    ).resolves.toEqual([
+      expect.objectContaining({
+        candidateId: login.id,
+        summary: "checkout.example · a•••@example.com",
+      }),
+    ]);
+    await expect(
+      provider.listSuggestions(
+        scope,
+        "https://attacker.example",
+        credentialsSurface
+      )
+    ).resolves.toEqual([]);
+
+    const claims = await provider.materializeClaims(scope, login.id, {
+      availableTokens: new Set(["username", "current-password"]),
+      origin: "https://checkout.example",
+      surface: credentialsSurface,
+    });
+    expect(claimValues(claims)).toEqual({
+      "current-password": "correct horse",
+      username: "ada@example.com",
+    });
+
+    await expect(
+      provider.materializeClaims(scope, login.id, {
+        availableTokens: new Set(["username"]),
+        origin: "https://attacker.example",
+        surface: credentialsSurface,
+      })
+    ).rejects.toThrow("restricted to https://checkout.example");
+  });
+
+  it("materializes passwordless identifiers without an OTP", async () => {
+    const login = vaultItem("login", "Email code", "a•••@example.com");
+    const provider = providerFor(
+      login,
+      serializeLoginVaultPayload({
+        authentication: { type: "email_otp" },
+        identifier: { type: "email", value: "ada@example.com" },
+        kind: "login",
+        origin: "https://checkout.example",
+        version: 2,
+      })
+    );
+
+    const claims = await provider.materializeClaims(scope, login.id, {
+      availableTokens: new Set(["email", "one-time-code"]),
+      origin: "https://checkout.example",
+      surface: contactSurface,
+    });
+    expect(claimValues(claims)).toEqual({ email: "ada@example.com" });
+  });
+
+  it("fails closed for legacy logins without an origin", async () => {
+    const login = vaultItem("login", "Legacy", "a•••@example.com");
+    const provider = providerFor(
+      login,
+      JSON.stringify({
+        authentication: { password: "correct horse", type: "password" },
+        identifier: { type: "email", value: "ada@example.com" },
+        kind: "login",
+        version: 1,
+      })
+    );
+
+    await expect(
+      provider.listSuggestions(
+        scope,
+        "https://checkout.example",
+        credentialsSurface
+      )
+    ).resolves.toEqual([]);
+    await expect(
+      provider.materializeClaims(scope, login.id, {
+        availableTokens: new Set(["username"]),
+        origin: "https://checkout.example",
+        surface: credentialsSurface,
+      })
+    ).rejects.toThrow("not assigned to a website");
+  });
+
+  it("maps structured addresses and contacts to standard tokens", async () => {
+    const address = vaultItem("address", "Home", "");
+    const addressProvider = providerFor(
+      address,
+      serializeAddressVaultPayload({
+        city: "London",
+        countryCode: "GB",
+        kind: "address",
+        line1: "12 St James's Square",
+        line2: "Floor 2",
+        postalCode: "SW1Y 4LB",
+        recipientName: "Ada Lovelace",
+        region: "London",
+        version: 1,
+      })
+    );
+    const addressClaims = await addressProvider.materializeClaims(
+      scope,
+      address.id,
+      {
+        availableTokens: new Set(
+          addressSurface.fields.map(({ token }) => token)
+        ),
+        origin: "https://merchant.example",
+        surface: addressSurface,
+      }
+    );
+    expect(claimValues(addressClaims)).toEqual({
+      "address-level1": "London",
+      "address-level2": "London",
+      "address-line1": "12 St James's Square",
+      "address-line2": "Floor 2",
+      country: "GB",
+      "country-name": "United Kingdom",
+      "postal-code": "SW1Y 4LB",
+      "street-address": "12 St James's Square\nFloor 2",
+    });
+
+    const contact = vaultItem("contact", "Checkout", "");
+    const contactProvider = providerFor(
+      contact,
+      serializeContactVaultPayload({
+        email: "ada@example.com",
+        fullName: "Ada Lovelace",
+        kind: "contact",
+        phone: "+442079460000",
+        version: 1,
+      })
+    );
+    const contactClaims = await contactProvider.materializeClaims(
+      scope,
+      contact.id,
+      {
+        availableTokens: new Set(["email", "tel"]),
+        origin: "https://merchant.example",
+        surface: contactSurface,
+      }
+    );
+    expect(claimValues(contactClaims)).toEqual({
+      email: "ada@example.com",
+      tel: "+442079460000",
     });
   });
 
@@ -229,4 +419,46 @@ describe("vault browser autofill", () => {
 
 function claim(token: string, value: string) {
   return { token, value };
+}
+
+function surface(kind: string, tokens: readonly string[]) {
+  return {
+    fields: tokens.map((token) => ({ score: 100, token })),
+    id: kind,
+    kind,
+  };
+}
+
+function vaultItem(kind: VaultItemKind, label: string, account: string) {
+  return {
+    account,
+    createdAt: "2026-08-27T00:00:00.000Z",
+    id: `vault-${kind}`,
+    kind,
+    label,
+    updatedAt: "2026-08-27T00:00:00.000Z",
+  };
+}
+
+function providerFor(item: ReturnType<typeof vaultItem>, secret: string) {
+  return createVaultAutofillProvider({
+    async hasSecret() {
+      return true;
+    },
+    async listVaultItems() {
+      return [item];
+    },
+    async readSecret() {
+      return secret;
+    },
+    async readVaultItem() {
+      return item;
+    },
+  });
+}
+
+function claimValues(
+  claims: readonly { readonly token: string; readonly value: string }[]
+) {
+  return Object.fromEntries(claims.map(({ token, value }) => [token, value]));
 }

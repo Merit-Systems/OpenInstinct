@@ -1,20 +1,28 @@
 import { z } from "zod";
 import { paymentCardSecretStringSchema } from "./payment-card";
+import {
+  addressVaultPayloadStringSchema,
+  contactVaultPayloadStringSchema,
+  loginIdentifierTypeSchema,
+  loginOriginSchema,
+  loginVaultPayloadStringSchema,
+} from "./vault-payload";
 
 export const vaultItemKindSchema = z.enum([
   "login",
   "payment",
   "address",
+  "contact",
   "phone",
   "identity",
   "token",
 ]);
 
-const vaultSetupKindSchema = vaultItemKindSchema.extract([
+const vaultCreateItemKindSchema = vaultItemKindSchema.extract([
   "login",
   "payment",
   "address",
-  "phone",
+  "contact",
 ]);
 
 const managerVaultItemSchema = z.object({
@@ -45,31 +53,48 @@ export const managerSnapshotSchema = z.object({
 const vaultItemInputSchema = z
   .object({
     account: z.string().trim().max(200).default(""),
-    kind: vaultItemKindSchema,
+    kind: vaultCreateItemKindSchema,
     label: z.string().trim().min(1).max(120),
     secret: z.string().min(1).max(20_000),
   })
   .superRefine((input, context) => {
-    if (
-      input.kind === "payment" &&
-      !paymentCardSecretStringSchema.safeParse(input.secret).success
-    ) {
+    const secretSchema = {
+      address: addressVaultPayloadStringSchema,
+      contact: contactVaultPayloadStringSchema,
+      login: loginVaultPayloadStringSchema,
+      payment: paymentCardSecretStringSchema,
+    }[input.kind];
+    if (!secretSchema.safeParse(input.secret).success) {
       context.addIssue({
         code: "custom",
-        message: "Complete the card details before saving.",
+        message: `Complete the ${input.kind} details before saving.`,
         path: ["secret"],
       });
     }
   });
 
-export const managerSetupRequestSchema = z
+const loginManagerSetupRequestSchema = z
   .object({
-    account: z.string().trim().max(200).optional(),
-    kind: vaultSetupKindSchema,
-    label: z.string().trim().max(120).optional(),
+    identifierType: loginIdentifierTypeSchema,
+    kind: z.literal("login"),
+    label: z.string().trim().min(1).max(120),
+    origin: loginOriginSchema,
     target: z.literal("vault"),
   })
   .strict();
+
+const nonLoginManagerSetupRequestSchema = z
+  .object({
+    kind: vaultCreateItemKindSchema.exclude(["login"]),
+    label: z.string().trim().min(1).max(120).optional(),
+    target: z.literal("vault"),
+  })
+  .strict();
+
+export const managerSetupRequestSchema = z.union([
+  loginManagerSetupRequestSchema,
+  nonLoginManagerSetupRequestSchema,
+]);
 
 export const managerMutationSchema = z.discriminatedUnion("action", [
   z.object({
@@ -84,6 +109,25 @@ export type ManagerMutation = z.infer<typeof managerMutationSchema>;
 export type ManagerSetupRequest = z.infer<typeof managerSetupRequestSchema>;
 export type ManagerSnapshot = z.infer<typeof managerSnapshotSchema>;
 export type VaultItemKind = z.infer<typeof vaultItemKindSchema>;
+export type VaultCreateItemKind = z.infer<typeof vaultCreateItemKindSchema>;
+
+export function parseManagerSetupSearchParams(
+  query: Record<string, string | readonly string[] | undefined>
+) {
+  const identifierType = firstQueryValue(query.identifier_type);
+  const origin = firstQueryValue(query.origin);
+  const input = {
+    kind: firstQueryValue(query.kind),
+    label: firstQueryValue(query.label),
+    target: firstQueryValue(query.setup),
+  };
+
+  return managerSetupRequestSchema.safeParse(
+    identifierType === undefined && origin === undefined
+      ? input
+      : { ...input, identifierType, origin }
+  );
+}
 
 export function createManagerSetupUrl(
   baseUrl: string,
@@ -91,8 +135,15 @@ export function createManagerSetupUrl(
 ) {
   const url = new URL("/vault", baseUrl);
   url.searchParams.set("setup", request.target);
-  if (request.account) url.searchParams.set("account", request.account);
   if (request.label) url.searchParams.set("label", request.label);
   url.searchParams.set("kind", request.kind);
+  if (request.kind === "login") {
+    url.searchParams.set("identifier_type", request.identifierType);
+    url.searchParams.set("origin", request.origin);
+  }
   return url.toString();
+}
+
+function firstQueryValue(value: string | readonly string[] | undefined) {
+  return typeof value === "string" ? value : value?.[0];
 }

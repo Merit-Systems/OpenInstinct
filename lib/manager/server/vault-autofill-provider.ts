@@ -1,21 +1,29 @@
 import { listVaultItems, readVaultItem } from "@/db/services/vault";
+import type { VaultItemKind } from "..";
 import { parsePaymentCardSecret } from "../payment-card";
 import type { DetectedAutofillSurface } from "../vault-autofill-protocol";
+import {
+  parseAddressVaultPayload,
+  parseContactVaultPayload,
+  parseLoginVaultPayload,
+} from "../vault-payload";
 import { hasSecret, readSecret } from "./secret-store";
 import type { AutofillVaultAdapter } from "./vault-autofill";
 
 interface VaultAutofillCodec {
   readonly claims: (
     item: NonNullable<Awaited<ReturnType<typeof readVaultItem>>>,
-    secret: string
+    secret: string,
+    origin: string
   ) => ReadonlyMap<string, string>;
+  readonly isAvailableAtOrigin?: (secret: string, origin: string) => boolean;
   readonly matchReason: string;
-  readonly surfaceKind: string;
+  readonly surfaceKinds: readonly DetectedAutofillSurface["kind"][];
   readonly tokens: readonly string[];
-  readonly vaultKind: string;
+  readonly vaultKind: VaultItemKind;
 }
 
-const codecs = [
+const codecs: readonly VaultAutofillCodec[] = [
   {
     claims(_item, secret) {
       const card = parsePaymentCardSecret(secret);
@@ -33,7 +41,7 @@ const codecs = [
       ]);
     },
     matchReason: "Saved payment card",
-    surfaceKind: "payment-card",
+    surfaceKinds: ["payment-card"],
     tokens: [
       "cc-name",
       "cc-number",
@@ -46,24 +54,59 @@ const codecs = [
     vaultKind: "payment",
   },
   {
-    claims(item, secret) {
-      return new Map([
-        ["username", item.account],
-        ["current-password", secret],
+    claims(_item, secret, origin) {
+      const login = requireBoundLogin(secret, origin);
+      const values = new Map<string, string>([
+        ["username", login.identifier.value],
       ]);
+      if (login.identifier.type === "email") {
+        values.set("email", login.identifier.value);
+      }
+      if (login.identifier.type === "phone") {
+        values.set("tel", login.identifier.value);
+      }
+      if (login.authentication.type === "password") {
+        values.set("current-password", login.authentication.password);
+      }
+      return values;
     },
+    isAvailableAtOrigin: isBoundLoginForOrigin,
     matchReason: "Saved login",
-    surfaceKind: "credentials",
-    tokens: ["username", "current-password"],
+    surfaceKinds: ["credentials", "contact"],
+    tokens: ["username", "current-password", "email", "tel"],
     vaultKind: "login",
   },
   {
     claims(_item, secret) {
-      return new Map([["street-address", secret]]);
+      const address = parseAddressVaultPayload(secret);
+      if (!address) return new Map([["street-address", secret]]);
+
+      const values = new Map<string, string>([
+        ["name", address.recipientName],
+        ["street-address", formatStreetAddress(address)],
+        ["address-line1", address.line1],
+        ["address-level2", address.city],
+        ["address-level1", address.region],
+        ["postal-code", address.postalCode],
+        ["country", address.countryCode],
+        ["country-name", countryName(address.countryCode)],
+      ]);
+      if (address.line2) values.set("address-line2", address.line2);
+      return values;
     },
     matchReason: "Saved address",
-    surfaceKind: "postal-address",
-    tokens: ["street-address"],
+    surfaceKinds: ["postal-address", "identity"],
+    tokens: [
+      "name",
+      "street-address",
+      "address-line1",
+      "address-line2",
+      "address-level2",
+      "address-level1",
+      "postal-code",
+      "country",
+      "country-name",
+    ],
     vaultKind: "address",
   },
   {
@@ -71,11 +114,46 @@ const codecs = [
       return new Map([["tel", secret]]);
     },
     matchReason: "Saved phone number",
-    surfaceKind: "contact",
+    surfaceKinds: ["contact"],
     tokens: ["tel"],
     vaultKind: "phone",
   },
-] satisfies readonly VaultAutofillCodec[];
+  {
+    claims(_item, secret) {
+      const contact = parseContactVaultPayload(secret);
+      if (!contact) {
+        throw new Error("The saved contact is incomplete or invalid.");
+      }
+      const values = new Map<string, string>();
+      if (contact.fullName) values.set("name", contact.fullName);
+      if (contact.email) values.set("email", contact.email);
+      if (contact.phone) values.set("tel", contact.phone);
+      return values;
+    },
+    matchReason: "Saved contact",
+    surfaceKinds: ["contact", "identity"],
+    tokens: ["name", "email", "tel"],
+    vaultKind: "contact",
+  },
+  {
+    claims(_item, secret) {
+      return new Map([["name", secret]]);
+    },
+    matchReason: "Saved identity",
+    surfaceKinds: ["identity"],
+    tokens: ["name"],
+    vaultKind: "identity",
+  },
+  {
+    claims(_item, secret) {
+      return new Map([["eve-secret", secret]]);
+    },
+    matchReason: "Saved secret",
+    surfaceKinds: ["secret"],
+    tokens: ["eve-secret"],
+    vaultKind: "token",
+  },
+];
 
 export function createVaultAutofillProvider(
   dependencies: {
@@ -93,30 +171,37 @@ export function createVaultAutofillProvider(
   };
 
   return {
-    async listSuggestions(scope, _origin, surface) {
+    async listSuggestions(scope, origin, surface) {
       const compatibleCodecs = codecsForSurface(surface);
       if (compatibleCodecs.length === 0) return [];
 
       const items = await stores.listVaultItems(scope);
-      const compatibleItems = items.filter((item) =>
-        compatibleCodecs.some(
-          (codec) =>
-            codec.vaultKind === item.kind &&
-            surface.fields.some(({ token }) => codec.tokens.includes(token))
-        )
-      );
+      const compatibleItems = items.flatMap((item) => {
+        const codec = compatibleCodecs.find(
+          (candidate) =>
+            candidate.vaultKind === item.kind &&
+            surface.fields.some(({ token }) => candidate.tokens.includes(token))
+        );
+        return codec ? [{ codec, item }] : [];
+      });
       const availability = await Promise.all(
-        compatibleItems.map((item) =>
-          stores.hasSecret({ id: item.id, namespace: "vault", scope })
-        )
+        compatibleItems.map(async ({ codec, item }) => {
+          if (!codec.isAvailableAtOrigin) {
+            return stores.hasSecret({ id: item.id, namespace: "vault", scope });
+          }
+          const secret = await stores.readSecret({
+            id: item.id,
+            namespace: "vault",
+            scope,
+          });
+          return (
+            secret !== undefined && codec.isAvailableAtOrigin(secret, origin)
+          );
+        })
       );
 
-      return compatibleItems.flatMap((item, index) => {
+      return compatibleItems.flatMap(({ codec, item }, index) => {
         if (!availability[index]) return [];
-        const codec = compatibleCodecs.find(
-          (candidate) => candidate.vaultKind === item.kind
-        );
-        if (!codec) return [];
         return [
           {
             candidateId: item.id,
@@ -135,7 +220,7 @@ export function createVaultAutofillProvider(
       const codec = codecs.find(
         (candidate) =>
           candidate.vaultKind === item.kind &&
-          candidate.surfaceKind === target.surface.kind
+          candidate.surfaceKinds.includes(target.surface.kind)
       );
       if (!codec) {
         throw new Error(
@@ -150,7 +235,7 @@ export function createVaultAutofillProvider(
       });
       if (!secret) throw new Error("The selected vault item has no secret.");
 
-      const values = codec.claims(item, secret);
+      const values = codec.claims(item, secret, target.origin);
       return [...target.availableTokens].flatMap((token) => {
         const value = values.get(token);
         return value ? [{ id: crypto.randomUUID(), token, value }] : [];
@@ -162,5 +247,40 @@ export function createVaultAutofillProvider(
 export const vaultAutofillProvider = createVaultAutofillProvider();
 
 function codecsForSurface(surface: DetectedAutofillSurface) {
-  return codecs.filter((codec) => codec.surfaceKind === surface.kind);
+  return codecs.filter((codec) => codec.surfaceKinds.includes(surface.kind));
+}
+
+function isBoundLoginForOrigin(secret: string, origin: string) {
+  const login = parseLoginVaultPayload(secret);
+  return Boolean(login && "origin" in login && login.origin === origin);
+}
+
+function requireBoundLogin(secret: string, origin: string) {
+  const login = parseLoginVaultPayload(secret);
+  if (!login || !("origin" in login)) {
+    throw new Error(
+      "This saved login is not assigned to a website. Re-save it before autofill."
+    );
+  }
+  if (login.origin !== origin) {
+    throw new Error(`This saved login is restricted to ${login.origin}.`);
+  }
+  return login;
+}
+
+function formatStreetAddress(
+  address: NonNullable<ReturnType<typeof parseAddressVaultPayload>>
+) {
+  return [address.line1, address.line2].filter(Boolean).join("\n");
+}
+
+function countryName(countryCode: string) {
+  try {
+    return (
+      new Intl.DisplayNames("en", { type: "region" }).of(countryCode) ??
+      countryCode
+    );
+  } catch {
+    return countryCode;
+  }
 }

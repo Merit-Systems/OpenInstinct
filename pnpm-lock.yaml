@@ -68,6 +68,9 @@ importers:
       cmdk:
         specifier: 1.1.1
         version: 1.1.1(@types/react-dom@19.2.5(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
+      credit-card-type:
+        specifier: ^10.3.0
+        version: 10.3.0
       drizzle-orm:
         specifier: ^0.45.2
         version: 0.45.2(@electric-sql/pglite@0.5.8)(@neondatabase/serverless@1.1.0)(@opentelemetry/api@1.9.1)(@types/pg@8.23.1)(kysely@0.29.5)(pg@8.23.0)
@@ -3750,6 +3753,9 @@ packages:
     peerDependenciesMeta:
       typescript:
         optional: true
+
+  credit-card-type@10.3.0:
+    resolution: {integrity: sha512-gT9Sb34QMQJDjvovdygGLRHT2wWrvIjEJ+WfCHgBElBbbP8WSl5LEkgwuIRKHeaBOr5sMTgIro3SDYl7XxwTTQ==}
 
   cross-spawn@7.0.6:
     resolution: {integrity: sha512-uV2QOWP2nWzsy2aMp8aRibhi9dlzF5Hgh5SHaB9OiTGEyDTiJJyx0uy51QXdyWbtAHNua4XJzUKca3OzKUd3vA==}
@@ -10070,6 +10076,8 @@ snapshots:
       parse-json: 5.2.0
     optionalDependencies:
       typescript: 6.0.3
+
+  credit-card-type@10.3.0: {}
 
   cross-spawn@7.0.6:
     dependencies:
