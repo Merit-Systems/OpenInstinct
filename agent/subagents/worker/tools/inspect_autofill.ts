@@ -1,7 +1,7 @@
 import { defineTool } from "eve/tools";
 import { z } from "zod";
-import { requireOwnedBrowserSession } from "@/agent/extensions/kernel/browser-runtime";
-import { scopeFromPrincipal } from "@/lib/access-scope";
+import { requireOwnedBrowserSession } from "@/agent/subagents/worker/lib/owned-browser";
+import { requireWorkerScope } from "@/agent/subagents/worker/lib/access";
 import { listAutofillSuggestions } from "@/lib/manager/server/vault-autofill";
 import { vaultAutofillProvider } from "@/lib/manager/server/vault-autofill-provider";
 import { inspectWithVaultExtension } from "@/lib/manager/server/vault-extension-autofill";
@@ -28,10 +28,7 @@ export default defineTool({
   inputSchema: inspectAutofillRequestSchema,
   outputSchema,
   async execute(input, context) {
-    const caller =
-      context.session.auth.current ?? context.session.auth.initiator;
-    if (!caller) throw new Error("An authenticated user is required.");
-    const scope = scopeFromPrincipal(caller);
+    const scope = await requireWorkerScope(context);
 
     await requireOwnedBrowserSession(scope, input.browserSessionId);
     const inspection = await inspectWithVaultExtension({

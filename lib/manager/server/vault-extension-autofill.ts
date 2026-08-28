@@ -1,6 +1,6 @@
-import Kernel from "@onkernel/sdk";
 import { CompactEncrypt, importJWK, type JWK } from "jose";
 import { z } from "zod";
+import { kernel } from "@/lib/kernel";
 import type {
   AutofillClaim,
   VaultAutofillCommand,
@@ -9,7 +9,6 @@ import {
   autofillInspectionSchema,
   vaultAutofillExtensionResultSchema,
 } from "../vault-autofill-protocol";
-import { env } from "../../env";
 
 const keyExchangeSchema = z.object({
   browserNow: z.number().int().nonnegative(),
@@ -91,14 +90,7 @@ async function executeExtensionOperation(
   argument: string | undefined,
   signal: AbortSignal | undefined
 ) {
-  if (!env.KERNEL_VAULT_AUTOFILL_EXTENSION) {
-    throw new Error(
-      "Secure vault autofill is unavailable because the browser extension is not configured."
-    );
-  }
-
-  const client = new Kernel({ apiKey: env.KERNEL_API_KEY });
-  const result = await client.browsers.playwright.execute(
+  const result = await kernel.browsers.playwright.execute(
     browserSessionId,
     {
       code: extensionRuntimeCode(operation, argument),
