@@ -7,12 +7,13 @@ import { getAuthSession } from "@/auth/session";
 
 export default async function SignInPage({
   searchParams,
-}: {
-  readonly searchParams: Promise<{ callbackUrl?: string }>;
-}) {
+}: PageProps<"/sign-in">) {
   if (await getAuthSession(await headers())) redirect("/");
 
-  const requestedCallback = (await searchParams).callbackUrl;
+  const callbackValue = (await searchParams).callbackUrl;
+  const requestedCallback = Array.isArray(callbackValue)
+    ? callbackValue[0]
+    : callbackValue;
   const callbackUrl =
     requestedCallback?.startsWith("/") && !requestedCallback.startsWith("//")
       ? requestedCallback

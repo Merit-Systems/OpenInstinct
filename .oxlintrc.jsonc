@@ -23,6 +23,7 @@
     "perf": "error"
   },
   "jsPlugins": [
+    "./tools/oxlint/next/index.ts",
     "eslint-plugin-turbo",
     {
       "name": "hooks",
@@ -36,6 +37,10 @@
     }
   },
   "rules": {
+    "local-next/no-route-private-imports": "error",
+    "local-next/prefer-nearest-route-private-owner": "error",
+    "local-next/require-generated-route-props": "error",
+    "local-next/require-page-route-group": "error",
     "hooks/config": "error",
     "hooks/error-boundaries": "error",
     "hooks/gating": "error",
