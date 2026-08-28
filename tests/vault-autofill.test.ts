@@ -4,6 +4,7 @@ import {
   fillAutofillClaims,
   fillCandidates,
 } from "../browser-extension/lib/fill-engine";
+import { permittedFrameInspection } from "../browser-extension/lib/frame-policy";
 import type { AccessScope } from "../lib/access-scope";
 import type { VaultItemKind } from "../lib/manager";
 import { serializePaymentCard } from "../lib/manager/payment-card";
@@ -375,6 +376,50 @@ describe("vault browser autofill", () => {
         type: "text",
       })
     ).toEqual({ kind: "postal-address", score: 100, token: "country" });
+  });
+
+  it("limits cross-origin autofill to hosted payment surfaces", () => {
+    expect(
+      permittedFrameInspection("https://merchant.example", {
+        origin: "https://js.globalpay.com",
+        surfaces: [paymentSurface, credentialsSurface],
+      })
+    ).toEqual({
+      origin: "https://js.globalpay.com",
+      surfaces: [paymentSurface],
+    });
+    expect(
+      permittedFrameInspection("https://merchant.example", {
+        origin: "https://unknown-payment-provider.example",
+        surfaces: [paymentSurface],
+      })
+    ).toEqual({
+      origin: "https://unknown-payment-provider.example",
+      surfaces: [paymentSurface],
+    });
+    expect(
+      permittedFrameInspection("https://merchant.example", {
+        origin: "https://embedded-login.example",
+        surfaces: [credentialsSurface],
+      })
+    ).toBeNull();
+    expect(
+      permittedFrameInspection("https://merchant.example", {
+        origin: "https://analytics.example",
+        surfaces: [],
+      })
+    ).toBeNull();
+  });
+
+  it("keeps every detected surface in same-origin frames", () => {
+    const inspection = {
+      origin: "https://merchant.example",
+      surfaces: [paymentSurface, credentialsSurface, contactSurface],
+    };
+
+    expect(
+      permittedFrameInspection("https://merchant.example", inspection)
+    ).toBe(inspection);
   });
 
   it("falls back to labels without model-authored selectors", () => {

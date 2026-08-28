@@ -9,22 +9,8 @@ import type {
   VaultAutofillFrameInspection,
 } from "../../lib/manager/vault-autofill-protocol";
 import { vaultAutofillCommandSchema } from "../../lib/manager/vault-autofill-protocol";
+import { permittedFrameInspection } from "../lib/frame-policy";
 import { onMessage, sendMessage } from "../lib/messaging";
-
-const paymentFrameHosts = [
-  "adyen.com",
-  "authorize.net",
-  "braintree-api.com",
-  "braintreegateway.com",
-  "cardconnect.com",
-  "checkout.com",
-  "cybersource.com",
-  "squarecdn.com",
-  "squareup.com",
-  "spreedly.com",
-  "stripe.com",
-  "worldpay.com",
-] as const;
 
 export default defineBackground(() => {
   const keys = generateKeyPair("RSA-OAEP-256", { extractable: true });
@@ -221,27 +207,6 @@ function bestTokenScore(
 async function inspectFrame(tabId: number, frameId: number) {
   try {
     return await sendMessage("inspectFrame", undefined, { tabId, frameId });
-  } catch {
-    return null;
-  }
-}
-
-function permittedFrameInspection(
-  expectedOrigin: string,
-  inspection: VaultAutofillFrameInspection | null
-) {
-  if (!inspection || inspection.surfaces.length === 0) return null;
-  if (inspection.origin === expectedOrigin) return inspection;
-  try {
-    const hostname = new URL(inspection.origin).hostname;
-    const permitted = paymentFrameHosts.some(
-      (host) => hostname === host || hostname.endsWith(`.${host}`)
-    );
-    if (!permitted) return null;
-    const surfaces = inspection.surfaces.filter(
-      ({ kind }) => kind === "payment-card"
-    );
-    return surfaces.length > 0 ? { ...inspection, surfaces } : null;
   } catch {
     return null;
   }

@@ -1,4 +1,4 @@
-/* oxlint-disable typescript/no-unsafe-call, typescript/no-unsafe-member-access -- Eve's Linq adapter exposes the thread through a transitive Chat SDK type; TypeScript still checks this contextual handler. */
+/* oxlint-disable typescript/no-unsafe-assignment, typescript/no-unsafe-call, typescript/no-unsafe-member-access -- Eve's Linq adapter exposes the thread through a transitive Chat SDK type; TypeScript still checks this contextual handler. */
 import { connectLinqCredentials } from "@vercel/connect/eve";
 import {
   defaultLinqAuth,
@@ -39,15 +39,16 @@ export const deliverCompletedLinqMessage: LinqMessageCompletedHandler = async (
     context.state.pendingToolCallMessage = event.message
       ? (firstNonEmptyLine(event.message) ?? null)
       : null;
+    await acknowledgeLinqToolWork(context);
     return;
   }
 
   context.state.pendingToolCallMessage = null;
   if (!event.message || !context.thread) return;
 
-  // Linq/iMessage supports raw text. Passing Markdown through Chat SDK's
-  // converter collapses soft line breaks and can concatenate adjacent lines.
-  await context.thread.post(event.message);
+  // Eve's Linq adapter translates supported Markdown into native iMessage
+  // decorations, so recipients see styled text instead of literal markers.
+  await context.thread.post({ markdown: event.message });
 };
 
 export default linqChannel({
@@ -99,4 +100,22 @@ async function findVerifiedAuthUserIdByPhoneNumber(phoneNumber: string) {
   });
   const parsed = verifiedPhoneUserSchema.safeParse(user);
   return parsed.success ? parsed.data.id : undefined;
+}
+
+async function acknowledgeLinqToolWork(
+  context: Parameters<LinqMessageCompletedHandler>[1]
+) {
+  if (!context.thread) return;
+  const messageId = context.thread.toJSON().currentMessage?.id;
+  if (!messageId || context.state.acknowledgedLinqMessageId === messageId)
+    return;
+
+  try {
+    await context.bot
+      .getAdapter("linq")
+      .addReaction(context.thread.id, messageId, "thumbs_up");
+    context.state.acknowledgedLinqMessageId = messageId;
+  } catch {
+    // SMS/RCS and some carrier paths do not support iMessage tapbacks.
+  }
 }
