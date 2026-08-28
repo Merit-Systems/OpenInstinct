@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const requiredEnvironment = {
   BETTER_AUTH_SECRET: "test-auth-secret",
   BETTER_AUTH_URL: "https://example.com",
+  BLOB_READ_WRITE_TOKEN: "vercel_blob_rw_test",
   DATABASE_URL: "postgresql://user:password@example.com/database",
   KERNEL_API_KEY: "test-kernel-key",
   SECRET_ENCRYPTION_KEY: Buffer.alloc(32, 1).toString("base64"),
@@ -81,7 +82,7 @@ describe("environment", () => {
     );
   });
 
-  it.each(["DATABASE_URL", "KERNEL_API_KEY"])(
+  it.each(["BLOB_READ_WRITE_TOKEN", "DATABASE_URL", "KERNEL_API_KEY"])(
     "keeps %s required in local development",
     async (name) => {
       vi.stubEnv(name, "");
@@ -107,6 +108,7 @@ describe("environment", () => {
   it.each([
     ["BETTER_AUTH_SECRET", "Invalid environment variables"],
     ["BETTER_AUTH_URL", "Invalid environment variables"],
+    ["BLOB_READ_WRITE_TOKEN", "Invalid environment variables"],
     ["DATABASE_URL", "Invalid environment variables"],
     ["KERNEL_API_KEY", "Invalid environment variables"],
     ["SECRET_ENCRYPTION_KEY", "Invalid environment variables"],

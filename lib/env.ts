@@ -33,6 +33,7 @@ export const env = createEnv({
     // Required
     DATABASE_URL: databaseUrlSchema,
     KERNEL_API_KEY: requiredValue,
+    BLOB_READ_WRITE_TOKEN: requiredValue,
 
     // Required with local defaults
     BETTER_AUTH_SECRET: requiredValueWithLocalDefault(

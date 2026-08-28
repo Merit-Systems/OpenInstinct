@@ -5,6 +5,7 @@ import { z } from "zod";
 import {
   account,
   agentSessions,
+  browserImageArtifacts,
   browserSessions,
   chats,
   encryptedSecrets,
@@ -26,6 +27,7 @@ describe("database schema", () => {
         vaultItems,
         settings,
         agentSessions,
+        browserImageArtifacts,
         browserSessions,
         chats,
         encryptedSecrets,
@@ -40,6 +42,7 @@ describe("database schema", () => {
       "vault_items",
       "settings",
       "agent_sessions",
+      "browser_image_artifacts",
       "browser_sessions",
       "chats",
       "encrypted_secrets",
@@ -51,7 +54,11 @@ describe("database schema", () => {
   });
 
   it("anchors session creators to a membership in the same workspace", () => {
-    for (const table of [agentSessions, browserSessions]) {
+    for (const table of [
+      agentSessions,
+      browserImageArtifacts,
+      browserSessions,
+    ]) {
       const foreignKeys = getTableConfig(table).foreignKeys;
       expect(foreignKeys.map((foreignKey) => foreignKey.getName())).toContain(
         `${getTableConfig(table).name}_membership_fkey`

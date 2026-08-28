@@ -4,6 +4,7 @@ import { z } from "zod";
 
 const applicationEnvironment = [
   "BETTER_AUTH_*",
+  "BLOB_READ_WRITE_TOKEN",
   "DATABASE_URL",
   "*_CONNECTOR_UID",
   "KERNEL_*",
