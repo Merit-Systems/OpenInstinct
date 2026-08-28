@@ -1,10 +1,12 @@
 import { sql } from "drizzle-orm";
+import type { BrowserRefState } from "@onkernel/browser-loop";
 import {
   check,
   doublePrecision,
   foreignKey,
   index,
   integer,
+  jsonb,
   pgTable,
   primaryKey,
   text,
@@ -118,6 +120,7 @@ export const browserSessions = pgTable(
     workspaceId: text("workspace_id").notNull(),
     createdByUserId: text("created_by_user_id").notNull(),
     createdAt: text("created_at").notNull(),
+    refState: jsonb("ref_state").$type<BrowserRefState>(),
   },
   (table) => [
     foreignKey({

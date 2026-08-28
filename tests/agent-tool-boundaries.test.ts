@@ -53,6 +53,8 @@ describe("root and worker capability boundaries", () => {
   it("gives worker the browser and opaque-vault tools without messaging", () => {
     expect(toolFiles(workerTools)).toEqual([
       "ask_question.ts",
+      "browser_act.ts",
+      "browser_snapshot.ts",
       "capture_browser_image.ts",
       "computer_action.ts",
       "execute_playwright_code.ts",
@@ -73,7 +75,11 @@ describe("root and worker capability boundaries", () => {
     expect(readFileSync("package.json", "utf8")).not.toContain(
       "@onkernel/eve-extension"
     );
+    expect(readFileSync(`${workerRoot}/agent.ts`, "utf8")).toContain(
+      'externalDependencies: ["@onkernel/browser-loop"]'
+    );
     for (const tool of [
+      "browser_snapshot",
       "capture_browser_image",
       "computer_action",
       "execute_playwright_code",
@@ -84,6 +90,14 @@ describe("root and worker capability boundaries", () => {
       expect(source).not.toContain("defineDynamic(");
       expect(source).toContain("requireWorkerScope(context)");
     }
+    const browserActSource = readFileSync(
+      `${workerTools}/browser_act.ts`,
+      "utf8"
+    );
+    expect(browserActSource).toContain("defineTool(");
+    expect(browserActSource).toContain("defineDynamic(");
+    expect(browserActSource).toContain("browserActAvailableForModel(modelId)");
+    expect(browserActSource).toContain("requireWorkerScope(context)");
     expect(existsSync(`${workerRoot}/hooks/session-owner.ts`)).toBe(true);
     expect(existsSync(`${workerRoot}/skills/browser-execution/SKILL.md`)).toBe(
       true
@@ -103,6 +117,8 @@ describe("root and worker capability boundaries", () => {
 
     expect(readFileSync("lib/kernel.ts", "utf8")).toContain("new Kernel(");
     for (const tool of [
+      "browser_act",
+      "browser_snapshot",
       "capture_browser_image",
       "computer_action",
       "execute_playwright_code",

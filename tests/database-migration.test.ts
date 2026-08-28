@@ -16,6 +16,7 @@ describe("database migrations", () => {
     await applyMigration(database, "0001_better-auth.sql");
     await applyMigration(database, "0002_heavy_celestials.sql");
     await applyMigration(database, "0003_unusual_fabian_cortez.sql");
+    await applyMigration(database, "0004_futuristic_ink.sql");
     await applyMigration(database, "0000_fluffy_the_spike.sql");
     await applyMigration(database, "0001_better-auth.sql");
 

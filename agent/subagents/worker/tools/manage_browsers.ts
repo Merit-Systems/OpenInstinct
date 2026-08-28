@@ -222,7 +222,9 @@ function lifecycleResult(browser: KernelBrowser) {
   return {
     browser: value,
     next_actions: [
-      `Use execute_playwright_code with session_id "${value.session_id}" for deterministic browser automation.`,
+      `Use browser_snapshot with session_id "${value.session_id}" to inspect accessible page state and mint element refs.`,
+      `Use browser_act with session_id "${value.session_id}" for ref-based actions with semantic verification.`,
+      `Use execute_playwright_code with session_id "${value.session_id}" for precise extraction or unsupported interactions.`,
       `Use computer_action with session_id "${value.session_id}" for visual browser control.`,
       `Use manage_browsers with action "delete" and session_id "${value.session_id}" when finished.`,
     ],

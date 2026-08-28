@@ -19,6 +19,7 @@ describe("database services", () => {
     databases.push(client);
     await applyInitialMigration(client);
     await applyBrowserImageMigration(client);
+    await applyBrowserRefStateMigration(client);
 
     const pgliteDatabase = drizzle(client, { schema });
     // PGlite exposes the PostgreSQL query builders and transaction behavior
@@ -212,6 +213,37 @@ describe("database services", () => {
       await browsers.readBrowserSession(bob, "browser-alice")
     ).toBeUndefined();
     expect(await browsers.listBrowserSessions(alice)).toHaveLength(1);
+    await expect(
+      browsers.withBrowserRefState(alice, "browser-alice", async (refState) => {
+        expect(refState).toBeUndefined();
+        return {
+          refState: {
+            activeTargetId: "target-1",
+            documents: [["target-1", "loader-1"]],
+            generations: [["target-1", 0]],
+            refCounter: 1,
+            refs: [],
+          },
+          result: "stored",
+        };
+      })
+    ).resolves.toBe("stored");
+    await expect(
+      browsers.withBrowserRefState(alice, "browser-alice", async (refState) => {
+        expect(refState).toMatchObject({
+          activeTargetId: "target-1",
+          refCounter: 1,
+        });
+        if (!refState)
+          throw new Error("Expected the stored browser ref state.");
+        return { refState, result: "restored" };
+      })
+    ).resolves.toBe("restored");
+    await expect(
+      browsers.withBrowserRefState(bob, "browser-alice", async () => {
+        throw new Error("should not execute");
+      })
+    ).rejects.toThrow("not owned by this workspace");
     expect(await browsers.deleteBrowserSession(bob, "browser-alice")).toBe(
       false
     );
@@ -267,6 +299,16 @@ async function applyInitialMigration(database: PGlite) {
 async function applyBrowserImageMigration(database: PGlite) {
   const migration = await readFile(
     new URL("../db/migrations/0003_unusual_fabian_cortez.sql", import.meta.url),
+    "utf8"
+  );
+  for (const statement of migration.split("--> statement-breakpoint")) {
+    if (statement.trim()) await database.exec(statement);
+  }
+}
+
+async function applyBrowserRefStateMigration(database: PGlite) {
+  const migration = await readFile(
+    new URL("../db/migrations/0004_futuristic_ink.sql", import.meta.url),
     "utf8"
   );
   for (const statement of migration.split("--> statement-breakpoint")) {

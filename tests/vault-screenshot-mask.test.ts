@@ -1,5 +1,5 @@
 /* oxlint-disable vitest/require-mock-type-parameters -- The hoisted Kernel fake records cleanup request options. */
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({ playwrightExecute: vi.fn() }));
 
@@ -7,7 +7,14 @@ vi.mock("@/lib/kernel", () => ({
   kernel: { browsers: { playwright: { execute: mocks.playwrightExecute } } },
 }));
 
-import { withVaultScreenshotMask } from "../agent/subagents/worker/lib/vault-screenshot-mask";
+import {
+  withVaultBrowserObservationMask,
+  withVaultScreenshotMask,
+} from "../agent/subagents/worker/lib/vault-screenshot-mask";
+
+beforeEach(() => {
+  vi.clearAllMocks();
+});
 
 describe("Vault screenshot masking", () => {
   it("removes the mask with a fresh request after capture cancellation", async () => {
@@ -37,13 +44,7 @@ describe("Vault screenshot masking", () => {
   });
 
   it("keeps the shared mask until every overlapping capture completes", async () => {
-    let maskReferences = 0;
-    mocks.playwrightExecute.mockImplementation(
-      async (_sessionId: string, body: { code: string }) => {
-        maskReferences += body.code.includes("remainingRefs") ? -1 : 1;
-        return { success: true };
-      }
-    );
+    mocks.playwrightExecute.mockResolvedValue({ success: true });
     let finishFirst: (() => void) | undefined;
     let finishSecond: (() => void) | undefined;
     const first = withVaultScreenshotMask(
@@ -55,7 +56,8 @@ describe("Vault screenshot masking", () => {
         })
     );
     await vi.waitFor(() => {
-      expect(maskReferences).toBe(1);
+      expect(mocks.playwrightExecute).toHaveBeenCalledTimes(1);
+      expect(finishFirst).toBeTypeOf("function");
     });
     const second = withVaultScreenshotMask(
       "browser-1",
@@ -66,18 +68,50 @@ describe("Vault screenshot masking", () => {
         })
     );
     await vi.waitFor(() => {
-      expect(maskReferences).toBe(2);
+      expect(mocks.playwrightExecute).toHaveBeenCalledTimes(2);
+      expect(finishSecond).toBeTypeOf("function");
     });
 
     finishFirst?.();
     await first;
-    expect(maskReferences).toBe(1);
+    expect(mocks.playwrightExecute).toHaveBeenCalledTimes(3);
 
     finishSecond?.();
     await second;
-    expect(maskReferences).toBe(0);
+    expect(mocks.playwrightExecute).toHaveBeenCalledTimes(4);
+    expect(
+      JSON.stringify(mocks.playwrightExecute.mock.calls[0]?.[1])
+    ).toContain("append(style)");
+    expect(
+      JSON.stringify(mocks.playwrightExecute.mock.calls[2]?.[1])
+    ).toContain("remainingRefs");
     expect(JSON.stringify(mocks.playwrightExecute.mock.calls)).toContain(
       "vaultMaskRefs"
+    );
+  });
+
+  it("repairs an abandoned accessibility mask on the next observation", async () => {
+    mocks.playwrightExecute
+      .mockResolvedValueOnce({ success: true })
+      .mockResolvedValueOnce({ success: false })
+      .mockResolvedValueOnce({ success: true })
+      .mockResolvedValueOnce({ success: true });
+
+    await expect(
+      withVaultBrowserObservationMask("browser-1", undefined, async () => true)
+    ).resolves.toBe(true);
+    await expect(
+      withVaultBrowserObservationMask("browser-1", undefined, async () => true)
+    ).resolves.toBe(true);
+
+    expect(mocks.playwrightExecute).toHaveBeenCalledTimes(4);
+    const recoveryAdd = JSON.stringify(
+      mocks.playwrightExecute.mock.calls[2]?.[1]
+    );
+    expect(recoveryAdd).toContain("stalePrevious");
+    expect(recoveryAdd).toContain("removeAttribute");
+    expect(recoveryAdd).toContain(
+      'setAttribute(\\"aria-hidden\\", \\"true\\")'
     );
   });
 });

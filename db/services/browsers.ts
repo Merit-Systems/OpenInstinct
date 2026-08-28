@@ -1,4 +1,5 @@
 import { and, desc, eq, sql } from "drizzle-orm";
+import type { BrowserRefState } from "@onkernel/browser-loop";
 import type { AccessScope } from "@/lib/access-scope";
 import { browserSessions, db } from "@/db";
 
@@ -64,6 +65,44 @@ export async function deleteBrowserSession(
     )
     .returning({ sessionId: browserSessions.sessionId });
   return rows.length > 0;
+}
+
+export async function withBrowserRefState<T>(
+  scope: AccessScope,
+  sessionId: string,
+  operation: (
+    refState: BrowserRefState | undefined
+  ) => Promise<{ refState: BrowserRefState; result: T }>
+) {
+  return db.transaction(async (transaction) => {
+    const rows = await transaction
+      .select({ refState: browserSessions.refState })
+      .from(browserSessions)
+      .where(
+        and(
+          eq(browserSessions.workspaceId, scope.workspaceId),
+          eq(browserSessions.sessionId, sessionId)
+        )
+      )
+      .limit(1)
+      .for("update");
+    const record = rows[0];
+    if (!record) {
+      throw new Error("The browser session is not owned by this workspace.");
+    }
+
+    const outcome = await operation(record.refState ?? undefined);
+    await transaction
+      .update(browserSessions)
+      .set({ refState: outcome.refState })
+      .where(
+        and(
+          eq(browserSessions.workspaceId, scope.workspaceId),
+          eq(browserSessions.sessionId, sessionId)
+        )
+      );
+    return outcome.result;
+  });
 }
 
 export async function withBrowserProfileWriteLock<T>(
