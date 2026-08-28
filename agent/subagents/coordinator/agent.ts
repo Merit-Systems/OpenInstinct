@@ -15,7 +15,7 @@ export default defineAgent({
       },
     },
   }),
-  reasoning: "low",
+  reasoning: "medium",
   outputSchema: taskCompletionSchema,
   compaction: {
     thresholdPercent: 0.7,

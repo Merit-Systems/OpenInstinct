@@ -41,6 +41,7 @@ describe("root, coordinator, and browser capability boundaries", () => {
     );
     expect(coordinatorConfig).toContain("getModelSettings");
     expect(coordinatorConfig).not.toContain("openai/gpt-5.6-luna");
+    expect(coordinatorConfig).toContain('reasoning: "medium"');
 
     const rootInstructions = readFileSync("agent/instructions.md", "utf8");
     expect(rootInstructions).toContain(
