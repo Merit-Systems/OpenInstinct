@@ -1,10 +1,7 @@
 import { listVaultItems, readVaultItem } from "@/db/services/vault";
 import type { VaultItemKind } from "..";
 import { parsePaymentCardSecret } from "../payment-card";
-import type {
-  AutofillSurfaceKind,
-  DetectedAutofillSurface,
-} from "../vault-autofill-protocol";
+import type { DetectedAutofillSurface } from "../vault-autofill-protocol";
 import {
   parseAddressVaultPayload,
   parseContactVaultPayload,
@@ -21,7 +18,7 @@ interface VaultAutofillCodec {
   ) => ReadonlyMap<string, string>;
   readonly isAvailableAtOrigin?: (secret: string, origin: string) => boolean;
   readonly matchReason: string;
-  readonly surfaceKinds: readonly AutofillSurfaceKind[];
+  readonly surfaceKinds: readonly DetectedAutofillSurface["kind"][];
   readonly tokens: readonly string[];
   readonly vaultKind: VaultItemKind;
 }
