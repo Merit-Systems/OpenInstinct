@@ -5,7 +5,7 @@ import {
   managerSetupRequestSchema,
   parseManagerSetupSearchParams,
 } from "../lib/manager";
-import { isSameOrigin } from "../app/_lib/server/same-origin";
+import { isSameOrigin } from "../lib/same-origin";
 import { serializePaymentCard } from "../lib/manager/payment-card";
 import {
   serializeContactVaultPayload,

@@ -14,7 +14,7 @@ import {
   type SendTurnOptions,
 } from "eve/client";
 import { useCallback, useEffect, useReducer, useRef, useState } from "react";
-import { followDurableSession } from "@/app/_lib/follow-durable-session";
+import { followDurableSession } from "./follow-durable-session";
 
 const messageReducer = defaultMessageReducer();
 

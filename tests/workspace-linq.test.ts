@@ -1,12 +1,15 @@
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import { WorkspaceManager } from "../app/_components/manager/workspace";
+import { ChannelsSection } from "../app/(authenticated)/(manager)/page";
 
 describe("workspace Linq channel", () => {
   it("disables iMessage without advertising another deployment's number", () => {
     const html = renderToStaticMarkup(
-      createElement(WorkspaceManager, { linqPhoneNumber: undefined })
+      createElement(ChannelsSection, {
+        browserReady: true,
+        linqPhoneNumber: undefined,
+      })
     );
 
     expect(html).toContain("Set up Linq to enable iMessage.");
@@ -16,7 +19,10 @@ describe("workspace Linq channel", () => {
 
   it("links the configured deployment number", () => {
     const html = renderToStaticMarkup(
-      createElement(WorkspaceManager, { linqPhoneNumber: "+12025550123" })
+      createElement(ChannelsSection, {
+        browserReady: true,
+        linqPhoneNumber: "+12025550123",
+      })
     );
 
     expect(html).toContain("sms:+12025550123");
