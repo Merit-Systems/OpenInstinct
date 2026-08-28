@@ -60,7 +60,7 @@ function nestedString(
   depth = 0
 ): string | undefined {
   if (!value || typeof value !== "object" || depth > 3) return undefined;
-  const direct = Reflect.get(value, key);
+  const direct: unknown = Reflect.get(value, key);
   if (typeof direct === "string" && direct) return direct;
   for (const wrapper of ["order", "product", "result"]) {
     const nested = nestedString(Reflect.get(value, wrapper), key, depth + 1);

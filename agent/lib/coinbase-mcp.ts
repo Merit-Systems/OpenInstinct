@@ -1,4 +1,8 @@
-import { createMCPClient, type MCPClient } from "@ai-sdk/mcp";
+import {
+  createMCPClient,
+  type ListToolsResult,
+  type MCPClient,
+} from "@ai-sdk/mcp";
 import { Experimental_StdioMCPTransport } from "@ai-sdk/mcp/mcp-stdio";
 import { coinbaseChildEnvironment, coinbaseCliPath } from "./coinbase-cli";
 
@@ -6,16 +10,10 @@ const initializeTimeoutMs = 10_000;
 const toolTimeoutMs = 30_000;
 const maximumResultCharacters = 120_000;
 
-type JsonValue = boolean | JsonObject | JsonValue[] | null | number | string;
-interface JsonObject {
-  [key: string]: JsonValue;
-}
-
-export interface CoinbaseMcpToolDefinition {
-  readonly description?: string;
-  readonly inputSchema: JsonObject;
-  readonly name: string;
-}
+export type CoinbaseMcpToolDefinition = Pick<
+  ListToolsResult["tools"][number],
+  "description" | "inputSchema" | "name"
+>;
 
 async function createClient(): Promise<MCPClient> {
   return createMCPClient({
@@ -45,7 +43,7 @@ export async function listCoinbaseMcpTools() {
       for (const tool of page.tools) {
         definitions.push({
           ...(tool.description ? { description: tool.description } : {}),
-          inputSchema: tool.inputSchema as JsonObject,
+          inputSchema: tool.inputSchema,
           name: tool.name,
         });
       }
@@ -75,7 +73,7 @@ export async function callCoinbaseMcpTool(
       Reflect.get(result, "toolResult") ??
       parseTextResult(result.content);
     const safe = redactSensitiveFields(selected);
-    const serialized = JSON.stringify(safe);
+    const serialized = safe === undefined ? "" : JSON.stringify(safe);
     if (serialized.length > maximumResultCharacters) {
       throw new Error(
         "Coinbase returned too much data. Retry with a smaller limit or narrower query."
@@ -90,14 +88,8 @@ export async function callCoinbaseMcpTool(
 function parseTextResult(content: unknown) {
   if (!Array.isArray(content)) return content;
   const text = content
-    .flatMap((part) =>
-      part &&
-      typeof part === "object" &&
-      Reflect.get(part, "type") === "text" &&
-      typeof Reflect.get(part, "text") === "string"
-        ? [Reflect.get(part, "text") as string]
-        : []
-    )
+    .map(textContent)
+    .filter((value): value is string => value !== undefined)
     .join("\n");
   try {
     return JSON.parse(text) as unknown;
@@ -107,19 +99,27 @@ function parseTextResult(content: unknown) {
 }
 
 function safeResultText(content: unknown) {
-  const value = String(
-    parseTextResult(content) || "Coinbase rejected the request."
-  );
+  const parsed = parseTextResult(content);
+  if (parsed === undefined) return "Coinbase rejected the request.";
+  const value = typeof parsed === "string" ? parsed : JSON.stringify(parsed);
   return value.slice(0, 2_000);
+}
+
+function textContent(part: unknown) {
+  if (!part || typeof part !== "object") return undefined;
+  const type: unknown = Reflect.get(part, "type");
+  const text: unknown = Reflect.get(part, "text");
+  return type === "text" && typeof text === "string" ? text : undefined;
 }
 
 function redactSensitiveFields(value: unknown, key?: string): unknown {
   const normalized = key?.replaceAll(/[-_]/gu, "").toLowerCase();
   if (
     normalized &&
-    /(?:authorization|credential|password|privatekey|secret|token)$/u.test(
+    (/(?:authorization|credential|password|privatekey|secret)$/u.test(
       normalized
-    )
+    ) ||
+      /^(?:access|api|auth|bearer|refresh|session)token$/u.test(normalized))
   ) {
     return "[credential omitted]";
   }

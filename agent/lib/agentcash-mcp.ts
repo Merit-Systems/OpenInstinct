@@ -1,4 +1,8 @@
-import { createMCPClient, type MCPClient } from "@ai-sdk/mcp";
+import {
+  createMCPClient,
+  type ListToolsResult,
+  type MCPClient,
+} from "@ai-sdk/mcp";
 import { Experimental_StdioMCPTransport } from "@ai-sdk/mcp/mcp-stdio";
 import { agentcashChildEnvironment, agentcashCliPath } from "./agentcash-cli";
 
@@ -6,16 +10,10 @@ const initializeTimeoutMs = 15_000;
 const toolTimeoutMs = 180_000;
 const maximumResultCharacters = 120_000;
 
-type JsonValue = boolean | JsonObject | JsonValue[] | null | number | string;
-interface JsonObject {
-  [key: string]: JsonValue;
-}
-
-export interface AgentcashMcpToolDefinition {
-  readonly description?: string;
-  readonly inputSchema: JsonObject;
-  readonly name: string;
-}
+export type AgentcashMcpToolDefinition = Pick<
+  ListToolsResult["tools"][number],
+  "description" | "inputSchema" | "name"
+>;
 
 async function createClient(): Promise<MCPClient> {
   return createMCPClient({
@@ -40,7 +38,7 @@ export async function listAgentcashMcpTools() {
     });
     return page.tools.map((tool): AgentcashMcpToolDefinition => ({
       ...(tool.description ? { description: tool.description } : {}),
-      inputSchema: tool.inputSchema as JsonObject,
+      inputSchema: tool.inputSchema,
       name: tool.name,
     }));
   } finally {
@@ -65,12 +63,11 @@ export async function callAgentcashMcpTool(
       Reflect.get(result, "toolResult") ??
       parseTextResult(result.content);
     if (result.isError) {
-      throw new Error(
-        String(selected || "Agentcash rejected the request.").slice(0, 2_000)
-      );
+      throw new Error(safeResultText(selected));
     }
     const safe = redactSensitiveFields(selected);
-    if (JSON.stringify(safe).length > maximumResultCharacters) {
+    const serialized = safe === undefined ? "" : JSON.stringify(safe);
+    if (serialized.length > maximumResultCharacters) {
       throw new Error(
         "Agentcash returned too much data. Retry with a narrower query or endpoint."
       );
@@ -84,20 +81,27 @@ export async function callAgentcashMcpTool(
 function parseTextResult(content: unknown) {
   if (!Array.isArray(content)) return content;
   const text = content
-    .flatMap((part) =>
-      part &&
-      typeof part === "object" &&
-      Reflect.get(part, "type") === "text" &&
-      typeof Reflect.get(part, "text") === "string"
-        ? [Reflect.get(part, "text") as string]
-        : []
-    )
+    .map(textContent)
+    .filter((value): value is string => value !== undefined)
     .join("\n");
   try {
     return JSON.parse(text) as unknown;
   } catch {
     return text;
   }
+}
+
+function safeResultText(value: unknown) {
+  if (value === undefined) return "Agentcash rejected the request.";
+  const message = typeof value === "string" ? value : JSON.stringify(value);
+  return message.slice(0, 2_000);
+}
+
+function textContent(part: unknown) {
+  if (!part || typeof part !== "object") return undefined;
+  const type: unknown = Reflect.get(part, "type");
+  const text: unknown = Reflect.get(part, "text");
+  return type === "text" && typeof text === "string" ? text : undefined;
 }
 
 function redactSensitiveFields(value: unknown, key?: string): unknown {

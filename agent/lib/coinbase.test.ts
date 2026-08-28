@@ -35,7 +35,7 @@ describe("Coinbase order safety", () => {
         side: "BUY",
         type: "market",
       })
-    ).toThrow();
+    ).toThrow(/exactly one/u);
     expect(() =>
       enforceCoinbaseToolInput("coinbase_products_get", {
         product_id: "BTC-PERP",
@@ -46,12 +46,12 @@ describe("Coinbase order safety", () => {
   it("binds a preview token and idempotency id to the exact user and order", () => {
     const { token } = createOrderPreviewToken(order, "user-1", "secret");
 
-    expect(() =>
-      verifyOrderPreviewToken(token, order, "user-1", "secret")
-    ).not.toThrow();
-    expect(() =>
-      verifyOrderPreviewToken(token, order, "user-2", "secret")
-    ).toThrow(/different authenticated user/u);
+    expect(() => {
+      verifyOrderPreviewToken(token, order, "user-1", "secret");
+    }).not.toThrow();
+    expect(() => {
+      verifyOrderPreviewToken(token, order, "user-2", "secret");
+    }).toThrow(/different authenticated user/u);
     expect(clientOrderIdForPreview(token)).toMatch(
       /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u
     );

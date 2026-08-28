@@ -255,7 +255,7 @@ describe("agent messages", () => {
     );
 
     expect(markup).toContain("Here is the mini app.");
-    expect(markup).toContain(`/artifacts/${artifactId}`);
+    expect(markup).toContain(`/artifacts/published/${artifactId}`);
     expect(markup).toContain("Open artifact");
     expect(markup).toContain('sandbox="allow-forms allow-scripts"');
     expect(markup).not.toContain("[[artifact:");

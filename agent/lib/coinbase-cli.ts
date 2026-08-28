@@ -36,7 +36,7 @@ function materializeCoinbaseCli() {
   };
   mkdirSync(directory, { mode: 0o700, recursive: true });
   if (valid()) return path;
-  const temporaryPath = `${path}.${process.pid}.${randomUUID()}.tmp`;
+  const temporaryPath = `${path}.${String(process.pid)}.${randomUUID()}.tmp`;
   try {
     writeFileSync(temporaryPath, coinbaseCliSource, {
       encoding: "utf8",
@@ -83,9 +83,8 @@ export function coinbaseChildEnvironment(): Record<string, string> {
     COINBASE_KEY_SECRET: credentials.keySecret,
     COINBASE_NO_HISTORY: "1",
     COINBASE_NO_UPDATE_CHECK: "1",
-    LANG: process.env.LANG ?? "C.UTF-8",
-    NODE_ENV: process.env.NODE_ENV ?? "production",
-    PATH: process.env.PATH ?? "",
+    LANG: "C.UTF-8",
+    NODE_ENV: env.NODE_ENV,
     TMPDIR: tmpdir(),
   };
 }

@@ -12,7 +12,7 @@ export function agentcashPrincipalId(session: Session) {
 }
 
 export function agentcashWalletConfigured() {
-  return Boolean(env.X402_PRIVATE_KEY || env.X402_SOLANA_PRIVATE_KEY);
+  return Boolean(env.X402_PRIVATE_KEY ?? env.X402_SOLANA_PRIVATE_KEY);
 }
 
 export function agentcashPrincipalAllowed(session: Session) {

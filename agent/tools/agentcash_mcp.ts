@@ -1,4 +1,5 @@
 import { defineDynamic, defineTool } from "eve/tools";
+import { z } from "zod";
 import {
   agentcashPrincipalAllowed,
   agentcashWalletConfigured,
@@ -20,9 +21,10 @@ const allowedReadTools = new Set([
   "search",
 ]);
 let cachedDefinitions: Promise<AgentcashMcpToolDefinition[]> | undefined;
+const mcpInputSchema = z.looseObject({});
 
 async function availableTools() {
-  cachedDefinitions ??= listAgentcashMcpTools().catch((error) => {
+  cachedDefinitions ??= listAgentcashMcpTools().catch((error: unknown) => {
     cachedDefinitions = undefined;
     throw error;
   });
@@ -45,8 +47,8 @@ export default defineDynamic({
         definitions.map((definition) => [
           `agentcash_${definition.name}`,
           defineTool({
-            description: `${definition.description ?? definition.name} This operation never makes a payment.`,
-            inputSchema: definition.inputSchema,
+            description: `${definition.description ?? definition.name} This operation never makes a payment. Input JSON Schema: ${JSON.stringify(definition.inputSchema)}`,
+            inputSchema: mcpInputSchema,
             async execute(input, toolCtx) {
               requireAgentcashAccess(toolCtx);
               return callAgentcashMcpTool(

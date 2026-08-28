@@ -15,7 +15,7 @@ describe("Agentcash payment policy", () => {
     ).toThrow(/HTTPS/u);
     expect(() =>
       agentcashFetchSchema.parse({ url: "https://example.com/api" })
-    ).toThrow();
+    ).toThrow(/Invalid input/u);
   });
 
   it("enforces the deployment ceiling and removes no payment detail", () => {

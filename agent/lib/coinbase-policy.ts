@@ -15,11 +15,6 @@ export const coinbaseReadTools = new Set([
   "coinbase_products_ticker",
 ]);
 
-export const coinbaseProviderTools = new Set([
-  ...coinbaseReadTools,
-  "coinbase_orders_preview",
-]);
-
 const maximumPageItems = 200;
 
 export function enforceCoinbaseToolInput(
@@ -34,17 +29,18 @@ export function enforceCoinbaseToolInput(
       input.limit > maximumPageItems
     ) {
       throw new Error(
-        `Coinbase result limits must be integers between 1 and ${maximumPageItems}.`
+        `Coinbase result limits must be integers between 1 and ${String(maximumPageItems)}.`
       );
     }
   }
-  const products = [
-    input.product_id,
-    ...(Array.isArray(input.product_ids) ? input.product_ids : []),
-    ...(typeof input.product_ids === "string"
+  const productIds = Array.isArray(input.product_ids)
+    ? input.product_ids.filter(
+        (value): value is string => typeof value === "string"
+      )
+    : typeof input.product_ids === "string"
       ? input.product_ids.split(",")
-      : []),
-  ];
+      : [];
+  const products = [input.product_id, ...productIds];
   if (
     products.some(
       (value) =>

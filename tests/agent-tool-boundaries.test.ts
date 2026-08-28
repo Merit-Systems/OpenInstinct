@@ -16,9 +16,17 @@ describe("root and worker capability boundaries", () => {
   it("keeps root coordination separate from browser execution", () => {
     expect(toolFiles(rootTools)).toEqual([
       "agent.ts",
+      "agentcash_access_status.ts",
+      "agentcash_fetch.ts",
+      "agentcash_mcp.ts",
       "ask_question.ts",
+      "coinbase_access_status.ts",
+      "coinbase_create_order.ts",
+      "coinbase_mcp.ts",
+      "coinbase_preview_order.ts",
       "google_workspace_read.ts",
       "google_workspace_write.ts",
+      "publish_artifact.ts",
       "request_vault_import.ts",
       "request_vault_setup.ts",
     ]);

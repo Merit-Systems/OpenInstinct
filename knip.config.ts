@@ -23,6 +23,9 @@ export default {
     "oxlint-tailwindcss",
     // Invoked as a CLI.
     "vercel",
+    // Embedded into generated runtime sources by build preparation scripts.
+    "@coinbase/coinbase-cli",
+    "agentcash",
   ],
   ignoreIssues: {
     // Eve AI Elements and shadcn registry primitives intentionally expose

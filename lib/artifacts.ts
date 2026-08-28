@@ -14,7 +14,7 @@ export type ArtifactMessageSegment =
     };
 
 export function artifactUrl(id: string) {
-  return `/artifacts/${encodeURIComponent(artifactIdSchema.parse(id))}`;
+  return `/artifacts/published/${encodeURIComponent(artifactIdSchema.parse(id))}`;
 }
 
 export function artifactMarker(id: string) {
@@ -30,9 +30,9 @@ export function parseArtifactMessage(
 
   for (const match of message.matchAll(artifactMarkerPattern)) {
     const index = match.index;
-    const id = match[1];
-    if (index === undefined || id === undefined) continue;
-
+    const parsedId = artifactIdSchema.safeParse(match[1]);
+    if (!parsedId.success) continue;
+    const id = parsedId.data;
     appendText(segments, message.slice(cursor, index));
     if (!seen.has(id)) {
       seen.add(id);

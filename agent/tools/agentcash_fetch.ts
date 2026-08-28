@@ -20,7 +20,7 @@ export default defineTool({
   async execute(input, ctx) {
     requireAgentcashAccess(ctx);
     const caller = ctx.session.auth.current ?? ctx.session.auth.initiator;
-    if (!caller || caller.principalType !== "user") {
+    if (caller?.principalType !== "user") {
       throw new Error("An authenticated user is required for Agentcash.");
     }
     const toolInput = enforceAgentcashFetch(

@@ -13,16 +13,16 @@ const operationSchema = z.object({
   updatedAt: z.iso.datetime(),
 });
 
-export async function executeAgentcashPayment<T>(input: {
+export async function executeAgentcashPayment(input: {
   readonly callId: string;
-  readonly operation: () => Promise<T>;
+  readonly operation: () => Promise<unknown>;
   readonly scope: AccessScope;
   readonly toolInput: Record<string, unknown>;
 }) {
   const path = operationPath(input.scope, input.callId);
   const inputHash = hashCanonical(input.toolInput);
   const existing = await readOperation(path);
-  if (existing) return existingResult<T>(existing, inputHash);
+  if (existing) return existingResult(existing, inputHash);
 
   const now = new Date().toISOString();
   try {
@@ -33,7 +33,7 @@ export async function executeAgentcashPayment<T>(input: {
     );
   } catch {
     const raced = await readOperation(path);
-    if (raced) return existingResult<T>(raced, inputHash);
+    if (raced) return existingResult(raced, inputHash);
     throw new Error(
       "The Agentcash payment safety receipt could not be created."
     );
@@ -68,17 +68,17 @@ export async function executeAgentcashPayment<T>(input: {
   }
 }
 
-function existingResult<T>(
+function existingResult(
   operation: z.infer<typeof operationSchema>,
   inputHash: string
-): T {
+): unknown {
   if (operation.inputHash !== inputHash) {
     throw new Error(
       "This Agentcash tool-call identity conflicts with a different request. Start a new request."
     );
   }
   if (operation.state === "succeeded" && operation.result !== undefined) {
-    return operation.result as T;
+    return operation.result;
   }
   throw new Error(
     "This Agentcash payment was already attempted and its completion is uncertain. Do not repay; inspect the provider or wallet history first."
