@@ -18,9 +18,6 @@ import { requireWorkerScope } from "@/agent/subagents/worker/lib/access";
 import { requireOwnedBrowserSession } from "@/agent/subagents/worker/lib/owned-browser";
 
 const browserTimeoutFloorSeconds = 15 * 60;
-// Kernel saves profile changes only when the session ends, so a lingering
-// writable browser blocks persistence and the single-writer slot.
-const writableBrowserTimeoutSeconds = 10 * 60;
 
 const inputSchema = z.object({
   action: z.enum(["create", "update", "list", "get", "delete"]),
@@ -42,7 +39,7 @@ const inputSchema = z.object({
 
 export default defineTool({
   description:
-    'Manage browser sessions backed by the workspace persistent profile. Create read-only browsers by default so tasks can run in parallel. Immediately before a login, replace that task browser with one created using save_changes: true, then delete it after authentication so the session is saved; writable browsers expire after 10 minutes regardless of timeout_seconds. Only one profile writer may be active. Use "list" or "get" to inspect sessions.',
+    'Manage browser sessions backed by the workspace persistent profile. Create read-only browsers by default so tasks can run in parallel. Immediately before a login, replace that task browser with one created using save_changes: true, then delete it after authentication so the session is saved. Only one profile writer may be active. Use "list" or "get" to inspect sessions.',
   inputSchema,
   async execute(input, context) {
     const scope = await requireWorkerScope(context);
@@ -74,9 +71,8 @@ export default defineTool({
               },
               start_url: input.start_url,
               stealth: true,
-              timeout_seconds: input.save_changes
-                ? writableBrowserTimeoutSeconds
-                : (input.timeout_seconds ?? browserTimeoutFloorSeconds),
+              timeout_seconds:
+                input.timeout_seconds ?? browserTimeoutFloorSeconds,
               viewport: browserViewport(input),
             },
             { signal }
@@ -228,7 +224,7 @@ function lifecycleResult(browser: KernelBrowser) {
     next_actions: [
       ...(browser.profile_save_changes
         ? [
-            `Login state persists to the workspace profile only when this browser is deleted. Delete session_id "${value.session_id}" as soon as authentication succeeds; it expires on its own after 10 minutes.`,
+            `Login state persists to the workspace profile only when this browser is deleted. Delete session_id "${value.session_id}" as soon as authentication succeeds.`,
           ]
         : []),
       `Use execute_playwright_code with session_id "${value.session_id}" for deterministic browser automation.`,
