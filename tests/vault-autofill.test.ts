@@ -1,17 +1,16 @@
 import { describe, expect, it } from "vitest";
-import { classifyAutofillField } from "../browser-extension/lib/field-detector";
-import { fillCandidates } from "../browser-extension/lib/fill-engine";
-import { isAutofillFrame } from "../browser-extension/lib/frame-policy";
 import type { AccessScope } from "../lib/access-scope";
+import { serializePaymentCard } from "../lib/manager/payment-card";
+import {
+  buildNativeAutofillPayload,
+  nativeAutofillTokens,
+} from "../lib/manager/server/kernel-native-autofill";
 import {
   listAutofillSuggestions,
   materializeAutofillClaims,
   type AutofillVaultAdapter,
 } from "../lib/manager/server/vault-autofill";
 import { createVaultAutofillProvider } from "../lib/manager/server/vault-autofill-provider";
-import { extensionRuntimeCode } from "../lib/manager/server/vault-extension-autofill";
-import { serializePaymentCard } from "../lib/manager/payment-card";
-import { vaultAutofillCommandSchema } from "../lib/manager/vault-autofill-protocol";
 
 const scope: AccessScope = {
   userId: "user-1",
@@ -160,105 +159,74 @@ describe("vault browser autofill", () => {
     ]);
   });
 
-  it("accepts protocol tokens without defining a vault-field enum", () => {
-    const now = Date.now();
+  it("builds Chromium card autofill parameters from vault claims", () => {
     expect(
-      vaultAutofillCommandSchema.parse({
-        claims: [
+      buildNativeAutofillPayload("payment", [
+        claim("cc-name", "Grace Hopper"),
+        claim("cc-number", "4111111111111111"),
+        claim("cc-exp-month", "09"),
+        claim("cc-exp-year", "2031"),
+        claim("cc-csc", "321"),
+      ])
+    ).toEqual({
+      card: {
+        cvc: "321",
+        expiryMonth: "09",
+        expiryYear: "2031",
+        name: "Grace Hopper",
+        number: "4111111111111111",
+      },
+    });
+    expect(nativeAutofillTokens.payment).toContain("cc-exp-month");
+  });
+
+  it("builds Chromium address fields from structured vault claims", () => {
+    expect(
+      buildNativeAutofillPayload("address", [
+        claim("name", "Ada Lovelace"),
+        claim("address-line1", "12 St James's Square"),
+        claim("address-line2", "Floor 2"),
+        claim("address-level2", "London"),
+        claim("address-level1", "London"),
+        claim("postal-code", "SW1Y 4LB"),
+        claim("country", "GB"),
+      ])
+    ).toEqual({
+      address: {
+        fields: [
+          { name: "NAME_FULL", value: "Ada Lovelace" },
           {
-            id: "84e90f49-68d0-45ba-a183-3ca18ef087dc",
-            token: "future-browser-token",
-            value: "private value",
+            name: "ADDRESS_HOME_LINE1",
+            value: "12 St James's Square",
+          },
+          { name: "ADDRESS_HOME_LINE2", value: "Floor 2" },
+          { name: "ADDRESS_HOME_CITY", value: "London" },
+          { name: "ADDRESS_HOME_STATE", value: "London" },
+          { name: "ADDRESS_HOME_ZIP", value: "SW1Y 4LB" },
+          { name: "ADDRESS_HOME_COUNTRY", value: "GB" },
+        ],
+      },
+    });
+  });
+
+  it("builds a Chromium address from the current free-form vault value", () => {
+    expect(
+      buildNativeAutofillPayload("address", [
+        claim("street-address", "12 St James's Square\nLondon SW1Y 4LB"),
+      ])
+    ).toEqual({
+      address: {
+        fields: [
+          {
+            name: "ADDRESS_HOME_STREET_ADDRESS",
+            value: "12 St James's Square\nLondon SW1Y 4LB",
           },
         ],
-        expectedOrigin: "https://merchant.example",
-        expiresAt: now + 30_000,
-        issuedAt: now,
-        nonce: "a-unique-request-nonce",
-        surfaceId: "future-surface",
-        version: 1,
-      }).claims[0]?.token
-    ).toBe("future-browser-token");
-  });
-
-  it("prefers browser-standard autocomplete semantics", () => {
-    expect(
-      classifyAutofillField({
-        autocomplete: "billing cc-number",
-        label: "",
-        name: "opaque-provider-field",
-        type: "tel",
-      })
-    ).toEqual({ kind: "payment-card", score: 100, token: "cc-number" });
-    expect(
-      classifyAutofillField({
-        autocomplete: "billing cc-exp-month",
-        label: "",
-        name: "month",
-        type: "text",
-      })
-    ).toEqual({ kind: "payment-card", score: 100, token: "cc-exp-month" });
-  });
-
-  it("accepts detected autofill surfaces from any reachable frame origin", () => {
-    expect(
-      isAutofillFrame({
-        origin: "https://js.globalpay.com",
-        surfaces: [paymentSurface],
-      })
-    ).toBe(true);
-    expect(
-      isAutofillFrame({
-        origin: "https://unknown-payment-provider.example",
-        surfaces: [paymentSurface],
-      })
-    ).toBe(true);
-    expect(
-      isAutofillFrame({
-        origin: "https://analytics.example",
-        surfaces: [],
-      })
-    ).toBe(false);
-  });
-
-  it("falls back to labels without model-authored selectors", () => {
-    expect(
-      classifyAutofillField({
-        autocomplete: "off",
-        label: "Security code (CVV)",
-        name: "secure-field",
-        type: "text",
-      })
-    ).toEqual({ kind: "payment-card", score: 70, token: "cc-csc" });
-    expect(
-      classifyAutofillField({
-        autocomplete: "",
-        label: "MM/YY",
-        name: "cardExpiry cc-cardExpiry",
-        type: "text",
-      })
-    ).toEqual({ kind: "payment-card", score: 70, token: "cc-exp" });
-  });
-
-  it("lets masked expiry controls own slash formatting", () => {
-    expect(fillCandidates("09/31", "cc-exp")).toEqual(["09/31", "0931"]);
-    expect(fillCandidates("Grace Hopper", "cc-name")).toEqual(["Grace Hopper"]);
-  });
-
-  it("sends only an encrypted envelope through Kernel Playwright", () => {
-    const code = extensionRuntimeCode("fill", "encrypted-envelope");
-
-    expect(code).toContain('cdpSession.send("Runtime.enable")');
-    expect(code).toContain("vaultAutofillContentRuntime");
-    expect(code).toContain("encrypted-envelope");
-    expect(code).not.toContain("4242424242424242");
-    expect(code).not.toContain("context.serviceWorkers()");
-  });
-
-  it("timestamps commands with the browser clock", () => {
-    const code = extensionRuntimeCode("getPublicKey");
-
-    expect(code).toContain("browserNow: Date.now()");
-    expect(code).toContain("publicKey");
+      },
+    });
   });
 });
+
+function claim(token: string, value: string) {
+  return { token, value };
+}

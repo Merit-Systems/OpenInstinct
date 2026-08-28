@@ -32,10 +32,8 @@ export async function manageOwnedKernelBrowsers(
 
   switch (input.action) {
     case "create": {
-      const extensionName = env.KERNEL_VAULT_AUTOFILL_EXTENSION;
       const browser = await client.browsers.create(
         {
-          extensions: extensionName ? [{ name: extensionName }] : undefined,
           start_url: input.start_url,
           stealth: true,
           timeout_seconds: input.timeout_seconds ?? browserTimeoutFloorSeconds,
@@ -320,7 +318,8 @@ async function maskVaultFields(
   signal?: AbortSignal
 ) {
   const styleId = "vault-screenshot-mask";
-  const selector = '[data-vault-secret="true"]';
+  const selector =
+    "input:-webkit-autofill, select:-webkit-autofill, textarea:-webkit-autofill";
   const addCode = `
 for (const currentContext of browser.contexts()) {
   for (const currentPage of currentContext.pages()) {
@@ -329,7 +328,7 @@ for (const currentContext of browser.contexts()) {
         if (document.getElementById(styleId)) return;
         const style = document.createElement("style");
         style.id = styleId;
-        style.textContent = selector + " { color: transparent !important; text-shadow: 0 0 8px black !important; -webkit-text-security: disc !important; }";
+        style.textContent = selector + " { color: transparent !important; -webkit-text-fill-color: transparent !important; text-shadow: 0 0 8px black !important; -webkit-text-security: disc !important; }";
         document.documentElement.append(style);
       }, ${JSON.stringify({ selector, styleId })}).catch(() => undefined);
     }
