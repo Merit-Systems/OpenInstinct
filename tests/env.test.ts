@@ -82,7 +82,7 @@ describe("environment", () => {
     );
   });
 
-  it.each(["BLOB_READ_WRITE_TOKEN", "DATABASE_URL", "KERNEL_API_KEY"])(
+  it.each(["DATABASE_URL", "KERNEL_API_KEY"])(
     "keeps %s required in local development",
     async (name) => {
       vi.stubEnv(name, "");
@@ -108,7 +108,6 @@ describe("environment", () => {
   it.each([
     ["BETTER_AUTH_SECRET", "Invalid environment variables"],
     ["BETTER_AUTH_URL", "Invalid environment variables"],
-    ["BLOB_READ_WRITE_TOKEN", "Invalid environment variables"],
     ["DATABASE_URL", "Invalid environment variables"],
     ["KERNEL_API_KEY", "Invalid environment variables"],
     ["SECRET_ENCRYPTION_KEY", "Invalid environment variables"],
@@ -145,6 +144,16 @@ describe("environment", () => {
 
     expect(env.LINQ_CONNECTOR).toBe("linq/open-instinct");
     expect(env.LINQ_PHONE_NUMBER).toBe("+12025550123");
+  });
+
+  it("accepts Vercel OIDC Blob storage without a static token", async () => {
+    vi.stubEnv("BLOB_READ_WRITE_TOKEN", "");
+    vi.stubEnv("BLOB_STORE_ID", "store_openinstinct");
+
+    const { env } = await import("../lib/env");
+
+    expect(env.BLOB_READ_WRITE_TOKEN).toBeUndefined();
+    expect(env.BLOB_STORE_ID).toBe("store_openinstinct");
   });
 
   it.each([

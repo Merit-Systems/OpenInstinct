@@ -54,9 +54,7 @@ function splitLinqReply(message: string) {
 async function postLinqReply(
   thread: NonNullable<
     Parameters<
-      NonNullable<
-        NonNullable<LinqChannelConfig["events"]>["message.completed"]
-      >
+      NonNullable<NonNullable<LinqChannelConfig["events"]>["message.completed"]>
     >[1]["thread"]
   >,
   markdown: string,

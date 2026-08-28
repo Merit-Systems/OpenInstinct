@@ -22,6 +22,7 @@ vi.mock("@/db/services/browser-images", () => ({
 }));
 
 import {
+  browserImageBlobAuthentication,
   persistReservedBrowserImage,
   readBoundedResponse,
   readBrowserImageBytes,
@@ -48,6 +49,21 @@ beforeEach(() => {
 });
 
 describe("browser image storage", () => {
+  it("prefers a connected store for OIDC and retains token fallback", () => {
+    expect(
+      browserImageBlobAuthentication({
+        readWriteToken: "legacy-token",
+        storeId: "store_openinstinct",
+      })
+    ).toEqual({ storeId: "store_openinstinct" });
+    expect(
+      browserImageBlobAuthentication({ readWriteToken: "legacy-token" })
+    ).toEqual({ token: "legacy-token" });
+    expect(() => browserImageBlobAuthentication({})).toThrow(
+      "Browser image storage is not configured"
+    );
+  });
+
   it("uploads a private bounded image and finalizes its manifest", async () => {
     await persistReservedBrowserImage(scope, reservation, {
       bytes: png,

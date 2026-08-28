@@ -14,6 +14,24 @@ import { env } from "@/lib/env";
 
 const blobOptions = { access: "private" as const };
 
+export function browserImageBlobAuthentication(input: {
+  readonly readWriteToken?: string;
+  readonly storeId?: string;
+}) {
+  if (input.storeId) return { storeId: input.storeId };
+  if (input.readWriteToken) return { token: input.readWriteToken };
+  throw new Error(
+    "Browser image storage is not configured. Connect a private Vercel Blob store or set BLOB_READ_WRITE_TOKEN."
+  );
+}
+
+function blobAuthentication() {
+  return browserImageBlobAuthentication({
+    readWriteToken: env.BLOB_READ_WRITE_TOKEN,
+    storeId: env.BLOB_STORE_ID,
+  });
+}
+
 export async function persistReservedBrowserImage(
   scope: AccessScope,
   reservation: BrowserImageArtifactReservation,
@@ -40,13 +58,13 @@ export async function persistReservedBrowserImage(
 
   await put(attemptPathname, Buffer.from(input.bytes), {
     ...blobOptions,
+    ...blobAuthentication(),
     abortSignal: signal,
     addRandomSuffix: false,
     allowOverwrite: true,
     cacheControlMaxAge: 30 * 24 * 60 * 60,
     contentType: mediaType,
     maximumSizeInBytes: maximumBrowserImageBytes,
-    token: env.BLOB_READ_WRITE_TOKEN,
   });
 
   try {
@@ -69,9 +87,7 @@ export async function persistReservedBrowserImage(
 }
 
 async function deleteBlob(pathname: string) {
-  await del(pathname, { token: env.BLOB_READ_WRITE_TOKEN }).catch(
-    () => undefined
-  );
+  await del(pathname, blobAuthentication()).catch(() => undefined);
 }
 
 export async function getBrowserImageBlob(
@@ -98,9 +114,9 @@ export async function getBrowserImageBlob(
   };
   const result = await get(artifact.storagePathname, {
     ...blobOptions,
+    ...blobAuthentication(),
     abortSignal: options.signal,
     ifNoneMatch: options.ifNoneMatch,
-    token: env.BLOB_READ_WRITE_TOKEN,
   });
   if (!result) return undefined;
   if (
