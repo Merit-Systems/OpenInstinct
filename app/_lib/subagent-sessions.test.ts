@@ -206,7 +206,7 @@ describe("getSubagentStatus", () => {
 });
 
 describe("getSubagentTask", () => {
-  it("uses the latest task after a child session is continued", () => {
+  it("keeps the original task after a child session is continued", () => {
     const events = [
       {
         type: "message.received",
@@ -220,6 +220,6 @@ describe("getSubagentTask", () => {
       },
     ] satisfies readonly MessageStreamEvent[];
 
-    expect(getSubagentTask(events)).toBe("Continued task");
+    expect(getSubagentTask(events)).toBe("First task");
   });
 });

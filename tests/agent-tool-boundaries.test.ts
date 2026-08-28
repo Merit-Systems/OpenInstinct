@@ -45,7 +45,7 @@ describe("root, coordinator, and browser capability boundaries", () => {
 
     const rootInstructions = readFileSync("agent/instructions.md", "utf8");
     expect(rootInstructions).toContain(
-      "Delegate every request that requires public research"
+      "Delegate everything except conversational and context-only questions"
     );
     expect(rootInstructions).toContain(
       "Every initial or resumed `coordinator` call must set `outputSchema`"
