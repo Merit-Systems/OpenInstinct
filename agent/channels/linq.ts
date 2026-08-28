@@ -222,6 +222,7 @@ export default linqChannel({
         ...auth,
         attributes: {
           ...auth.attributes,
+          ...(verifiedUserId && phoneNumber ? { phoneNumber } : {}),
           workspaceId: scope.workspaceId,
         },
         principalId,
