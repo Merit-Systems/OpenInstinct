@@ -32,6 +32,13 @@ describe("root and worker capability boundaries", () => {
     expect(readFileSync(`${rootTools}/ask_question.ts`, "utf8")).toContain(
       "disableTool()"
     );
+    const rootInstructions = readFileSync("agent/instructions.md", "utf8");
+    expect(rootInstructions).toContain(
+      "Perform public research, source discovery, comparisons, and current-information lookups directly with `web_search`"
+    );
+    expect(rootInstructions).toContain(
+      "try `web_fetch` before browser automation"
+    );
   });
 
   it("gives worker the browser and opaque-vault tools without messaging", () => {
@@ -75,6 +82,9 @@ describe("root and worker capability boundaries", () => {
     );
     expect(readFileSync(`${workerRoot}/instructions.md`, "utf8")).toContain(
       "native `final_output` tool exactly once"
+    );
+    expect(readFileSync(`${workerRoot}/instructions.md`, "utf8")).toContain(
+      "Never use the browser for general web search"
     );
     expect(existsSync(`${workerRoot}/lib/browser-contract.ts`)).toBe(false);
     expect(existsSync(`${workerRoot}/lib/browser-runtime.ts`)).toBe(false);
