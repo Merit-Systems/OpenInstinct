@@ -59,6 +59,7 @@ describe("root and worker capability boundaries", () => {
       "computer_action.ts",
       "fill_from_vault.ts",
       "list_vault.ts",
+      "load_skill.ts",
       "manage_browsers.ts",
       "read_file.ts",
       "semantic_browser.ts",
@@ -76,6 +77,7 @@ describe("root and worker capability boundaries", () => {
     );
     for (const tool of [
       "bash",
+      "load_skill",
       "read_file",
       "todo",
       "web_fetch",

@@ -65,6 +65,11 @@ async function executeSemanticTool(
 }
 
 function boundedToolInput(spec: LoopToolSpec, input: Record<string, unknown>) {
+  if (spec.name === "browser_snapshot" && input.ref === "root") {
+    const freshPageInput = { ...input };
+    delete freshPageInput.ref;
+    return freshPageInput;
+  }
   if (spec.name === "browser_act") {
     return {
       ...input,
