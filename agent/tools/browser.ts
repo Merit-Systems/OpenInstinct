@@ -7,7 +7,6 @@ import {
 import { z } from "zod";
 import { scopeFromPrincipal } from "@/lib/access-scope";
 import {
-  browserLiveViewInputSchema,
   computerActionInputSchema,
   executePlaywrightInputSchema,
   manageBrowsersInputSchema,
@@ -15,7 +14,6 @@ import {
 import {
   executeOwnedKernelComputerAction,
   executeOwnedKernelPlaywright,
-  getOwnedKernelBrowserLiveView,
   manageOwnedKernelBrowsers,
 } from "@/agent/extensions/kernel/browser-runtime";
 
@@ -40,17 +38,6 @@ export default defineDynamic({
           inputSchema: manageBrowsersInputSchema,
           execute: (input, context) =>
             manageOwnedKernelBrowsers(scope, input, context.abortSignal),
-        }),
-        get_browser_live_view: defineTool({
-          description:
-            "Get a signed live-view URL for an owned browser only when the user explicitly asks for browser access. Do not call this speculatively or for routine browser work.",
-          inputSchema: browserLiveViewInputSchema,
-          execute: (input, context) =>
-            getOwnedKernelBrowserLiveView(
-              scope,
-              input.session_id,
-              context.abortSignal
-            ),
         }),
         execute_playwright_code: defineTool({
           description:
