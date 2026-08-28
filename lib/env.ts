@@ -33,7 +33,6 @@ export const env = createEnv({
     // Required
     DATABASE_URL: databaseUrlSchema,
     KERNEL_API_KEY: requiredValue,
-    KERNEL_VAULT_AUTOFILL_EXTENSION: requiredValue.default("vault-autofill"),
 
     // Required with local defaults
     BETTER_AUTH_SECRET: requiredValueWithLocalDefault(

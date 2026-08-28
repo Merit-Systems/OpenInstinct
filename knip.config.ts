@@ -6,7 +6,6 @@ export default {
     "agent/extensions/**/*.ts",
     "agent/hooks/**/*.ts",
     "agent/tools/**/*.ts",
-    "browser-extension/entrypoints/**/*.ts",
     "db/drizzle.config.ts",
     "evals/**/*.eval.ts",
     "evals/evals.config.ts",

@@ -1,0 +1,520 @@
+import Kernel from "@onkernel/sdk";
+import { z } from "zod";
+import { env } from "../../env";
+import type { AutofillClaim } from "../vault-autofill-protocol";
+
+const targetListSchema = z.object({
+  targetInfos: z.array(
+    z.object({
+      targetId: z.string(),
+      type: z.string(),
+      url: z.string(),
+    })
+  ),
+});
+
+const attachedTargetSchema = z.object({ sessionId: z.string() });
+
+const frameTreeSchema = z.object({
+  frameTree: z.lazy(() => frameTreeNodeSchema),
+});
+const frameTreeNodeSchema: z.ZodType<{
+  childFrames?: z.infer<typeof frameTreeNodeSchema>[];
+  frame: { id: string; url: string };
+}> = z.object({
+  childFrames: z.array(z.lazy(() => frameTreeNodeSchema)).optional(),
+  frame: z.object({ id: z.string(), url: z.string() }),
+});
+
+const isolatedWorldSchema = z.object({ executionContextId: z.number() });
+const evaluatedValueSchema = z.object({
+  result: z.object({ value: z.unknown() }),
+});
+const evaluatedObjectSchema = z.object({
+  result: z.object({ objectId: z.string().optional() }),
+});
+const describedNodeSchema = z.object({
+  node: z.object({ backendNodeId: z.number().int().positive() }),
+});
+const controlDescriptorsSchema = z.array(
+  z.object({
+    autocomplete: z.string(),
+    focused: z.boolean(),
+    index: z.number().int().nonnegative(),
+  })
+);
+
+const cardTokens = [
+  "cc-name",
+  "cc-number",
+  "cc-exp-month",
+  "cc-exp-year",
+  "cc-csc",
+] as const;
+
+const addressTokenToChromiumField = {
+  name: "NAME_FULL",
+  "street-address": "ADDRESS_HOME_STREET_ADDRESS",
+  "address-line1": "ADDRESS_HOME_LINE1",
+  "address-line2": "ADDRESS_HOME_LINE2",
+  "address-level2": "ADDRESS_HOME_CITY",
+  "address-level1": "ADDRESS_HOME_STATE",
+  "postal-code": "ADDRESS_HOME_ZIP",
+  country: "ADDRESS_HOME_COUNTRY",
+} as const;
+
+export const nativeAutofillTokens = {
+  address: Object.keys(addressTokenToChromiumField),
+  payment: [...cardTokens],
+} as const;
+
+export async function currentKernelPageOrigin({
+  browserSessionId,
+  signal,
+}: {
+  readonly browserSessionId: string;
+  readonly signal?: AbortSignal;
+}) {
+  return withKernelPage(browserSessionId, signal, async ({ origin }) => origin);
+}
+
+export async function fillWithKernelNativeAutofill({
+  browserSessionId,
+  claims,
+  expectedOrigin,
+  kind,
+  signal,
+}: {
+  readonly browserSessionId: string;
+  readonly claims: readonly AutofillClaim[];
+  readonly expectedOrigin: string;
+  readonly kind: "address" | "payment";
+  readonly signal?: AbortSignal;
+}) {
+  const payload = buildNativeAutofillPayload(kind, claims);
+
+  return withKernelPage(
+    browserSessionId,
+    signal,
+    async ({ connection, origin, sessionId }) => {
+      if (origin !== expectedOrigin) {
+        throw new Error(
+          "The active tab no longer matches the approved origin."
+        );
+      }
+
+      const controls = await inspectControls(connection, sessionId, kind);
+      if (controls.length === 0) {
+        throw new Error("No visible form control is available for autofill.");
+      }
+
+      let lastError: unknown;
+      for (const control of controls) {
+        try {
+          await connection.send(
+            "Autofill.trigger",
+            {
+              fieldId: control.backendNodeId,
+              frameId: control.frameId,
+              ...payload,
+            },
+            control.sessionId
+          );
+          return { filledClaims: claims.length, origin };
+        } catch (error) {
+          lastError = error;
+        }
+      }
+
+      throw new Error(
+        "Chromium could not autofill any visible control. Focus a field in the intended card or address form and retry.",
+        { cause: lastError }
+      );
+    }
+  );
+}
+
+export function buildNativeAutofillPayload(
+  kind: "address" | "payment",
+  claims: readonly Pick<AutofillClaim, "token" | "value">[]
+) {
+  const values = new Map(claims.map(({ token, value }) => [token, value]));
+
+  if (kind === "payment") {
+    return {
+      card: {
+        cvc: requiredClaim(values, "cc-csc"),
+        expiryMonth: requiredClaim(values, "cc-exp-month"),
+        expiryYear: requiredClaim(values, "cc-exp-year"),
+        name: requiredClaim(values, "cc-name"),
+        number: requiredClaim(values, "cc-number"),
+      },
+    };
+  }
+
+  const fields = Object.entries(addressTokenToChromiumField).flatMap(
+    ([token, name]) => {
+      const value = values.get(token);
+      return value ? [{ name, value }] : [];
+    }
+  );
+  if (fields.length === 0) {
+    throw new Error("The saved address is incomplete or invalid.");
+  }
+  return { address: { fields } };
+}
+
+async function inspectControls(
+  connection: CdpConnection,
+  sessionIds: readonly string[],
+  kind: "address" | "payment"
+) {
+  const controls = (
+    await Promise.all(
+      sessionIds.map(async (sessionId) => {
+        try {
+          await connection.send("Page.enable", undefined, sessionId);
+          const { frameTree } = frameTreeSchema.parse(
+            await connection.send("Page.getFrameTree", undefined, sessionId)
+          );
+          return (
+            await Promise.all(
+              flattenFrames(frameTree).map(({ id: frameId }) =>
+                inspectFrameControls(
+                  connection,
+                  sessionId,
+                  frameId,
+                  kind
+                ).catch(() => [])
+              )
+            )
+          ).flat();
+        } catch {
+          return [];
+        }
+      })
+    )
+  ).flat();
+
+  return controls.toSorted((left, right) => {
+    if (left.focused !== right.focused) return left.focused ? -1 : 1;
+    if (left.standard !== right.standard) return left.standard ? -1 : 1;
+    return left.order - right.order;
+  });
+}
+
+async function inspectFrameControls(
+  connection: CdpConnection,
+  sessionId: string,
+  frameId: string,
+  kind: "address" | "payment"
+) {
+  const { executionContextId } = isolatedWorldSchema.parse(
+    await connection.send(
+      "Page.createIsolatedWorld",
+      { frameId, worldName: "open-instinct-autofill" },
+      sessionId
+    )
+  );
+  const response = evaluatedValueSchema.parse(
+    await connection.send(
+      "Runtime.evaluate",
+      {
+        contextId: executionContextId,
+        expression: controlInspectionExpression,
+        returnByValue: true,
+      },
+      sessionId
+    )
+  );
+  const descriptors = controlDescriptorsSchema.parse(response.result.value);
+
+  return (
+    await Promise.all(
+      descriptors.map(async (descriptor, order) => {
+        const evaluated = evaluatedObjectSchema.parse(
+          await connection.send(
+            "Runtime.evaluate",
+            {
+              contextId: executionContextId,
+              expression: `document.querySelectorAll("input, select, textarea").item(${String(descriptor.index)})`,
+            },
+            sessionId
+          )
+        );
+        const objectId = evaluated.result.objectId;
+        if (!objectId) return null;
+
+        try {
+          const described = describedNodeSchema.parse(
+            await connection.send("DOM.describeNode", { objectId }, sessionId)
+          );
+          return {
+            backendNodeId: described.node.backendNodeId,
+            focused: descriptor.focused,
+            frameId,
+            order,
+            sessionId,
+            standard: standardAutocomplete(kind, descriptor.autocomplete),
+          };
+        } finally {
+          await connection
+            .send("Runtime.releaseObject", { objectId }, sessionId)
+            .catch(() => undefined);
+        }
+      })
+    )
+  ).filter((control) => control !== null);
+}
+
+const controlInspectionExpression = `(() => {
+  const elements = Array.from(document.querySelectorAll("input, select, textarea"));
+  return elements.flatMap((element, index) => {
+    if (element.disabled || ("readOnly" in element && element.readOnly)) return [];
+    if (element instanceof HTMLInputElement && ["hidden", "submit", "button", "reset", "file", "image", "checkbox", "radio"].includes(element.type)) return [];
+    const style = getComputedStyle(element);
+    if (style.display === "none" || style.visibility === "hidden" || element.getClientRects().length === 0) return [];
+    return [{ autocomplete: element.autocomplete || "", focused: document.activeElement === element, index }];
+  });
+})()`;
+
+async function withKernelPage<T>(
+  browserSessionId: string,
+  signal: AbortSignal | undefined,
+  operation: (page: {
+    readonly connection: CdpConnection;
+    readonly origin: string;
+    readonly sessionId: readonly string[];
+  }) => Promise<T>
+) {
+  const browser = await new Kernel({
+    apiKey: env.KERNEL_API_KEY,
+  }).browsers.retrieve(browserSessionId, {}, { signal });
+  const connection = await CdpConnection.connect(browser.cdp_ws_url, signal);
+
+  try {
+    const { targetInfos } = targetListSchema.parse(
+      await connection.send("Target.getTargets")
+    );
+    const target = targetInfos.findLast(
+      ({ type, url }) => type === "page" && isWebUrl(url)
+    );
+    if (!target) throw new Error("No active browser tab was found.");
+
+    const { sessionId: pageSessionId } = attachedTargetSchema.parse(
+      await connection.send("Target.attachToTarget", {
+        flatten: true,
+        targetId: target.targetId,
+      })
+    );
+    const sessionIds = [pageSessionId];
+    try {
+      await connection.send("Page.enable", undefined, pageSessionId);
+      const { frameTree } = frameTreeSchema.parse(
+        await connection.send("Page.getFrameTree", undefined, pageSessionId)
+      );
+      const frameIds = new Set(flattenFrames(frameTree).map(({ id }) => id));
+      const iframeTargets = targetInfos.filter(
+        ({ targetId, type }) => type === "iframe" && frameIds.has(targetId)
+      );
+      for (const iframeTarget of iframeTargets) {
+        const attached = attachedTargetSchema.safeParse(
+          await connection
+            .send("Target.attachToTarget", {
+              flatten: true,
+              targetId: iframeTarget.targetId,
+            })
+            .catch(() => undefined)
+        );
+        if (attached.success) sessionIds.push(attached.data.sessionId);
+      }
+
+      return await operation({
+        connection,
+        origin: new URL(target.url).origin,
+        sessionId: sessionIds,
+      });
+    } finally {
+      await Promise.all(
+        sessionIds.map((sessionId) =>
+          connection
+            .send("Target.detachFromTarget", { sessionId })
+            .catch(() => undefined)
+        )
+      );
+    }
+  } finally {
+    connection.close();
+  }
+}
+
+class CdpConnection {
+  readonly #pending = new Map<
+    number,
+    {
+      readonly reject: (reason?: unknown) => void;
+      readonly resolve: (value: unknown) => void;
+    }
+  >();
+  #nextId = 1;
+
+  private constructor(
+    private readonly socket: WebSocket,
+    signal: AbortSignal | undefined
+  ) {
+    socket.addEventListener("message", (event) => {
+      this.#onMessage(event);
+    });
+    socket.addEventListener("close", () => {
+      this.#rejectPending(new Error("The Kernel CDP connection closed."));
+    });
+    signal?.addEventListener(
+      "abort",
+      () => {
+        this.close();
+      },
+      { once: true }
+    );
+  }
+
+  static async connect(url: string, signal?: AbortSignal) {
+    const socket = new WebSocket(url);
+    await new Promise<void>((resolve, reject) => {
+      const cleanup = () => {
+        socket.removeEventListener("open", onOpen);
+        socket.removeEventListener("error", onError);
+        signal?.removeEventListener("abort", onAbort);
+      };
+      const onOpen = () => {
+        cleanup();
+        resolve();
+      };
+      const onError = () => {
+        cleanup();
+        reject(new Error("Could not connect to the Kernel browser over CDP."));
+      };
+      const onAbort = () => {
+        cleanup();
+        socket.close();
+        reject(
+          signal?.reason instanceof Error
+            ? signal.reason
+            : new Error("The CDP connection was aborted.")
+        );
+      };
+      socket.addEventListener("open", onOpen, { once: true });
+      socket.addEventListener("error", onError, { once: true });
+      signal?.addEventListener("abort", onAbort, { once: true });
+    });
+    return new CdpConnection(socket, signal);
+  }
+
+  send(method: string, params?: object, sessionId?: string) {
+    const id = this.#nextId++;
+    return new Promise<unknown>((resolve, reject) => {
+      const timeout = setTimeout(() => {
+        this.#pending.delete(id);
+        reject(new Error(`Chromium did not respond to ${method}.`));
+      }, 15_000);
+      this.#pending.set(id, {
+        reject(reason) {
+          clearTimeout(timeout);
+          reject(
+            reason instanceof Error
+              ? reason
+              : new Error("The Chromium command failed.")
+          );
+        },
+        resolve(value) {
+          clearTimeout(timeout);
+          resolve(value);
+        },
+      });
+      this.socket.send(JSON.stringify({ id, method, params, sessionId }));
+    });
+  }
+
+  close() {
+    this.socket.close();
+  }
+
+  #onMessage(event: MessageEvent) {
+    if (typeof event.data !== "string") return;
+    let rawMessage: unknown;
+    try {
+      rawMessage = JSON.parse(event.data);
+    } catch {
+      return;
+    }
+    const message = cdpResponseSchema.safeParse(rawMessage);
+    if (!message.success || message.data.id === undefined) return;
+    const pending = this.#pending.get(message.data.id);
+    if (!pending) return;
+    this.#pending.delete(message.data.id);
+    if (message.data.error) {
+      pending.reject(new Error(message.data.error.message));
+    } else {
+      pending.resolve(message.data.result);
+    }
+  }
+
+  #rejectPending(error: Error) {
+    for (const { reject } of this.#pending.values()) reject(error);
+    this.#pending.clear();
+  }
+}
+
+const cdpResponseSchema = z.object({
+  error: z.object({ message: z.string() }).optional(),
+  id: z.number().int().optional(),
+  result: z.unknown().optional(),
+});
+
+function flattenFrames(
+  node: z.infer<typeof frameTreeNodeSchema>
+): { readonly id: string; readonly url: string }[] {
+  return [
+    node.frame,
+    ...(node.childFrames ?? []).flatMap((child) => flattenFrames(child)),
+  ];
+}
+
+function standardAutocomplete(
+  kind: "address" | "payment",
+  autocomplete: string
+) {
+  const token = autocomplete
+    .toLowerCase()
+    .split(/\s+/u)
+    .findLast((value) => Boolean(value));
+  if (!token) return false;
+  return kind === "payment"
+    ? token.startsWith("cc-")
+    : [
+        "name",
+        "street-address",
+        "address-line1",
+        "address-line2",
+        "address-line3",
+        "address-level1",
+        "address-level2",
+        "postal-code",
+        "country",
+        "country-name",
+      ].includes(token);
+}
+
+function requiredClaim(values: ReadonlyMap<string, string>, token: string) {
+  const value = values.get(token);
+  if (!value)
+    throw new Error("The saved payment card is incomplete or invalid.");
+  return value;
+}
+
+function isWebUrl(value: string) {
+  try {
+    return ["http:", "https:"].includes(new URL(value).protocol);
+  } catch {
+    return false;
+  }
+}
