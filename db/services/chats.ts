@@ -1,8 +1,8 @@
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, sql } from "drizzle-orm";
 import { z } from "zod";
 import type { AccessScope } from "@/lib/access-scope";
 import { chatListSchema, type ChatSummary, type SaveChat } from "@/lib/chat";
-import { chats, db } from "@/db";
+import { agentSessions, chats, db } from "@/db";
 import { ensureScope } from "./scope";
 
 const chatRowSchema = z.object({
@@ -24,15 +24,23 @@ function toChatSummary(row: z.infer<typeof chatRowSchema>): ChatSummary {
 }
 
 export async function listChats(scope: AccessScope) {
-  const rows = chatRowSchema
-    .array()
-    .parse(
-      await db
-        .select()
-        .from(chats)
-        .where(eq(chats.workspaceId, scope.workspaceId))
-        .orderBy(desc(chats.updatedAt))
-    );
+  const updatedAt = sql<string>`coalesce(${chats.updatedAt}, ${agentSessions.createdAt})`;
+  const rows = chatRowSchema.array().parse(
+    await db
+      .select({
+        costUsd: chats.costUsd,
+        createdAt: sql<string>`coalesce(${chats.createdAt}, ${agentSessions.createdAt})`,
+        inputTokens: sql<number>`coalesce(${chats.inputTokens}, 0)`,
+        outputTokens: sql<number>`coalesce(${chats.outputTokens}, 0)`,
+        sessionId: agentSessions.sessionId,
+        title: sql<string>`coalesce(${chats.title}, 'New chat')`,
+        updatedAt,
+      })
+      .from(agentSessions)
+      .leftJoin(chats, eq(chats.sessionId, agentSessions.sessionId))
+      .where(eq(agentSessions.workspaceId, scope.workspaceId))
+      .orderBy(desc(updatedAt))
+  );
   return chatListSchema.parse(rows.map(toChatSummary));
 }
 
