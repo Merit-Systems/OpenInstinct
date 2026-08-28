@@ -50,6 +50,34 @@ describe("database services", () => {
     );
     expect(await sessions.listOwnedSessionIds(bob)).toEqual(new Set());
 
+    await sessions.claimSession(alice, "session-imessage");
+    const unindexedChats = (await chats.listChats(alice)).sort((left, right) =>
+      left.sessionId.localeCompare(right.sessionId)
+    );
+    expect(
+      unindexedChats.map(({ sessionId, title, usage }) => ({
+        sessionId,
+        title,
+        usage,
+      }))
+    ).toEqual([
+      {
+        sessionId: "session-alice",
+        title: "New chat",
+        usage: { costUsd: null, inputTokens: 0, outputTokens: 0 },
+      },
+      {
+        sessionId: "session-imessage",
+        title: "New chat",
+        usage: { costUsd: null, inputTokens: 0, outputTokens: 0 },
+      },
+    ]);
+    expect(
+      unindexedChats.every(
+        (chat) => chat.createdAt.length > 0 && chat.updatedAt.length > 0
+      )
+    ).toBe(true);
+
     await sessions.claimSession(bob, "session-alice");
     expect(await sessions.isSessionOwned(alice, "session-alice")).toBe(true);
     expect(await sessions.isSessionOwned(bob, "session-alice")).toBe(false);
@@ -72,7 +100,14 @@ describe("database services", () => {
       outputTokens: 4,
     });
     expect(await chats.readChat(bob, "session-alice")).toBeUndefined();
-    expect(await chats.listChats(alice)).toEqual([aliceChat]);
+    const indexedChats = await chats.listChats(alice);
+    expect(indexedChats).toHaveLength(2);
+    expect(
+      indexedChats.find((chat) => chat.sessionId === "session-alice")
+    ).toEqual(aliceChat);
+    expect(indexedChats.map((chat) => chat.sessionId)).toContain(
+      "session-imessage"
+    );
     expect(await chats.listChats(bob)).toEqual([]);
 
     await expect(
