@@ -4,12 +4,12 @@ import { Client, type MessageStreamEvent } from "eve/client";
 import {
   ChevronRightIcon,
   CircleDotIcon,
+  CornerDownRightIcon,
   ListTreeIcon,
   SparklesIcon,
   XIcon,
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type RefObject } from "react";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
@@ -362,7 +362,7 @@ function ActivityCard({
   readonly workingCount: number;
 }) {
   return (
-    <Card className="max-h-full w-full gap-0 overflow-hidden ring-0">
+    <Card className="max-h-full w-full gap-0 overflow-hidden">
       <CardContent className="min-h-0 overflow-y-auto pr-6">
         <p className="type-section-title text-muted-foreground">Activity</p>
         <label
@@ -400,7 +400,7 @@ function ActivityCard({
                   {doneCount} done
                 </span>
               </div>
-              <div className="divide-y">
+              <div>
                 {sessionNodes.map(({ depth, session }) => {
                   const status =
                     statuses.get(session.childSessionId) ?? "starting";
@@ -409,7 +409,7 @@ function ActivityCard({
                   );
                   return (
                     <button
-                      aria-label={`${agentLabel(session.name)} task, level ${String(depth + 1)}`}
+                      aria-label={`${agentLabel(session.name)} task, ${status}, level ${String(depth + 1)}`}
                       className={cn(
                         "group flex w-full items-center gap-3 rounded-md py-3 pr-2 text-left",
                         selectedId === session.childSessionId && "bg-muted/60"
@@ -418,11 +418,13 @@ function ActivityCard({
                       key={session.childSessionId}
                       onClick={() => onSelect(session.childSessionId)}
                       style={{
-                        paddingInlineStart: `${0.5 + depth * 0.5}rem`,
+                        paddingInlineStart: "0.5rem",
                       }}
                       type="button"
                     >
-                      <StatusDot status={status} />
+                      {depth > 0 ? (
+                        <CornerDownRightIcon className="size-4 shrink-0 text-muted-foreground" />
+                      ) : null}
                       <span className="min-w-0 flex-1">
                         <span className="block truncate type-label">
                           {task ?? session.name}
@@ -431,7 +433,7 @@ function ActivityCard({
                           {agentLabel(session.name)}
                         </span>
                       </span>
-                      <Badge variant={statusVariant(status)}>{status}</Badge>
+                      <StatusIndicator status={status} />
                       <ChevronRightIcon className="size-4 text-muted-foreground transition-transform group-hover:translate-x-0.5" />
                     </button>
                   );
@@ -499,7 +501,7 @@ function agentLabel(name: string) {
   return `${name.charAt(0).toUpperCase()}${name.slice(1)}`;
 }
 
-function StatusDot({ status }: { readonly status: SubagentStatus }) {
+function StatusIndicator({ status }: { readonly status: SubagentStatus }) {
   return (
     <span
       aria-hidden
@@ -515,12 +517,4 @@ function StatusDot({ status }: { readonly status: SubagentStatus }) {
       )}
     />
   );
-}
-
-function statusVariant(status: SubagentStatus) {
-  if (status === "failed") return "destructive" as const;
-  if (status === "working" || status === "starting") {
-    return "information" as const;
-  }
-  return "secondary" as const;
 }
