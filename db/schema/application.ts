@@ -1,5 +1,6 @@
 import { sql } from "drizzle-orm";
 import type { AgentManifest } from "@/lib/agent-manifest";
+import { user } from "./auth";
 import {
   check,
   type AnyPgColumn,
@@ -33,6 +34,13 @@ export const workspaceLifecycleStates = [
   "deleted",
 ] as const;
 export type WorkspaceLifecycleState = (typeof workspaceLifecycleStates)[number];
+
+export const phoneIdentityStatuses = [
+  "verified",
+  "revoked",
+  "recycled",
+] as const;
+export type PhoneIdentityStatus = (typeof phoneIdentityStatuses)[number];
 
 const utcTimestampDefault = sql`to_char(now() AT TIME ZONE 'utc', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')`;
 
@@ -380,5 +388,35 @@ export const encryptedSecrets = pgTable(
       "encrypted_secrets_namespace_check",
       sql`${table.namespace} = 'vault'`
     ),
+  ]
+);
+
+export const phoneIdentities = pgTable(
+  "phone_identities",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id").notNull(),
+    encryptedPhoneNumber: text("encrypted_phone_number").notNull(),
+    phoneLookupHash: text("phone_lookup_hash").notNull(),
+    status: text("status").notNull().default("verified"),
+    verifiedAt: text("verified_at").notNull(),
+    revokedAt: text("revoked_at"),
+    createdAt: text("created_at").notNull().default(utcTimestampDefault),
+    updatedAt: text("updated_at").notNull().default(utcTimestampDefault),
+  },
+  (table) => [
+    check(
+      "phone_identities_status_check",
+      sql`${table.status} IN (${sqlValues(phoneIdentityStatuses)})`
+    ),
+    foreignKey({
+      name: "phone_identities_user_id_fkey",
+      columns: [table.userId],
+      foreignColumns: [user.id],
+    }).onDelete("cascade"),
+    uniqueIndex("phone_identities_verified_lookup_hash_uidx")
+      .on(table.phoneLookupHash)
+      .where(sql`${table.status} = 'verified'`),
+    index("phone_identities_user_id_idx").on(table.userId),
   ]
 );

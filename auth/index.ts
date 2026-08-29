@@ -4,6 +4,7 @@ import { APIError } from "better-auth/api";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { phoneNumber } from "better-auth/plugins/phone-number";
 import { account, db, session, user, verification } from "@/db";
+import { recordVerifiedPhoneIdentity } from "@/db/services/phone-identities";
 import { env, localPhoneAuthBypassEnabled } from "@/lib/env";
 import { LinqDeliveryError, linqOtpFailure, sendLinqText } from "./linq";
 import { isE164PhoneNumber } from "./phone-number";
@@ -32,6 +33,22 @@ export const auth = betterAuth({
       expiresIn: 300,
       phoneNumberValidator: isE164PhoneNumber,
       requireVerification: true,
+      callbackOnVerification: async ({
+        phoneNumber: phoneNumberValue,
+        user,
+      }) => {
+        try {
+          await recordVerifiedPhoneIdentity({
+            phoneNumber: phoneNumberValue,
+            userId: user.id,
+          });
+        } catch (error) {
+          console.error(
+            "Failed to record verified phone identity.",
+            phoneIdentityErrorDiscriminator(error)
+          );
+        }
+      },
       sendOTP: localPhoneAuthBypassEnabled
         ? () => undefined
         : ({ code, phoneNumber: to }) => sendPhoneCode({ code, to }),
@@ -49,6 +66,10 @@ export const auth = betterAuth({
   ],
   secret: env.BETTER_AUTH_SECRET,
 });
+
+function phoneIdentityErrorDiscriminator(error: unknown) {
+  return error instanceof Error ? error.name : "UnknownError";
+}
 
 export async function sendPhoneCode({
   code,

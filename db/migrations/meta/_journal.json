@@ -43,6 +43,13 @@
       "when": 1788014628184,
       "tag": "0005_clammy_kinsey_walden",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1788016654671,
+      "tag": "0006_sudden_iron_monger",
+      "breakpoints": true
     }
   ]
 }

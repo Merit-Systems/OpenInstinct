@@ -28,6 +28,9 @@ export default {
     // The workspace agent service is consumed dynamically in its PGlite
     // integration test until the control-plane API is introduced.
     "db/services/agents.ts": ["exports"],
+    // Phone identity lookups and revocation are consumed by the incoming Linq
+    // identity flow; the verification write is wired into Better Auth today.
+    "db/services/phone-identities.ts": ["exports"],
     // Eve AI Elements and shadcn registry primitives intentionally expose
     // a reusable component surface wider than this minimal chat consumes.
     "components/ai-elements/**/*.tsx": ["exports", "files", "types"],
