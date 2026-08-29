@@ -91,6 +91,17 @@ export type ApiCredentialScope = (typeof apiCredentialScopes)[number];
 export const apiCredentialStatuses = ["active", "revoked"] as const;
 export type ApiCredentialStatus = (typeof apiCredentialStatuses)[number];
 
+export const webhookEndpointStatuses = ["active", "disabled"] as const;
+export type WebhookEndpointStatus = (typeof webhookEndpointStatuses)[number];
+
+export const webhookDeliveryOutcomes = [
+  "pending",
+  "delivered",
+  "failed",
+  "dead",
+] as const;
+export type WebhookDeliveryOutcome = (typeof webhookDeliveryOutcomes)[number];
+
 const utcTimestampDefault = sql`to_char(now() AT TIME ZONE 'utc', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')`;
 
 function sqlValues(values: readonly string[]) {
@@ -760,6 +771,101 @@ export const channelParticipants = pgTable(
     uniqueIndex("channel_participants_conversation_identity_uidx").on(
       table.conversationId,
       table.phoneIdentityId
+    ),
+  ]
+);
+
+export const webhookEndpoints = pgTable(
+  "webhook_endpoints",
+  {
+    id: text("id").primaryKey(),
+    workspaceId: text("workspace_id").notNull(),
+    url: text("url").notNull(),
+    encryptedSigningSecret: text("encrypted_signing_secret").notNull(),
+    status: text("status").notNull().default("active"),
+    subscribedEvents: jsonb("subscribed_events").notNull(),
+    createdAt: text("created_at").notNull().default(utcTimestampDefault),
+    updatedAt: text("updated_at").notNull().default(utcTimestampDefault),
+    disabledAt: text("disabled_at"),
+  },
+  (table) => [
+    foreignKey({
+      name: "webhook_endpoints_workspace_id_fkey",
+      columns: [table.workspaceId],
+      foreignColumns: [workspaces.id],
+    }).onDelete("cascade"),
+    check(
+      "webhook_endpoints_status_check",
+      sql`${table.status} IN (${sqlValues(webhookEndpointStatuses)})`
+    ),
+    index("webhook_endpoints_workspace_status_idx").on(
+      table.workspaceId,
+      table.status
+    ),
+  ]
+);
+
+export const webhookEvents = pgTable(
+  "webhook_events",
+  {
+    id: text("id").primaryKey(),
+    workspaceId: text("workspace_id").notNull(),
+    type: text("type").notNull(),
+    payload: jsonb("payload").notNull(),
+    correlationId: text("correlation_id"),
+    createdAt: text("created_at").notNull().default(utcTimestampDefault),
+    fannedOutAt: text("fanned_out_at"),
+  },
+  (table) => [
+    foreignKey({
+      name: "webhook_events_workspace_id_fkey",
+      columns: [table.workspaceId],
+      foreignColumns: [workspaces.id],
+    }).onDelete("cascade"),
+    index("webhook_events_workspace_created_idx").on(
+      table.workspaceId,
+      table.createdAt
+    ),
+  ]
+);
+
+export const webhookDeliveries = pgTable(
+  "webhook_deliveries",
+  {
+    id: text("id").primaryKey(),
+    workspaceId: text("workspace_id").notNull(),
+    eventId: text("event_id").notNull(),
+    endpointId: text("endpoint_id").notNull(),
+    attempt: integer("attempt").notNull().default(0),
+    responseStatus: integer("response_status"),
+    outcome: text("outcome").notNull().default("pending"),
+    nextAttemptAt: text("next_attempt_at").notNull(),
+    createdAt: text("created_at").notNull().default(utcTimestampDefault),
+    updatedAt: text("updated_at").notNull().default(utcTimestampDefault),
+  },
+  (table) => [
+    foreignKey({
+      name: "webhook_deliveries_workspace_id_fkey",
+      columns: [table.workspaceId],
+      foreignColumns: [workspaces.id],
+    }).onDelete("cascade"),
+    foreignKey({
+      name: "webhook_deliveries_event_id_fkey",
+      columns: [table.eventId],
+      foreignColumns: [webhookEvents.id],
+    }).onDelete("cascade"),
+    foreignKey({
+      name: "webhook_deliveries_endpoint_id_fkey",
+      columns: [table.endpointId],
+      foreignColumns: [webhookEndpoints.id],
+    }).onDelete("cascade"),
+    check(
+      "webhook_deliveries_outcome_check",
+      sql`${table.outcome} IN (${sqlValues(webhookDeliveryOutcomes)})`
+    ),
+    index("webhook_deliveries_outcome_next_attempt_idx").on(
+      table.outcome,
+      table.nextAttemptAt
     ),
   ]
 );

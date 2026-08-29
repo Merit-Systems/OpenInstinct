@@ -9,6 +9,7 @@ import {
 } from "@/lib/agent-manifest";
 import { agentRevisions, agents, db } from "@/db";
 import { recordAuditEvent } from "./audit";
+import { emitWebhookEvent } from "./webhooks";
 
 export async function createAgent(scope: AccessScope, input: unknown) {
   const parsedInput = agentInputSchema.parse(input);
@@ -80,7 +81,12 @@ export async function publishRevision(
   agentId: string,
   revisionId: string
 ) {
-  const agent = await moveActiveRevision(scope, agentId, revisionId);
+  const agent = await moveActiveRevision(
+    scope,
+    agentId,
+    revisionId,
+    "agent.published"
+  );
   recordAudit(scope, "agent.publish", agentId);
   return agent;
 }
@@ -90,7 +96,12 @@ export async function rollback(
   agentId: string,
   revisionId: string
 ) {
-  const agent = await moveActiveRevision(scope, agentId, revisionId);
+  const agent = await moveActiveRevision(
+    scope,
+    agentId,
+    revisionId,
+    "agent.rolled_back"
+  );
   recordAudit(scope, "agent.rollback", agentId);
   return agent;
 }
@@ -155,7 +166,8 @@ export async function archiveAgent(scope: AccessScope, agentId: string) {
 async function moveActiveRevision(
   scope: AccessScope,
   agentId: string,
-  revisionId: string
+  revisionId: string,
+  webhookEventType: "agent.published" | "agent.rolled_back"
 ) {
   return await db.transaction(async (transaction) => {
     const [agent] = await transaction
@@ -194,6 +206,10 @@ async function moveActiveRevision(
       )
       .returning();
     if (!updatedAgent) throw new Error("Failed to move active revision.");
+    await emitWebhookEvent(transaction, scope, {
+      payload: { agentId, revisionId },
+      type: webhookEventType,
+    });
     return updatedAgent;
   });
 }

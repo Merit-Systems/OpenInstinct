@@ -1,0 +1,2 @@
+ALTER TABLE "webhook_events" ADD COLUMN "fanned_out_at" text;--> statement-breakpoint
+CREATE INDEX "webhook_endpoints_workspace_status_idx" ON "webhook_endpoints" USING btree ("workspace_id","status");

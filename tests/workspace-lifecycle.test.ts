@@ -138,6 +138,14 @@ describe("workspace lifecycle", () => {
     const service = await loadService();
     await seedOwnedRows(service.client, "workspace-a", "owner");
     await seedOwnedRows(service.client, "workspace-b", "other-owner");
+    await service.client.exec(`
+      INSERT INTO webhook_endpoints (id, workspace_id, url, encrypted_signing_secret, subscribed_events)
+      VALUES ('endpoint-a', 'workspace-a', 'https://deleted.example.test', 'encrypted-webhook-secret', '[]');
+      INSERT INTO webhook_events (id, workspace_id, type, payload)
+      VALUES ('webhook-event-a', 'workspace-a', 'agent.published', '{}');
+      INSERT INTO webhook_deliveries (id, workspace_id, event_id, endpoint_id, next_attempt_at)
+      VALUES ('webhook-delivery-a', 'workspace-a', 'webhook-event-a', 'endpoint-a', '2026-01-01');
+    `);
     await expect(
       service.lifecycle.deleteWorkspaceData(service.owner)
     ).rejects.toBeInstanceOf(
@@ -166,6 +174,9 @@ describe("workspace lifecycle", () => {
       encryptedSecrets: 1,
       settings: 1,
       vaultItems: 1,
+      webhookDeliveries: 1,
+      webhookEndpoints: 1,
+      webhookEvents: 1,
       workspaceBudgets: 1,
       workspaceMemberships: 3,
     });
@@ -199,6 +210,9 @@ describe("workspace lifecycle", () => {
           UNION ALL SELECT 'workspace_budgets', count(*)::int FROM workspace_budgets WHERE workspace_id = 'workspace-a'
           UNION ALL SELECT 'workspace_memberships', count(*)::int FROM workspace_memberships WHERE workspace_id = 'workspace-a'
           UNION ALL SELECT 'channel_participants', count(*)::int FROM channel_participants WHERE conversation_id = 'conversation-a'
+          UNION ALL SELECT 'webhook_deliveries', count(*)::int FROM webhook_deliveries WHERE workspace_id = 'workspace-a'
+          UNION ALL SELECT 'webhook_endpoints', count(*)::int FROM webhook_endpoints WHERE workspace_id = 'workspace-a'
+          UNION ALL SELECT 'webhook_events', count(*)::int FROM webhook_events WHERE workspace_id = 'workspace-a'
         `
         ),
         service.client.query(
@@ -219,7 +233,7 @@ describe("workspace lifecycle", () => {
         },
       },
     ]);
-    expect(deletedRows.rows).toHaveLength(14);
+    expect(deletedRows.rows).toHaveLength(17);
     for (const row of deletedRows.rows) expect(row.count).toBe(0);
     expect(otherTenantVault.rows).toEqual([{ count: 1 }]);
   });
