@@ -50,6 +50,13 @@
       "when": 1788016654671,
       "tag": "0006_sudden_iron_monger",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1788017146143,
+      "tag": "0007_talented_hammerhead",
+      "breakpoints": true
     }
   ]
 }

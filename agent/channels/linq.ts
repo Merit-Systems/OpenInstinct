@@ -12,6 +12,11 @@ import { normalizeAuthPhoneNumber } from "@/auth/phone-number";
 import { accessScopeForUser, scopeFromPrincipal } from "@/lib/access-scope";
 import { verifyScopeAccess } from "@/db/services/scope";
 import {
+  createConversationBinding,
+  resolveConversationBinding,
+} from "@/db/services/channel-conversations";
+import { findVerifiedUserByPhoneNumber } from "@/db/services/phone-identities";
+import {
   extractBrowserImageMarkdownReferences,
   stripBrowserImageMarkdownReferences,
 } from "@/lib/browser-images";
@@ -202,7 +207,7 @@ export default linqChannel({
       await postLinqReply(context.thread, markdown, delivery.files);
     },
   },
-  async onMessage(_context, message) {
+  async onMessage(context, message) {
     if (message.author.isBot) return null;
 
     const auth = defaultLinqAuth(message);
@@ -218,11 +223,52 @@ export default linqChannel({
       ? `better-auth:${verifiedUserId}`
       : auth.principalId;
     const scope = accessScopeForUser(principalId);
-    if (
-      isWorkspaceScopeEnforcementEnabled() &&
-      !(await verifyScopeAccess(scope))
-    ) {
+    if (!isWorkspaceScopeEnforcementEnabled()) {
+      return {
+        auth: {
+          ...auth,
+          attributes: {
+            ...auth.attributes,
+            ...(verifiedUserId && phoneNumber ? { phoneNumber } : {}),
+            workspaceId: scope.workspaceId,
+          },
+          principalId,
+        },
+      };
+    }
+    if (!(await verifyScopeAccess(scope))) {
       return null;
+    }
+
+    if (verifiedUserId && phoneNumber) {
+      const identity = await findVerifiedUserByPhoneNumber(phoneNumber);
+      if (identity?.userId === verifiedUserId) {
+        const provider = "linq";
+        const providerAccountId = env.LINQ_CONNECTOR;
+        const providerLineId = env.LINQ_PHONE_NUMBER;
+        const providerConversationId = context.thread.id;
+        if (providerAccountId && providerLineId && providerConversationId) {
+          let binding = await resolveConversationBinding({
+            provider,
+            providerAccountId,
+            providerConversationId,
+          });
+          binding ??= await createConversationBinding({
+            phoneIdentityId: identity.phoneIdentityId,
+            platformLine: {
+              connectorId: providerAccountId,
+              providerLineId,
+            },
+            provider,
+            providerAccountId,
+            providerConversationId,
+            userId: verifiedUserId,
+          });
+          if (binding && binding.workspaceId !== scope.workspaceId) return null;
+          // MVP transition rule: until real workspaces have active agents,
+          // preserve the existing channel behavior rather than dropping turns.
+        }
+      }
     }
     return {
       auth: {
