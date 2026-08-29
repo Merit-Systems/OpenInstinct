@@ -54,6 +54,13 @@ A setup may report `eve link` as a prerequisite; run it, then retry the continua
 
 Run the validation the task requests. When it does not establish the behavior you changed, run the narrowest relevant check.
 
+## Testing tiers
+
+- Put pure logic, config, environment, and component tests in `tests/unit/`.
+- Put PGlite, migrations, service, and database tests in `tests/integration/`.
+- Run `pnpm test:unit`, `pnpm test:integration`, or `pnpm test:coverage`; root Vitest runs both.
+- `REAL_PG` unset auto-detects Compose, `0` skips real Postgres, and `1` requires it.
+
 ## Repository contract
 
 - The repository root owns the single Next.js application, Eve agent, and shared UI contract.
