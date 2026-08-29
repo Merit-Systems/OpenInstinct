@@ -59,6 +59,14 @@ export const channelParticipantStatuses = ["active", "revoked"] as const;
 export type ChannelParticipantStatus =
   (typeof channelParticipantStatuses)[number];
 
+export const connectionInstallationProviders = ["google", "linq"] as const;
+export type ConnectionInstallationProvider =
+  (typeof connectionInstallationProviders)[number];
+
+export const connectionInstallationStatuses = ["active", "revoked"] as const;
+export type ConnectionInstallationStatus =
+  (typeof connectionInstallationStatuses)[number];
+
 const utcTimestampDefault = sql`to_char(now() AT TIME ZONE 'utc', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')`;
 
 function sqlValues(values: readonly string[]) {
@@ -435,6 +443,43 @@ export const phoneIdentities = pgTable(
       .on(table.phoneLookupHash)
       .where(sql`${table.status} = 'verified'`),
     index("phone_identities_user_id_idx").on(table.userId),
+  ]
+);
+
+export const connectionInstallations = pgTable(
+  "connection_installations",
+  {
+    id: text("id").primaryKey(),
+    workspaceId: text("workspace_id").notNull(),
+    provider: text("provider").notNull(),
+    connectorId: text("connector_id").notNull(),
+    authorizationSubject: text("authorization_subject").notNull(),
+    scopes: jsonb("scopes").$type<readonly string[]>(),
+    status: text("status").notNull().default("active"),
+    createdAt: text("created_at").notNull().default(utcTimestampDefault),
+    updatedAt: text("updated_at").notNull().default(utcTimestampDefault),
+    revokedAt: text("revoked_at"),
+  },
+  (table) => [
+    foreignKey({
+      name: "connection_installations_workspace_id_fkey",
+      columns: [table.workspaceId],
+      foreignColumns: [workspaces.id],
+    }).onDelete("cascade"),
+    check(
+      "connection_installations_provider_check",
+      sql`${table.provider} IN (${sqlValues(connectionInstallationProviders)})`
+    ),
+    check(
+      "connection_installations_status_check",
+      sql`${table.status} IN (${sqlValues(connectionInstallationStatuses)})`
+    ),
+    uniqueIndex("connection_installations_workspace_connector_subject_uidx").on(
+      table.workspaceId,
+      table.provider,
+      table.connectorId,
+      table.authorizationSubject
+    ),
   ]
 );
 

@@ -57,6 +57,13 @@
       "when": 1788017146143,
       "tag": "0007_talented_hammerhead",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1788018912664,
+      "tag": "0008_naive_doomsday",
+      "breakpoints": true
     }
   ]
 }

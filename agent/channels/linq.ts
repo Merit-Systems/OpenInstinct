@@ -15,6 +15,7 @@ import {
   createConversationBinding,
   resolveConversationBinding,
 } from "@/db/services/channel-conversations";
+import { recordConnectionInstallation } from "@/db/services/connection-installations";
 import { findVerifiedUserByPhoneNumber } from "@/db/services/phone-identities";
 import {
   extractBrowserImageMarkdownReferences,
@@ -253,18 +254,33 @@ export default linqChannel({
             providerAccountId,
             providerConversationId,
           });
-          binding ??= await createConversationBinding({
-            phoneIdentityId: identity.phoneIdentityId,
-            platformLine: {
-              connectorId: providerAccountId,
-              providerLineId,
-            },
-            provider,
-            providerAccountId,
-            providerConversationId,
-            userId: verifiedUserId,
-          });
+          let bindingCreated = false;
+          if (!binding) {
+            binding = await createConversationBinding({
+              phoneIdentityId: identity.phoneIdentityId,
+              platformLine: {
+                connectorId: providerAccountId,
+                providerLineId,
+              },
+              provider,
+              providerAccountId,
+              providerConversationId,
+              userId: verifiedUserId,
+            });
+            bindingCreated = binding !== undefined;
+          }
           if (binding && binding.workspaceId !== scope.workspaceId) return null;
+          if (binding && bindingCreated) {
+            try {
+              await recordConnectionInstallation(scope, {
+                authorizationSubject: providerLineId,
+                connectorId: providerAccountId,
+                provider: "linq",
+              });
+            } catch {
+              console.warn("[linq] connection installation recording failed");
+            }
+          }
           // MVP transition rule: until real workspaces have active agents,
           // preserve the existing channel behavior rather than dropping turns.
         }
