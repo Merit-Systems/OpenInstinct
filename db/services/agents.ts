@@ -8,6 +8,7 @@ import {
   canonicalAgentManifest,
 } from "@/lib/agent-manifest";
 import { agentRevisions, agents, db } from "@/db";
+import { recordAuditEvent } from "./audit";
 
 export async function createAgent(scope: AccessScope, input: unknown) {
   const parsedInput = agentInputSchema.parse(input);
@@ -79,7 +80,9 @@ export async function publishRevision(
   agentId: string,
   revisionId: string
 ) {
-  return await moveActiveRevision(scope, agentId, revisionId);
+  const agent = await moveActiveRevision(scope, agentId, revisionId);
+  recordAudit(scope, "agent.publish", agentId);
+  return agent;
 }
 
 export async function rollback(
@@ -87,7 +90,15 @@ export async function rollback(
   agentId: string,
   revisionId: string
 ) {
-  return await moveActiveRevision(scope, agentId, revisionId);
+  const agent = await moveActiveRevision(scope, agentId, revisionId);
+  recordAudit(scope, "agent.rollback", agentId);
+  return agent;
+}
+
+function recordAudit(scope: AccessScope, action: string, target: string) {
+  void recordAuditEvent(scope, { action, target }).catch(() => {
+    console.warn("[audit] event recording failed");
+  });
 }
 
 export async function listAgents(scope: AccessScope) {

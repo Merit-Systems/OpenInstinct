@@ -1,14 +1,23 @@
 /* oxlint-disable typescript/no-unsafe-type-assertion, vitest/require-mock-type-parameters -- Eve's Linq adapter exposes the handler context through a transitive Chat SDK `any`; the fixture supplies only the fields exercised here. */
 import type * as LinqModule from "eve/channels/linq";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import workerCancellationHook from "../agent/hooks/worker-cancellation-delivery";
 
 const linqChannelCapture = vi.hoisted(() => ({
   config: undefined as unknown,
   readImage: vi.fn(),
 }));
+const usage = vi.hoisted(() => ({
+  checkBudget: vi.fn(),
+  recordUsageEvent: vi.fn(),
+}));
 vi.mock("@/lib/browser-images/server", () => ({
   readBrowserImageBytes: linqChannelCapture.readImage,
+}));
+vi.mock("@/db/services/usage", () => ({
+  BudgetExceededError: class BudgetExceededError extends Error {},
+  checkBudget: usage.checkBudget,
+  recordUsageEvent: usage.recordUsageEvent,
 }));
 vi.mock("eve/channels/linq", async (importOriginal) => {
   const original = await importOriginal<typeof LinqModule>();
@@ -33,7 +42,29 @@ if (!trackWorkerCancellation || !deliverCompletedMessage) {
 
 type HandlerParameters = Parameters<typeof deliverCompletedMessage>;
 
+beforeEach(() => {
+  vi.clearAllMocks();
+  usage.checkBudget.mockResolvedValue(undefined);
+  usage.recordUsageEvent.mockResolvedValue(undefined);
+});
+
 describe("Linq message delivery", () => {
+  it("does not block a reply when usage ledger insertion fails", async () => {
+    usage.recordUsageEvent.mockRejectedValue(new Error("ledger unavailable"));
+    const { context, post } = handlerContext();
+
+    await expect(
+      deliverCompletedMessage(
+        completedEvent({ message: "Still delivered." }),
+        context,
+        sessionContext()
+      )
+    ).resolves.toBeUndefined();
+    expect(post).toHaveBeenCalledExactlyOnceWith({
+      markdown: "Still delivered.",
+    });
+  });
+
   it("posts final responses as native iMessage Markdown", async () => {
     const message = [
       "Still blocked. No order was submitted.",

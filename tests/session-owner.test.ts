@@ -2,17 +2,24 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { saveChat } from "@/db/services/chats";
 import type { ensureScope } from "@/db/services/scope";
 import type { claimSession } from "@/db/services/sessions";
+import type { checkBudget, recordUsageEvent } from "@/db/services/usage";
 
 const mocks = vi.hoisted(() => ({
   claimSession: vi.fn<typeof claimSession>(),
   ensureScope: vi.fn<typeof ensureScope>(),
   saveChat: vi.fn<typeof saveChat>(),
+  checkBudget: vi.fn<typeof checkBudget>(),
+  recordUsageEvent: vi.fn<typeof recordUsageEvent>(),
 }));
 
 vi.mock("@/db/services/chats", () => ({ saveChat: mocks.saveChat }));
 vi.mock("@/db/services/scope", () => ({ ensureScope: mocks.ensureScope }));
 vi.mock("@/db/services/sessions", () => ({
   claimSession: mocks.claimSession,
+}));
+vi.mock("@/db/services/usage", () => ({
+  checkBudget: mocks.checkBudget,
+  recordUsageEvent: mocks.recordUsageEvent,
 }));
 
 import sessionOwner from "../agent/hooks/session-owner";
@@ -36,6 +43,8 @@ const context = {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  mocks.checkBudget.mockResolvedValue(undefined);
+  mocks.recordUsageEvent.mockResolvedValue(undefined);
 });
 
 describe("session ownership hook", () => {
@@ -55,6 +64,35 @@ describe("session ownership hook", () => {
 
     expect(mocks.saveChat).toHaveBeenCalledWith(scope, {
       sessionId: "session-1",
+    });
+  });
+
+  it("records each completed model step once for every channel session", async () => {
+    const handler = sessionOwner.events?.["step.completed"];
+    expect(handler).toBeDefined();
+    // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- Focused event fixture.
+    const event = {
+      data: {
+        stepIndex: 2,
+        turnId: "turn-1",
+        usage: { costUsd: 0.02, inputTokens: 250, outputTokens: 150 },
+      },
+    } as Parameters<NonNullable<typeof handler>>[0];
+    // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- Focused hook context fixture.
+    const hookContext = context as unknown as Parameters<
+      NonNullable<typeof handler>
+    >[1];
+
+    await handler?.(event, hookContext);
+    await Promise.resolve();
+
+    expect(mocks.recordUsageEvent).toHaveBeenCalledWith(scope, {
+      costEstimateUsd: 0.02,
+      kind: "model_tokens",
+      metadata: { stepIndex: 2, turnId: "turn-1" },
+      quantity: 400,
+      sessionId: "session-1",
+      unit: "tokens",
     });
   });
 });

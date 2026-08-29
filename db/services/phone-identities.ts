@@ -10,6 +10,8 @@ import { and, eq } from "drizzle-orm";
 import { normalizeAuthPhoneNumber } from "@/auth/phone-number";
 import { db, phoneIdentities } from "@/db";
 import { env } from "@/lib/env";
+import { accessScopeForUser } from "@/lib/access-scope";
+import { recordAuditEvent } from "./audit";
 
 // This encryption guarantee covers phone_identities only; Better Auth's user
 // phoneNumber storage and temporary-email derivation are tracked separately.
@@ -127,7 +129,17 @@ export async function revokePhoneIdentity(userId: string, phoneNumber: string) {
       )
     )
     .returning({ id: phoneIdentities.id });
-  return rows.length > 0;
+  const revoked = rows.length > 0;
+  if (revoked) {
+    // Phone revocation occurs for a provisioned Better Auth user's workspace.
+    void recordAuditEvent(accessScopeForUser(`better-auth:${userId}`), {
+      action: "phone.identity.revoke",
+      target: rows[0]?.id,
+    }).catch(() => {
+      console.warn("[audit] event recording failed");
+    });
+  }
+  return revoked;
 }
 
 function requireNormalizedPhoneNumber(phoneNumber: string) {

@@ -9,6 +9,7 @@ import {
   phoneIdentities,
   platformLines,
 } from "@/db";
+import { recordAuditEvent } from "./audit";
 
 const bindingSelection = {
   agentId: channelConversations.agentId,
@@ -94,7 +95,7 @@ export async function createConversationBinding({
   const scope = accessScopeForUser(`better-auth:${userId}`);
   const now = new Date().toISOString();
 
-  return await db.transaction(async (transaction) => {
+  const binding = await db.transaction(async (transaction) => {
     const [identity] = await transaction
       .select({ id: phoneIdentities.id })
       .from(phoneIdentities)
@@ -208,6 +209,15 @@ export async function createConversationBinding({
       });
     return binding;
   });
+  if (binding) {
+    void recordAuditEvent(scope, {
+      action: "channel.conversation.bind",
+      target: binding.id,
+    }).catch(() => {
+      console.warn("[audit] event recording failed");
+    });
+  }
+  return binding;
 }
 
 // Lifecycle close handling arrives with the channel webhook slice.

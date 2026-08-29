@@ -12,6 +12,11 @@ import { normalizeAuthPhoneNumber } from "@/auth/phone-number";
 import { accessScopeForUser, scopeFromPrincipal } from "@/lib/access-scope";
 import { verifyScopeAccess } from "@/db/services/scope";
 import {
+  BudgetExceededError,
+  checkBudget,
+  recordUsageEvent,
+} from "@/db/services/usage";
+import {
   createConversationBinding,
   resolveConversationBinding,
 } from "@/db/services/channel-conversations";
@@ -65,11 +70,24 @@ async function postLinqReply(
     >[1]["thread"]
   >,
   markdown: string,
-  files: readonly unknown[] = []
+  files: readonly unknown[] = [],
+  scope?: ReturnType<typeof scopeFromPrincipal>
 ) {
+  if (scope) {
+    try {
+      await checkBudget(scope, "provider_message");
+    } catch (error) {
+      if (error instanceof BudgetExceededError) {
+        await thread.post({ markdown: error.message });
+        recordLinqUsage(scope);
+      }
+      throw error;
+    }
+  }
   const bubbles = splitLinqReply(markdown);
   if (bubbles.length === 0) {
     if (files.length > 0) await thread.post({ files, markdown: "" });
+    if (files.length > 0) recordLinqUsage(scope);
     return;
   }
   for (const [index, bubble] of bubbles.entries()) {
@@ -78,6 +96,20 @@ async function postLinqReply(
       ...(index === bubbles.length - 1 && files.length > 0 ? { files } : {}),
     });
   }
+  recordLinqUsage(scope);
+}
+
+function recordLinqUsage(
+  scope: ReturnType<typeof scopeFromPrincipal> | undefined
+) {
+  if (!scope) return;
+  void recordUsageEvent(scope, {
+    kind: "provider_message",
+    quantity: 1,
+    unit: "messages",
+  }).catch(() => {
+    console.warn("[usage] usage event recording failed");
+  });
 }
 
 const credentials: LinqChannelCredentials = env.LINQ_CONNECTOR
@@ -173,6 +205,7 @@ export default linqChannel({
       const caller =
         session.session.auth.current ?? session.session.auth.initiator;
       if (!caller) {
+        // Provider-auth-only replies lack a workspace and are not budgeted or ledgered.
         const references = extractBrowserImageMarkdownReferences(event.message);
         const markdown =
           references.length === 0
@@ -205,7 +238,17 @@ export default linqChannel({
       const markdown = [delivery.markdown, failureMessage]
         .filter(Boolean)
         .join("\n\n");
-      await postLinqReply(context.thread, markdown, delivery.files);
+      try {
+        await postLinqReply(
+          context.thread,
+          markdown,
+          delivery.files,
+          scopeFromPrincipal(caller)
+        );
+      } catch (error) {
+        if (error instanceof BudgetExceededError) return;
+        throw error;
+      }
     },
   },
   async onMessage(context, message) {

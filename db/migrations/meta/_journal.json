@@ -64,6 +64,13 @@
       "when": 1788018912664,
       "tag": "0008_naive_doomsday",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1788020798708,
+      "tag": "0009_dusty_star_brand",
+      "breakpoints": true
     }
   ]
 }
