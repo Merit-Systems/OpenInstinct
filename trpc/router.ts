@@ -10,9 +10,33 @@ import {
 } from "@/lib/google-workspace/server";
 import { managerMutationSchema, managerSnapshotSchema } from "@/lib/manager";
 import { applyManagerMutation } from "@/lib/manager/server/store";
+import {
+  listApiCredentials,
+  mintApiCredential,
+  revokeApiCredential,
+} from "@/db/services/api-credentials";
 import { createTRPCRouter, protectedProcedure } from "./init";
 
 export const appRouter = createTRPCRouter({
+  apiCredentials: {
+    list: protectedProcedure.query(({ ctx }) => listApiCredentials(ctx.scope)),
+    mint: protectedProcedure
+      .input(
+        z.object({
+          name: z.string(),
+          scopes: z
+            .array(z.enum(["agents:read", "agents:write", "usage:read"]))
+            .min(1),
+          expiresAt: z.iso.datetime().optional(),
+        })
+      )
+      .mutation(({ ctx, input }) => mintApiCredential(ctx.scope, input)),
+    revoke: protectedProcedure
+      .input(z.object({ credentialId: z.uuid() }))
+      .mutation(({ ctx, input }) =>
+        revokeApiCredential(ctx.scope, input.credentialId)
+      ),
+  },
   chats: {
     save: protectedProcedure
       .input(saveChatSchema)
