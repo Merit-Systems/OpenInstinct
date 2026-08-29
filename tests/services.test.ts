@@ -19,6 +19,7 @@ describe("database services", () => {
     databases.push(client);
     await applyInitialMigration(client);
     await applyBrowserImageMigration(client);
+    await applyWorkspaceTenancyMigration(client);
 
     const pgliteDatabase = drizzle(client, { schema });
     // PGlite exposes the PostgreSQL query builders and transaction behavior
@@ -267,6 +268,16 @@ async function applyInitialMigration(database: PGlite) {
 async function applyBrowserImageMigration(database: PGlite) {
   const migration = await readFile(
     new URL("../db/migrations/0003_unusual_fabian_cortez.sql", import.meta.url),
+    "utf8"
+  );
+  for (const statement of migration.split("--> statement-breakpoint")) {
+    if (statement.trim()) await database.exec(statement);
+  }
+}
+
+async function applyWorkspaceTenancyMigration(database: PGlite) {
+  const migration = await readFile(
+    new URL("../db/migrations/0004_wide_mysterio.sql", import.meta.url),
     "utf8"
   );
   for (const statement of migration.split("--> statement-breakpoint")) {
