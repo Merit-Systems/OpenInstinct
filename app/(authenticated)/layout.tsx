@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import type { CSSProperties } from "react";
 import { Logo } from "@/components/ui/logo";
 import {
@@ -9,7 +10,7 @@ import {
   SidebarInset,
   SidebarProvider,
 } from "@/components/ui/sidebar";
-import { requireRequestScope } from "@/lib/request-scope";
+import { requireRequestScope, UnauthenticatedError } from "@/lib/request-scope";
 import { TRPCProvider } from "@/trpc/client";
 import { AuthenticatedAccountControl } from "./_components/account-control";
 import {
@@ -24,7 +25,12 @@ const sidebarStyle: CSSProperties & { "--sidebar-width": string } = {
 export default async function AuthenticatedLayout({
   children,
 }: LayoutProps<"/">) {
-  await requireRequestScope();
+  try {
+    await requireRequestScope();
+  } catch (error) {
+    if (error instanceof UnauthenticatedError) redirect("/sign-in");
+    throw error;
+  }
 
   return (
     <TRPCProvider>

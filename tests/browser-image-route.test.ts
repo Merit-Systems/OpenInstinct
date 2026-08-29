@@ -3,11 +3,22 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const artifactId = "0d01e667-d128-4bb7-a248-1ae21db72f4f";
 const png = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
-const mocks = vi.hoisted(() => ({ getAuthSession: vi.fn(), getBlob: vi.fn() }));
+const mocks = vi.hoisted(() => ({
+  getAuthSession: vi.fn(),
+  getBlob: vi.fn(),
+  scopeEnforcementEnabled: vi.fn<() => boolean>(),
+  verifyScopeAccess: vi.fn<() => Promise<unknown>>(),
+}));
 
 vi.mock("@/auth/session", () => ({ getAuthSession: mocks.getAuthSession }));
 vi.mock("@/lib/browser-images/server", () => ({
   getBrowserImageBlob: mocks.getBlob,
+}));
+vi.mock("@/db/services/scope", () => ({
+  verifyScopeAccess: mocks.verifyScopeAccess,
+}));
+vi.mock("@/lib/env", () => ({
+  isWorkspaceScopeEnforcementEnabled: mocks.scopeEnforcementEnabled,
 }));
 
 import { GET } from "../app/artifacts/[artifactId]/route";
@@ -15,6 +26,7 @@ import { GET } from "../app/artifacts/[artifactId]/route";
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.getAuthSession.mockResolvedValue({ user: { id: "user-1" } });
+  mocks.scopeEnforcementEnabled.mockReturnValue(false);
   mocks.getBlob.mockResolvedValue({
     artifact: {
       byteSize: png.byteLength,
@@ -92,6 +104,17 @@ describe("browser image route", () => {
 
     expect(response.status).toBe(404);
     expect(await response.text()).toBe("Not found");
+  });
+
+  it("does not reveal an artifact for a denied enforced scope", async () => {
+    mocks.scopeEnforcementEnabled.mockReturnValue(true);
+    mocks.verifyScopeAccess.mockResolvedValue(undefined);
+
+    const response = await GET(request(), context());
+
+    expect(response.status).toBe(404);
+    expect(await response.text()).toBe("Not found");
+    expect(mocks.getBlob).not.toHaveBeenCalled();
   });
 });
 

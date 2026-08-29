@@ -10,6 +10,8 @@ const mocks = vi.hoisted(() => ({
     >(),
   isSessionOwned:
     vi.fn<(_scope: unknown, _sessionId: string) => Promise<boolean>>(),
+  scopeEnforcementEnabled: vi.fn<() => boolean>(),
+  verifyScopeAccess: vi.fn<(_scope: unknown) => Promise<unknown>>(),
 }));
 
 vi.mock("@/auth/session", () => ({
@@ -18,6 +20,14 @@ vi.mock("@/auth/session", () => ({
 
 vi.mock("@/db/services/sessions", () => ({
   isSessionOwned: mocks.isSessionOwned,
+}));
+
+vi.mock("@/db/services/scope", () => ({
+  verifyScopeAccess: mocks.verifyScopeAccess,
+}));
+
+vi.mock("@/lib/env", () => ({
+  isWorkspaceScopeEnforcementEnabled: mocks.scopeEnforcementEnabled,
 }));
 
 import eveChannel from "../agent/channels/eve";
@@ -29,6 +39,7 @@ beforeEach(() => {
     user: { id: "user-1", phoneNumber: "+12025550123" },
   });
   mocks.isSessionOwned.mockResolvedValue(false);
+  mocks.scopeEnforcementEnabled.mockReturnValue(false);
 });
 
 afterEach(() => {
@@ -36,16 +47,46 @@ afterEach(() => {
 });
 
 describe("Eve channel authentication", () => {
-  it("checks decoded session route ids against workspace ownership", async () => {
-    const route = eveChannel.routes.find(
-      (candidate) =>
-        candidate.transport !== "websocket" &&
-        candidate.method === "GET" &&
-        candidate.path === "/eve/v1/session/:sessionId/stream"
+  it("rejects a denied scope with the same response as a missing session", async () => {
+    const route = sessionStreamRoute();
+    mocks.scopeEnforcementEnabled.mockReturnValue(true);
+    mocks.verifyScopeAccess.mockResolvedValue(undefined);
+
+    const denied = await route.handler(
+      new Request(
+        "https://assistant.example/eve/v1/session/session-one/stream"
+      ),
+      unexpectedRouteContext()
     );
-    if (!route || route.transport === "websocket") {
-      throw new Error("The Eve session stream route is unavailable.");
-    }
+    mocks.getAuthSession.mockResolvedValue(null);
+    const unauthenticated = await route.handler(
+      new Request(
+        "https://assistant.example/eve/v1/session/session-one/stream"
+      ),
+      unexpectedRouteContext()
+    );
+
+    expect(denied.status).toBe(401);
+    expect(await denied.text()).toBe(await unauthenticated.text());
+  });
+
+  it("keeps scope verification disabled by default", async () => {
+    const route = sessionStreamRoute();
+
+    const responsePromise = route.handler(
+      new Request(
+        "https://assistant.example/eve/v1/session/session-one/stream"
+      ),
+      unexpectedRouteContext()
+    );
+    await vi.runAllTimersAsync();
+    await responsePromise;
+
+    expect(mocks.verifyScopeAccess).not.toHaveBeenCalled();
+  });
+
+  it("checks decoded session route ids against workspace ownership", async () => {
+    const route = sessionStreamRoute();
 
     const responsePromise = route.handler(
       new Request(
@@ -63,6 +104,19 @@ describe("Eve channel authentication", () => {
     );
   });
 });
+
+function sessionStreamRoute() {
+  const route = eveChannel.routes.find(
+    (candidate) =>
+      candidate.transport !== "websocket" &&
+      candidate.method === "GET" &&
+      candidate.path === "/eve/v1/session/:sessionId/stream"
+  );
+  if (!route || route.transport === "websocket") {
+    throw new Error("The Eve session stream route is unavailable.");
+  }
+  return route;
+}
 
 function unexpectedRouteContext() {
   const unexpected = () => {

@@ -26,9 +26,20 @@ describe("environment", () => {
   });
 
   it("exports the validated environment", async () => {
-    const { env } = await import("../lib/env");
+    const { env, isWorkspaceScopeEnforcementEnabled } =
+      await import("../lib/env");
 
     expect(env).toMatchObject(requiredEnvironment);
+    expect(env.WORKSPACE_SCOPE_ENFORCEMENT).toBe("off");
+    expect(isWorkspaceScopeEnforcementEnabled()).toBe(false);
+  });
+
+  it("enables workspace scope enforcement when configured", async () => {
+    vi.stubEnv("WORKSPACE_SCOPE_ENFORCEMENT", "enforce");
+
+    const { isWorkspaceScopeEnforcementEnabled } = await import("../lib/env");
+
+    expect(isWorkspaceScopeEnforcementEnabled()).toBe(true);
   });
 
   it("provides the Google connector default without enabling Linq", async () => {

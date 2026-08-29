@@ -1,7 +1,9 @@
 import { z } from "zod";
 import { getAuthSession } from "@/auth/session";
+import { verifyScopeAccess } from "@/db/services/scope";
 import { accessScopeForUser } from "@/lib/access-scope";
 import { getBrowserImageBlob } from "@/lib/browser-images/server";
+import { isWorkspaceScopeEnforcementEnabled } from "@/lib/env";
 
 export const runtime = "nodejs";
 
@@ -14,6 +16,12 @@ export async function GET(
   if (!session || !parsedId.success) return notFound();
 
   const scope = accessScopeForUser(`better-auth:${session.user.id}`);
+  if (
+    isWorkspaceScopeEnforcementEnabled() &&
+    !(await verifyScopeAccess(scope))
+  ) {
+    return notFound();
+  }
   const opened = await getBrowserImageBlob(scope, parsedId.data, {
     ifNoneMatch: request.headers.get("if-none-match") ?? undefined,
     signal: request.signal,

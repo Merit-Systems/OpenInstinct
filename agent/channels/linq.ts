@@ -10,11 +10,12 @@ import { z } from "zod";
 import { auth } from "@/auth";
 import { normalizeAuthPhoneNumber } from "@/auth/phone-number";
 import { accessScopeForUser, scopeFromPrincipal } from "@/lib/access-scope";
+import { verifyScopeAccess } from "@/db/services/scope";
 import {
   extractBrowserImageMarkdownReferences,
   stripBrowserImageMarkdownReferences,
 } from "@/lib/browser-images";
-import { env } from "@/lib/env";
+import { env, isWorkspaceScopeEnforcementEnabled } from "@/lib/env";
 import { consumeWorkerCancellationTurn } from "../lib/worker-cancellation-delivery";
 import { prepareLinqBrowserImageDelivery } from "../lib/linq-browser-image-delivery";
 
@@ -217,6 +218,12 @@ export default linqChannel({
       ? `better-auth:${verifiedUserId}`
       : auth.principalId;
     const scope = accessScopeForUser(principalId);
+    if (
+      isWorkspaceScopeEnforcementEnabled() &&
+      !(await verifyScopeAccess(scope))
+    ) {
+      return null;
+    }
     return {
       auth: {
         ...auth,
