@@ -10,7 +10,10 @@ import { z } from "zod";
 import { auth } from "@/auth";
 import { normalizeAuthPhoneNumber } from "@/auth/phone-number";
 import { accessScopeForUser, scopeFromPrincipal } from "@/lib/access-scope";
-import { verifyScopeAccess } from "@/db/services/scope";
+import {
+  verifyScopeAccess,
+  WorkspaceNotOperableError,
+} from "@/db/services/scope";
 import {
   BudgetExceededError,
   checkBudget,
@@ -77,7 +80,10 @@ async function postLinqReply(
     try {
       await checkBudget(scope, "provider_message");
     } catch (error) {
-      if (error instanceof BudgetExceededError) {
+      if (
+        error instanceof BudgetExceededError ||
+        error instanceof WorkspaceNotOperableError
+      ) {
         await thread.post({ markdown: error.message });
         recordLinqUsage(scope);
       }
@@ -246,7 +252,11 @@ export default linqChannel({
           scopeFromPrincipal(caller)
         );
       } catch (error) {
-        if (error instanceof BudgetExceededError) return;
+        if (
+          error instanceof BudgetExceededError ||
+          error instanceof WorkspaceNotOperableError
+        )
+          return;
         throw error;
       }
     },

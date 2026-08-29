@@ -4,6 +4,7 @@ import type { AccessScope } from "@/lib/access-scope";
 import { isWorkspaceScopeEnforcementEnabled } from "@/lib/env";
 import { db, type UsageEventKind, usageEvents, workspaceBudgets } from "@/db";
 import { recordAuditEvent } from "./audit";
+import { assertWorkspaceOperable } from "./scope";
 
 export class BudgetExceededError extends Error {
   constructor(
@@ -69,6 +70,7 @@ const budgetLimitColumn = {
 
 export async function checkBudget(scope: AccessScope, kind: UsageEventKind) {
   if (!isWorkspaceScopeEnforcementEnabled()) return;
+  await assertWorkspaceOperable(scope);
   try {
     const limitColumn = budgetLimitColumn[kind];
     if (!limitColumn) return;

@@ -8,6 +8,14 @@ import {
   type WorkspaceMembershipRole,
   type WorkspaceMembershipStatus,
 } from "@/db";
+import { isWorkspaceScopeEnforcementEnabled } from "@/lib/env";
+
+export class WorkspaceNotOperableError extends Error {
+  constructor(readonly lifecycleState: string | undefined) {
+    super("This workspace is not currently operable.");
+    this.name = "WorkspaceNotOperableError";
+  }
+}
 
 export type VerifiedAccessScope = AccessScope & {
   readonly membershipStatus: WorkspaceMembershipStatus;
@@ -78,4 +86,23 @@ export async function ensureScope(scope: AccessScope) {
         target: [workspaceMemberships.workspaceId, workspaceMemberships.userId],
       });
   });
+}
+
+export async function assertWorkspaceOperable(scope: AccessScope) {
+  if (!isWorkspaceScopeEnforcementEnabled()) return;
+  const [workspace] = await db
+    .select({ lifecycleState: workspaces.lifecycleState })
+    .from(workspaces)
+    .where(eq(workspaces.id, scope.workspaceId))
+    .limit(1);
+
+  // A deterministic first-run scope has not been provisioned yet; preserve the
+  // same admission behavior as verifyScopeAccess until ensureScope creates it.
+  if (!workspace) return;
+  if (
+    workspace.lifecycleState !== "trial" &&
+    workspace.lifecycleState !== "active"
+  ) {
+    throw new WorkspaceNotOperableError(workspace.lifecycleState);
+  }
 }

@@ -34,6 +34,12 @@ export default {
     // Usage aggregation is a deliberate service API for future workspace
     // reporting; budget enforcement consumes it internally today.
     "db/services/usage.ts": ["exports"],
+    // The operability error is a public typed denial for callers of the
+    // shared guard, which is loaded by the budget service at runtime.
+    "db/services/scope.ts": ["exports"],
+    // Lifecycle control-plane actions are covered by PGlite integration tests
+    // until the workspace management API is introduced.
+    "db/services/workspace-lifecycle.ts": ["exports"],
     // Eve AI Elements and shadcn registry primitives intentionally expose
     // a reusable component surface wider than this minimal chat consumes.
     "components/ai-elements/**/*.tsx": ["exports", "files", "types"],

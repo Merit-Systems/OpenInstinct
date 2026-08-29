@@ -11,6 +11,14 @@ const usage = vi.hoisted(() => ({
   checkBudget: vi.fn(),
   recordUsageEvent: vi.fn(),
 }));
+const scope = vi.hoisted(() => ({
+  WorkspaceNotOperableError: class WorkspaceNotOperableError extends Error {
+    constructor() {
+      super("This workspace is not currently operable.");
+    }
+  },
+  verifyScopeAccess: vi.fn(),
+}));
 vi.mock("@/lib/browser-images/server", () => ({
   readBrowserImageBytes: linqChannelCapture.readImage,
 }));
@@ -19,6 +27,7 @@ vi.mock("@/db/services/usage", () => ({
   checkBudget: usage.checkBudget,
   recordUsageEvent: usage.recordUsageEvent,
 }));
+vi.mock("@/db/services/scope", () => scope);
 vi.mock("eve/channels/linq", async (importOriginal) => {
   const original = await importOriginal<typeof LinqModule>();
   return {
@@ -62,6 +71,22 @@ describe("Linq message delivery", () => {
     ).resolves.toBeUndefined();
     expect(post).toHaveBeenCalledExactlyOnceWith({
       markdown: "Still delivered.",
+    });
+  });
+
+  it("posts a generic denial instead of a reply for a suspended workspace", async () => {
+    usage.checkBudget.mockRejectedValue(new scope.WorkspaceNotOperableError());
+    const { context, post } = handlerContext();
+
+    await expect(
+      deliverCompletedMessage(
+        completedEvent({ message: "This reply must not be sent." }),
+        context,
+        sessionContext()
+      )
+    ).resolves.toBeUndefined();
+    expect(post).toHaveBeenCalledExactlyOnceWith({
+      markdown: "This workspace is not currently operable.",
     });
   });
 
