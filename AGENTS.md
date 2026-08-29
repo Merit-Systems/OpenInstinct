@@ -92,3 +92,17 @@ This version has breaking changes — APIs, conventions, and file structure may 
 This block is written and re-added by `next dev` — verify at `node_modules/next/dist/server/lib/generate-agent-files.js`. Removing it from a diff only re-creates the uncommitted change; committing it with your work keeps the tree clean.
 
 <!-- END:nextjs-agent-rules -->
+
+## Agent orientation
+
+Read [`docs/AGENT_GUIDE.md`](docs/AGENT_GUIDE.md) for the repository topology,
+route map, ownership boundaries, storage rules, change recipes, and verification
+gates. The architecture review and operational contracts are linked from that
+guide.
+
+For product work involving configurable agents, managed phone lines, MCP/tool
+catalogs, public APIs, webhooks, or shared tenants, read
+[`docs/PRODUCT_DIRECTION.md`](docs/PRODUCT_DIRECTION.md) and
+[`docs/MULTITENANCY.md`](docs/MULTITENANCY.md) before changing schema or runtime
+behavior. They are proposed contracts; preserve the implemented/proposed
+distinction in [`docs/README.md`](docs/README.md).
