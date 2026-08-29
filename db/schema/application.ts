@@ -67,6 +67,20 @@ export const connectionInstallationStatuses = ["active", "revoked"] as const;
 export type ConnectionInstallationStatus =
   (typeof connectionInstallationStatuses)[number];
 
+export const usageEventKinds = [
+  "model_tokens",
+  "browser_session",
+  "provider_message",
+  "storage_bytes",
+] as const;
+export type UsageEventKind = (typeof usageEventKinds)[number];
+
+export const workspaceBudgetPeriods = ["monthly"] as const;
+export type WorkspaceBudgetPeriod = (typeof workspaceBudgetPeriods)[number];
+
+export const auditEventOutcomes = ["ok", "denied", "error"] as const;
+export type AuditEventOutcome = (typeof auditEventOutcomes)[number];
+
 const utcTimestampDefault = sql`to_char(now() AT TIME ZONE 'utc', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')`;
 
 function sqlValues(values: readonly string[]) {
@@ -386,6 +400,91 @@ export const chats = pgTable(
     index("chats_workspace_updated_idx").on(
       table.workspaceId,
       table.updatedAt.desc().nullsFirst()
+    ),
+  ]
+);
+
+export const usageEvents = pgTable(
+  "usage_events",
+  {
+    id: text("id").primaryKey(),
+    workspaceId: text("workspace_id").notNull(),
+    userId: text("user_id"),
+    kind: text("kind").notNull(),
+    quantity: integer("quantity").notNull(),
+    unit: text("unit").notNull(),
+    costEstimateUsd: doublePrecision("cost_estimate_usd"),
+    sessionId: text("session_id"),
+    metadata: jsonb("metadata"),
+    createdAt: text("created_at").notNull().default(utcTimestampDefault),
+  },
+  (table) => [
+    foreignKey({
+      name: "usage_events_workspace_id_fkey",
+      columns: [table.workspaceId],
+      foreignColumns: [workspaces.id],
+    }).onDelete("cascade"),
+    check(
+      "usage_events_kind_check",
+      sql`${table.kind} IN (${sqlValues(usageEventKinds)})`
+    ),
+    index("usage_events_workspace_kind_created_idx").on(
+      table.workspaceId,
+      table.kind,
+      table.createdAt
+    ),
+  ]
+);
+
+export const workspaceBudgets = pgTable(
+  "workspace_budgets",
+  {
+    workspaceId: text("workspace_id").primaryKey(),
+    period: text("period").notNull().default("monthly"),
+    modelTokenLimit: integer("model_token_limit"),
+    browserSessionLimit: integer("browser_session_limit"),
+    messageLimit: integer("message_limit"),
+    updatedAt: text("updated_at").notNull().default(utcTimestampDefault),
+  },
+  (table) => [
+    foreignKey({
+      name: "workspace_budgets_workspace_id_fkey",
+      columns: [table.workspaceId],
+      foreignColumns: [workspaces.id],
+    }).onDelete("cascade"),
+    check(
+      "workspace_budgets_period_check",
+      sql`${table.period} IN (${sqlValues(workspaceBudgetPeriods)})`
+    ),
+  ]
+);
+
+export const auditEvents = pgTable(
+  "audit_events",
+  {
+    id: text("id").primaryKey(),
+    workspaceId: text("workspace_id").notNull(),
+    actorUserId: text("actor_user_id"),
+    action: text("action").notNull(),
+    target: text("target"),
+    outcome: text("outcome").notNull().default("ok"),
+    correlationId: text("correlation_id"),
+    metadata: jsonb("metadata"),
+    createdAt: text("created_at").notNull().default(utcTimestampDefault),
+  },
+  (table) => [
+    foreignKey({
+      name: "audit_events_workspace_id_fkey",
+      columns: [table.workspaceId],
+      foreignColumns: [workspaces.id],
+    }).onDelete("cascade"),
+    check(
+      "audit_events_outcome_check",
+      sql`${table.outcome} IN (${sqlValues(auditEventOutcomes)})`
+    ),
+    index("audit_events_workspace_created_idx").on(
+      table.workspaceId,
+      table.createdAt
     ),
   ]
 );

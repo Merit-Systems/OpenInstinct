@@ -31,6 +31,9 @@ export default {
     // Phone identity lookups and revocation are consumed by the incoming Linq
     // identity flow; the verification write is wired into Better Auth today.
     "db/services/phone-identities.ts": ["exports"],
+    // Usage aggregation is a deliberate service API for future workspace
+    // reporting; budget enforcement consumes it internally today.
+    "db/services/usage.ts": ["exports"],
     // Eve AI Elements and shadcn registry primitives intentionally expose
     // a reusable component surface wider than this minimal chat consumes.
     "components/ai-elements/**/*.tsx": ["exports", "files", "types"],

@@ -1,6 +1,7 @@
 import { and, desc, eq, sql } from "drizzle-orm";
 import type { AccessScope } from "@/lib/access-scope";
 import { browserSessions, db } from "@/db";
+import { checkBudget, recordUsageEvent } from "./usage";
 
 type BrowserSessionRecord = Pick<
   typeof browserSessions.$inferSelect,
@@ -11,11 +12,20 @@ export async function createBrowserSession(
   scope: AccessScope,
   record: BrowserSessionRecord
 ) {
+  await checkBudget(scope, "browser_session");
   await db.insert(browserSessions).values({
     createdAt: record.createdAt,
     createdByUserId: scope.userId,
     sessionId: record.sessionId,
     workspaceId: scope.workspaceId,
+  });
+  void recordUsageEvent(scope, {
+    kind: "browser_session",
+    quantity: 1,
+    sessionId: record.sessionId,
+    unit: "sessions",
+  }).catch(() => {
+    console.warn("[usage] usage event recording failed");
   });
 }
 

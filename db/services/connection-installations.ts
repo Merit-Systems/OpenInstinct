@@ -7,6 +7,7 @@ import {
   type ConnectionInstallationProvider,
 } from "@/db";
 import { ensureScope } from "./scope";
+import { recordAuditEvent } from "./audit";
 
 interface ConnectionInstallationKey {
   readonly authorizationSubject: string;
@@ -81,7 +82,16 @@ export async function revokeConnectionInstallation(
     .set({ revokedAt: now, status: "revoked", updatedAt: now })
     .where(installationConditions(scope, key))
     .returning({ id: connectionInstallations.id });
-  return rows.length > 0;
+  const revoked = rows.length > 0;
+  if (revoked) {
+    void recordAuditEvent(scope, {
+      action: "connection.installation.revoke",
+      target: `${key.provider}:${key.connectorId}:${key.authorizationSubject}`,
+    }).catch(() => {
+      console.warn("[audit] event recording failed");
+    });
+  }
+  return revoked;
 }
 
 export async function deleteRevokedConnectionInstallation(
