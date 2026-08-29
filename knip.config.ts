@@ -25,6 +25,9 @@ export default {
     "vercel",
   ],
   ignoreIssues: {
+    // The workspace agent service is consumed dynamically in its PGlite
+    // integration test until the control-plane API is introduced.
+    "db/services/agents.ts": ["exports"],
     // Eve AI Elements and shadcn registry primitives intentionally expose
     // a reusable component surface wider than this minimal chat consumes.
     "components/ai-elements/**/*.tsx": ["exports", "files", "types"],

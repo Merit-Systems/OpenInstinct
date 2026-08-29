@@ -4,6 +4,8 @@ import { describe, expect, it } from "vitest";
 import { z } from "zod";
 import {
   account,
+  agentRevisions,
+  agents,
   agentSessions,
   browserImageArtifacts,
   browserSessions,
@@ -24,6 +26,8 @@ describe("database schema", () => {
       [
         workspaces,
         workspaceMemberships,
+        agents,
+        agentRevisions,
         vaultItems,
         settings,
         agentSessions,
@@ -39,6 +43,8 @@ describe("database schema", () => {
     ).toEqual([
       "workspaces",
       "workspace_memberships",
+      "agents",
+      "agent_revisions",
       "vault_items",
       "settings",
       "agent_sessions",
@@ -81,6 +87,8 @@ describe("database schema", () => {
   it("keeps every workspace-owned table connected to the workspace root", () => {
     for (const table of [
       workspaceMemberships,
+      agents,
+      agentRevisions,
       vaultItems,
       settings,
       chats,
