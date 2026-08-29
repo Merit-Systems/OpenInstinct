@@ -42,6 +42,23 @@ export const phoneIdentityStatuses = [
 ] as const;
 export type PhoneIdentityStatus = (typeof phoneIdentityStatuses)[number];
 
+export const platformLineProviders = ["linq"] as const;
+export type PlatformLineProvider = (typeof platformLineProviders)[number];
+
+export const platformLineStatuses = ["active", "suspended", "retired"] as const;
+export type PlatformLineStatus = (typeof platformLineStatuses)[number];
+
+export const channelConversationStatuses = ["active", "closed"] as const;
+export type ChannelConversationStatus =
+  (typeof channelConversationStatuses)[number];
+
+export const channelParticipantRoles = ["owner", "participant"] as const;
+export type ChannelParticipantRole = (typeof channelParticipantRoles)[number];
+
+export const channelParticipantStatuses = ["active", "revoked"] as const;
+export type ChannelParticipantStatus =
+  (typeof channelParticipantStatuses)[number];
+
 const utcTimestampDefault = sql`to_char(now() AT TIME ZONE 'utc', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')`;
 
 function sqlValues(values: readonly string[]) {
@@ -418,5 +435,121 @@ export const phoneIdentities = pgTable(
       .on(table.phoneLookupHash)
       .where(sql`${table.status} = 'verified'`),
     index("phone_identities_user_id_idx").on(table.userId),
+  ]
+);
+
+export const platformLines = pgTable(
+  "platform_lines",
+  {
+    id: text("id").primaryKey(),
+    provider: text("provider").notNull(),
+    providerLineId: text("provider_line_id").notNull(),
+    connectorId: text("connector_id"),
+    status: text("status").notNull().default("active"),
+    environment: text("environment"),
+    createdAt: text("created_at").notNull().default(utcTimestampDefault),
+    updatedAt: text("updated_at").notNull().default(utcTimestampDefault),
+  },
+  (table) => [
+    check(
+      "platform_lines_provider_check",
+      sql`${table.provider} IN (${sqlValues(platformLineProviders)})`
+    ),
+    check(
+      "platform_lines_status_check",
+      sql`${table.status} IN (${sqlValues(platformLineStatuses)})`
+    ),
+    uniqueIndex("platform_lines_provider_line_uidx").on(
+      table.provider,
+      table.providerLineId
+    ),
+  ]
+);
+
+export const channelConversations = pgTable(
+  "channel_conversations",
+  {
+    id: text("id").primaryKey(),
+    provider: text("provider").notNull(),
+    providerAccountId: text("provider_account_id").notNull(),
+    providerConversationId: text("provider_conversation_id").notNull(),
+    platformLineId: text("platform_line_id").notNull(),
+    workspaceId: text("workspace_id").notNull(),
+    agentId: text("agent_id").notNull(),
+    pinnedRevisionId: text("pinned_revision_id").notNull(),
+    status: text("status").notNull().default("active"),
+    createdAt: text("created_at").notNull().default(utcTimestampDefault),
+    updatedAt: text("updated_at").notNull().default(utcTimestampDefault),
+  },
+  (table) => [
+    uniqueIndex("channel_conversations_provider_conversation_uidx").on(
+      table.provider,
+      table.providerAccountId,
+      table.providerConversationId
+    ),
+    foreignKey({
+      name: "channel_conversations_platform_line_id_fkey",
+      columns: [table.platformLineId],
+      foreignColumns: [platformLines.id],
+    }),
+    foreignKey({
+      name: "channel_conversations_workspace_id_fkey",
+      columns: [table.workspaceId],
+      foreignColumns: [workspaces.id],
+    }).onDelete("cascade"),
+    foreignKey({
+      name: "channel_conversations_workspace_agent_fkey",
+      columns: [table.workspaceId, table.agentId],
+      foreignColumns: [agents.workspaceId, agents.id],
+    }),
+    foreignKey({
+      name: "channel_conversations_workspace_agent_revision_fkey",
+      columns: [table.workspaceId, table.agentId, table.pinnedRevisionId],
+      foreignColumns: [
+        agentRevisions.workspaceId,
+        agentRevisions.agentId,
+        agentRevisions.id,
+      ],
+    }),
+    check(
+      "channel_conversations_status_check",
+      sql`${table.status} IN (${sqlValues(channelConversationStatuses)})`
+    ),
+  ]
+);
+
+export const channelParticipants = pgTable(
+  "channel_participants",
+  {
+    id: text("id").primaryKey(),
+    conversationId: text("conversation_id").notNull(),
+    phoneIdentityId: text("phone_identity_id").notNull(),
+    role: text("role").notNull().default("owner"),
+    status: text("status").notNull().default("active"),
+    createdAt: text("created_at").notNull().default(utcTimestampDefault),
+  },
+  (table) => [
+    foreignKey({
+      name: "channel_participants_conversation_id_fkey",
+      columns: [table.conversationId],
+      foreignColumns: [channelConversations.id],
+    }).onDelete("cascade"),
+    foreignKey({
+      name: "channel_participants_phone_identity_id_fkey",
+      columns: [table.phoneIdentityId],
+      foreignColumns: [phoneIdentities.id],
+    }),
+    check(
+      "channel_participants_role_check",
+      sql`${table.role} IN (${sqlValues(channelParticipantRoles)})`
+    ),
+    check(
+      "channel_participants_status_check",
+      sql`${table.status} IN (${sqlValues(channelParticipantStatuses)})`
+    ),
+    uniqueIndex("channel_participants_conversation_identity_uidx").on(
+      table.conversationId,
+      table.phoneIdentityId
+    ),
   ]
 );
