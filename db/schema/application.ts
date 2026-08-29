@@ -81,6 +81,16 @@ export type WorkspaceBudgetPeriod = (typeof workspaceBudgetPeriods)[number];
 export const auditEventOutcomes = ["ok", "denied", "error"] as const;
 export type AuditEventOutcome = (typeof auditEventOutcomes)[number];
 
+export const apiCredentialScopes = [
+  "agents:read",
+  "agents:write",
+  "usage:read",
+] as const;
+export type ApiCredentialScope = (typeof apiCredentialScopes)[number];
+
+export const apiCredentialStatuses = ["active", "revoked"] as const;
+export type ApiCredentialStatus = (typeof apiCredentialStatuses)[number];
+
 const utcTimestampDefault = sql`to_char(now() AT TIME ZONE 'utc', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')`;
 
 function sqlValues(values: readonly string[]) {
@@ -485,6 +495,62 @@ export const auditEvents = pgTable(
     index("audit_events_workspace_created_idx").on(
       table.workspaceId,
       table.createdAt
+    ),
+  ]
+);
+
+export const apiCredentials = pgTable(
+  "api_credentials",
+  {
+    id: text("id").primaryKey(),
+    workspaceId: text("workspace_id").notNull(),
+    name: text("name").notNull(),
+    keyHash: text("key_hash").notNull(),
+    keyPrefix: text("key_prefix").notNull(),
+    scopes: jsonb("scopes").$type<readonly ApiCredentialScope[]>().notNull(),
+    status: text("status").notNull().default("active"),
+    createdByUserId: text("created_by_user_id").notNull(),
+    expiresAt: text("expires_at"),
+    revokedAt: text("revoked_at"),
+    lastUsedAt: text("last_used_at"),
+    createdAt: text("created_at").notNull().default(utcTimestampDefault),
+    updatedAt: text("updated_at").notNull().default(utcTimestampDefault),
+  },
+  (table) => [
+    foreignKey({
+      name: "api_credentials_workspace_id_fkey",
+      columns: [table.workspaceId],
+      foreignColumns: [workspaces.id],
+    }).onDelete("cascade"),
+    uniqueIndex("api_credentials_key_hash_uidx").on(table.keyHash),
+    check(
+      "api_credentials_status_check",
+      sql`${table.status} IN (${sqlValues(apiCredentialStatuses)})`
+    ),
+  ]
+);
+
+export const apiIdempotencyKeys = pgTable(
+  "api_idempotency_keys",
+  {
+    id: text("id").primaryKey(),
+    workspaceId: text("workspace_id").notNull(),
+    route: text("route").notNull(),
+    idempotencyKey: text("idempotency_key").notNull(),
+    resourceId: text("resource_id"),
+    responseStatus: integer("response_status").notNull(),
+    createdAt: text("created_at").notNull().default(utcTimestampDefault),
+  },
+  (table) => [
+    foreignKey({
+      name: "api_idempotency_keys_workspace_id_fkey",
+      columns: [table.workspaceId],
+      foreignColumns: [workspaces.id],
+    }).onDelete("cascade"),
+    uniqueIndex("api_idempotency_keys_workspace_route_key_uidx").on(
+      table.workspaceId,
+      table.route,
+      table.idempotencyKey
     ),
   ]
 );
