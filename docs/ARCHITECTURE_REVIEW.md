@@ -215,7 +215,16 @@ targets without implementation and verification work:
 - `pnpm audit --prod --json`: zero high/critical advisories; one moderate optional transitive advisory.
 - `git diff --check`: passed.
 
+After this source review, the same documented revision line was deployed to the
+Vercel reference project with Neon, Kernel, private Blob, and a Linq connector.
+The dated operational evidence and exact deployment ID live in
+[`operations/VERCEL.md`](operations/VERCEL.md). That evidence proves the named
+deployment and non-message smoke only; it does not close the architecture
+findings or make the application truly multi-tenant.
+
 ## Not audited
 
-No live provider calls, infrastructure provisioning, DNS/TLS, reverse-proxy
-deployment, browser UI smoke, or production data path was exercised.
+The source-review phase itself did not exercise live provider calls,
+infrastructure provisioning, DNS/TLS, reverse-proxy deployment, browser UI, or
+production data. Later deployment checks are recorded separately in the
+operator runbook so source findings are not silently conflated with live proof.

@@ -12,6 +12,13 @@ operate a browser or inject vault values.
 The repository is Vercel-first today. Treat self-hosting and multi-tenancy as
 documented direction unless a change explicitly implements them.
 
+Read [`README.md`](README.md) for the documentation map and truth labels.
+Product work involving configurable agents, managed lines, MCP/tool catalogs,
+public APIs, or customer webhooks starts with
+[`PRODUCT_DIRECTION.md`](PRODUCT_DIRECTION.md) and
+[`MULTITENANCY.md`](MULTITENANCY.md). Those are proposed contracts, not schema
+or runtime claims.
+
 ## Route map
 
 | Route                        | Owner                                          | Purpose                                         |
@@ -127,9 +134,13 @@ boundary still needs deterministic approval enforcement before production use.
 3. **Add a connector:** prefer the existing registry/integration path, define
    environment validation and failure states, keep tokens out of chat/history,
    and add mocked contract tests.
-4. **Change auth or routes:** test unauthenticated, authenticated, wrong-owner,
+4. **Add tenant-configurable capability:** keep configuration as validated data;
+   resolve workspace/agent/revision from verified auth, expose only a reviewed
+   catalog/allow-list, and enforce authorization plus approval in the executor.
+   Do not compile or evaluate tenant-provided JavaScript.
+5. **Change auth or routes:** test unauthenticated, authenticated, wrong-owner,
    and cross-origin cases. Test both Next proxy behavior and generated Eve routes.
-5. **Change local startup:** preserve `scripts/dev.mjs` ownership of Compose,
+6. **Change local startup:** preserve `scripts/dev.mjs` ownership of Compose,
    signal forwarding, dynamic port injection, migration, and teardown.
 
 ## Non-negotiable gates
@@ -144,6 +155,11 @@ alone is insufficient. Do not claim production readiness from local tests.
 - `@workflow/world-vercel` and Vercel Connect are not portable-provider support.
 - Local phone code `000000` is a development bypass, not a Linq delivery test.
 - The global configured Linq line is not a tenant model.
+- A workspace is the tenant; an agent, revision, line, participant, and user are
+  distinct resources. Never collapse them into one ID because the MVP has one
+  of each.
+- Current Eve dynamic capability resolution does not make arbitrary tenant MCP
+  endpoints safe. Follow the curated-catalog/broker design before adding them.
 - Workspace columns without server-derived membership authorization are not true
   multi-tenancy.
 - `BLOB_READ_WRITE_TOKEN` and `KERNEL_API_KEY` must never be printed or committed.

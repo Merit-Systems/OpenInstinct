@@ -5,6 +5,13 @@ design contract, not an implemented claim. The recommended first production
 platform is Vercel because the current application already relies on Vercel
 Connect, Blob, AI Gateway, and Vercel workflow services.
 
+The proposed product sequence is **agent infrastructure first**: a workspace
+owns configurable agents, published revisions, managed channel bindings,
+connections, API credentials, and webhooks. The later consumer text-to-create
+experience should call that same control plane. See
+[`PRODUCT_DIRECTION.md`](PRODUCT_DIRECTION.md) for the two-path comparison,
+public API proposal, MCP strategy, and delivery phases.
+
 The existing `workspaces` table is the canonical tenant and billable boundary
 for this evolution. Extend `workspaces` and `workspace_memberships`; do not add
 a parallel tenant owner table unless a deliberate future rename migration is
@@ -17,13 +24,16 @@ canonical workspace.
 Stage the change around the boundary that already exists:
 
 1. Preserve each current workspace as the initial tenant boundary.
-2. Make personal workspaces explicit, member-authorized, observable, and
+2. Introduce `agent` as a workspace-owned configurable resource; do not treat
+   the workspace, user, agent, and phone line as the same identity.
+3. Make personal workspaces explicit, member-authorized, observable, and
    operable before adding shared access.
-3. Decide phone-first and email invitation semantics, including verification,
+4. Decide phone-first and email invitation semantics, including verification,
    recovery, and ownership transfer.
-4. Decide the Linq line model (one managed line per tenant versus bring your
-   own line) before enabling shared organizations.
-5. Add shared organizations only after those identity and channel contracts are
+5. Start managed-line onboarding with an asynchronous request or a
+   pre-provisioned pool; current Linq documentation does not expose self-serve
+   create/release endpoints. Keep bring-your-own-line as a later contract.
+6. Add shared organizations only after those identity and channel contracts are
    tested end to end.
 
 Better Auth Organizations is a candidate for membership/session primitives, not
@@ -36,6 +46,7 @@ it.
 | Area        | Current                                            | Gap                                                      | Target                                             |
 | ----------- | -------------------------------------------------- | -------------------------------------------------------- | -------------------------------------------------- |
 | Workspace   | One deterministic personal workspace per principal | No shared organization or active-tenant concept          | Extended workspace/tenant entity with lifecycle    |
+| Agent       | One repository-authored root agent for all users   | No workspace-owned agent resource or published revision  | Workspace owns one or more versioned agents        |
 | Membership  | Composite membership row, owner role only          | No invitations, roles, or membership management          | Owner/admin/member roles with server authorization |
 | Identity    | Better Auth user and Linq provider principal       | Channel identities are not unified for every tenant mode | One identity map with verified provider subjects   |
 | Channels    | One configured Linq line per deployment            | No tenant routing or BYO line model                      | Tenant-bound line/install routing                  |
@@ -43,15 +54,17 @@ it.
 | Storage     | Workspace columns and private Blob objects         | No tenant quotas, export, or retention controls          | Tenant-scoped storage, limits, lifecycle jobs      |
 | Usage       | Per-chat token/cost fields                         | No aggregate ledger or billing authority                 | Immutable usage ledger with billing reconciliation |
 | Workflow    | Eve sessions and local/Vercel workflow state       | No tenant-aware operations console                       | Tenant-scoped runs, retention, and support access  |
+| API         | Internal tRPC and framework-owned Eve routes       | No stable customer auth, versioning, or webhook contract | Scoped `/v1` API plus signed, durable webhooks     |
 
 ## Isolation invariant
 
 Every request resolves exactly one tenant/workspace server-side from an
-authenticated principal and a membership record. A client-supplied workspace
-ID is a selector at most, never an authority. The server must verify that the
-principal belongs to the selected tenant, has the required role, and that the
-resource belongs to that tenant before every read, write, external call, and
-background continuation.
+authenticated principal and a membership record. Agent-facing requests also
+resolve exactly one workspace-owned agent and published revision. A
+client-supplied workspace or agent ID is a selector at most, never an authority.
+The server must verify membership, role/capability, resource ownership, and
+lifecycle state before every read, write, external call, and background
+continuation.
 
 Service APIs should accept a typed scope object containing tenant ID, principal
 ID, and role claims. Keep workspace predicates in every query and preserve
@@ -71,11 +84,21 @@ The target model separates these concepts while keeping workspace canonical:
   workspace.
 - `workspace_installation`: provider connection/line installation owned by a
   workspace.
+- `agent`: stable workspace-owned configurable product resource.
+- `agent_revision`: immutable configuration snapshot pinned by new sessions.
+- `channel_binding`: verified provider address or endpoint routed to an agent.
+- `channel_participant`: verified person allowed to converse without receiving
+  workspace administration rights.
 
 The active tenant must come from a server-issued session claim or a server-side
 membership lookup. Switching tenants rotates the effective scope and must
 invalidate or re-check active Eve sessions, workers, browser profiles, and
 connection grants.
+
+The active agent and revision follow the same rule. They must be resolved from
+a workspace-owned channel binding or an authorized API request. A running
+session remains pinned to its revision until an explicit reset/migration; a
+publish must not silently widen the tools of an already-running session.
 
 Roles should begin with owner, admin, and member. Sensitive operations need
 capability checks in addition to role checks: vault administration, connection
@@ -181,21 +204,29 @@ separate portability review and provider credential implementation.
    extending workspace/member records with owner authorization, active-tenant
    checks, lifecycle state, and audit visibility. Gate: every existing
    workspace has one explicit owner and all scoped operations are observable.
-2. **Model shared membership:** extend workspace/membership records and add
+2. **Introduce versioned agents:** add workspace-owned agents, immutable
+   revisions, an active revision pointer, and session pinning without enabling
+   customer-defined code. Gate: every new session records one validated
+   workspace/agent/revision tuple and revision rollback is auditable.
+3. **Model shared membership:** extend workspace/membership records and add
    identity, invitation, installation, policy, usage, and audit records without
    enabling shared writes. Gate: phone/email invitation and ownership-transfer
    decisions are recorded and wrong-tenant access is denied.
-3. **Backfill and scope:** backfill each current personal workspace with
+4. **Backfill and scope:** backfill each current personal workspace with
    lifecycle fields and its owner membership, then replace derivation with
    membership lookup behind a feature flag. Gate: counts, foreign keys,
    encrypted AAD mappings, and wrong-tenant read/write tests reconcile.
-4. **Decide and bind channels:** choose the Linq line model, then bind Linq and
-   Google installations to tenants. Gate: sender/line routing, OAuth subject
-   mapping, retries, revocation, and invitation tests pass.
-5. **Limits and lifecycle:** enable usage ledger, quotas, audit, suspension,
+5. **Bind capabilities and channels:** add curated tenant-resolved tools and
+   connections, then bind managed Linq lines and Google installations to agents.
+   Gate: tool allow-lists, approval, sender/line routing, OAuth subject mapping,
+   retries, revocation, and invitation tests pass.
+6. **Limits and lifecycle:** enable usage ledger, quotas, audit, suspension,
    retention, and deletion. Gate: budget enforcement is tested before model,
    browser, message, and storage calls.
-6. **Shared cutover:** enable shared tenants for a controlled cohort. Gate:
+7. **API and webhook cutover:** expose scoped platform credentials and signed
+   durable events. Gate: key rotation, idempotency, webhook replay, and
+   wrong-tenant contract suites pass.
+8. **Shared cutover:** enable shared tenants for a controlled cohort. Gate:
    complete web-chat and Linq turns, tenant isolation acceptance, rollback
    rehearsal, and backup restore rehearsal all pass.
 
@@ -221,6 +252,8 @@ silently recreating a tenant.
 ## Threat-model checklist
 
 - Can a caller select another tenant by changing an ID, cursor, or session ID?
+- Can a caller select another workspace's agent, revision, connection, or line?
+- Can publishing a revision widen the tools of an already-running session?
 - Can a Linq sender reach a tenant without a verified provider mapping?
 - Can a worker child inherit a different tenant than its root session?
 - Can retries duplicate a purchase, message, grant, usage charge, or deletion?
@@ -231,7 +264,11 @@ silently recreating a tenant.
 
 ## Open decisions
 
-- Is the first shared-tenant product managed lines or bring-your-own Linq lines?
+- Is the first managed-line release a manual request queue or a
+  pre-provisioned pool? Bring-your-own line is proposed after that release.
+- Can an MVP workspace own multiple agents even if the first UI exposes one?
+- Are external connections workspace-owned, agent-owned, or personal grants
+  selected through an agent policy?
 - Is a Better Auth user allowed to belong to multiple tenants, and how is the active tenant selected?
 - Which roles can manage vault, connectors, billing, support, and spending policy?
 - Is customer data residency or regional Kernel placement required?

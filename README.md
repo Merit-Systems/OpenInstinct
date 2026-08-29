@@ -183,10 +183,12 @@ explicit secrets.
 
 ## Repository orientation and operations
 
+- [`docs/README.md`](docs/README.md) — documentation map and implemented/verified/proposed truth labels.
 - [`docs/ARCHITECTURE_REVIEW.md`](docs/ARCHITECTURE_REVIEW.md) — verified architecture, boundaries, and prioritized risks.
 - [`docs/AGENT_GUIDE.md`](docs/AGENT_GUIDE.md) — repository map, change recipes, and verification gates for agents.
+- [`docs/PRODUCT_DIRECTION.md`](docs/PRODUCT_DIRECTION.md) — infrastructure-first product recommendation, managed-line lifecycle, MCP/tool strategy, API, and webhooks.
 - [`docs/MULTITENANCY.md`](docs/MULTITENANCY.md) — design path for tenant isolation, quotas, and scaling.
-- [`docs/operations/VERCEL.md`](docs/operations/VERCEL.md) — supported Vercel deployment and incident runbook.
+- [`docs/operations/VERCEL.md`](docs/operations/VERCEL.md) — zero-to-running local/Vercel setup, live Linq acceptance, operations, and incident runbook.
 - [`init.sh`](init.sh) — guarded local bootstrap for development and testing.
 
 > [!WARNING]
