@@ -28,11 +28,12 @@ Stage the change around the boundary that already exists:
    the workspace, user, agent, and phone line as the same identity.
 3. Make personal workspaces explicit, member-authorized, observable, and
    operable before adding shared access.
-4. Decide phone-first and email invitation semantics, including verification,
-   recovery, and ownership transfer.
-5. Start managed-line onboarding with an asynchronous request or a
-   pre-provisioned pool; current Linq documentation does not expose self-serve
-   create/release endpoints. Keep bring-your-own-line as a later contract.
+4. Make a shared platform number the default messaging ingress. Bind each
+   provider conversation to one verified phone identity, workspace, agent, and
+   published revision.
+5. Start with one active/default agent per verified phone. Add invitation codes,
+   explicit agent switching, group-thread binding, and premium dedicated lines
+   as later contracts.
 6. Add shared organizations only after those identity and channel contracts are
    tested end to end.
 
@@ -49,7 +50,7 @@ it.
 | Agent       | One repository-authored root agent for all users   | No workspace-owned agent resource or published revision  | Workspace owns one or more versioned agents        |
 | Membership  | Composite membership row, owner role only          | No invitations, roles, or membership management          | Owner/admin/member roles with server authorization |
 | Identity    | Better Auth user and Linq provider principal       | Channel identities are not unified for every tenant mode | One identity map with verified provider subjects   |
-| Channels    | One configured Linq line per deployment            | No tenant routing or BYO line model                      | Tenant-bound line/install routing                  |
+| Channels    | One configured Linq line per deployment            | No durable conversation-to-tenant/agent resolver         | Shared line with tenant-bound conversation routing |
 | Connections | Vercel Connect installation IDs                    | Installation ownership is implicit                       | Installation-to-tenant records and checks          |
 | Storage     | Workspace columns and private Blob objects         | No tenant quotas, export, or retention controls          | Tenant-scoped storage, limits, lifecycle jobs      |
 | Usage       | Per-chat token/cost fields                         | No aggregate ledger or billing authority                 | Immutable usage ledger with billing reconciliation |
@@ -82,11 +83,16 @@ The target model separates these concepts while keeping workspace canonical:
   invitation provenance.
 - `workspace_identity`: verified external subject mapping, provider, and
   workspace.
+- `phone_identity`: verified normalized phone subject linked to a Better Auth
+  user, including recovery and number-recycling state.
 - `workspace_installation`: provider connection/line installation owned by a
   workspace.
 - `agent`: stable workspace-owned configurable product resource.
 - `agent_revision`: immutable configuration snapshot pinned by new sessions.
-- `channel_binding`: verified provider address or endpoint routed to an agent.
+- `platform_line`: provider address and connector shared across tenant
+  conversations; this is not tenant authority.
+- `channel_conversation`: verified provider thread routed to exactly one
+  workspace and agent, with an explicit participant set and pinned revision.
 - `channel_participant`: verified person allowed to converse without receiving
   workspace administration rights.
 
@@ -96,7 +102,7 @@ invalidate or re-check active Eve sessions, workers, browser profiles, and
 connection grants.
 
 The active agent and revision follow the same rule. They must be resolved from
-a workspace-owned channel binding or an authorized API request. A running
+a server-owned channel conversation binding or an authorized API request. A running
 session remains pinned to its revision until an explicit reset/migration; a
 publish must not silently widen the tools of an already-running session.
 
@@ -106,23 +112,31 @@ management, spending policy, support access, export, and tenant deletion.
 
 ## Channels and connections
 
-### Linq
+### Shared iMessage/SMS ingress
 
-The product must choose one of these explicit models:
+The default model is one provider line shared by many tenants. The current code
+uses a deployment-level Linq connector and line; the planned product may move
+the shared channel to Sendblue through Eve's Chat SDK adapter after a separate
+migration and acceptance test. Provider choice must not change the tenant
+resolution contract.
 
-1. **One line per deployment**: simple and compatible with the current global
-   `LINQ_CONNECTOR`/`LINQ_PHONE_NUMBER`, but all tenant routing and reputation
-   share one line.
-2. **One managed line per tenant**: strongest identity and billing boundary,
-   with more provisioning, compliance, and webhook routing work.
-3. **Bring your own line**: customers supply or authorize their own Linq
-   installation. This reduces shared reputation risk but increases OAuth/API
-   support and offboarding complexity.
+For an existing conversation, inbound messages must resolve
+`(provider, provider_account_id, provider_conversation_id)` to exactly one
+platform line, tenant, agent, revision, and participant set before starting an
+Eve session. For a new conversation, the sender must map to a verified phone
+identity with exactly one active/default agent before the platform
+transactionally creates that binding. Reject ambiguous or unverified routing.
+Replies must use the same provider conversation, platform line, tenant, and
+agent context as the inbound event.
 
-Inbound messages must resolve `(provider, sender, line, installation)` to one
-tenant before starting an Eve session. Persist the mapping and reject
-ambiguous or unverified senders. Replies must use the same installation and
-tenant context as the inbound event.
+The first release does not allow a phone identity to select among multiple
+agents through arbitrary message text. Later releases add expiring invitations,
+an explicit auditable switch operation, and group-thread bindings. Possession of
+a phone number never grants web administration rights.
+
+Dedicated or bring-your-own lines remain premium later-stage modes. They add
+provider ownership verification, billing, reputation isolation, release,
+quarantine, and offboarding; they are not required for the shared-number MVP.
 
 ### Google Workspace and Vercel Connect
 
@@ -152,7 +166,7 @@ Enforce tenant limits before expensive work:
 - browser lifetime and profile writers;
 - model tokens and estimated spend;
 - Blob bytes, image count, and retention;
-- Linq messages and outbound actions;
+- provider messages and outbound actions;
 - Google/API request budgets.
 
 Use provider/webhook rate limits, OTP attempt limits, abuse flags, circuit
@@ -183,7 +197,7 @@ customer to query another customer's identifiers.
 
 ## Horizontal scaling risks
 
-- Linq channel state, webhook deduplication, and thread continuity need a
+- Provider channel state, webhook deduplication, and thread continuity need a
   durable/idempotent multi-instance contract; this review does not assert a
   particular in-memory implementation.
 - Eve workflow persistence and task-history behavior need durable shared
@@ -216,10 +230,11 @@ separate portability review and provider credential implementation.
    lifecycle fields and its owner membership, then replace derivation with
    membership lookup behind a feature flag. Gate: counts, foreign keys,
    encrypted AAD mappings, and wrong-tenant read/write tests reconcile.
-5. **Bind capabilities and channels:** add curated tenant-resolved tools and
-   connections, then bind managed Linq lines and Google installations to agents.
-   Gate: tool allow-lists, approval, sender/line routing, OAuth subject mapping,
-   retries, revocation, and invitation tests pass.
+5. **Bind capabilities and shared messaging:** add curated tenant-resolved
+   tools and connections, verified phone identities, provider conversation
+   bindings, and Google installations. Gate: tool allow-lists, approval,
+   signed-webhook verification, sender/default-agent routing, OAuth subject
+   mapping, retries, and revocation tests pass for two tenants on one line.
 6. **Limits and lifecycle:** enable usage ledger, quotas, audit, suspension,
    retention, and deletion. Gate: budget enforcement is tested before model,
    browser, message, and storage calls.
@@ -227,8 +242,13 @@ separate portability review and provider credential implementation.
    durable events. Gate: key rotation, idempotency, webhook replay, and
    wrong-tenant contract suites pass.
 8. **Shared cutover:** enable shared tenants for a controlled cohort. Gate:
-   complete web-chat and Linq turns, tenant isolation acceptance, rollback
-   rehearsal, and backup restore rehearsal all pass.
+   complete web-chat and shared-line turns, tenant isolation acceptance,
+   ambiguous-routing rejection, rollback rehearsal, and backup restore
+   rehearsal all pass.
+9. **Participant and premium channels:** add expiring invites, explicit agent
+   switching, group-thread bindings, and optional dedicated/BYO lines. Gate:
+   participant revocation, line billing, reputation, release, and quarantine
+   tests pass independently of the shared channel.
 
 Rollback boundaries must be explicit: schema additions are backward compatible;
 scope enforcement can be feature-flagged; tenant writes after cutover require
@@ -246,15 +266,19 @@ silently recreating a tenant.
 - Run browser authorization tests proving a worker cannot use another tenant's
   browser, profile, vault item, or artifact.
 - Run migration/backfill tests on empty, legacy, partial, and rollback fixtures.
-- Exercise a complete web-chat and Linq turn in staging with audit and usage
-  records, then rehearse backup restore and tenant deletion.
+- Exercise complete web-chat and provider turns for two tenants through the
+  same staging number with audit and usage records, then rehearse backup restore
+  and tenant deletion.
 
 ## Threat-model checklist
 
 - Can a caller select another tenant by changing an ID, cursor, or session ID?
 - Can a caller select another workspace's agent, revision, connection, or line?
 - Can publishing a revision widen the tools of an already-running session?
-- Can a Linq sender reach a tenant without a verified provider mapping?
+- Can a provider sender reach a tenant without a verified phone identity and
+  server-owned conversation mapping?
+- Can one sender with multiple agent memberships cause ambiguous routing or
+  select a tenant through arbitrary message text?
 - Can a worker child inherit a different tenant than its root session?
 - Can retries duplicate a purchase, message, grant, usage charge, or deletion?
 - Can support staff or logs expose vault values, OAuth tokens, phone numbers, or screenshots?
@@ -264,9 +288,12 @@ silently recreating a tenant.
 
 ## Open decisions
 
-- Is the first managed-line release a manual request queue or a
-  pre-provisioned pool? Bring-your-own line is proposed after that release.
 - Can an MVP workspace own multiple agents even if the first UI exposes one?
+- When are invite redemption, explicit agent switching, and group-thread
+  binding introduced after the one-default-agent MVP?
+- Do Sendblue's commercial terms, throughput, webhook contract, opt-out model,
+  and reputation controls permit one shared line across SaaS tenants?
+- What price and support contract apply to optional dedicated lines?
 - Are external connections workspace-owned, agent-owned, or personal grants
   selected through an agent policy?
 - Is a Better Auth user allowed to belong to multiple tenants, and how is the active tenant selected?

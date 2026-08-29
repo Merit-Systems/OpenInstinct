@@ -95,16 +95,24 @@ session ownership before using Kernel or the vault.
 - **Confidence**: HIGH
 - **Fix sketch**: Preserve and extend `workspaces` as the canonical tenant and billable boundary; add explicit member authorization to `workspace_memberships` and server-side active-scope checks before introducing shared organizations. Do not create a parallel tenant owner table.
 
-### [TENANCY-02] Bind the deployment-level Linq line and connector to a tenant
+### [TENANCY-02] Resolve the shared provider conversation before tenant work
 
 - **Evidence**: `lib/env.ts:54-76` — one `LINQ_CONNECTOR` and one `LINQ_PHONE_NUMBER` configure a deployment.
 - **Evidence**: `agent/channels/linq.ts:76-84` — the channel uses that single configured connector and has no tenant installation lookup.
 - **Evidence**: `auth/linq.ts:60-76` — OTP delivery uses the same deployment connector.
-- **Impact**: Current workspace scoping can isolate users after identity resolution, but inbound line/sender routing and outbound reputation are not a tenant boundary.
+- **Impact**: The deployment line is intentionally suitable as shared platform
+  ingress, but the current code has no durable provider-conversation-to-agent
+  binding. Sender plus destination line becomes ambiguous when one participant
+  can reach multiple tenant agents, and a routing error could cross tenants.
 - **Effort**: L
 - **Risk**: HIGH — routing, replay/idempotency, and provider offboarding need an end-to-end contract.
 - **Confidence**: HIGH
-- **Fix sketch**: Persist verified (provider, sender, line, installation) -> tenant mappings and require the resolved tenant on every inbound and outbound turn; decide managed-line versus bring-your-own-line first.
+- **Fix sketch**: Verify and deduplicate provider webhooks, then persist
+  `(provider, provider account ID, provider conversation ID)` to platform line,
+  verified phone identity, tenant, agent, participant set, and pinned revision.
+  Allow a new binding only when the identity has exactly one active/default
+  agent; otherwise enter explicit onboarding/selection and fail closed.
+  Dedicated/BYO lines are later premium modes, not the MVP tenant boundary.
 
 ### [TENANCY-03] Treat Google grants as user-scoped until installation ownership exists
 
@@ -201,7 +209,9 @@ targets without implementation and verification work:
 - Vercel Connect, Vercel Blob, AI Gateway, and the workflow history adapter create
   substantial Vercel coupling.
 - Local phone auth has a development-only bypass and is not a real Linq round trip.
-- Linq currently assumes one globally configured line/connector per deployment.
+- Linq currently assumes one globally configured line/connector per deployment;
+  that matches the new shared-number product direction but lacks the durable
+  conversation resolver required for safe multitenancy.
 - Kernel browser execution and Blob browser artifacts are external dependencies.
 - Self-hosted workflow persistence requires persistent Eve output/state storage
   and is not equivalent to the current task-history adapter.

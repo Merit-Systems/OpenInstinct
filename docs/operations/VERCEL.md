@@ -12,8 +12,10 @@ It covers four outcomes:
    messaging;
 4. verify, operate, roll back, and recover the deployment.
 
-The current product has one deployment-level Linq line. The multi-tenant line,
-agent, API, and webhook design is proposed in
+The current product has one deployment-level Linq line. The proposed
+multi-tenant product deliberately uses a shared platform number with durable
+conversation-to-workspace/agent routing; optional dedicated lines are a later
+premium channel. That resolver, agent, API, and webhook design is proposed in
 [`../PRODUCT_DIRECTION.md`](../PRODUCT_DIRECTION.md); it is not implemented by
 this runbook.
 
@@ -271,10 +273,12 @@ and configure the inbound trigger at `/eve/v1/linq`.
 
 Current Linq Partner API documentation does not expose self-serve create/delete
 operations for phone lines; new or released lines are handled through Linq.
-Vercel's managed connector form may provision an eligible shared line, but that
-UI is not a general multi-tenant line-provisioning API. For a repeatable service,
-arrange a line pool or an operator request process with Linq before promising
-instant numbers to users.
+That does not block the new MVP product plan because customers share a platform
+number and are separated by verified identity plus a durable provider
+conversation binding. Vercel's managed connector form may provision an
+eligible shared line, but the current code does not yet implement that
+multi-tenant resolver. Do not describe the reference deployment as
+multi-tenant until the isolation tests in `MULTITENANCY.md` pass.
 
 ```bash
 # OPERATOR ACTION: create the Linq Connect installation.
@@ -320,7 +324,10 @@ or resolve ownership with Linq.
 Use the Connect dashboard to add only approved users under Messaging Contacts.
 The configured line, connector, trigger destination, and contact allowlist are
 one deployment-level trust boundary today; they are not a multi-tenant routing
-model. Repeat attachments and environment variables for preview only when
+model. The product plan may use the existing Sendblue account through Eve's
+Chat SDK channel, but this runbook remains the verified Linq procedure until a
+Sendblue migration has its own webhook, delivery, rollback, and isolation
+evidence. Repeat attachments and environment variables for preview only when
 traffic is intentionally isolated.
 
 Keep `LINQ_CONNECTOR` and `LINQ_PHONE_NUMBER` production-only unless a separate

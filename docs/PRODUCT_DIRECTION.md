@@ -6,9 +6,10 @@ Status: **proposed product decision**, not implemented.
 
 Build OpenInstinct first as an agent infrastructure service: a customer creates
 a workspace, creates and configures an agent, attaches approved tools or MCP
-connections, receives a managed phone line, and operates the agent through a
-dashboard and versioned API. Add the consumer text-to-create experience later
-as a product shell on the same control plane.
+connections, links a verified phone identity, and reaches that agent through a
+shared platform number, dashboard, and versioned API. Offer dedicated numbers
+later as a premium channel. Add the consumer text-to-create experience as a
+product shell on the same control plane.
 
 This sequencing preserves both ideas. The infrastructure product forces the
 hard primitives—tenant isolation, agent versions, channel routing, connection
@@ -23,7 +24,7 @@ onboarding flow without becoming a separate architecture.
 | Primary buyer         | Builder, operator, business, agency                   | Individual, organizer, group host                           |
 | First interaction     | Dashboard/API signup                                  | Text a platform number                                      |
 | Configuration         | UI plus API; versioned and reviewable                 | Conversational wizard                                       |
-| Distribution          | API, webhook, dedicated line, embedded chat           | Share a number or invite into a group                       |
+| Distribution          | API, webhook, shared platform number, embedded chat   | Invite a participant or add the bot to a group              |
 | Tool model            | Curated tools/MCP first; policy-controlled            | Templates with a narrow safe catalog                        |
 | Main value            | Programmable agent infrastructure                     | Fast creation and social sharing                            |
 | Hardest early problem | Secure tenant-configurable capabilities               | Identity, abuse, group ownership, moderation                |
@@ -48,8 +49,11 @@ exactly one of each:
 - **Agent**: configurable product resource owned by a workspace.
 - **Agent revision**: immutable, publishable snapshot of instructions, model
   policy, enabled capabilities, and channel behavior.
-- **Channel binding**: a phone line, web endpoint, or future chat surface routed
-  to one agent. A new session pins that agent's active revision.
+- **Platform line**: a provider-owned ingress/egress number shared by many
+  tenant conversations. It is infrastructure inventory, not a tenant identity.
+- **Channel conversation**: a verified provider thread bound server-side to one
+  workspace, agent, and participant set. A new session pins that agent's active
+  revision.
 - **Participant**: an identity allowed to talk to an agent on a channel; this is
   distinct from a workspace member who can administer it.
 - **Connection installation**: tenant-owned authorization and policy for an
@@ -60,16 +64,36 @@ exactly one of each:
 The invariant is:
 
 ```text
-verified caller + verified channel binding
-                  |
-                  v
-workspace -> agent -> published revision -> allowed capabilities
-                  |
-                  +-> session/run -> usage + audit + outbound events
+signed provider event + verified phone identity
+                         |
+                         v
+provider conversation binding -> workspace -> agent -> published revision
+                                               |
+                                               +-> allowed capabilities
+                                               +-> session/run -> usage + audit
 ```
 
-Neither a prompt, a phone number in a request body, nor a model-generated tool
-argument may select another workspace or agent.
+Neither a prompt, a raw phone number in a request body, nor a model-generated
+tool argument may select another workspace or agent. The platform line alone
+never supplies tenant authority.
+
+## Product decisions now made
+
+- Launch agent infrastructure before the consumer text-to-create shell.
+- Use one shared Vercel deployment rather than one deployment per customer.
+- Use a shared platform iMessage/SMS number for the default plan. The current
+  per-line economics do not support giving every early user a dedicated line.
+- Resolve tenancy through a verified phone identity and a durable provider
+  conversation binding, not through the destination line.
+- Limit the first messaging release to one active/default agent per verified
+  phone identity. Add explicit agent switching and invitations before allowing
+  the same participant to reach multiple agents through the shared number.
+- Treat dedicated lines as an optional premium channel with provider cost and
+  operational margin passed through in pricing.
+- Keep the channel contract provider-aware but portable. The current reference
+  deployment uses Linq; the intended shared-number product path may use the
+  existing Sendblue account through Eve's Chat SDK channel after a separate
+  adapter migration and provider acceptance test.
 
 ## Infrastructure MVP
 
@@ -79,18 +103,20 @@ The narrow first release should support:
 2. The owner creates one agent draft and publishes immutable revisions.
 3. The owner configures identity, instructions, model tier, and a curated set of
    tools/MCP integrations.
-4. A phone line request enters a visible provisioning state. An operator or a
-   pre-provisioned pool assigns a Linq line and binds it to the agent.
-5. Approved participants can message the line; the owner can also use web chat.
-6. The owner receives API credentials and can start sessions, send messages,
+4. The owner verifies a phone identity and selects one active/default agent.
+5. The owner texts the shared platform number. The signed provider event is
+   bound to the verified identity, workspace, agent, and published revision.
+6. The owner can also use web chat. Invited participants and agent switching
+   remain disabled until their routing contracts are implemented.
+7. The owner receives API credentials and can start sessions, send messages,
    read run status, and register signed webhook endpoints.
-7. Every expensive or externally visible operation is subject to tenant policy,
+8. Every expensive or externally visible operation is subject to tenant policy,
    idempotency, quota, and audit.
-8. Suspension stops new turns and side effects without deleting evidence.
+9. Suspension stops new turns and side effects without deleting evidence.
 
 Do not include arbitrary uploaded JavaScript, public anonymous agents, shared
-workspace administration, marketplace billing, or instant self-serve number
-creation in this first release.
+workspace administration, marketplace billing, multi-agent SMS switching, or
+dedicated-number provisioning in this first release.
 
 ## Control plane and runtime
 
@@ -107,14 +133,14 @@ Dashboard / public API
          v
 Control plane ----------------------------------------------+
   workspace, memberships, agents, revisions, policy         |
-  line requests, connections, API keys, webhooks, billing   |
+  identities, agents, connections, API keys, webhooks       |
          |                                                   |
          v                                                   |
 Published runtime view                                      |
          |                                                   |
          v                                                   |
-Inbound gateway -> tenant/agent resolver -> Eve session      |
-  web/API          line + sender           dynamic context   |
+Inbound gateway -> conversation resolver -> Eve session     |
+  web/API/SMS      thread + identity        dynamic context  |
                                               |              |
                                               +-> tools/MCP --+
                                               +-> Kernel
@@ -135,27 +161,30 @@ application responsibilities.
 Extend the existing `workspaces` and `workspace_memberships`; do not create a
 parallel tenant table. Names below describe concepts, not approved migrations.
 
-| Record                     | Required ownership and purpose                                                                              |
-| -------------------------- | ----------------------------------------------------------------------------------------------------------- |
-| `workspaces`               | Add display name, plan, lifecycle state, policy version, and timestamps                                     |
-| `workspace_memberships`    | Add status and owner/admin/member roles with invitation provenance                                          |
-| `agents`                   | Workspace-owned stable identity, slug, status, and active revision                                          |
-| `agent_revisions`          | Immutable configuration manifest and publisher; never mutate a published row                                |
-| `agent_capabilities`       | Revision-to-curated-tool/MCP bindings and least-privilege allow-lists                                       |
-| `connection_installations` | Workspace/agent provider binding, auth owner, scopes, encrypted credential reference, and state             |
-| `phone_line_requests`      | Requested, provisioning, assigned, failed, released lifecycle with provider reference                       |
-| `phone_lines`              | Provider line identity, encrypted number plus lookup hash, connector, status, reputation, and agent binding |
-| `channel_participants`     | Verified sender identity, role, invitation/consent state, and channel binding                               |
-| `api_credentials`          | Hashed credential, visible prefix, workspace, scopes, expiration, and revocation                            |
-| `webhook_endpoints`        | Workspace URL, encrypted signing secret, subscribed events, status, and rotation metadata                   |
-| `webhook_deliveries`       | Event/endpoint attempt ledger, response class, retry time, and terminal state                               |
-| `usage_events`             | Append-only model, browser, storage, message, and connection usage authority                                |
-| `audit_events`             | Actor, workspace, agent, action, target, outcome, correlation ID, and redacted metadata                     |
+| Record                     | Required ownership and purpose                                                                                  |
+| -------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| `workspaces`               | Add display name, plan, lifecycle state, policy version, and timestamps                                         |
+| `workspace_memberships`    | Add status and owner/admin/member roles with invitation provenance                                              |
+| `agents`                   | Workspace-owned stable identity, slug, status, active revision, and default-channel policy                      |
+| `agent_revisions`          | Immutable configuration manifest and publisher; never mutate a published row                                    |
+| `agent_capabilities`       | Revision-to-curated-tool/MCP bindings and least-privilege allow-lists                                           |
+| `connection_installations` | Workspace/agent provider binding, auth owner, scopes, encrypted credential reference, and state                 |
+| `phone_identities`         | Encrypted normalized number, lookup hash, verification/recovery state, authenticated user, and recycling checks |
+| `platform_lines`           | Provider line/connector identity, status, reputation, capacity, and environment; normally platform-owned        |
+| `channel_conversations`    | Provider conversation ID bound to platform line, workspace, agent, participant set, and pinned revision         |
+| `channel_participants`     | Verified sender identity, role, invitation/consent state, and conversation binding                              |
+| `channel_invitations`      | Single-use or expiring join token, intended agent, inviter, status, and redemption audit                        |
+| `dedicated_line_requests`  | Optional premium requested, provisioning, assigned, failed, quarantined, and released lifecycle                 |
+| `api_credentials`          | Hashed credential, visible prefix, workspace, scopes, expiration, and revocation                                |
+| `webhook_endpoints`        | Workspace URL, encrypted signing secret, subscribed events, status, and rotation metadata                       |
+| `webhook_deliveries`       | Event/endpoint attempt ledger, response class, retry time, and terminal state                                   |
+| `usage_events`             | Append-only model, browser, storage, message, and connection usage authority                                    |
+| `audit_events`             | Actor, workspace, agent, action, target, outcome, correlation ID, and redacted metadata                         |
 
 Every agent-owned record must also carry `workspace_id`; relying on an indirect
 join alone makes authorization and retention harder to prove. Use composite
 foreign keys or equivalent constraints so an agent cannot reference a revision,
-line, connection, or session from another workspace.
+conversation, connection, or session from another workspace.
 
 ## Agent configuration and publishing
 
@@ -211,33 +240,59 @@ The model should see only approved tool names, descriptions, schemas, and
 bounded results. A tenant admin must review schema changes before newly added or
 materially changed write tools become available.
 
-## Phone-number provisioning
+## Shared messaging and dedicated-number policy
 
-The current Linq Partner API documentation says adding or releasing phone
-numbers is handled through Linq rather than a self-serve provisioning endpoint.
-Therefore the initial product must choose one of these honest flows:
+The default product uses one shared platform number for many customers. The
+line is not assigned to a workspace or agent. A signed inbound provider event
+must instead resolve to a durable `channel_conversation` before Eve starts a
+turn.
 
-1. **Manual request:** signup creates `phone_line_request=requested`; operations
-   obtains and assigns a line, then marks the agent ready.
-2. **Pre-provisioned pool:** operations maintains an inventory of unused lines;
-   signup atomically leases one while pool replenishment remains manual.
-3. **Bring your own line:** a later customer connects an existing Linq account
-   and line after an ownership challenge.
+For the MVP, resolution is deliberately narrow:
 
-Do not show “your number is ready” until provider assignment, connector
-attachment, trigger routing, status, contact policy, and a non-destructive
-delivery check all pass.
+1. Verify the provider webhook signature and replay window.
+2. Deduplicate the provider event ID before any model call or side effect.
+3. Resolve an existing
+   `(provider, provider_account_id, provider_conversation_id)` binding.
+4. If it exists, derive the workspace, agent, participant, platform line, and
+   pinned revision entirely from server-owned records.
+5. If no binding exists, match a verified phone identity with exactly one
+   active/default agent, create the binding transactionally, and continue.
+6. If identity is absent or agent selection is ambiguous, enter onboarding or
+   explicit selection; never guess and never let message text select a tenant.
 
-Line state should distinguish `requested`, `provisioning`, `active`, `at_risk`,
-`suspended`, `releasing`, `quarantined`, and `released`. Consume Linq
-`phone_number.status_updated` events so `FLAGGED`, `AT_RISK`, or `CRITICAL`
-reputation can stop or limit outbound traffic. Released numbers need a
-quarantine and data-detachment procedure before reuse.
+The owner may administer the agent only through normal authenticated web/API
+authorization. Possession of a phone number or an inbound message is a channel
+identity signal, not sufficient authority for billing, credentials, publishing,
+export, or deletion.
 
-Using Vercel Connect, the connector trigger targets the Eve Linq channel. A
-future direct Partner API adapter would own its own webhook subscription,
-signing secret, signature verification, and retry deduplication. Do not run both
-routes for the same line without a single routing owner.
+The next messaging stage adds expiring invite codes and explicit agent
+selection. Redeeming an invite creates participant membership and binds the
+provider conversation to the invited agent. A participant who can reach
+multiple agents through the same one-to-one provider conversation must use an
+auditable `switch` operation; group conversations bind their stable provider
+thread to one agent.
+
+Dedicated numbers remain a premium option:
+
+- request and provision a provider line asynchronously;
+- verify the connector, webhook owner, status, and delivery before activation;
+- price the line above provider cost with support and reputation risk included;
+- quarantine and detach released lines before reuse; and
+- support bring-your-own-provider installations only after ownership and
+  offboarding contracts are defined.
+
+The current reference deployment uses one Linq line through Vercel Connect. The
+planned shared-number product may migrate to the existing Sendblue account via
+Eve's Chat SDK channel, but that is not an implemented claim. Migration requires
+provider webhook contract tests, stable conversation IDs, inbound/outbound
+delivery proof, opt-out handling, throughput limits, and multi-tenant terms.
+Only one adapter may own a production line's inbound webhook at a time.
+
+Shared infrastructure concentrates risk. Monitor line reputation, provider
+capacity, opt-outs, and abuse per tenant. A tenant suspension must stop its
+traffic without disabling unrelated tenants; a line suspension must stop or
+fail over every conversation using that line. Add additional shared lines with
+sticky conversation assignment when capacity or reputation requires sharding.
 
 ## Public API proposal
 
@@ -250,7 +305,10 @@ framework-owned `/eve/v1/*` contract the long-term customer API.
 | `GET /v1/agents/:agentId`                                | Read agent state and active revision                    |
 | `POST /v1/agents/:agentId/revisions`                     | Validate and create a draft revision                    |
 | `POST /v1/agents/:agentId/revisions/:revisionId/publish` | Publish an immutable revision                           |
-| `POST /v1/agents/:agentId/line-requests`                 | Request a managed line asynchronously                   |
+| `POST /v1/agents/:agentId/channel-bindings`              | Activate shared messaging for a verified phone identity |
+| `POST /v1/agents/:agentId/invitations`                   | Create an expiring participant invitation               |
+| `POST /v1/channel-conversations/:id/select-agent`        | Explicitly switch a bound conversation                  |
+| `POST /v1/agents/:agentId/dedicated-line-requests`       | Request an optional premium dedicated line              |
 | `POST /v1/agents/:agentId/connections`                   | Configure an approved catalog/MCP installation          |
 | `POST /v1/agents/:agentId/sessions`                      | Create a platform session pinned to the active revision |
 | `POST /v1/sessions/:sessionId/messages`                  | Send a turn with idempotency                            |
@@ -276,7 +334,10 @@ by event ID.
 Initial events:
 
 - `agent.provisioning`, `agent.ready`, `agent.suspended`;
-- `line.requested`, `line.active`, `line.status_updated`, `line.released`;
+- `channel.activated`, `conversation.bound`, `conversation.switched`;
+- `participant.invited`, `participant.joined`, `participant.revoked`;
+- `dedicated_line.requested`, `dedicated_line.active`,
+  `dedicated_line.status_updated`, `dedicated_line.released`;
 - `message.received`, `message.completed`, `message.failed`;
 - `run.started`, `run.completed`, `run.failed`;
 - `approval.required`, `approval.completed`;
@@ -299,15 +360,15 @@ client:
 2. A constrained provisioning agent collects purpose, audience, name, and a
    template—not arbitrary executable instructions.
 3. The control plane creates an agent draft, selects safe capabilities, and
-   requests a line.
+   binds the owner's provider conversation to that agent after confirmation.
 4. The owner confirms the published revision and sharing policy.
-5. Guests receive a participant role on the channel, not workspace admin
-   access.
+5. Guests join with an expiring invitation and receive a participant role on
+   the conversation, not workspace admin access.
 
-Group bots then become channel bindings plus participant policy. Ownership,
-configuration, billing, and deletion remain with the workspace owner. This
-keeps a wedding, party, friend-group, or business bot on the same platform
-instead of building a second tenancy model.
+Group bots then become provider conversation bindings plus participant policy.
+Ownership, configuration, billing, and deletion remain with the workspace
+owner. This keeps a wedding, party, friend-group, or business bot on the same
+platform instead of building a second tenancy model.
 
 ## Delivery phases and gates
 
@@ -319,23 +380,30 @@ instead of building a second tenancy model.
 3. **Curated capabilities:** tenant-resolved tools, MCP/OpenAPI catalog,
    credential ownership, and approval policy. Gate: wrong-tenant and schema
    drift tests fail closed.
-4. **Managed lines:** line request/pool workflow, connector routing, participant
-   policy, reputation state, and idempotent webhooks. Gate: one full inbound and
-   outbound turn plus line suspension/retry tests.
+4. **Shared messaging:** verified phone identities, signed and idempotent
+   provider webhooks, one-default-agent resolution, durable conversation
+   binding, participant policy, and line reputation controls. Gate: two tenants
+   use the same platform number for complete inbound/outbound turns without
+   cross-tenant state, tool, usage, or audit leakage.
 5. **Platform API/webhooks:** scoped keys, idempotency, signed outbox delivery,
    usage and audit endpoints. Gate: replay, rotation, revocation, quota, and
    cross-tenant contract tests.
 6. **Shared administration:** invitations and owner/admin/member capabilities.
    Gate: ownership transfer, removal, support access, and deletion rehearsal.
-7. **Consumer shell:** text-to-create templates and guest/group participation.
+7. **Participant routing:** expiring join codes, explicit agent switching, and
+   group-thread binding. Gate: ambiguous routing fails closed and revoked
+   participants cannot resume old sessions.
+8. **Premium channels:** dedicated-line requests and provider/BYO lifecycle.
+   Gate: provisioning, billing, reputation, suspension, release, and quarantine
+   tests pass without affecting shared-line tenants.
+9. **Consumer shell:** text-to-create templates and guest/group participation.
    Gate: abuse, consent, recovery, moderation, and line reputation review.
 
 ## Decisions required before implementation
 
 - Is the MVP customer a developer, an agency, or a small business operator?
-- Is billing per workspace, agent, line, message, run, provider cost, or a
+- Is billing per workspace, agent, message, run, provider cost, or a
   bundled combination?
-- Is one managed line included, wait-listed, or separately approved?
 - Which curated tools/MCP services ship first, and which operations require
   approval?
 - Can the first customer have multiple agents, even if the UI initially exposes
@@ -344,8 +412,10 @@ instead of building a second tenancy model.
   an agent?
 - What are the message, run, screenshot, audit, and released-line retention
   periods?
-- What is the operator SLA for line provisioning, suspension, and connector
-  failure?
+- What are Sendblue's approved shared-line throughput, multi-tenant terms,
+  opt-out contract, and webhook/retry limits?
+- What price and service level make a dedicated line viable as a premium
+  add-on?
 - Which use cases or external actions are prohibited at launch?
 
 ## Sources used for this proposal
@@ -356,5 +426,8 @@ instead of building a second tenancy model.
 - Current Linq Partner API docs: chat sending, webhook subscriptions and
   retries, line status/reputation events, and the non-self-serve phone-number
   provisioning constraint.
+- Current Eve registry and Vercel Chat SDK guidance: first-class Linq support
+  plus provider-backed Chat SDK adapters, including Sendblue. Vercel supplies
+  the runtime integration, not the underlying iMessage line.
 - Repository architecture and services described in
   [`ARCHITECTURE_REVIEW.md`](ARCHITECTURE_REVIEW.md).
