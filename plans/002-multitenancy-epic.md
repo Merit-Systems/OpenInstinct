@@ -4,8 +4,27 @@ GitHub:
 
 - Epic: dennisonbertram/fork-OpenInstinct#1 Multi-tenant agent infrastructure
   on Vercel
-- First implementation slice: dennisonbertram/fork-OpenInstinct#2 make personal
-  workspaces explicit tenants with lifecycle and member roles
+
+## Status: all 10 slices merged (2026-08-29)
+
+| Slice | Issue | PR  |
+| ----- | ----- | --- |
+| 1. Workspace tenancy foundation | #2 | #4 |
+| 2. Server-resolved active scope | #5 | #7 |
+| 3. Agent resource and revisions | #6 | #9 |
+| 4. Verified phone identity | #8 | #11 |
+| 5. Shared-line conversation binding | #10 | #13 |
+| 6. Connection installations | #12 | #15 |
+| 7. Usage ledger and quotas | #14 | #17 |
+| 8. Tenant lifecycle enforcement | #16 | #19 |
+| 9. Platform API v1 and credentials | #18 | #21 |
+| 10. Webhook outbox | #20 | #22 |
+
+`WORKSPACE_SCOPE_ENFORCEMENT` defaults to `off`; every tenancy check activates
+only when it is set to `enforce`. Follow-ups: #23 (SECURITY-01 browser
+approval boundary), #24 (deferred items: drain scheduler, SSRF DNS
+resolution, plaintext user phone column, api-credential purge gap, flag
+rollout gates).
 
 This file mirrors the epic issue so the slice plan is versioned next to the
 design docs it implements (`docs/MULTITENANCY.md`, `docs/PRODUCT_DIRECTION.md`,
