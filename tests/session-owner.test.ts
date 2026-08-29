@@ -10,10 +10,14 @@ const mocks = vi.hoisted(() => ({
   saveChat: vi.fn<typeof saveChat>(),
   checkBudget: vi.fn<typeof checkBudget>(),
   recordUsageEvent: vi.fn<typeof recordUsageEvent>(),
+  WorkspaceNotOperableError: class WorkspaceNotOperableError extends Error {},
 }));
 
 vi.mock("@/db/services/chats", () => ({ saveChat: mocks.saveChat }));
-vi.mock("@/db/services/scope", () => ({ ensureScope: mocks.ensureScope }));
+vi.mock("@/db/services/scope", () => ({
+  ensureScope: mocks.ensureScope,
+  WorkspaceNotOperableError: mocks.WorkspaceNotOperableError,
+}));
 vi.mock("@/db/services/sessions", () => ({
   claimSession: mocks.claimSession,
 }));
@@ -94,5 +98,21 @@ describe("session ownership hook", () => {
       sessionId: "session-1",
       unit: "tokens",
     });
+  });
+
+  it("denies a model turn when the workspace is not operable", async () => {
+    const handler = sessionOwner.events?.["turn.started"];
+    expect(handler).toBeDefined();
+    const error = new mocks.WorkspaceNotOperableError();
+    mocks.checkBudget.mockRejectedValue(error);
+    // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- Focused event fixture.
+    const event = {} as Parameters<NonNullable<typeof handler>>[0];
+    // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- Focused hook context fixture.
+    const hookContext = context as unknown as Parameters<
+      NonNullable<typeof handler>
+    >[1];
+
+    await expect(handler?.(event, hookContext)).rejects.toBe(error);
+    expect(mocks.checkBudget).toHaveBeenCalledWith(scope, "model_tokens");
   });
 });
