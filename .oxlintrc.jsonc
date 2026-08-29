@@ -436,6 +436,13 @@
       }
     },
     {
+      // Playwright's documented test discovery convention is *.spec.ts.
+      "files": ["tests/e2e/**/*.spec.ts"],
+      "rules": {
+        "vitest/consistent-test-filename": "off"
+      }
+    },
+    {
       // shadcn registry source uses behavior utilities that the Tailwind
       // linter cannot resolve through package stylesheet imports.
       "files": ["components/ui/**/*.tsx"],

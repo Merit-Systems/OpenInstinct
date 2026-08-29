@@ -25,16 +25,18 @@ describe("Vitest project configuration", () => {
     );
     expect(config).toContain("include: [defaultTestInclude]");
     expect(config).toMatch(
-      /exclude:\s+\[\s+"\*\*\/node_modules\/\*\*",\s+"\*\*\/.next\/\*\*",\s+"tests\/integration\/\*\*",\s+\]/u
+      /exclude:\s+\[\s+"\*\*\/node_modules\/\*\*",\s+"\*\*\/.next\/\*\*",\s+"tests\/integration\/\*\*",\s+(?:\/\/[^\n]*\s+)?"tests\/e2e\/\*\*",\s+\]/u
     );
     expect(config).toContain('include: ["tests/integration/**"]');
     expect(testFiles).not.toHaveLength(0);
     for (const path of testFiles) {
+      // Playwright owns tests/e2e; those specs must match no vitest project.
+      const expectedMatches = path.startsWith("tests/e2e/") ? 0 : 1;
       const matchingProjects = [
         matchesUnitProject(path),
         path.startsWith("tests/integration/"),
       ].filter(Boolean);
-      expect(matchingProjects).toHaveLength(1);
+      expect(matchingProjects).toHaveLength(expectedMatches);
     }
   });
 });
@@ -55,5 +57,9 @@ async function repositoryTestFiles(root: URL, prefix = ""): Promise<string[]> {
 }
 
 function matchesUnitProject(path: string) {
-  return testFilePattern.test(path) && !path.startsWith("tests/integration/");
+  return (
+    testFilePattern.test(path) &&
+    !path.startsWith("tests/integration/") &&
+    !path.startsWith("tests/e2e/")
+  );
 }
