@@ -157,26 +157,37 @@ Gotchas:
 
 ## Local development
 
-Docker Desktop (or another Docker Compose installation) is required. Configure
-the non-database variables in `.env.example`, then:
+Docker Desktop (or another Docker Compose installation) is required. The
+guarded bootstrap checks prerequisites, creates `.env.local` when absent, and
+stops with instructions to set `KERNEL_API_KEY` before starting the app:
 
 ```bash
 git clone https://github.com/Merit-Systems/open-instinct.git
 cd open-instinct
-pnpm install
-pnpm dev
+./init.sh
+# Set KERNEL_API_KEY in .env.local, then run again when prompted.
+./init.sh
 ```
 
-`pnpm dev` starts PostgreSQL from `compose.yaml`, applies the committed database
-migrations, and starts the application. Stopping the development process also
-stops and removes the PostgreSQL container; its data remains in the
-`postgres-data` volume for the next run. Run `pnpm dev:app` when intentionally
-using an externally managed database instead.
+The underlying manual lifecycle is `pnpm install` followed by `pnpm dev`.
+`pnpm dev` starts PostgreSQL from `compose.yaml`, applies the committed
+database migrations, and starts the application. Stopping the development
+process also stops and removes the PostgreSQL container; its data remains in
+the `postgres-data` volume for the next run. Run `pnpm dev:app` when
+intentionally using an externally managed database instead.
 
 Local development otherwise uses the same vault, Kernel browser, and AI Gateway
 path as the Vercel deployment. Better Auth and vault encryption use stable
 local-only defaults when their variables are unset; deployments still require
 explicit secrets.
+
+## Repository orientation and operations
+
+- [`docs/ARCHITECTURE_REVIEW.md`](docs/ARCHITECTURE_REVIEW.md) — verified architecture, boundaries, and prioritized risks.
+- [`docs/AGENT_GUIDE.md`](docs/AGENT_GUIDE.md) — repository map, change recipes, and verification gates for agents.
+- [`docs/MULTITENANCY.md`](docs/MULTITENANCY.md) — design path for tenant isolation, quotas, and scaling.
+- [`docs/operations/VERCEL.md`](docs/operations/VERCEL.md) — supported Vercel deployment and incident runbook.
+- [`init.sh`](init.sh) — guarded local bootstrap for development and testing.
 
 > [!WARNING]
 > This is not software intended for production use.
