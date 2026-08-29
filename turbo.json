@@ -83,6 +83,8 @@
       "persistent": true
     },
     "test:app": {
+      "cache": false,
+      "env": ["REAL_PG", "REAL_PG_COMPOSE_PROJECT"],
       "outputs": []
     },
     "types:generate": {
