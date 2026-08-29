@@ -1,8 +1,10 @@
 import { eveChannel } from "eve/channels/eve";
 import { ForbiddenError, UnauthenticatedError } from "eve/channels/auth";
 import { isSessionOwned } from "@/db/services/sessions";
+import { verifyScopeAccess } from "@/db/services/scope";
 import { accessScopeForUser, type AccessScope } from "@/lib/access-scope";
 import { getAuthSession } from "@/auth/session";
+import { isWorkspaceScopeEnforcementEnabled } from "@/lib/env";
 
 export default eveChannel({
   auth: [
@@ -46,9 +48,16 @@ async function requestIdentityFromRequest(request: Request) {
   const phoneNumber = session?.user.phoneNumber;
   if (!session || typeof phoneNumber !== "string") return;
 
+  const scope = accessScopeForUser(`better-auth:${session.user.id}`);
+  if (!isWorkspaceScopeEnforcementEnabled()) {
+    return { phoneNumber, scope };
+  }
+
+  const verifiedScope = await verifyScopeAccess(scope);
+  if (!verifiedScope) return;
   return {
     phoneNumber,
-    scope: accessScopeForUser(`better-auth:${session.user.id}`),
+    scope: verifiedScope,
   };
 }
 

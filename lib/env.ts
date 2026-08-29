@@ -59,6 +59,7 @@ export const env = createEnv({
         "LINQ_PHONE_NUMBER must use E.164 format"
       )
       .optional(),
+    WORKSPACE_SCOPE_ENFORCEMENT: z.enum(["off", "enforce"]).default("off"),
     NODE_ENV: z
       .enum(["development", "production", "test"])
       .default("production"),
@@ -84,3 +85,7 @@ export const localPhoneAuthBypassEnabled =
     authHostname.endsWith(".localhost") ||
     authHostname === "127.0.0.1" ||
     authHostname === "[::1]");
+
+export function isWorkspaceScopeEnforcementEnabled() {
+  return env.WORKSPACE_SCOPE_ENFORCEMENT === "enforce";
+}
