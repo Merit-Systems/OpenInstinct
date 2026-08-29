@@ -11,10 +11,50 @@ import {
   uniqueIndex,
 } from "drizzle-orm/pg-core";
 
-export const workspaces = pgTable("workspaces", {
-  id: text("id").primaryKey(),
-  createdAt: text("created_at").notNull(),
-});
+export const workspaceMembershipRoles = ["owner", "admin", "member"] as const;
+export type WorkspaceMembershipRole = (typeof workspaceMembershipRoles)[number];
+
+export const workspaceMembershipStatuses = [
+  "active",
+  "invited",
+  "revoked",
+] as const;
+export type WorkspaceMembershipStatus =
+  (typeof workspaceMembershipStatuses)[number];
+
+export const workspaceLifecycleStates = [
+  "trial",
+  "active",
+  "suspended",
+  "pending_deletion",
+  "deleted",
+] as const;
+export type WorkspaceLifecycleState = (typeof workspaceLifecycleStates)[number];
+
+const utcTimestampDefault = sql`to_char(now() AT TIME ZONE 'utc', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')`;
+
+function sqlValues(values: readonly string[]) {
+  return sql.raw(values.map((value) => `'${value}'`).join(", "));
+}
+
+export const workspaces = pgTable(
+  "workspaces",
+  {
+    id: text("id").primaryKey(),
+    displayName: text("display_name"),
+    plan: text("plan").notNull().default("free"),
+    lifecycleState: text("lifecycle_state").notNull().default("active"),
+    policyVersion: integer("policy_version").notNull().default(1),
+    createdAt: text("created_at").notNull(),
+    updatedAt: text("updated_at").notNull().default(utcTimestampDefault),
+  },
+  (table) => [
+    check(
+      "workspaces_lifecycle_state_check",
+      sql`${table.lifecycleState} IN (${sqlValues(workspaceLifecycleStates)})`
+    ),
+  ]
+);
 
 export const workspaceMemberships = pgTable(
   "workspace_memberships",
@@ -22,6 +62,9 @@ export const workspaceMemberships = pgTable(
     workspaceId: text("workspace_id").notNull(),
     userId: text("user_id").notNull(),
     role: text("role").notNull(),
+    status: text("status").notNull().default("active"),
+    invitedByUserId: text("invited_by_user_id"),
+    invitedAt: text("invited_at"),
     createdAt: text("created_at").notNull(),
   },
   (table) => [
@@ -34,7 +77,14 @@ export const workspaceMemberships = pgTable(
       columns: [table.workspaceId],
       foreignColumns: [workspaces.id],
     }).onDelete("cascade"),
-    check("workspace_memberships_role_check", sql`${table.role} = 'owner'`),
+    check(
+      "workspace_memberships_role_check",
+      sql`${table.role} IN (${sqlValues(workspaceMembershipRoles)})`
+    ),
+    check(
+      "workspace_memberships_status_check",
+      sql`${table.status} IN (${sqlValues(workspaceMembershipStatuses)})`
+    ),
   ]
 );
 
