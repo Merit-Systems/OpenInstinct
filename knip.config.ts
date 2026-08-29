@@ -40,6 +40,9 @@ export default {
     // Lifecycle control-plane actions are covered by PGlite integration tests
     // until the workspace management API is introduced.
     "db/services/workspace-lifecycle.ts": ["exports"],
+    // Endpoint management is called through tRPC; the delivery worker and
+    // crypto test helper are intentionally exported for scheduled runners.
+    "db/services/webhooks.ts": ["exports"],
     // Eve AI Elements and shadcn registry primitives intentionally expose
     // a reusable component surface wider than this minimal chat consumes.
     "components/ai-elements/**/*.tsx": ["exports", "files", "types"],

@@ -15,6 +15,12 @@ import {
   mintApiCredential,
   revokeApiCredential,
 } from "@/db/services/api-credentials";
+import {
+  disableWebhookEndpoint,
+  listWebhookEndpoints,
+  registerWebhookEndpoint,
+  rotateWebhookSecret,
+} from "@/db/services/webhooks";
 import { createTRPCRouter, protectedProcedure } from "./init";
 
 export const appRouter = createTRPCRouter({
@@ -35,6 +41,29 @@ export const appRouter = createTRPCRouter({
       .input(z.object({ credentialId: z.uuid() }))
       .mutation(({ ctx, input }) =>
         revokeApiCredential(ctx.scope, input.credentialId)
+      ),
+  },
+  webhookEndpoints: {
+    list: protectedProcedure.query(({ ctx }) =>
+      listWebhookEndpoints(ctx.scope)
+    ),
+    register: protectedProcedure
+      .input(
+        z.object({
+          url: z.string(),
+          subscribedEvents: z.array(z.string()).min(1),
+        })
+      )
+      .mutation(({ ctx, input }) => registerWebhookEndpoint(ctx.scope, input)),
+    disable: protectedProcedure
+      .input(z.object({ endpointId: z.uuid() }))
+      .mutation(({ ctx, input }) =>
+        disableWebhookEndpoint(ctx.scope, input.endpointId)
+      ),
+    rotate: protectedProcedure
+      .input(z.object({ endpointId: z.uuid() }))
+      .mutation(({ ctx, input }) =>
+        rotateWebhookSecret(ctx.scope, input.endpointId)
       ),
   },
   chats: {

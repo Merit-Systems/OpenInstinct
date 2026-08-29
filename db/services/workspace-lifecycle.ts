@@ -19,9 +19,13 @@ import {
   workspaceBudgets,
   workspaceLifecycleStates,
   workspaceMemberships,
+  webhookDeliveries,
+  webhookEndpoints,
+  webhookEvents,
   workspaces,
   type WorkspaceLifecycleState,
 } from "@/db";
+import { emitWebhookEvent } from "./webhooks";
 
 export class WorkspaceLifecycleTransitionError extends Error {
   constructor(
@@ -115,6 +119,13 @@ export async function transitionWorkspaceLifecycle(
       )
       .returning({ id: workspaces.id });
     if (!updated) throw new WorkspaceLifecycleTransitionError(from, to);
+    const webhookEventType = lifecycleWebhookEventType(from, to);
+    if (webhookEventType) {
+      await emitWebhookEvent(transaction, scope, {
+        payload: { lifecycleState: to, workspaceId: scope.workspaceId },
+        type: webhookEventType,
+      });
+    }
     await transaction.insert(auditEvents).values({
       action: lifecycleAuditAction(from, to),
       actorUserId: scope.userId,
@@ -126,6 +137,17 @@ export async function transitionWorkspaceLifecycle(
       workspaceId: scope.workspaceId,
     });
   });
+}
+
+function lifecycleWebhookEventType(
+  from: WorkspaceLifecycleState,
+  to: WorkspaceLifecycleState
+) {
+  if (to === "suspended") return "workspace.suspended" as const;
+  if (to === "pending_deletion") return "workspace.deletion_started" as const;
+  if (from === "suspended" && to === "active")
+    return "workspace.reactivated" as const;
+  return;
 }
 
 export async function deleteWorkspaceData(scope: AccessScope) {
@@ -183,6 +205,9 @@ export async function deleteWorkspaceData(scope: AccessScope) {
       encryptedSecrets: 0,
       settings: 0,
       vaultItems: 0,
+      webhookDeliveries: 0,
+      webhookEndpoints: 0,
+      webhookEvents: 0,
       workspaceBudgets: 0,
       workspaceMemberships: 0,
     };
@@ -254,6 +279,24 @@ export async function deleteWorkspaceData(scope: AccessScope) {
         .delete(vaultItems)
         .where(eq(vaultItems.workspaceId, workspaceId))
         .returning({ id: vaultItems.id })
+    ).length;
+    counts.webhookDeliveries = (
+      await transaction
+        .delete(webhookDeliveries)
+        .where(eq(webhookDeliveries.workspaceId, workspaceId))
+        .returning({ id: webhookDeliveries.id })
+    ).length;
+    counts.webhookEvents = (
+      await transaction
+        .delete(webhookEvents)
+        .where(eq(webhookEvents.workspaceId, workspaceId))
+        .returning({ id: webhookEvents.id })
+    ).length;
+    counts.webhookEndpoints = (
+      await transaction
+        .delete(webhookEndpoints)
+        .where(eq(webhookEndpoints.workspaceId, workspaceId))
+        .returning({ id: webhookEndpoints.id })
     ).length;
 
     await transaction
