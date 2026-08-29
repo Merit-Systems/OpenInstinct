@@ -1,10 +1,13 @@
 import { sql } from "drizzle-orm";
+import type { AgentManifest } from "@/lib/agent-manifest";
 import {
   check,
+  type AnyPgColumn,
   doublePrecision,
   foreignKey,
   index,
   integer,
+  jsonb,
   pgTable,
   primaryKey,
   text,
@@ -84,6 +87,92 @@ export const workspaceMemberships = pgTable(
     check(
       "workspace_memberships_status_check",
       sql`${table.status} IN (${sqlValues(workspaceMembershipStatuses)})`
+    ),
+  ]
+);
+
+export const agentStatuses = ["draft", "active", "archived"] as const;
+export type AgentStatus = (typeof agentStatuses)[number];
+
+function activeRevisionForeignColumns(): [
+  AnyPgColumn,
+  AnyPgColumn,
+  AnyPgColumn,
+] {
+  return [
+    agentRevisions.workspaceId,
+    agentRevisions.agentId,
+    agentRevisions.id,
+  ];
+}
+
+export const agents = pgTable(
+  "agents",
+  {
+    id: text("id").primaryKey(),
+    workspaceId: text("workspace_id").notNull(),
+    slug: text("slug").notNull(),
+    displayName: text("display_name"),
+    status: text("status").notNull().default("draft"),
+    activeRevisionId: text("active_revision_id"),
+    createdAt: text("created_at").notNull(),
+    updatedAt: text("updated_at").notNull().default(utcTimestampDefault),
+  },
+  (table) => [
+    foreignKey({
+      name: "agents_workspace_id_fkey",
+      columns: [table.workspaceId],
+      foreignColumns: [workspaces.id],
+    }).onDelete("cascade"),
+    check(
+      "agents_status_check",
+      sql`${table.status} IN (${sqlValues(agentStatuses)})`
+    ),
+    uniqueIndex("agents_workspace_id_uidx").on(table.workspaceId, table.id),
+    uniqueIndex("agents_workspace_slug_uidx").on(table.workspaceId, table.slug),
+    foreignKey({
+      name: "agents_workspace_active_revision_fkey",
+      columns: [table.workspaceId, table.id, table.activeRevisionId],
+      foreignColumns: activeRevisionForeignColumns(),
+    }),
+  ]
+);
+
+export const agentRevisions = pgTable(
+  "agent_revisions",
+  {
+    id: text("id").primaryKey(),
+    workspaceId: text("workspace_id").notNull(),
+    agentId: text("agent_id").notNull(),
+    revisionNumber: integer("revision_number").notNull(),
+    manifest: jsonb("manifest").$type<AgentManifest>().notNull(),
+    contentDigest: text("content_digest").notNull(),
+    createdByUserId: text("created_by_user_id").notNull(),
+    createdAt: text("created_at").notNull(),
+  },
+  (table) => [
+    foreignKey({
+      name: "agent_revisions_workspace_id_fkey",
+      columns: [table.workspaceId],
+      foreignColumns: [workspaces.id],
+    }).onDelete("cascade"),
+    foreignKey({
+      name: "agent_revisions_workspace_agent_fkey",
+      columns: [table.workspaceId, table.agentId],
+      foreignColumns: [agents.workspaceId, agents.id],
+    }).onDelete("cascade"),
+    uniqueIndex("agent_revisions_workspace_id_uidx").on(
+      table.workspaceId,
+      table.id
+    ),
+    uniqueIndex("agent_revisions_agent_revision_number_uidx").on(
+      table.agentId,
+      table.revisionNumber
+    ),
+    uniqueIndex("agent_revisions_workspace_agent_id_uidx").on(
+      table.workspaceId,
+      table.agentId,
+      table.id
     ),
   ]
 );
