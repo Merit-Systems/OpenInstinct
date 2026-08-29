@@ -11,6 +11,8 @@ export default {
     "db/drizzle.config.ts",
     "evals/**/*.eval.ts",
     "evals/evals.config.ts",
+    // Playwright discovers e2e specs and the auth setup via testMatch, not imports.
+    "tests/e2e/**/*.ts",
     "taze.config.ts",
   ],
   ignoreDependencies: [

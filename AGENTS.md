@@ -58,6 +58,10 @@ Run the validation the task requests. When it does not establish the behavior yo
 
 - Put pure logic, config, environment, and component tests in `tests/unit/`.
 - Put PGlite, migrations, service, and database tests in `tests/integration/`.
+- Put browser journeys in `tests/e2e/` and run them with `pnpm test:e2e`. Playwright
+  boots the app through `scripts/dev.mjs`, so it owns Compose, migrations, and
+  teardown; it authenticates once through the local phone-auth bypass before the
+  authenticated specs run.
 - Run `pnpm test:unit`, `pnpm test:integration`, or `pnpm test:coverage`; root Vitest runs both.
 - `REAL_PG` unset auto-detects Compose, `0` skips real Postgres, and `1` requires it.
 
