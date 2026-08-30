@@ -65,6 +65,11 @@ Run the validation the task requests. When it does not establish the behavior yo
 - Run `pnpm test:unit`, `pnpm test:integration`, or `pnpm test:coverage`; root Vitest runs both.
 - `REAL_PG` unset auto-detects Compose, `0` skips real Postgres, and `1` requires it.
 
+Playwright e2e boots with `WORKSPACE_SCOPE_ENFORCEMENT=enforce`, so its paths
+exercise the production tenancy posture. Set `CRON_SECRET` in Vercel to enable
+the five-minute webhook drain cron; without it, the route responds with 404.
+The admin webhook drain button remains the supported manual drain path.
+
 ## Repository contract
 
 - The repository root owns the single Next.js application, Eve agent, and shared UI contract.

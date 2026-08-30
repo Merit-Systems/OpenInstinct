@@ -40,6 +40,7 @@ export default defineConfig({
       KERNEL_API_KEY: "e2e-kernel-key",
       ADMIN_PHONE_NUMBERS: "+12025550123",
       SECRET_ENCRYPTION_KEY: randomBytes(32).toString("base64"),
+      WORKSPACE_SCOPE_ENFORCEMENT: "enforce",
     },
     gracefulShutdown: {
       signal: "SIGTERM",

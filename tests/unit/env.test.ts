@@ -30,6 +30,7 @@ describe("environment", () => {
       await import("../../lib/env");
 
     expect(env).toMatchObject(requiredEnvironment);
+    expect(env.CRON_SECRET).toBeUndefined();
     expect(env.WORKSPACE_SCOPE_ENFORCEMENT).toBe("off");
     expect(isWorkspaceScopeEnforcementEnabled()).toBe(false);
   });
