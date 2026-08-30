@@ -1,4 +1,25 @@
 import { z } from "zod";
+import { and, desc, eq, gte, lt, or, sql } from "drizzle-orm";
+import { adminTransitionWorkspaceLifecycle } from "@/db/services/workspace-lifecycle";
+import { recordAuditEvent } from "@/db/services/audit";
+import { ensureScope } from "@/db/services/scope";
+import { drainWebhookDeliveries } from "@/db/services/webhooks";
+import {
+  agents,
+  apiCredentials,
+  auditEvents,
+  channelConversations,
+  chats,
+  db,
+  phoneIdentities,
+  usageEvents,
+  webhookDeliveries,
+  webhookEndpoints,
+  webhookEvents,
+  workspaceLifecycleStates,
+  workspaceMemberships,
+  workspaces,
+} from "@/db";
 import { readModelCatalog } from "@/lib/model-catalog/server";
 import { readTaskHistoryPage } from "@/lib/task-history/server";
 import { saveChat } from "@/db/services/chats";
@@ -21,9 +42,346 @@ import {
   registerWebhookEndpoint,
   rotateWebhookSecret,
 } from "@/db/services/webhooks";
-import { createTRPCRouter, protectedProcedure } from "./init";
+import { adminProcedure, createTRPCRouter, protectedProcedure } from "./init";
+
+const auditCursorSchema = z.object({ createdAt: z.string(), id: z.string() });
+const auditCursor = z.string().transform((value, context) => {
+  try {
+    return auditCursorSchema.parse(
+      JSON.parse(Buffer.from(value, "base64url").toString())
+    );
+  } catch {
+    context.addIssue({ code: "custom", message: "Invalid cursor" });
+    return z.NEVER;
+  }
+});
+
+function encodeAuditCursor(row: { createdAt: string; id: string }) {
+  return Buffer.from(JSON.stringify(row)).toString("base64url");
+}
+
+function startOfCurrentUtcMonth() {
+  const now = new Date();
+  return new Date(
+    Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)
+  ).toISOString();
+}
+
+function groupedCounts(rows: readonly { key: string; count: number }[]) {
+  return Object.fromEntries(rows.map((row) => [row.key, row.count]));
+}
 
 export const appRouter = createTRPCRouter({
+  admin: {
+    overview: adminProcedure.query(async () => {
+      const since = startOfCurrentUtcMonth();
+      const [
+        workspaceRows,
+        agentRows,
+        phoneRows,
+        conversationRows,
+        credentialRows,
+        endpointRows,
+        usageRows,
+        deliveryRows,
+        recentAudit,
+      ] = await Promise.all([
+        db
+          .select({
+            key: workspaces.lifecycleState,
+            count: sql<number>`count(*)`.mapWith(Number),
+          })
+          .from(workspaces)
+          .groupBy(workspaces.lifecycleState),
+        db
+          .select({
+            key: agents.status,
+            count: sql<number>`count(*)`.mapWith(Number),
+          })
+          .from(agents)
+          .groupBy(agents.status),
+        db
+          .select({ count: sql<number>`count(*)`.mapWith(Number) })
+          .from(phoneIdentities)
+          .where(eq(phoneIdentities.status, "verified")),
+        db
+          .select({ count: sql<number>`count(*)`.mapWith(Number) })
+          .from(channelConversations)
+          .where(eq(channelConversations.status, "active")),
+        db
+          .select({ count: sql<number>`count(*)`.mapWith(Number) })
+          .from(apiCredentials)
+          .where(eq(apiCredentials.status, "active")),
+        db
+          .select({
+            key: webhookEndpoints.status,
+            count: sql<number>`count(*)`.mapWith(Number),
+          })
+          .from(webhookEndpoints)
+          .groupBy(webhookEndpoints.status),
+        db
+          .select({
+            key: usageEvents.kind,
+            quantity:
+              sql<number>`coalesce(sum(${usageEvents.quantity}), 0)`.mapWith(
+                Number
+              ),
+          })
+          .from(usageEvents)
+          .where(gte(usageEvents.createdAt, since))
+          .groupBy(usageEvents.kind),
+        db
+          .select({
+            key: webhookDeliveries.outcome,
+            count: sql<number>`count(*)`.mapWith(Number),
+          })
+          .from(webhookDeliveries)
+          .groupBy(webhookDeliveries.outcome),
+        db
+          .select({
+            id: auditEvents.id,
+            workspaceId: auditEvents.workspaceId,
+            actorUserId: auditEvents.actorUserId,
+            action: auditEvents.action,
+            target: auditEvents.target,
+            outcome: auditEvents.outcome,
+            createdAt: auditEvents.createdAt,
+          })
+          .from(auditEvents)
+          .orderBy(desc(auditEvents.createdAt), desc(auditEvents.id))
+          .limit(10),
+      ]);
+      return {
+        workspacesByLifecycle: groupedCounts(workspaceRows),
+        agentsByStatus: groupedCounts(agentRows),
+        verifiedPhoneIdentities: phoneRows[0]?.count ?? 0,
+        activeChannelConversations: conversationRows[0]?.count ?? 0,
+        activeApiCredentials: credentialRows[0]?.count ?? 0,
+        webhookEndpointsByStatus: groupedCounts(endpointRows),
+        usageByKind: Object.fromEntries(
+          usageRows.map((row) => [row.key, row.quantity])
+        ),
+        webhookDeliveryOutcomes: groupedCounts(deliveryRows),
+        recentAudit,
+      };
+    }),
+    usage: adminProcedure
+      .input(
+        z.object({
+          workspaceId: z.string().min(1).optional(),
+          sinceIso: z.iso.datetime().optional(),
+        })
+      )
+      .query(async ({ input }) => {
+        const predicates = [
+          input.workspaceId
+            ? eq(usageEvents.workspaceId, input.workspaceId)
+            : undefined,
+          input.sinceIso
+            ? gte(usageEvents.createdAt, input.sinceIso)
+            : undefined,
+        ].filter(
+          (value): value is NonNullable<typeof value> => value !== undefined
+        );
+        const where = predicates.length === 0 ? undefined : and(...predicates);
+        const rows = await db
+          .select({
+            workspaceId: usageEvents.workspaceId,
+            kind: usageEvents.kind,
+            quantity:
+              sql<number>`coalesce(sum(${usageEvents.quantity}), 0)`.mapWith(
+                Number
+              ),
+          })
+          .from(usageEvents)
+          .where(where)
+          .groupBy(usageEvents.workspaceId, usageEvents.kind)
+          .orderBy(desc(sql`coalesce(sum(${usageEvents.quantity}), 0)`))
+          .limit(50);
+        return rows;
+      }),
+    auditLog: adminProcedure
+      .input(
+        z.object({
+          workspaceId: z.string().min(1).optional(),
+          cursor: auditCursor.optional(),
+          limit: z.number().int().min(1).max(100).default(50),
+        })
+      )
+      .query(async ({ input }) => {
+        const cursorWhere =
+          input.cursor &&
+          or(
+            lt(auditEvents.createdAt, input.cursor.createdAt),
+            and(
+              eq(auditEvents.createdAt, input.cursor.createdAt),
+              lt(auditEvents.id, input.cursor.id)
+            )
+          );
+        const where = [
+          input.workspaceId
+            ? eq(auditEvents.workspaceId, input.workspaceId)
+            : undefined,
+          cursorWhere,
+        ].filter(
+          (value): value is NonNullable<typeof value> => value !== undefined
+        );
+        const rows = await db
+          .select({
+            id: auditEvents.id,
+            workspaceId: auditEvents.workspaceId,
+            actorUserId: auditEvents.actorUserId,
+            action: auditEvents.action,
+            target: auditEvents.target,
+            outcome: auditEvents.outcome,
+            createdAt: auditEvents.createdAt,
+          })
+          .from(auditEvents)
+          .where(where.length ? and(...where) : undefined)
+          .orderBy(desc(auditEvents.createdAt), desc(auditEvents.id))
+          .limit(input.limit + 1);
+        const hasMore = rows.length > input.limit;
+        const events = rows.slice(0, input.limit);
+        const last = events.at(-1);
+        return {
+          events,
+          nextCursor: hasMore && last ? encodeAuditCursor(last) : null,
+        };
+      }),
+    webhookDeliveries: adminProcedure
+      .input(
+        z.object({
+          outcome: z
+            .enum(["pending", "delivered", "failed", "dead"])
+            .optional(),
+          limit: z.number().int().min(1).max(100).default(50),
+        })
+      )
+      .query(async ({ input }) => {
+        return db
+          .select({
+            id: webhookDeliveries.id,
+            workspaceId: webhookDeliveries.workspaceId,
+            endpointUrl: webhookEndpoints.url,
+            eventType: webhookEvents.type,
+            attempt: webhookDeliveries.attempt,
+            responseStatus: webhookDeliveries.responseStatus,
+            outcome: webhookDeliveries.outcome,
+            createdAt: webhookDeliveries.createdAt,
+            updatedAt: webhookDeliveries.updatedAt,
+          })
+          .from(webhookDeliveries)
+          .innerJoin(
+            webhookEndpoints,
+            eq(webhookDeliveries.endpointId, webhookEndpoints.id)
+          )
+          .innerJoin(
+            webhookEvents,
+            eq(webhookDeliveries.eventId, webhookEvents.id)
+          )
+          .where(
+            input.outcome
+              ? eq(webhookDeliveries.outcome, input.outcome)
+              : undefined
+          )
+          .orderBy(desc(webhookDeliveries.createdAt))
+          .limit(input.limit);
+      }),
+    workspaces: adminProcedure
+      .input(
+        z.object({
+          cursor: auditCursor.optional(),
+          limit: z.number().int().min(1).max(50).default(50),
+        })
+      )
+      .query(async ({ input }) => {
+        const since = startOfCurrentUtcMonth();
+        const cursorWhere =
+          input.cursor &&
+          or(
+            lt(workspaces.createdAt, input.cursor.createdAt),
+            and(
+              eq(workspaces.createdAt, input.cursor.createdAt),
+              lt(workspaces.id, input.cursor.id)
+            )
+          );
+        const rows = await db
+          .select({
+            id: workspaces.id,
+            displayName: workspaces.displayName,
+            plan: workspaces.plan,
+            lifecycleState: workspaces.lifecycleState,
+            createdAt: workspaces.createdAt,
+            memberCount:
+              sql<number>`(select count(*) from ${workspaceMemberships} where ${workspaceMemberships.workspaceId} = ${workspaces.id})`.mapWith(
+                Number
+              ),
+            agentCount:
+              sql<number>`(select count(*) from ${agents} where ${agents.workspaceId} = ${workspaces.id})`.mapWith(
+                Number
+              ),
+            modelTokens:
+              sql<number>`(select coalesce(sum(${usageEvents.quantity}), 0) from ${usageEvents} where ${usageEvents.workspaceId} = ${workspaces.id} and ${usageEvents.kind} = 'model_tokens' and ${usageEvents.createdAt} >= ${since})`.mapWith(
+                Number
+              ),
+          })
+          .from(workspaces)
+          .where(cursorWhere)
+          .orderBy(desc(workspaces.createdAt), desc(workspaces.id))
+          .limit(input.limit + 1);
+        const hasMore = rows.length > input.limit;
+        const items = rows
+          .slice(0, input.limit)
+          .map(({ createdAt: _createdAt, ...row }) => row);
+        const last = rows.slice(0, input.limit).at(-1);
+        return {
+          workspaces: items,
+          items,
+          nextCursor: hasMore && last ? encodeAuditCursor(last) : null,
+        };
+      }),
+    sessionsActivity: adminProcedure
+      .input(z.object({ limit: z.number().int().min(1).max(50).default(50) }))
+      .query(({ input }) =>
+        db
+          .select({
+            id: chats.sessionId,
+            workspaceId: chats.workspaceId,
+            updatedAt: chats.updatedAt,
+            inputTokens: chats.inputTokens,
+            outputTokens: chats.outputTokens,
+            costUsd: chats.costUsd,
+          })
+          .from(chats)
+          .orderBy(desc(chats.updatedAt))
+          .limit(input.limit)
+      ),
+    drainWebhooks: adminProcedure
+      .input(z.object({ limit: z.number().int().min(1).max(50).default(50) }))
+      .mutation(async ({ ctx, input }) => {
+        await ensureScope(ctx.scope);
+        const summary = await drainWebhookDeliveries({ limit: input.limit });
+        await recordAuditEvent(ctx.scope, {
+          action: "admin.webhook_drain",
+          metadata: { ...summary, limit: input.limit },
+        });
+        return summary;
+      }),
+    transitionLifecycle: adminProcedure
+      .input(
+        z.object({
+          workspaceId: z.string().min(1),
+          to: z.enum(workspaceLifecycleStates),
+        })
+      )
+      .mutation(({ ctx, input }) =>
+        adminTransitionWorkspaceLifecycle(
+          ctx.scope.userId,
+          input.workspaceId,
+          input.to
+        )
+      ),
+  },
   apiCredentials: {
     list: protectedProcedure.query(({ ctx }) => listApiCredentials(ctx.scope)),
     mint: protectedProcedure

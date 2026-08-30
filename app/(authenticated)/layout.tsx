@@ -11,6 +11,7 @@ import {
   SidebarProvider,
 } from "@/components/ui/sidebar";
 import { requireRequestScope, UnauthenticatedError } from "@/lib/request-scope";
+import { isAdmin } from "@/lib/admin";
 import { TRPCProvider } from "@/trpc/client";
 import { AuthenticatedAccountControl } from "./_components/account-control";
 import {
@@ -31,6 +32,7 @@ export default async function AuthenticatedLayout({
     if (error instanceof UnauthenticatedError) redirect("/sign-in");
     throw error;
   }
+  const admin = await isAdmin();
 
   return (
     <TRPCProvider>
@@ -42,14 +44,14 @@ export default async function AuthenticatedLayout({
             </Link>
           </SidebarHeader>
           <SidebarContent>
-            <AuthenticatedNavigation />
+            <AuthenticatedNavigation isAdmin={admin} />
           </SidebarContent>
           <SidebarFooter className="p-0">
             <AuthenticatedAccountControl />
           </SidebarFooter>
         </Sidebar>
         <SidebarInset className="h-svh overflow-y-auto">
-          <AuthenticatedMobileHeader />
+          <AuthenticatedMobileHeader isAdmin={admin} />
           {children}
         </SidebarInset>
       </SidebarProvider>

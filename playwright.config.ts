@@ -38,6 +38,7 @@ export default defineConfig({
       BETTER_AUTH_SECRET: "e2e-better-auth-secret-for-playwright-tests",
       BETTER_AUTH_URL: baseURL,
       KERNEL_API_KEY: "e2e-kernel-key",
+      ADMIN_PHONE_NUMBERS: "+12025550123",
       SECRET_ENCRYPTION_KEY: randomBytes(32).toString("base64"),
     },
     gracefulShutdown: {

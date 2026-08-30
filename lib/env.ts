@@ -59,6 +59,7 @@ export const env = createEnv({
         "LINQ_PHONE_NUMBER must use E.164 format"
       )
       .optional(),
+    ADMIN_PHONE_NUMBERS: z.string().default(""),
     WORKSPACE_SCOPE_ENFORCEMENT: z.enum(["off", "enforce"]).default("off"),
     NODE_ENV: z
       .enum(["development", "production", "test"])

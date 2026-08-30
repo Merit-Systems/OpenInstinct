@@ -1,8 +1,11 @@
 import { expect, type Page } from "@playwright/test";
 
-const phoneNumber = "+12025550123";
+const defaultPhoneNumber = "+12025550123";
 
-export async function signInThroughBypass(page: Page) {
+export async function signInThroughBypass(
+  page: Page,
+  phoneNumber = defaultPhoneNumber
+) {
   const outcomes: string[] = [];
   for (let attempt = 0; attempt < 3; attempt += 1) {
     await page.goto("/sign-in");
