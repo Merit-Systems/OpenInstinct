@@ -88,6 +88,42 @@ describe("workspace lifecycle", () => {
     }
   });
 
+  it("lets an administrator use the same transition map without owner membership", async () => {
+    const service = await loadService();
+    await service.lifecycle.adminTransitionWorkspaceLifecycle(
+      "deployment-admin",
+      "workspace-a",
+      "suspended"
+    );
+    await expect(
+      service.client.query(
+        "SELECT lifecycle_state FROM workspaces WHERE id = 'workspace-a'"
+      )
+    ).resolves.toMatchObject({ rows: [{ lifecycle_state: "suspended" }] });
+    await expect(
+      service.client.query(
+        "SELECT action, actor_user_id, metadata FROM audit_events WHERE workspace_id = 'workspace-a' ORDER BY created_at DESC LIMIT 1"
+      )
+    ).resolves.toMatchObject({
+      rows: [
+        {
+          action: "admin.workspace_lifecycle",
+          actor_user_id: "deployment-admin",
+          metadata: { from: "active", to: "suspended" },
+        },
+      ],
+    });
+    await expect(
+      service.lifecycle.adminTransitionWorkspaceLifecycle(
+        "deployment-admin",
+        "workspace-a",
+        "trial"
+      )
+    ).rejects.toBeInstanceOf(
+      service.lifecycle.WorkspaceLifecycleTransitionError
+    );
+  });
+
   it("denies suspended workspaces through the shared budget chokepoint and allows after reactivation", async () => {
     const service = await loadService();
     enforcementEnabled = true;

@@ -139,6 +139,63 @@ export async function transitionWorkspaceLifecycle(
   });
 }
 
+/**
+ * Cross-workspace administrative transition.  Keep this separate from the
+ * membership-checked owner path above: callers must already be deployment
+ * administrators, and the audit actor is the administrator rather than a
+ * workspace member.
+ */
+export async function adminTransitionWorkspaceLifecycle(
+  actorUserId: string,
+  workspaceId: string,
+  to: WorkspaceLifecycleState
+) {
+  const now = new Date().toISOString();
+  return db.transaction(async (transaction) => {
+    const [workspace] = await transaction
+      .select({ lifecycleState: workspaces.lifecycleState })
+      .from(workspaces)
+      .where(eq(workspaces.id, workspaceId))
+      .for("update")
+      .limit(1);
+    const candidate = workspace?.lifecycleState;
+    const from = isWorkspaceLifecycleState(candidate) ? candidate : undefined;
+    if (!from || !allowedTransitions[from]?.includes(to)) {
+      throw new WorkspaceLifecycleTransitionError(from, to);
+    }
+
+    const [updated] = await transaction
+      .update(workspaces)
+      .set({ lifecycleState: to, updatedAt: now })
+      .where(
+        and(eq(workspaces.id, workspaceId), eq(workspaces.lifecycleState, from))
+      )
+      .returning({ id: workspaces.id });
+    if (!updated) throw new WorkspaceLifecycleTransitionError(from, to);
+    const webhookEventType = lifecycleWebhookEventType(from, to);
+    if (webhookEventType) {
+      await emitWebhookEvent(
+        transaction,
+        { userId: actorUserId, workspaceId },
+        {
+          payload: { lifecycleState: to, workspaceId },
+          type: webhookEventType,
+        }
+      );
+    }
+    await transaction.insert(auditEvents).values({
+      action: "admin.workspace_lifecycle",
+      actorUserId,
+      createdAt: now,
+      id: randomUUID(),
+      metadata: { from, to },
+      outcome: "ok",
+      target: workspaceId,
+      workspaceId,
+    });
+  });
+}
+
 function lifecycleWebhookEventType(
   from: WorkspaceLifecycleState,
   to: WorkspaceLifecycleState
