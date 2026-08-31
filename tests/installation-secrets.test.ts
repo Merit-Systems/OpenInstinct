@@ -8,7 +8,6 @@ const mocks = vi.hoisted(() => ({
   put: vi.fn<typeof put>(),
 }));
 
-vi.mock("server-only", () => ({}));
 vi.mock("@vercel/blob", () => ({ get: mocks.get, put: mocks.put }));
 
 beforeEach(() => {

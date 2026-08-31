@@ -1,5 +1,3 @@
-import "server-only";
-
 import { createHash, randomBytes } from "node:crypto";
 import { get, put } from "@vercel/blob";
 import { blobAuthentication } from "@/lib/blob-authentication";
