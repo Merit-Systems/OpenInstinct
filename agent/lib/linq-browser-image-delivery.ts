@@ -3,7 +3,7 @@ import { get } from "@vercel/blob";
 import type { AccessScope } from "@/lib/access-scope";
 import { readReadyBrowserImageArtifact } from "@/db/services/browser-images";
 import { maximumBrowserImageBytes } from "@/lib/browser-artifact";
-import { env } from "@/lib/env";
+import { env } from "@/env";
 import { maximumWorkerCompletionImages } from "@/lib/worker-completion";
 import {
   extractBrowserImageMarkdownReferences,
@@ -81,14 +81,8 @@ async function readLinqBrowserImage(
     !artifact.mediaType
   )
     return;
-  const blobAuth = env.BLOB_STORE_ID
-    ? { storeId: env.BLOB_STORE_ID }
-    : env.BLOB_READ_WRITE_TOKEN
-      ? { token: env.BLOB_READ_WRITE_TOKEN }
-      : undefined;
-  if (!blobAuth) return;
+  if (!env.BLOB_STORE_ID && !env.BLOB_READ_WRITE_TOKEN) return;
   const result = await get(artifact.storagePathname, {
-    ...blobAuth,
     access: "private",
     abortSignal: options.signal,
   });

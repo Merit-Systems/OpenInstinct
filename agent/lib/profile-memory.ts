@@ -1,6 +1,6 @@
 import type { MemoryScopeContext } from "eve/memory";
 import { z } from "zod";
-import type { env } from "@/lib/env";
+import type { env } from "@/env";
 
 export function resolveProfileMemoryBackend(
   environment: Pick<

@@ -11,6 +11,10 @@ export default defineConfig({
         ),
       },
       {
+        find: "@/env",
+        replacement: fileURLToPath(new URL("src/env.ts", import.meta.url)),
+      },
+      {
         find: /^@\/(app|auth|components|hooks|lib|trpc)(\/.*)?$/,
         replacement: fileURLToPath(new URL("src/$1$2", import.meta.url)),
       },
