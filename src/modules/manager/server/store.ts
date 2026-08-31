@@ -1,13 +1,18 @@
 import { randomUUID } from "node:crypto";
+import {
+  getTokenResponse,
+  NoValidTokenError,
+  UserAuthorizationRequiredError,
+} from "@vercel/connect";
 import { ensureScope } from "@/db/services/scope";
-import { selectGatewayModel } from "@/db/services/settings";
+import { getGatewayModel, selectGatewayModel } from "@/db/services/settings";
 import {
   createVaultItem as insertVaultItem,
   deleteVaultItem,
 } from "@/db/services/vault";
-import type { AccessScope } from "../../access-scope";
-import { getGoogleWorkspaceConnection } from "../../google-workspace/server";
-import { getModelSettings } from "../../model-config";
+import type { AccessScope } from "@/lib/access-scope";
+import { env } from "@/lib/env";
+import { googleWorkspaceTokenParams } from "@/lib/google-workspace";
 import type { ManagerMutation } from "..";
 import { parsePaymentCardSecret, paymentCardBrand } from "../payment-card";
 import { loginAccountHint, parseLoginVaultPayload } from "../vault-payload";
@@ -15,19 +20,45 @@ import { deleteSecret, secretStoreStatus, writeSecret } from "./secret-store";
 import { readManagerVaultItems } from "./vault";
 
 export async function readManagerSnapshot(scope: AccessScope) {
-  const [googleWorkspace, vaultRows, modelSettings] = await Promise.all([
+  const [googleWorkspace, vaultRows, gatewayModel] = await Promise.all([
     getGoogleWorkspaceConnection(scope),
     readManagerVaultItems(scope),
-    getModelSettings(scope),
+    getGatewayModel(scope),
   ]);
 
   return {
     browser: { available: true },
     googleWorkspace,
-    runtime: { inference: modelSettings.modelId },
+    runtime: { inference: gatewayModel },
     secretStore: secretStoreStatus(),
     vaultItems: vaultRows,
   };
+}
+
+async function getGoogleWorkspaceConnection(scope: AccessScope) {
+  try {
+    const response = await getTokenResponse(
+      env.GOOGLE_CONNECTOR_UID,
+      googleWorkspaceTokenParams(scope.userId),
+      { forceRefresh: true }
+    );
+    return {
+      accountLabel:
+        response.name ??
+        (typeof response.claims?.email === "string"
+          ? response.claims.email
+          : null),
+      state: "connected" as const,
+    };
+  } catch (error) {
+    if (
+      error instanceof UserAuthorizationRequiredError ||
+      error instanceof NoValidTokenError
+    ) {
+      return { accountLabel: null, state: "disconnected" as const };
+    }
+    return { accountLabel: null, state: "unavailable" as const };
+  }
 }
 
 export async function applyManagerMutation(

@@ -1,28 +1,28 @@
 import { describe, expect, it } from "vitest";
 import type { AccessScope } from "@/lib/access-scope";
-import type { VaultItemKind } from "@/lib/manager";
-import { serializePaymentCard } from "@/lib/manager/payment-card";
+import type { VaultItemKind } from "@/modules/manager";
+import { serializePaymentCard } from "@/modules/manager/payment-card";
 import {
   classifyNativeLoginControl,
   selectNativeLoginFills,
   type NativeLoginControlDescriptor,
-} from "@/lib/manager/server/kernel-login-autofill";
+} from "@/modules/manager/server/kernel-login-autofill";
 import {
   buildNativeAutofillPayload,
   nativeAutofillSecretMarkingExpression,
   nativeAutofillTokens,
-} from "@/lib/manager/server/kernel-native-autofill";
+} from "@/modules/manager/server/kernel-native-autofill";
 import {
   listAutofillSuggestions,
   materializeAutofillClaims,
   type AutofillVaultAdapter,
-} from "@/lib/manager/server/vault-autofill";
-import { createVaultAutofillProvider } from "@/lib/manager/server/vault-autofill-provider";
+} from "@/modules/manager/server/vault-autofill";
+import { createVaultAutofillProvider } from "@/modules/manager/server/vault-autofill-provider";
 import {
   serializeAddressVaultPayload,
   serializeContactVaultPayload,
   serializeLoginVaultPayload,
-} from "@/lib/manager/vault-payload";
+} from "@/modules/manager/vault-payload";
 
 const scope: AccessScope = {
   userId: "user-1",

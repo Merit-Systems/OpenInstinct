@@ -4,14 +4,14 @@ import { requireOwnedBrowserSession } from "@/agent/subagents/worker/lib/owned-b
 import { requireWorkerScope } from "@/agent/subagents/worker/lib/access";
 import { readVaultItem } from "@/db/services/vault";
 import { kernel } from "@/lib/kernel";
-import { materializeAutofillClaims } from "@/lib/manager/server/vault-autofill";
-import { vaultAutofillProvider } from "@/lib/manager/server/vault-autofill-provider";
+import { materializeAutofillClaims } from "@/modules/manager/server/vault-autofill";
+import { vaultAutofillProvider } from "@/modules/manager/server/vault-autofill-provider";
 import {
   currentKernelPageOrigin,
   fillWithKernelNativeAutofill,
   nativeAutofillTokens,
-} from "@/lib/manager/server/kernel-native-autofill";
-import { fillFromVaultRequestSchema } from "@/lib/manager/vault-autofill";
+} from "@/modules/manager/server/kernel-native-autofill";
+import { fillFromVaultRequestSchema } from "@/modules/manager/vault-autofill";
 
 const outputSchema = z.object({
   filledClaims: z.number().int().nonnegative(),

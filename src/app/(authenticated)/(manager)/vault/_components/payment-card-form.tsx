@@ -11,12 +11,12 @@ import {
   FieldLabel,
 } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
-import type { ManagerMutation } from "@/lib/manager";
+import type { ManagerMutation } from "@/modules/manager";
 import {
   paymentCardBrand,
   paymentCardType,
   serializePaymentCard,
-} from "@/lib/manager/payment-card";
+} from "@/modules/manager/payment-card";
 
 const paymentCardFormSchema = z.object({
   billingPostalCode: z.string().trim().min(1, "Enter the billing postal code."),

@@ -1,6 +1,6 @@
 "use client";
 
-import { PlayIcon, RotateCcwIcon } from "lucide-react";
+import { PlayIcon } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
@@ -18,15 +18,9 @@ import {
   createBrowserRunGroup,
   saveBrowserRunGroup,
 } from "@/app/(authenticated)/_lib/browser-run-store";
-import { browserBenchmarkTasks } from "@/lib/browser/benchmark-tasks";
-
-const starterTasks = browserBenchmarkTasks
-  .map((task) => task.prompt)
-  .join("\n");
-
 export function BrowserBatchForm() {
   const router = useRouter();
-  const [input, setInput] = useState(starterTasks);
+  const [input, setInput] = useState("");
   const [groupName, setGroupName] = useState("");
   const [concurrency, setConcurrency] = useState(4);
   const parsedTasks = useMemo(() => parseTasks(input), [input]);
@@ -98,15 +92,6 @@ export function BrowserBatchForm() {
         >
           <PlayIcon />
           Create and run group
-        </Button>
-
-        <Button
-          onClick={() => setInput(starterTasks)}
-          type="button"
-          variant="ghost"
-        >
-          <RotateCcwIcon />
-          Load examples
         </Button>
       </div>
     </div>

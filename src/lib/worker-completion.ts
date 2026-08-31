@@ -1,13 +1,12 @@
 import { z } from "zod";
-import {
-  browserImageArtifactReferenceSchema,
-  maximumBrowserImagesPerCompletion,
-} from "./browser-images";
+import { browserImageArtifactReferenceSchema } from "@/lib/browser-artifact";
+
+export const maximumWorkerCompletionImages = 4;
 
 export const taskCompletionSchema = z.object({
   images: z
     .array(browserImageArtifactReferenceSchema)
-    .max(maximumBrowserImagesPerCompletion),
+    .max(maximumWorkerCompletionImages),
   status: z.enum(["success", "failure"]),
   message: z.string().trim().min(1),
 });

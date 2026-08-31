@@ -3,10 +3,13 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const firstId = "0d01e667-d128-4bb7-a248-1ae21db72f4f";
 const secondId = "206c3a7e-c0b8-4317-9e34-552cff646673";
-const mocks = vi.hoisted(() => ({ readImage: vi.fn() }));
+const mocks = vi.hoisted(() => ({ getBlob: vi.fn(), readArtifact: vi.fn() }));
 
-vi.mock("@/lib/browser-images/server", () => ({
-  readBrowserImageBytes: mocks.readImage,
+vi.mock("@/db/services/browser-images", () => ({
+  readReadyBrowserImageArtifact: mocks.readArtifact,
+}));
+vi.mock("@vercel/blob", () => ({
+  get: mocks.getBlob,
 }));
 
 import { prepareLinqBrowserImageDelivery } from "../agent/lib/linq-browser-image-delivery";
@@ -15,16 +18,24 @@ const scope = { userId: "user-1", workspaceId: "workspace-1" };
 
 beforeEach(() => {
   vi.clearAllMocks();
-  mocks.readImage.mockImplementation(async (_scope: unknown, id: string) =>
+  mocks.readArtifact.mockImplementation(async (_scope: unknown, id: string) =>
     id === firstId
       ? {
-          bytes: new Uint8Array([1, 2, 3]),
+          byteSize: 3,
+          contentHash:
+            "039058c6f2c0cb492c533b0a4d14ef77cc0f78abccced5287d84a1a2011cfb81",
           filename: "product.png",
           id,
           mediaType: "image/png",
+          storagePathname: "artifacts/first",
         }
       : undefined
   );
+  mocks.getBlob.mockResolvedValue({
+    blob: { contentType: "image/png", size: 3 },
+    statusCode: 200,
+    stream: new Response(new Uint8Array([1, 2, 3])).body,
+  });
 });
 
 describe("Linq browser image delivery", () => {
@@ -40,7 +51,7 @@ describe("Linq browser image delivery", () => {
       scope,
     });
 
-    expect(mocks.readImage).toHaveBeenCalledExactlyOnceWith(scope, firstId, {
+    expect(mocks.readArtifact).toHaveBeenCalledExactlyOnceWith(scope, firstId, {
       rootSessionId: "root-session",
       signal: undefined,
     });
@@ -82,6 +93,6 @@ describe("Linq browser image delivery", () => {
       files: [],
       markdown,
     });
-    expect(mocks.readImage).not.toHaveBeenCalled();
+    expect(mocks.readArtifact).not.toHaveBeenCalled();
   });
 });

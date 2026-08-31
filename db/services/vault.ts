@@ -1,7 +1,7 @@
 import { and, desc, eq } from "drizzle-orm";
 import { z } from "zod";
 import type { AccessScope } from "@/lib/access-scope";
-import { vaultItemKindSchema } from "@/lib/manager";
+import { vaultItemKindSchema } from "@/modules/manager";
 import { db, vaultItems } from "@/db";
 
 const vaultRecordSchema = z.object({

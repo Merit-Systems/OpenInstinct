@@ -27,7 +27,7 @@ import type {
   ManagerSetupRequest,
   ManagerSnapshot,
   VaultCreateItemKind,
-} from "@/lib/manager";
+} from "@/modules/manager";
 import { api } from "@/trpc/client";
 import { AddressVaultForm } from "./address-vault-form";
 import { ChromePasswordImportPanel } from "./chrome-password-import";

@@ -5,7 +5,7 @@ export default defineConfig({
   resolve: {
     alias: [
       {
-        find: /^@\/(app|auth|components|hooks|lib|trpc)(\/.*)?$/,
+        find: /^@\/(app|auth|components|hooks|lib|modules|trpc)(\/.*)?$/,
         replacement: fileURLToPath(new URL("src/$1$2", import.meta.url)),
       },
       {

@@ -1,15 +1,18 @@
 import type { MessageStreamEvent } from "eve/client";
-import type { TaskHistoryRun } from "@/lib/task-history";
+import type { RouterOutputs } from "@/trpc/types";
 import type {
   BrowserRunGroup,
   BrowserRunTask,
 } from "@/app/(authenticated)/_lib/browser-run-store";
 import {
-  measureBrowserTask,
+  measureWorkerTask,
   readBackgroundWorkerTasks,
   readTaskCompletion,
-  terminalBrowserMessage,
-} from "@/lib/browser/benchmark";
+  terminalWorkerMessage,
+} from "@/lib/worker-events";
+
+export type TaskHistoryPage = RouterOutputs["tasks"]["list"];
+export type TaskHistoryRun = TaskHistoryPage["runs"][number];
 
 export function taskFromHistoryRun(
   run: TaskHistoryRun,
@@ -46,7 +49,7 @@ export function taskFromHistoryRun(
         waiting?.type === "session.completed" ||
         waiting?.type === "session.waiting"));
   const updatedAt = new Date(run.updatedAt).getTime();
-  const metrics = measureBrowserTask(
+  const metrics = measureWorkerTask(
     events,
     Math.max(0, (settled ? updatedAt : now) - startedAt)
   );
@@ -84,7 +87,7 @@ export function taskFromHistoryRun(
     terminalMessage:
       status === "running"
         ? undefined
-        : terminalBrowserMessage(
+        : terminalWorkerMessage(
             message?.type === "message.completed"
               ? (message.data.message ?? undefined)
               : undefined,

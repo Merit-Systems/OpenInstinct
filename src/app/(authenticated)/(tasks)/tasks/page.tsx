@@ -1,7 +1,7 @@
 import { MessageSquareIcon } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
-import { readTaskHistoryPage } from "@/lib/task-history/server";
+import { readTaskHistoryPage } from "@/trpc/router";
 import { requireRequestScope } from "@/lib/request-scope";
 import { BrowserBatchForm } from "./_components/browser-batch-form";
 import { GlobalTaskHistory } from "./_components/global-task-history";

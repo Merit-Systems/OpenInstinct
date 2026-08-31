@@ -2,17 +2,17 @@ import { describe, expect, it } from "vitest";
 import {
   browserImageArtifactReferenceSchema,
   browserImageArtifactUrl,
-  browserImageMarkdown,
-  extractBrowserImageMarkdownReferences,
-  safeBrowserImageFilename,
+  isBrowserImageArtifactUrl,
   sniffBrowserImageMediaType,
-  stripBrowserImageMarkdownReferences,
-} from "@/lib/browser-images";
-import { isBrowserImageArtifactUrl } from "@/lib/browser-image-path";
+} from "@/lib/browser-artifact";
 import {
   parseTaskCompletionOutput,
   taskCompletionSchema,
-} from "@/lib/task-completion";
+} from "@/lib/worker-completion";
+import {
+  extractBrowserImageMarkdownReferences,
+  stripBrowserImageMarkdownReferences,
+} from "@/agent/lib/linq-browser-image-markdown";
 
 const artifactId = "0d01e667-d128-4bb7-a248-1ae21db72f4f";
 
@@ -49,7 +49,7 @@ describe("browser image contracts", () => {
       mediaType: "image/png",
       url: browserImageArtifactUrl(artifactId),
     });
-    const markdown = browserImageMarkdown(artifact);
+    const markdown = `![Product](${artifact.url})`;
     const message = `Here it is.\n\n${markdown}\n\n${markdown}`;
 
     expect(extractBrowserImageMarkdownReferences(message)).toEqual([
@@ -74,12 +74,6 @@ describe("browser image contracts", () => {
     [new TextEncoder().encode("<svg></svg>"), undefined],
   ])("sniffs supported image bytes", (bytes, expected) => {
     expect(sniffBrowserImageMediaType(bytes)).toBe(expected);
-  });
-
-  it("generates safe filenames without retaining paths", () => {
-    expect(
-      safeBrowserImageFilename("../../ Product / front?", "image/jpeg")
-    ).toBe("Product _ front_.jpg");
   });
 
   it("defaults historical worker results to no images and caps new results", () => {

@@ -14,7 +14,10 @@ import {
   historyTableGroups,
   taskFromHistoryRun,
 } from "@/app/(authenticated)/(tasks)/_lib/task-history";
-import type { TaskHistoryPage, TaskHistoryRun } from "@/lib/task-history";
+import type {
+  TaskHistoryPage,
+  TaskHistoryRun,
+} from "@/app/(authenticated)/(tasks)/_lib/task-history";
 import { api } from "@/trpc/client";
 import { useBrowserRunGroups } from "@/app/(authenticated)/(tasks)/_components/use-browser-run-groups";
 

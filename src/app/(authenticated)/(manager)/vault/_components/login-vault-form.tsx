@@ -11,13 +11,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import type { ManagerMutation } from "@/lib/manager";
+import type { ManagerMutation } from "@/modules/manager";
 import {
   loginIdentifierSchema,
   loginIdentifierTypeSchema,
   loginOriginSchema,
   serializeLoginVaultPayload,
-} from "@/lib/manager/vault-payload";
+} from "@/modules/manager/vault-payload";
 import { VaultFormField } from "./vault-form-field";
 
 const loginFormSchema = z

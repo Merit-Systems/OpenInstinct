@@ -3,8 +3,8 @@ import { requireRequestScope } from "@/lib/request-scope";
 import {
   managerSnapshotSchema,
   parseManagerSetupSearchParams,
-} from "@/lib/manager";
-import { readManagerSnapshot } from "@/lib/manager/server/store";
+} from "@/modules/manager";
+import { readManagerSnapshot } from "@/modules/manager/server/store";
 
 export default async function Page({ searchParams }: PageProps<"/vault">) {
   const query = await searchParams;

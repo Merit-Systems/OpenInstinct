@@ -1,6 +1,6 @@
 import Kernel from "@onkernel/sdk";
 import { z } from "zod";
-import { env } from "../../env";
+import { env } from "@/lib/env";
 import type { AutofillClaim } from "../vault-autofill-protocol";
 import {
   classifyNativeLoginControl,

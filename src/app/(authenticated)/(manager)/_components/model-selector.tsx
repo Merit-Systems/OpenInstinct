@@ -16,8 +16,10 @@ import {
   ModelSelectorTrigger,
 } from "@/components/ai-elements/model-selector";
 import { Button } from "@/components/ui/button";
-import type { ModelCatalogItem } from "@/lib/model-catalog";
 import { api } from "@/trpc/client";
+import type { RouterOutputs } from "@/trpc/types";
+
+type ModelCatalogItem = RouterOutputs["models"]["list"][number];
 
 const priceFormatter = new Intl.NumberFormat("en-US", {
   maximumFractionDigits: 2,

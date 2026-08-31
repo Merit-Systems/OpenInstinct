@@ -1,7 +1,7 @@
 import { defineTool } from "eve/tools";
 import { z } from "zod";
 import { env } from "@/lib/env";
-import { createManagerImportUrl } from "@/lib/manager";
+import { createManagerImportUrl } from "@/modules/manager";
 
 export default defineTool({
   description:

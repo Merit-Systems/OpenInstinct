@@ -4,8 +4,8 @@ import { type FormEvent, useState } from "react";
 import { z } from "zod";
 import { Button } from "@/components/ui/button";
 import { FieldGroup } from "@/components/ui/field";
-import type { ManagerMutation } from "@/lib/manager";
-import { serializeContactVaultPayload } from "@/lib/manager/vault-payload";
+import type { ManagerMutation } from "@/modules/manager";
+import { serializeContactVaultPayload } from "@/modules/manager/vault-payload";
 import { VaultFormField } from "./vault-form-field";
 
 const contactFormSchema = z

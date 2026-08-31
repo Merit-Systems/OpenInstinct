@@ -2,7 +2,7 @@ import { defineTool } from "eve/tools";
 import {
   createManagerSetupUrl,
   managerSetupRequestSchema,
-} from "@/lib/manager";
+} from "@/modules/manager";
 import { env } from "@/lib/env";
 
 export default defineTool({

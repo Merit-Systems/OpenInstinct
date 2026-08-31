@@ -12,7 +12,7 @@ import {
   serializeAddressVaultPayload,
   serializeContactVaultPayload,
   serializeLoginVaultPayload,
-} from "@/lib/manager/vault-payload";
+} from "@/modules/manager/vault-payload";
 
 describe("versioned vault payloads", () => {
   it("stores password and passwordless login methods", () => {

@@ -3,12 +3,57 @@ import type * as LinqModule from "eve/channels/linq";
 import { describe, expect, it, vi } from "vitest";
 import workerCancellationHook from "../agent/hooks/worker-cancellation-delivery";
 
+interface BrowserImage {
+  bytes: Uint8Array;
+  filename: string;
+  id: string;
+  mediaType: string;
+}
+
 const linqChannelCapture = vi.hoisted(() => ({
   config: undefined as unknown,
-  readImage: vi.fn(),
+  images: new Map<string, BrowserImage>(),
+  readImage:
+    vi.fn<
+      (
+        scope: unknown,
+        id: string,
+        options: unknown
+      ) => Promise<BrowserImage | undefined>
+    >(),
 }));
-vi.mock("@/lib/browser-images/server", () => ({
-  readBrowserImageBytes: linqChannelCapture.readImage,
+vi.mock("@/db/services/browser-images", () => ({
+  async readReadyBrowserImageArtifact(
+    scope: unknown,
+    id: string,
+    options: unknown
+  ) {
+    const image = await linqChannelCapture.readImage(scope, id, options);
+    if (!image) return undefined;
+    linqChannelCapture.images.set(id, image);
+    return {
+      byteSize: image.bytes.byteLength,
+      contentHash:
+        image.bytes[0] === 1
+          ? "039058c6f2c0cb492c533b0a4d14ef77cc0f78abccced5287d84a1a2011cfb81"
+          : "787c798e39a5bc1910355bae6d0cd87a36b2e10fd0202a83e3bb6b005da83472",
+      filename: image.filename,
+      id,
+      mediaType: image.mediaType,
+      storagePathname: id,
+    };
+  },
+}));
+vi.mock("@vercel/blob", () => ({
+  get: async (pathname: string) => {
+    const image = linqChannelCapture.images.get(pathname);
+    if (!image) return null;
+    return {
+      blob: { contentType: image.mediaType, size: image.bytes.byteLength },
+      statusCode: 200,
+      stream: new Response(Buffer.from(image.bytes)).body,
+    };
+  },
 }));
 vi.mock("eve/channels/linq", async (importOriginal) => {
   const original = await importOriginal<typeof LinqModule>();

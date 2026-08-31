@@ -17,8 +17,8 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import type { ManagerMutation } from "@/lib/manager";
-import { parseChromePasswordsCsv } from "@/lib/manager/chrome-passwords";
+import type { ManagerMutation } from "@/modules/manager";
+import { parseChromePasswordsCsv } from "@/modules/manager/chrome-passwords";
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024;
 const GOOGLE_PASSWORD_MANAGER_URL = "https://passwords.google.com/options";

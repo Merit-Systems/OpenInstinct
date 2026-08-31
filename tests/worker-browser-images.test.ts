@@ -14,15 +14,16 @@ const image = {
 
 const mocks = vi.hoisted(() => ({
   captureScreenshot: vi.fn(),
+  del: vi.fn(),
   deleteFile: vi.fn(),
   fetch: vi.fn(),
   mask: vi.fn(),
   persist: vi.fn(),
   playwrightExecute: vi.fn(),
-  readBoundedResponse: vi.fn(),
   readFile: vi.fn(),
   reserve: vi.fn(),
   retrieve: vi.fn(),
+  put: vi.fn(),
   requireOwnedBrowserSession: vi.fn(),
   requireWorkerScope: vi.fn(),
 }));
@@ -37,11 +38,12 @@ vi.mock("@/agent/subagents/worker/lib/vault-screenshot-mask", () => ({
   withVaultScreenshotMask: mocks.mask,
 }));
 vi.mock("@/db/services/browser-images", () => ({
+  finalizeBrowserImageArtifact: mocks.persist,
   reserveBrowserImageArtifact: mocks.reserve,
 }));
-vi.mock("@/lib/browser-images/server", () => ({
-  persistReservedBrowserImage: mocks.persist,
-  readBoundedResponse: mocks.readBoundedResponse,
+vi.mock("@vercel/blob", () => ({
+  del: mocks.del,
+  put: mocks.put,
 }));
 vi.mock("@/lib/kernel", () => ({
   kernel: {
@@ -70,13 +72,14 @@ beforeEach(() => {
     sessionId: "browser-1",
   });
   mocks.reserve.mockResolvedValue({ reservation, status: "pending" });
-  mocks.persist.mockResolvedValue(image);
+  mocks.persist.mockResolvedValue({ image, storagePathname: "stored/image" });
+  mocks.del.mockResolvedValue(undefined);
+  mocks.put.mockResolvedValue({ pathname: "stored/image" });
   mocks.mask.mockImplementation(
     async (_sessionId: string, _signal: AbortSignal, capture: () => unknown) =>
       capture()
   );
   mocks.captureScreenshot.mockResolvedValue(new Response(png));
-  mocks.readBoundedResponse.mockResolvedValue(png);
   mocks.playwrightExecute.mockResolvedValue({ result: true, success: true });
   mocks.readFile.mockResolvedValue(new Response(png));
   mocks.deleteFile.mockResolvedValue(undefined);
@@ -112,8 +115,7 @@ describe("capture_browser_image", () => {
     expect(mocks.persist).toHaveBeenCalledWith(
       scope,
       reservation,
-      expect.objectContaining({ sourceKind: "viewport" }),
-      undefined
+      expect.objectContaining({ sourceKind: "viewport" })
     );
     expect(result).toEqual({ image });
     expect(JSON.stringify(result)).not.toContain("base64");
@@ -172,8 +174,7 @@ describe("capture_browser_image", () => {
     expect(mocks.persist).toHaveBeenCalledWith(
       scope,
       reservation,
-      expect.objectContaining({ sourceKind: "image_resource" }),
-      undefined
+      expect.objectContaining({ sourceKind: "image_resource" })
     );
     expect(JSON.stringify(mocks.persist.mock.calls)).not.toContain(
       "private=ignored"
@@ -203,8 +204,7 @@ describe("capture_browser_image", () => {
     expect(mocks.persist).toHaveBeenCalledWith(
       scope,
       reservation,
-      expect.objectContaining({ sourceKind: "element" }),
-      undefined
+      expect.objectContaining({ sourceKind: "element" })
     );
   });
 

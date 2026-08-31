@@ -1,6 +1,6 @@
 import type { MessageStreamEvent } from "eve/client";
 import { describe, expect, it } from "vitest";
-import type { TaskHistoryRun } from "@/lib/task-history";
+import type { TaskHistoryRun } from "@/app/(authenticated)/(tasks)/_lib/task-history";
 import { taskFromHistoryRun } from "./task-history";
 
 const run: TaskHistoryRun = {

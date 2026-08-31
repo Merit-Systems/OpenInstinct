@@ -14,12 +14,12 @@ import { useBrowserRunGroups } from "@/app/(authenticated)/(tasks)/_components/u
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
-  didFinishBrowserWorker,
-  measureBrowserTask,
+  didFinishWorker,
+  measureWorkerTask,
   readBackgroundWorkerTasks,
   readTaskCompletion,
-  terminalBrowserMessage,
-} from "@/lib/browser/benchmark";
+  terminalWorkerMessage,
+} from "@/lib/worker-events";
 import {
   type BrowserRunGroup,
   type BrowserRunTask,
@@ -227,7 +227,7 @@ async function runPersistedTask(
         events.push(event);
         projectTaskEvents(events, requestStartedAt, update);
         if (
-          didFinishBrowserWorker(events) ||
+          didFinishWorker(events) ||
           event.type === "session.failed" ||
           (event.type === "session.waiting" &&
             readBackgroundWorkerTasks(events).length === 0)
@@ -266,7 +266,7 @@ async function runPersistedTask(
         })) {
           events.push(event);
           projectTaskEvents(events, requestStartedAt, update);
-          if (didFinishBrowserWorker(events)) break;
+          if (didFinishWorker(events)) break;
         }
       }
     }
@@ -274,7 +274,7 @@ async function runPersistedTask(
     completePersistedTask(events, requestStartedAt, update);
   } catch (error) {
     const completion = readTaskCompletion(events);
-    const metrics = measureBrowserTask(events, Date.now() - requestStartedAt);
+    const metrics = measureWorkerTask(events, Date.now() - requestStartedAt);
     update({
       completedAt: Date.now(),
       costComplete: metrics.costComplete,
@@ -298,7 +298,7 @@ function projectTaskEvents(
   const event = events.at(-1);
   if (!event || !shouldProjectEvent(event)) return;
 
-  const metrics = measureBrowserTask(events, Date.now() - requestStartedAt);
+  const metrics = measureWorkerTask(events, Date.now() - requestStartedAt);
   const completion = readTaskCompletion(events);
   update({
     costComplete: metrics.costComplete,
@@ -313,9 +313,9 @@ function completePersistedTask(
   requestStartedAt: number,
   update: (taskUpdate: BrowserRunTaskUpdate) => void
 ) {
-  const metrics = measureBrowserTask(events, Date.now() - requestStartedAt);
+  const metrics = measureWorkerTask(events, Date.now() - requestStartedAt);
   const completion = readTaskCompletion(events);
-  const fallbackMessage = terminalBrowserMessage(undefined, events);
+  const fallbackMessage = terminalWorkerMessage(undefined, events);
   update({
     completedAt: Date.now(),
     costComplete: metrics.costComplete,

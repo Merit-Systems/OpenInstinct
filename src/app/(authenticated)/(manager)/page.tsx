@@ -11,8 +11,8 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { env } from "@/lib/env";
 import { requireRequestScope } from "@/lib/request-scope";
-import { managerSnapshotSchema, type ManagerSnapshot } from "@/lib/manager";
-import { readManagerSnapshot } from "@/lib/manager/server/store";
+import { managerSnapshotSchema, type ManagerSnapshot } from "@/modules/manager";
+import { readManagerSnapshot } from "@/modules/manager/server/store";
 import { GoogleWorkspaceAction } from "./_components/google-workspace-action";
 import { ModelSelector } from "./_components/model-selector";
 

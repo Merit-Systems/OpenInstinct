@@ -4,7 +4,7 @@ import {
   readEncryptedSecret,
   writeEncryptedSecret,
 } from "@/db/services/secrets";
-import type { AccessScope } from "../../access-scope";
+import type { AccessScope } from "@/lib/access-scope";
 import { env } from "@/lib/env";
 
 export function secretStoreStatus() {

@@ -2,7 +2,6 @@ import {
   getTokenResponse,
   NoValidTokenError,
   type ConnectTokenResponse,
-  startAuthorization,
 } from "@vercel/connect";
 import type * as VercelConnect from "@vercel/connect";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -11,19 +10,22 @@ import { googleWorkspaceAuthOptions } from "@/agent/lib/google-workspace/client"
 import { gmailUpdateLabels } from "@/agent/lib/google-workspace/gmail";
 import { googleWorkspaceWriteApproval } from "@/agent/tools/google_workspace_write";
 import {
-  GOOGLE_WORKSPACE_SCOPES,
+  googleWorkspaceScopes,
   googleWorkspaceSubject,
   googleWorkspaceTokenParams,
-} from "@/lib/google-workspace/config";
-import {
-  getGoogleWorkspaceConnection,
-  startGoogleWorkspaceAuthorization,
-} from "@/lib/google-workspace/server";
+} from "@/lib/google-workspace";
+import { readManagerSnapshot } from "@/modules/manager/server/store";
 
 vi.mock("@vercel/connect", async (importOriginal) => ({
   ...(await importOriginal<typeof VercelConnect>()),
   getTokenResponse: vi.fn<typeof getTokenResponse>(),
-  startAuthorization: vi.fn<typeof startAuthorization>(),
+}));
+vi.mock("@/db/services/settings", () => ({
+  getGatewayModel: vi.fn<() => Promise<string>>().mockResolvedValue("test"),
+  selectGatewayModel: vi.fn<() => Promise<void>>(),
+}));
+vi.mock("@/modules/manager/server/vault", () => ({
+  readManagerVaultItems: vi.fn<() => Promise<never[]>>().mockResolvedValue([]),
 }));
 
 afterEach(() => vi.clearAllMocks());
@@ -35,14 +37,14 @@ const scope = {
 
 describe("Google Workspace connection", () => {
   it("uses one explicit least-privilege scope set", () => {
-    expect(GOOGLE_WORKSPACE_SCOPES).not.toContain("*");
-    expect(GOOGLE_WORKSPACE_SCOPES).not.toContain("https://mail.google.com/");
+    expect(googleWorkspaceScopes).not.toContain("*");
+    expect(googleWorkspaceScopes).not.toContain("https://mail.google.com/");
     expect(googleWorkspaceTokenParams(scope.userId)).toEqual({
-      scopes: [...GOOGLE_WORKSPACE_SCOPES],
+      scopes: [...googleWorkspaceScopes],
       subject: googleWorkspaceSubject(scope.userId),
     });
     expect(googleWorkspaceAuthOptions.tokenParams).toEqual({
-      scopes: [...GOOGLE_WORKSPACE_SCOPES],
+      scopes: [...googleWorkspaceScopes],
     });
     expect(googleWorkspaceAuthOptions.validate).toBe(true);
   });
@@ -64,9 +66,11 @@ describe("Google Workspace connection", () => {
     };
     vi.mocked(getTokenResponse).mockResolvedValue(response);
 
-    await expect(getGoogleWorkspaceConnection(scope)).resolves.toEqual({
-      accountLabel: "person@example.com",
-      state: "connected",
+    await expect(readManagerSnapshot(scope)).resolves.toMatchObject({
+      googleWorkspace: {
+        accountLabel: "person@example.com",
+        state: "connected",
+      },
     });
     expect(getTokenResponse).toHaveBeenCalledWith(
       expect.any(String),
@@ -79,32 +83,9 @@ describe("Google Workspace connection", () => {
     vi.mocked(getTokenResponse).mockRejectedValue(
       new NoValidTokenError("No Google grant for this user.")
     );
-    await expect(getGoogleWorkspaceConnection(scope)).resolves.toEqual({
-      accountLabel: null,
-      state: "disconnected",
+    await expect(readManagerSnapshot(scope)).resolves.toMatchObject({
+      googleWorkspace: { accountLabel: null, state: "disconnected" },
     });
-  });
-
-  it("starts authorization with the canonical subject and scopes", async () => {
-    vi.mocked(startAuthorization).mockResolvedValue({
-      request: "request",
-      url: "https://connect.vercel.com/request",
-      verifier: "verifier",
-    });
-
-    await expect(
-      startGoogleWorkspaceAuthorization(
-        scope,
-        "https://openinstinct.example/?google=connected"
-      )
-    ).resolves.toBe("https://connect.vercel.com/request");
-    expect(startAuthorization).toHaveBeenCalledWith(
-      expect.any(String),
-      googleWorkspaceTokenParams(scope.userId),
-      expect.objectContaining({
-        callbackUrl: "https://openinstinct.example/?google=connected",
-      })
-    );
   });
 
   it("maps reversible Gmail actions to system labels", () => {

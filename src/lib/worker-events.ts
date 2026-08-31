@@ -1,6 +1,6 @@
-import { z } from "zod";
 import type { MessageStreamEvent } from "eve/client";
-import { parseTaskCompletionOutput } from "../task-completion";
+import { z } from "zod";
+import { parseTaskCompletionOutput } from "@/lib/worker-completion";
 
 const workerTaskNotificationPrefix = /^Background task (\S+) \(worker\) /u;
 const terminalTaskControlSchema = z.object({
@@ -19,7 +19,7 @@ interface BackgroundWorkerTaskState {
   terminalAt?: string;
 }
 
-export function measureBrowserTask(
+export function measureWorkerTask(
   events: readonly MessageStreamEvent[],
   fallbackDurationMs: number
 ) {
@@ -64,20 +64,19 @@ export function measureBrowserTask(
   };
 }
 
-export function didCompleteBrowserWorker(
-  events: readonly MessageStreamEvent[]
-) {
+export function didCompleteWorker(events: readonly MessageStreamEvent[]) {
   return readTaskCompletion(events)?.status === "success";
 }
 
-export function didFinishBrowserWorker(events: readonly MessageStreamEvent[]) {
+export function didFinishWorker(events: readonly MessageStreamEvent[]) {
   const backgroundTasks = readBackgroundWorkerTasks(events);
   if (backgroundTasks.length > 0) {
     return backgroundTasks.every((task) => task.status !== undefined);
   }
   return readTaskCompletion(events) !== undefined;
 }
-export function terminalBrowserMessage(
+
+export function terminalWorkerMessage(
   message: string | undefined,
   events: readonly MessageStreamEvent[]
 ) {

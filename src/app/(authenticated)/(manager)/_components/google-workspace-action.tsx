@@ -1,7 +1,7 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
-import type { ManagerSnapshot } from "@/lib/manager";
+import type { ManagerSnapshot } from "@/modules/manager";
 import { api } from "@/trpc/client";
 
 export function GoogleWorkspaceAction({
