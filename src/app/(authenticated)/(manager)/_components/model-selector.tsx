@@ -31,13 +31,16 @@ const priceFormatter = new Intl.NumberFormat("en-US", {
 export function ModelSelector({ modelId }: { readonly modelId: string }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string>();
   const catalog = api.models.list.useQuery(undefined, {
     enabled: open,
     staleTime: 5 * 60 * 1000,
   });
-  const mutateManager = api.manager.mutate.useMutation();
+  const selectModel = api.settings.selectModel.useMutation({
+    onSuccess: () => {
+      setOpen(false);
+      router.refresh();
+    },
+  });
   const groupedModels = useMemo(() => {
     const groups = new Map<string, ModelCatalogItem[]>();
     for (const model of catalog.data ?? []) {
@@ -50,31 +53,26 @@ export function ModelSelector({ modelId }: { readonly modelId: string }) {
     );
   }, [catalog.data]);
 
-  const select = async (selectedModelId: string) => {
-    setBusy(true);
-    setError(undefined);
-    try {
-      await mutateManager.mutateAsync({
-        action: "model.select",
-        modelId: selectedModelId,
-      });
-      setOpen(false);
-      router.refresh();
-    } catch {
-      setError("Unable to update the workspace. Try again.");
-    } finally {
-      setBusy(false);
-    }
-  };
+  const select = (selectedModelId: string) =>
+    selectModel.mutate({ modelId: selectedModelId });
 
   const catalogError =
-    catalog.error instanceof Error ? catalog.error.message : error;
+    catalog.error instanceof Error
+      ? catalog.error.message
+      : selectModel.error
+        ? "Unable to update the workspace. Try again."
+        : undefined;
 
   return (
     <ModelSelectorRoot onOpenChange={setOpen} open={open}>
       <ModelSelectorTrigger
         render={
-          <Button disabled={busy} size="sm" type="button" variant="outline" />
+          <Button
+            disabled={selectModel.isPending}
+            size="sm"
+            type="button"
+            variant="outline"
+          />
         }
       >
         <ModelSelectorLogo
@@ -101,7 +99,7 @@ export function ModelSelector({ modelId }: { readonly modelId: string }) {
                 <ModelSelectorItem
                   data-checked={model.id === modelId}
                   key={model.id}
-                  onSelect={() => void select(model.id)}
+                  onSelect={() => select(model.id)}
                   value={`${model.name} ${model.id} ${model.ownedBy}`}
                 >
                   <ModelSelectorLogo provider={providerLogo(model.ownedBy)} />

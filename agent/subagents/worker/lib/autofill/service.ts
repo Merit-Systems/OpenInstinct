@@ -3,7 +3,7 @@ import type {
   AutofillClaim,
   AutofillSuggestion,
   DetectedAutofillSurface,
-} from "../vault-autofill-protocol";
+} from "./protocol";
 
 export interface AutofillFillTarget {
   readonly availableTokens: ReadonlySet<string>;

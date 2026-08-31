@@ -1,6 +1,7 @@
 "use client";
 
 import { type FormEvent, useState } from "react";
+import { useRouter } from "next/navigation";
 import { z } from "zod";
 import { Button } from "@/components/ui/button";
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
@@ -11,14 +12,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import type { ManagerMutation } from "@/modules/manager";
 import {
   loginIdentifierSchema,
   loginIdentifierTypeSchema,
   loginOriginSchema,
   serializeLoginVaultPayload,
-} from "@/modules/manager/vault-payload";
-import { VaultFormField } from "./vault-form-field";
+} from "@/lib/vault";
+import { api } from "@/trpc/client";
+import { FormField } from "../field";
 
 const loginFormSchema = z
   .object({
@@ -55,21 +56,24 @@ const loginFormSchema = z
     }
   });
 
-export function LoginVaultForm({
-  busy,
+export function LoginForm({
   initialIdentifierType,
   initialLabel = "",
   initialOrigin = "",
   onSaved,
-  onSubmit,
 }: {
-  readonly busy: boolean;
   readonly initialIdentifierType?: z.infer<typeof loginIdentifierTypeSchema>;
   readonly initialLabel?: string;
   readonly initialOrigin?: string;
   readonly onSaved: () => void;
-  readonly onSubmit: (mutation: ManagerMutation) => Promise<boolean>;
 }) {
+  const router = useRouter();
+  const create = api.vault.create.useMutation({
+    onSuccess: () => {
+      router.refresh();
+      onSaved();
+    },
+  });
   const [attempted, setAttempted] = useState(false);
   const [form, setForm] = useState<z.input<typeof loginFormSchema>>({
     identifier: "",
@@ -82,40 +86,36 @@ export function LoginVaultForm({
   const errors =
     attempted && !result.success ? result.error.flatten().fieldErrors : {};
 
-  const submit = async (event: FormEvent) => {
+  const submit = (event: FormEvent) => {
     event.preventDefault();
     setAttempted(true);
     if (!result.success) return;
 
     const authentication = loginAuthentication(result.data);
-    const saved = await onSubmit({
-      action: "vault.create",
-      input: {
-        account: "",
+    create.mutate({
+      account: "",
+      kind: "login",
+      label: result.data.nickname,
+      secret: serializeLoginVaultPayload({
+        authentication,
+        identifier: {
+          type: result.data.identifierType,
+          value: result.data.identifier,
+        },
         kind: "login",
-        label: result.data.nickname,
-        secret: serializeLoginVaultPayload({
-          authentication,
-          identifier: {
-            type: result.data.identifierType,
-            value: result.data.identifier,
-          },
-          kind: "login",
-          origin: result.data.origin,
-          version: 2,
-        }),
-      },
+        origin: result.data.origin,
+        version: 2,
+      }),
     });
-    if (saved) onSaved();
   };
 
   const passwordOptional = form.identifierType !== "username";
 
   return (
-    <form noValidate onSubmit={(event) => void submit(event)}>
+    <form noValidate onSubmit={submit}>
       <FieldGroup className="gap-3">
         {initialLabel ? null : (
-          <VaultFormField
+          <FormField
             error={errors.nickname?.[0]}
             id="vault-login-label"
             label="Name"
@@ -126,7 +126,7 @@ export function LoginVaultForm({
             value={form.nickname}
           />
         )}
-        <VaultFormField
+        <FormField
           autoComplete="url"
           error={errors.origin?.[0]}
           id="vault-login-origin"
@@ -173,7 +173,7 @@ export function LoginVaultForm({
               </Select>
             </Field>
           )}
-          <VaultFormField
+          <FormField
             autoComplete="username"
             error={errors.identifier?.[0]}
             id="vault-login-identifier"
@@ -185,7 +185,7 @@ export function LoginVaultForm({
             value={form.identifier}
           />
         </div>
-        <VaultFormField
+        <FormField
           aria-describedby={
             passwordOptional ? "vault-login-password-description" : undefined
           }
@@ -209,7 +209,7 @@ export function LoginVaultForm({
         ) : null}
       </FieldGroup>
       <div className="mt-5 flex justify-end">
-        <Button disabled={busy} type="submit">
+        <Button disabled={create.isPending} type="submit">
           Save login
         </Button>
       </div>

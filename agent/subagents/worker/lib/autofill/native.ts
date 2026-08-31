@@ -1,7 +1,7 @@
 import Kernel from "@onkernel/sdk";
 import { z } from "zod";
 import { env } from "@/lib/env";
-import type { AutofillClaim } from "../vault-autofill-protocol";
+import type { AutofillClaim } from "./protocol";
 import {
   classifyNativeLoginControl,
   nativeLoginAutofillTokens,
@@ -9,7 +9,7 @@ import {
   nativeLoginFillFunctionDeclaration,
   selectNativeLoginFills,
   type ClassifiedNativeLoginControl,
-} from "./kernel-login-autofill";
+} from "./login";
 
 const targetListSchema = z.object({
   targetInfos: z.array(

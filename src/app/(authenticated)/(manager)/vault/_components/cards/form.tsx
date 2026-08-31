@@ -1,6 +1,7 @@
 "use client";
 
 import { type FormEvent, useState } from "react";
+import { useRouter } from "next/navigation";
 import { z } from "zod";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -11,12 +12,12 @@ import {
   FieldLabel,
 } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
-import type { ManagerMutation } from "@/modules/manager";
 import {
   paymentCardBrand,
   paymentCardType,
   serializePaymentCard,
-} from "@/modules/manager/payment-card";
+} from "@/lib/vault";
+import { api } from "@/trpc/client";
 
 const paymentCardFormSchema = z.object({
   billingPostalCode: z.string().trim().min(1, "Enter the billing postal code."),
@@ -37,17 +38,20 @@ const paymentCardFormSchema = z.object({
   nickname: z.string().trim().max(120),
 });
 
-export function PaymentCardForm({
-  busy,
+export function CardForm({
   initialLabel = "",
   onSaved,
-  onSubmit,
 }: {
-  readonly busy: boolean;
   readonly initialLabel?: string;
   readonly onSaved: () => void;
-  readonly onSubmit: (mutation: ManagerMutation) => Promise<boolean>;
 }) {
+  const router = useRouter();
+  const create = api.vault.create.useMutation({
+    onSuccess: () => {
+      router.refresh();
+      onSaved();
+    },
+  });
   const [attempted, setAttempted] = useState(false);
   const [form, setForm] = useState({
     billingPostalCode: "",
@@ -62,7 +66,7 @@ export function PaymentCardForm({
   const errors =
     attempted && !result.success ? result.error.flatten().fieldErrors : {};
 
-  const submit = async (event: FormEvent) => {
+  const submit = (event: FormEvent) => {
     event.preventDefault();
     setAttempted(true);
     if (!result.success) return;
@@ -72,30 +76,25 @@ export function PaymentCardForm({
 
     const brand = paymentCardBrand(result.data.cardNumber);
     const lastFour = result.data.cardNumber.slice(-4);
-    const saved = await onSubmit({
-      action: "vault.create",
-      input: {
-        account: `${brand} · •••• ${lastFour}`,
-        kind: "payment",
-        label: result.data.nickname || `${brand} ${lastFour}`,
-        secret: serializePaymentCard({
-          billingPostalCode: result.data.billingPostalCode,
-          cardholderName: result.data.cardholderName,
-          expirationMonth: Number(month),
-          expirationYear: 2000 + Number(shortYear),
-          kind: "payment-card",
-          number: result.data.cardNumber,
-          securityCode: result.data.cvc,
-          version: 1,
-        }),
-      },
+    create.mutate({
+      account: `${brand} · •••• ${lastFour}`,
+      kind: "payment",
+      label: result.data.nickname || `${brand} ${lastFour}`,
+      secret: serializePaymentCard({
+        billingPostalCode: result.data.billingPostalCode,
+        cardholderName: result.data.cardholderName,
+        expirationMonth: Number(month),
+        expirationYear: 2000 + Number(shortYear),
+        kind: "payment-card",
+        number: result.data.cardNumber,
+        securityCode: result.data.cvc,
+        version: 1,
+      }),
     });
-
-    if (saved) onSaved();
   };
 
   return (
-    <form noValidate onSubmit={(event) => void submit(event)}>
+    <form noValidate onSubmit={submit}>
       <FieldGroup className="gap-3">
         <div className="grid gap-3 sm:grid-cols-2">
           <CardField
@@ -194,7 +193,7 @@ export function PaymentCardForm({
       </FieldGroup>
 
       <div className="mt-5 flex justify-end">
-        <Button disabled={busy} type="submit">
+        <Button disabled={create.isPending} type="submit">
           Save card
         </Button>
       </div>

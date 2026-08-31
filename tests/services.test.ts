@@ -216,21 +216,30 @@ describe("database services", () => {
       false
     );
 
-    const now = new Date().toISOString();
-    await vault.createVaultItem(alice, {
+    const { serializeLoginVaultPayload } = await import("@/lib/vault");
+    await vault.saveVaultItem(alice, {
       account: "alice@example.com",
-      createdAt: now,
-      id: "vault-alice",
       kind: "login",
       label: "Alice",
-      updatedAt: now,
+      secret: serializeLoginVaultPayload({
+        authentication: { password: "correct horse", type: "password" },
+        identifier: { type: "email", value: "alice@example.com" },
+        kind: "login",
+        origin: "https://example.com",
+        version: 2,
+      }),
     });
-    expect(await vault.readVaultItem(alice, "vault-alice")).toMatchObject({
-      id: "vault-alice",
+    const [aliceVaultItem] = await vault.listVaultItems(alice);
+    expect(aliceVaultItem).toMatchObject({
+      label: "Alice",
     });
-    expect(await vault.readVaultItem(bob, "vault-alice")).toBeUndefined();
+    expect(
+      await vault.readVaultItem(bob, aliceVaultItem?.id ?? "vault-alice")
+    ).toBeUndefined();
     expect(await vault.listVaultItems(alice)).toHaveLength(1);
-    expect(await vault.deleteVaultItem(bob, "vault-alice")).toBe(false);
+    expect(
+      await vault.deleteVaultItem(bob, aliceVaultItem?.id ?? "vault-alice")
+    ).toBe(false);
 
     await secrets.writeEncryptedSecret(alice, "shared-id", "ciphertext-alice");
     await secrets.writeEncryptedSecret(bob, "shared-id", "ciphertext-bob");

@@ -1,12 +1,13 @@
 "use client";
 
 import { type FormEvent, useState } from "react";
+import { useRouter } from "next/navigation";
 import { z } from "zod";
 import { Button } from "@/components/ui/button";
 import { FieldGroup } from "@/components/ui/field";
-import type { ManagerMutation } from "@/modules/manager";
-import { serializeContactVaultPayload } from "@/modules/manager/vault-payload";
-import { VaultFormField } from "./vault-form-field";
+import { serializeContactVaultPayload } from "@/lib/vault";
+import { api } from "@/trpc/client";
+import { FormField } from "../field";
 
 const contactFormSchema = z
   .object({
@@ -33,17 +34,20 @@ const contactFormSchema = z
     path: ["fullName"],
   });
 
-export function ContactVaultForm({
-  busy,
+export function ContactForm({
   initialLabel = "",
   onSaved,
-  onSubmit,
 }: {
-  readonly busy: boolean;
   readonly initialLabel?: string;
   readonly onSaved: () => void;
-  readonly onSubmit: (mutation: ManagerMutation) => Promise<boolean>;
 }) {
+  const router = useRouter();
+  const create = api.vault.create.useMutation({
+    onSuccess: () => {
+      router.refresh();
+      onSaved();
+    },
+  });
   const [attempted, setAttempted] = useState(false);
   const [form, setForm] = useState({
     email: "",
@@ -55,37 +59,33 @@ export function ContactVaultForm({
   const errors =
     attempted && !result.success ? result.error.flatten().fieldErrors : {};
 
-  const submit = async (event: FormEvent) => {
+  const submit = (event: FormEvent) => {
     event.preventDefault();
     setAttempted(true);
     if (!result.success) return;
-    const saved = await onSubmit({
-      action: "vault.create",
-      input: {
-        account: "",
+    create.mutate({
+      account: "",
+      kind: "contact",
+      label: result.data.nickname,
+      secret: serializeContactVaultPayload({
+        email: result.data.email.length ? result.data.email : undefined,
+        fullName: result.data.fullName.length
+          ? result.data.fullName
+          : undefined,
         kind: "contact",
-        label: result.data.nickname,
-        secret: serializeContactVaultPayload({
-          email: result.data.email.length ? result.data.email : undefined,
-          fullName: result.data.fullName.length
-            ? result.data.fullName
-            : undefined,
-          kind: "contact",
-          phone: result.data.phone.length ? result.data.phone : undefined,
-          version: 1,
-        }),
-      },
+        phone: result.data.phone.length ? result.data.phone : undefined,
+        version: 1,
+      }),
     });
-    if (saved) onSaved();
   };
 
   const update = (field: keyof typeof form, value: string) =>
     setForm((current) => ({ ...current, [field]: value }));
 
   return (
-    <form noValidate onSubmit={(event) => void submit(event)}>
+    <form noValidate onSubmit={submit}>
       <FieldGroup className="gap-3">
-        <VaultFormField
+        <FormField
           error={errors.nickname?.[0]}
           id="vault-contact-label"
           label="Name"
@@ -93,7 +93,7 @@ export function ContactVaultForm({
           placeholder="Checkout"
           value={form.nickname}
         />
-        <VaultFormField
+        <FormField
           autoComplete="name"
           error={errors.fullName?.[0]}
           id="vault-contact-name"
@@ -101,7 +101,7 @@ export function ContactVaultForm({
           onChange={(value) => update("fullName", value)}
           value={form.fullName}
         />
-        <VaultFormField
+        <FormField
           autoComplete="email"
           error={errors.email?.[0]}
           id="vault-contact-email"
@@ -110,7 +110,7 @@ export function ContactVaultForm({
           type="email"
           value={form.email}
         />
-        <VaultFormField
+        <FormField
           autoComplete="tel"
           error={errors.phone?.[0]}
           id="vault-contact-phone"
@@ -121,7 +121,7 @@ export function ContactVaultForm({
         />
       </FieldGroup>
       <div className="mt-5 flex justify-end">
-        <Button disabled={busy} type="submit">
+        <Button disabled={create.isPending} type="submit">
           Save contact
         </Button>
       </div>

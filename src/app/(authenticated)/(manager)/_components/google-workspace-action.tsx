@@ -1,13 +1,12 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
-import type { ManagerSnapshot } from "@/modules/manager";
 import { api } from "@/trpc/client";
 
 export function GoogleWorkspaceAction({
   state,
 }: {
-  readonly state?: ManagerSnapshot["googleWorkspace"]["state"];
+  readonly state?: "connected" | "disconnected" | "unavailable";
 }) {
   const update = api.googleWorkspace.update.useMutation({
     onError: () => window.location.assign("/?google=unavailable"),

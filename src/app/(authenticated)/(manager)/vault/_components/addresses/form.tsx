@@ -1,12 +1,13 @@
 "use client";
 
 import { type FormEvent, useState } from "react";
+import { useRouter } from "next/navigation";
 import { z } from "zod";
 import { Button } from "@/components/ui/button";
 import { FieldGroup } from "@/components/ui/field";
-import type { ManagerMutation } from "@/modules/manager";
-import { serializeAddressVaultPayload } from "@/modules/manager/vault-payload";
-import { VaultFormField } from "./vault-form-field";
+import { serializeAddressVaultPayload } from "@/lib/vault";
+import { api } from "@/trpc/client";
+import { FormField } from "../field";
 
 const addressFormSchema = z.object({
   city: z.string().trim().min(1, "Enter the city."),
@@ -19,17 +20,20 @@ const addressFormSchema = z.object({
   region: z.string().trim().min(1, "Enter the state, province, or region."),
 });
 
-export function AddressVaultForm({
-  busy,
+export function AddressForm({
   initialLabel = "",
   onSaved,
-  onSubmit,
 }: {
-  readonly busy: boolean;
   readonly initialLabel?: string;
   readonly onSaved: () => void;
-  readonly onSubmit: (mutation: ManagerMutation) => Promise<boolean>;
 }) {
+  const router = useRouter();
+  const create = api.vault.create.useMutation({
+    onSuccess: () => {
+      router.refresh();
+      onSaved();
+    },
+  });
   const [attempted, setAttempted] = useState(false);
   const [form, setForm] = useState({
     city: "",
@@ -45,34 +49,30 @@ export function AddressVaultForm({
   const errors =
     attempted && !result.success ? result.error.flatten().fieldErrors : {};
 
-  const submit = async (event: FormEvent) => {
+  const submit = (event: FormEvent) => {
     event.preventDefault();
     setAttempted(true);
     if (!result.success) return;
-    const saved = await onSubmit({
-      action: "vault.create",
-      input: {
-        account: "",
+    create.mutate({
+      account: "",
+      kind: "address",
+      label: result.data.nickname,
+      secret: serializeAddressVaultPayload({
+        ...result.data,
         kind: "address",
-        label: result.data.nickname,
-        secret: serializeAddressVaultPayload({
-          ...result.data,
-          kind: "address",
-          version: 1,
-        }),
-      },
+        version: 1,
+      }),
     });
-    if (saved) onSaved();
   };
 
   const update = (field: keyof typeof form, value: string) =>
     setForm((current) => ({ ...current, [field]: value }));
 
   return (
-    <form noValidate onSubmit={(event) => void submit(event)}>
+    <form noValidate onSubmit={submit}>
       <FieldGroup className="gap-3">
         <div className="grid gap-3 sm:grid-cols-2">
-          <VaultFormField
+          <FormField
             error={errors.nickname?.[0]}
             id="vault-address-label"
             label="Name"
@@ -80,7 +80,7 @@ export function AddressVaultForm({
             placeholder="Home"
             value={form.nickname}
           />
-          <VaultFormField
+          <FormField
             autoComplete="name"
             error={errors.recipientName?.[0]}
             id="vault-address-recipient"
@@ -89,7 +89,7 @@ export function AddressVaultForm({
             value={form.recipientName}
           />
         </div>
-        <VaultFormField
+        <FormField
           autoComplete="address-line1"
           error={errors.line1?.[0]}
           id="vault-address-line1"
@@ -97,7 +97,7 @@ export function AddressVaultForm({
           onChange={(value) => update("line1", value)}
           value={form.line1}
         />
-        <VaultFormField
+        <FormField
           autoComplete="address-line2"
           error={errors.line2?.[0]}
           id="vault-address-line2"
@@ -106,7 +106,7 @@ export function AddressVaultForm({
           value={form.line2}
         />
         <div className="grid gap-3 sm:grid-cols-2">
-          <VaultFormField
+          <FormField
             autoComplete="address-level2"
             error={errors.city?.[0]}
             id="vault-address-city"
@@ -114,7 +114,7 @@ export function AddressVaultForm({
             onChange={(value) => update("city", value)}
             value={form.city}
           />
-          <VaultFormField
+          <FormField
             autoComplete="address-level1"
             error={errors.region?.[0]}
             id="vault-address-region"
@@ -124,7 +124,7 @@ export function AddressVaultForm({
           />
         </div>
         <div className="grid grid-cols-[1fr_0.6fr] gap-3">
-          <VaultFormField
+          <FormField
             autoComplete="postal-code"
             error={errors.postalCode?.[0]}
             id="vault-address-postal"
@@ -132,7 +132,7 @@ export function AddressVaultForm({
             onChange={(value) => update("postalCode", value)}
             value={form.postalCode}
           />
-          <VaultFormField
+          <FormField
             autoComplete="country"
             error={errors.countryCode?.[0]}
             id="vault-address-country"
@@ -144,7 +144,7 @@ export function AddressVaultForm({
         </div>
       </FieldGroup>
       <div className="mt-5 flex justify-end">
-        <Button disabled={busy} type="submit">
+        <Button disabled={create.isPending} type="submit">
           Save address
         </Button>
       </div>

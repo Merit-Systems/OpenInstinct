@@ -3,7 +3,7 @@
 import { Field, FieldError, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 
-export function VaultFormField({
+export function FormField({
   error,
   id,
   label,

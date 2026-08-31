@@ -1,14 +1,18 @@
-import { listVaultItems, readVaultItem } from "@/db/services/vault";
-import type { VaultItemKind } from "..";
-import { parsePaymentCardSecret } from "../payment-card";
-import type { DetectedAutofillSurface } from "../vault-autofill-protocol";
+import {
+  hasVaultSecret,
+  listVaultItems,
+  readVaultItem,
+  readVaultSecret,
+} from "@/db/services/vault";
 import {
   parseAddressVaultPayload,
   parseContactVaultPayload,
   parseLoginVaultPayload,
-} from "../vault-payload";
-import { hasSecret, readSecret } from "./secret-store";
-import type { AutofillVaultAdapter } from "./vault-autofill";
+  parsePaymentCardSecret,
+  type VaultItemKind,
+} from "@/lib/vault";
+import type { DetectedAutofillSurface } from "./protocol";
+import type { AutofillVaultAdapter } from "./service";
 
 interface VaultAutofillCodec {
   readonly claims: (
@@ -155,96 +159,70 @@ const codecs: readonly VaultAutofillCodec[] = [
   },
 ];
 
-export function createVaultAutofillProvider(
-  dependencies: {
-    readonly hasSecret?: typeof hasSecret;
-    readonly listVaultItems?: typeof listVaultItems;
-    readonly readSecret?: typeof readSecret;
-    readonly readVaultItem?: typeof readVaultItem;
-  } = {}
-): AutofillVaultAdapter {
-  const stores = {
-    hasSecret: dependencies.hasSecret ?? hasSecret,
-    listVaultItems: dependencies.listVaultItems ?? listVaultItems,
-    readSecret: dependencies.readSecret ?? readSecret,
-    readVaultItem: dependencies.readVaultItem ?? readVaultItem,
-  };
+export const vaultAutofillProvider: AutofillVaultAdapter = {
+  async listSuggestions(scope, origin, surface) {
+    const compatibleCodecs = codecsForSurface(surface);
+    if (compatibleCodecs.length === 0) return [];
 
-  return {
-    async listSuggestions(scope, origin, surface) {
-      const compatibleCodecs = codecsForSurface(surface);
-      if (compatibleCodecs.length === 0) return [];
-
-      const items = await stores.listVaultItems(scope);
-      const compatibleItems = items.flatMap((item) => {
-        const codec = compatibleCodecs.find(
-          (candidate) =>
-            candidate.vaultKind === item.kind &&
-            surface.fields.some(({ token }) => candidate.tokens.includes(token))
-        );
-        return codec ? [{ codec, item }] : [];
-      });
-      const availability = await Promise.all(
-        compatibleItems.map(async ({ codec, item }) => {
-          if (!codec.isAvailableAtOrigin) {
-            return stores.hasSecret({ id: item.id, namespace: "vault", scope });
-          }
-          const secret = await stores.readSecret({
-            id: item.id,
-            namespace: "vault",
-            scope,
-          });
-          return (
-            secret !== undefined && codec.isAvailableAtOrigin(secret, origin)
-          );
-        })
-      );
-
-      return compatibleItems.flatMap(({ codec, item }, index) => {
-        if (!availability[index]) return [];
-        return [
-          {
-            candidateId: item.id,
-            label: item.label,
-            matchReason: codec.matchReason,
-            summary: item.account,
-          },
-        ];
-      });
-    },
-
-    async materializeClaims(scope, candidateId, target) {
-      const item = await stores.readVaultItem(scope, candidateId);
-      if (!item) throw new Error("The selected vault item was not found.");
-
-      const codec = codecs.find(
+    const items = await listVaultItems(scope);
+    const compatibleItems = items.flatMap((item) => {
+      const codec = compatibleCodecs.find(
         (candidate) =>
           candidate.vaultKind === item.kind &&
-          candidate.surfaceKinds.includes(target.surface.kind)
+          surface.fields.some(({ token }) => candidate.tokens.includes(token))
       );
-      if (!codec) {
-        throw new Error(
-          "The selected vault item is not compatible with this form."
+      return codec ? [{ codec, item }] : [];
+    });
+    const availability = await Promise.all(
+      compatibleItems.map(async ({ codec, item }) => {
+        if (!codec.isAvailableAtOrigin) {
+          return hasVaultSecret(scope, item.id);
+        }
+        const secret = await readVaultSecret(scope, item.id);
+        return (
+          secret !== undefined && codec.isAvailableAtOrigin(secret, origin)
         );
-      }
+      })
+    );
 
-      const secret = await stores.readSecret({
-        id: item.id,
-        namespace: "vault",
-        scope,
-      });
-      if (!secret) throw new Error("The selected vault item has no secret.");
+    return compatibleItems.flatMap(({ codec, item }, index) => {
+      if (!availability[index]) return [];
+      return [
+        {
+          candidateId: item.id,
+          label: item.label,
+          matchReason: codec.matchReason,
+          summary: item.account,
+        },
+      ];
+    });
+  },
 
-      const values = codec.claims(item, secret, target.origin);
-      return [...target.availableTokens].flatMap((token) => {
-        const value = values.get(token);
-        return value ? [{ id: crypto.randomUUID(), token, value }] : [];
-      });
-    },
-  };
-}
+  async materializeClaims(scope, candidateId, target) {
+    const item = await readVaultItem(scope, candidateId);
+    if (!item) throw new Error("The selected vault item was not found.");
 
-export const vaultAutofillProvider = createVaultAutofillProvider();
+    const codec = codecs.find(
+      (candidate) =>
+        candidate.vaultKind === item.kind &&
+        candidate.surfaceKinds.includes(target.surface.kind)
+    );
+    if (!codec) {
+      throw new Error(
+        "The selected vault item is not compatible with this form."
+      );
+    }
+
+    const secret = await readVaultSecret(scope, item.id);
+    if (!secret) throw new Error("The selected vault item has no secret.");
+
+    const values = codec.claims(item, secret, target.origin);
+    return [...target.availableTokens].flatMap((token) => {
+      const value = values.get(token);
+      return value ? [{ id: crypto.randomUUID(), token, value }] : [];
+    });
+  },
+};
 
 function codecsForSurface(surface: DetectedAutofillSurface) {
   return codecs.filter((codec) => codec.surfaceKinds.includes(surface.kind));

@@ -8,7 +8,6 @@ const allowedSrcDirectories = [
   "components",
   "hooks",
   "lib",
-  "modules",
   "trpc",
 ];
 
@@ -31,13 +30,10 @@ const expectedLibFiles = [
   "request-scope.ts",
   "same-origin.ts",
   "utils.ts",
+  "vault.ts",
   "worker-completion.ts",
   "worker-events.ts",
 ];
-
-const expectedModuleDirectories = ["manager"];
-
-const expectedModuleFiles: string[] = [];
 
 function directories(directory: string) {
   return readdirSync(directory)
@@ -52,7 +48,7 @@ function files(directory: string) {
 }
 
 describe("source layout", () => {
-  it("keeps feature-owned code under modules instead of src root", () => {
+  it("keeps src limited to application layers", () => {
     expect(directories("src")).toEqual(allowedSrcDirectories);
   });
 
@@ -63,10 +59,5 @@ describe("source layout", () => {
       expect(libDirectories).not.toContain(directory);
     }
     expect(files("src/lib")).toEqual(expectedLibFiles);
-  });
-
-  it("keeps modules limited to cross-cutting product domains", () => {
-    expect(directories("src/modules")).toEqual(expectedModuleDirectories);
-    expect(files("src/modules")).toEqual(expectedModuleFiles);
   });
 });

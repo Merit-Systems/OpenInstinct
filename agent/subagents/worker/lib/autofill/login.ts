@@ -1,4 +1,4 @@
-import type { AutofillClaim } from "../vault-autofill-protocol";
+import type { AutofillClaim } from "./protocol";
 
 export const nativeLoginAutofillTokens = [
   "username",

@@ -2,8 +2,6 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { AccessScope } from "@/lib/access-scope";
 
 const mocks = vi.hoisted(() => ({
-  applyManagerMutation:
-    vi.fn<(scope: AccessScope, input: unknown) => Promise<unknown>>(),
   disconnectGoogleWorkspace: vi.fn<(scope: AccessScope) => Promise<void>>(),
   getAvailableModels: vi.fn<() => Promise<{ models: unknown[] }>>(),
   listOwnedSessionIds: vi.fn<(scope: AccessScope) => Promise<Set<string>>>(),
@@ -46,10 +44,6 @@ vi.mock("@vercel/connect", () => ({
   revokeToken: mocks.disconnectGoogleWorkspace,
   startAuthorization: mocks.startGoogleWorkspaceAuthorization,
 }));
-vi.mock("@/modules/manager/server/store", () => ({
-  applyManagerMutation: mocks.applyManagerMutation,
-}));
-
 import { appRouter } from "./router";
 
 const scope = {

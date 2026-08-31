@@ -1,4 +1,32 @@
+import creditCardType from "credit-card-type";
 import { z } from "zod";
+
+export const vaultItemKindSchema = z.enum([
+  "login",
+  "payment",
+  "address",
+  "contact",
+  "phone",
+  "identity",
+  "token",
+]);
+
+const vaultCreateItemKindSchema = vaultItemKindSchema.extract([
+  "login",
+  "payment",
+  "address",
+  "contact",
+]);
+
+const vaultItemSchema = z.object({
+  account: z.string(),
+  createdAt: z.string(),
+  hasSecret: z.boolean(),
+  id: z.string(),
+  kind: vaultItemKindSchema,
+  label: z.string(),
+  updatedAt: z.string(),
+});
 
 const boundedValue = z.string().trim().min(1).max(20_000);
 const optionalBoundedValue = z
@@ -151,6 +179,79 @@ export const contactVaultPayloadStringSchema = serializedPayloadSchema(
   "Enter at least one contact value."
 );
 
+export const paymentCardSecretSchema = z.object({
+  billingPostalCode: z.string().trim().min(1).max(20),
+  cardholderName: z.string().trim().min(1).max(200),
+  expirationMonth: z.number().int().min(1).max(12),
+  expirationYear: z.number().int().min(2000).max(9999),
+  kind: z.literal("payment-card"),
+  number: z.string().regex(/^\d{12,19}$/u),
+  securityCode: z.string().regex(/^\d{3,4}$/u),
+  version: z.literal(1),
+});
+
+export const paymentCardSecretStringSchema = serializedPayloadSchema(
+  paymentCardSecretSchema,
+  "Enter complete, valid card details."
+);
+
+export const vaultCreateItemSchema = z
+  .object({
+    account: z.string().trim().max(200).default(""),
+    kind: vaultCreateItemKindSchema,
+    label: z.string().trim().min(1).max(120),
+    secret: z.string().min(1).max(20_000),
+  })
+  .superRefine((input, context) => {
+    const secretSchema = {
+      address: addressVaultPayloadStringSchema,
+      contact: contactVaultPayloadStringSchema,
+      login: loginVaultPayloadStringSchema,
+      payment: paymentCardSecretStringSchema,
+    }[input.kind];
+    if (!secretSchema.safeParse(input.secret).success) {
+      context.addIssue({
+        code: "custom",
+        message: `Complete the ${input.kind} details before saving.`,
+        path: ["secret"],
+      });
+    }
+  });
+
+export const vaultImportItemsSchema = z
+  .array(
+    vaultCreateItemSchema.refine((item) => item.kind === "login", {
+      message: "Bulk imports support login credentials only.",
+    })
+  )
+  .min(1)
+  .max(3_000);
+
+export const vaultSetupRequestSchema = z.union([
+  z
+    .object({
+      identifierType: loginIdentifierTypeSchema,
+      kind: z.literal("login"),
+      label: z.string().trim().min(1).max(120),
+      origin: loginOriginSchema,
+      target: z.literal("vault"),
+    })
+    .strict(),
+  z
+    .object({
+      kind: vaultCreateItemKindSchema.exclude(["login"]),
+      label: z.string().trim().min(1).max(120).optional(),
+      target: z.literal("vault"),
+    })
+    .strict(),
+]);
+
+export type VaultCreateItem = z.infer<typeof vaultCreateItemSchema>;
+export type VaultImportItems = z.infer<typeof vaultImportItemsSchema>;
+export type VaultItem = z.infer<typeof vaultItemSchema>;
+export type VaultItemKind = z.infer<typeof vaultItemKindSchema>;
+export type VaultSetupRequest = z.infer<typeof vaultSetupRequestSchema>;
+
 export function serializeLoginVaultPayload(
   input: z.input<typeof loginVaultPayloadSchema>
 ) {
@@ -167,6 +268,31 @@ export function serializeContactVaultPayload(
   input: z.input<typeof contactVaultPayloadSchema>
 ) {
   return JSON.stringify(contactVaultPayloadSchema.parse(input));
+}
+
+export function serializePaymentCard(
+  input: z.input<typeof paymentCardSecretSchema>
+) {
+  return JSON.stringify(paymentCardSecretSchema.parse(input));
+}
+
+export function parsePaymentCardSecret(value: string) {
+  const card = parseSerializedPayload(paymentCardSecretSchema, value);
+  if (!card)
+    throw new Error("The saved payment card is incomplete or invalid.");
+  return card;
+}
+
+export function paymentCardBrand(number: string) {
+  return paymentCardType(number)?.niceType ?? "Card";
+}
+
+export function paymentCardType(number: string) {
+  const digits = number.replaceAll(/\D/gu, "");
+  if (!digits) return undefined;
+
+  const matches = creditCardType(digits);
+  return matches.length === 1 ? matches[0] : undefined;
 }
 
 export function parseLoginVaultPayload(value: string) {
@@ -203,8 +329,45 @@ export function loginAccountHint(
     : identifierHint;
 }
 
+export function parseVaultSetupSearchParams(
+  query: Record<string, string | readonly string[] | undefined>
+) {
+  const identifierType = firstQueryValue(query.identifier_type);
+  const origin = firstQueryValue(query.origin);
+  const input = {
+    kind: firstQueryValue(query.kind),
+    label: firstQueryValue(query.label),
+    target: firstQueryValue(query.setup),
+  };
+
+  return vaultSetupRequestSchema.safeParse(
+    identifierType === undefined && origin === undefined
+      ? input
+      : { ...input, identifierType, origin }
+  );
+}
+
+export function createVaultSetupUrl(
+  baseUrl: string,
+  request: VaultSetupRequest
+) {
+  const url = new URL("/vault", baseUrl);
+  url.searchParams.set("setup", request.target);
+  if (request.label) url.searchParams.set("label", request.label);
+  url.searchParams.set("kind", request.kind);
+  if (request.kind === "login") {
+    url.searchParams.set("identifier_type", request.identifierType);
+    url.searchParams.set("origin", request.origin);
+  }
+  return url.toString();
+}
+
 function lastCharacters(value: string, count: number) {
   return value.replaceAll(/\D/gu, "").slice(-count);
+}
+
+function firstQueryValue(value: string | readonly string[] | undefined) {
+  return typeof value === "string" ? value : value?.[0];
 }
 
 function serializedPayloadSchema(schema: z.ZodType, message: string) {

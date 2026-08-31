@@ -4,11 +4,8 @@ import { createWorld } from "@workflow/world-vercel";
 import { revokeToken, startAuthorization } from "@vercel/connect";
 import { saveChat } from "@/db/services/chats";
 import { listOwnedSessionIds } from "@/db/services/sessions";
-import {
-  managerMutationSchema,
-  managerSnapshotSchema,
-} from "@/modules/manager";
-import { applyManagerMutation } from "@/modules/manager/server/store";
+import { selectGatewayModel } from "@/db/services/settings";
+import { deleteVaultItem, saveVaultItem } from "@/db/services/vault";
 import type { AccessScope } from "@/lib/access-scope";
 import { saveChatSchema } from "@/lib/chat";
 import { env } from "@/lib/env";
@@ -16,6 +13,7 @@ import {
   googleWorkspaceSubject,
   googleWorkspaceTokenParams,
 } from "@/lib/google-workspace";
+import { vaultCreateItemSchema, vaultImportItemsSchema } from "@/lib/vault";
 import { createTRPCRouter, protectedProcedure } from "./init";
 
 const taskHistoryPageSize = 25;
@@ -48,11 +46,25 @@ export const appRouter = createTRPCRouter({
         };
       }),
   },
-  manager: {
-    mutate: protectedProcedure
-      .input(managerMutationSchema)
-      .output(managerSnapshotSchema)
-      .mutation(({ ctx, input }) => applyManagerMutation(ctx.scope, input)),
+  settings: {
+    selectModel: protectedProcedure
+      .input(z.object({ modelId: z.string().trim().min(1).max(300) }))
+      .mutation(({ ctx, input }) =>
+        selectGatewayModel(ctx.scope, input.modelId)
+      ),
+  },
+  vault: {
+    create: protectedProcedure
+      .input(vaultCreateItemSchema)
+      .mutation(({ ctx, input }) => saveVaultItem(ctx.scope, input)),
+    import: protectedProcedure
+      .input(vaultImportItemsSchema)
+      .mutation(async ({ ctx, input }) => {
+        for (const item of input) await saveVaultItem(ctx.scope, item);
+      }),
+    remove: protectedProcedure
+      .input(z.object({ id: z.string().min(1) }))
+      .mutation(({ ctx, input }) => deleteVaultItem(ctx.scope, input.id)),
   },
   models: {
     list: protectedProcedure.query(readModelCatalog),

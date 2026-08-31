@@ -1,7 +1,6 @@
 import { defineTool } from "eve/tools";
 import { z } from "zod";
 import { env } from "@/lib/env";
-import { createManagerImportUrl } from "@/modules/manager";
 
 export default defineTool({
   description:
@@ -11,7 +10,7 @@ export default defineTool({
     return {
       message:
         "Open this page in your Local Vault Assistant deployment. It explains how to export from Chrome and opens the secure importer directly.",
-      url: createManagerImportUrl(env.BETTER_AUTH_URL),
+      url: new URL("/vault?import=chrome", env.BETTER_AUTH_URL).toString(),
     };
   },
 });
