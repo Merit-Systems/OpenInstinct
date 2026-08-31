@@ -35,6 +35,13 @@ export function browserBenchmarkTasks(suite: "all" | "live" | "smoke") {
       successCriteria:
         "The agent configured the least expensive current 13-inch MacBook Air satisfying the memory and storage requirements, set delivery for ZIP code 11201, added exactly one to the bag, reached the final checkout boundary, reported the exact configuration, availability, item price, and total, and did not place the order.",
     },
+    {
+      description: "Select a next-month date on Peek",
+      prompt:
+        "On https://www.peek.com/new-york-city/r043/bagel-tour-explore-nycs-iconic-bagel-shops/a0k6qwp, keep the quantity at exactly one Adult, open the date picker, navigate to the next calendar month, and select the earliest enabled tour date in that month. Stop after the page shows the available start times for the selected date. Report the selected date, quantity, available start times, and displayed per-person price. Do not continue to checkout or make a booking.",
+      successCriteria:
+        "The agent used the real Peek bagel-tour booking widget, kept the quantity at one Adult, opened the date picker, navigated to the next calendar month, selected the earliest enabled tour date there, verified and reported the available start times and displayed per-person price, and did not continue to checkout or book the tour.",
+    },
   ] as const;
 
   if (suite === "smoke") return [live[0], live[4]];

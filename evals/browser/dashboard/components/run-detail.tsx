@@ -192,36 +192,42 @@ function TaskResultCell({ now, task }: { now: number; task?: Task }) {
   const message =
     task.terminalMessage ??
     task.error ??
-    (task.status === "running" ? "Working…" : "—");
-  const sessions = task.sessions
-    .map((session) => `${session.role} ${session.id.slice(0, 8)}`)
-    .join(", ");
-  const tools = Object.entries(task.toolCalls)
-    .map(([name, count]) => `${name} ×${String(count)}`)
-    .join(", ");
+    task.activity ??
+    (task.status === "running" ? "Starting task" : "Waiting to start");
   return (
     <TableCell className="max-w-0 align-top whitespace-normal">
       <div className="flex items-center gap-2">
-        <StatusText status={task.status} />
-        <span className="type-caption text-muted-foreground">
+        <StatusDot status={task.status} />
+        <span className="type-compact-code text-muted-foreground">
           {formatDuration(
             task.durationMs ?? elapsed(task.startedAt, task.completedAt, now)
-          )}{" "}
-          · {formatCost(task.costUsd, task.costComplete)}
+          )}
         </span>
       </div>
-      <p className="mt-1 line-clamp-2 type-caption" title={message}>
+      <p className="mt-1 truncate type-caption" title={message}>
         {message}
       </p>
-      {sessions || tools ? (
-        <p
-          className="type-compact-code mt-1 truncate text-muted-foreground"
-          title={[sessions, tools].filter(Boolean).join(" · ")}
-        >
-          {[sessions, tools].filter(Boolean).join(" · ")}
-        </p>
-      ) : null}
     </TableCell>
+  );
+}
+
+function StatusDot({ status }: { status: Task["status"] }) {
+  const className =
+    status === "passed"
+      ? "bg-success"
+      : status === "failed"
+        ? "bg-destructive"
+        : status === "scored" || status === "skipped"
+          ? "bg-warning"
+          : status === "running"
+            ? "bg-information"
+            : "bg-muted-foreground";
+  return (
+    <span
+      aria-label={status}
+      className={`size-2 shrink-0 rounded-full ${className}`}
+      title={status}
+    />
   );
 }
 

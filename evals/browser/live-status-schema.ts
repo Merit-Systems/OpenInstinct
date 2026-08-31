@@ -10,6 +10,7 @@ const benchmarkSessionSchema = z.object({
 });
 
 const liveBenchmarkTaskSchema = z.object({
+  activity: z.string().min(1).nullable().default(null),
   completedAt: nullableDateTime,
   costComplete: z.boolean(),
   costUsd: z.number().nonnegative().nullable(),

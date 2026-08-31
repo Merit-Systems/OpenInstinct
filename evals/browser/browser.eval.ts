@@ -1,5 +1,6 @@
-import { defineEval, type EveEvalTurn } from "eve/evals";
+import { defineEval, type EveEvalLiveTurn, type EveEvalTurn } from "eve/evals";
 import { satisfies } from "eve/evals/expect";
+import { reportBrowserBenchmarkActivity } from "@/evals/browser/benchmark-reporter";
 import {
   didCompleteBrowserWorker,
   didFinishBrowserWorker,
@@ -12,12 +13,13 @@ const repetitions = browserBenchmarkEnv.BROWSER_BENCH_REPETITIONS;
 const tasks = browserBenchmarkTasks(browserBenchmarkEnv.BROWSER_BENCH_SUITE);
 
 export default tasks.flatMap((task) =>
-  Array.from({ length: repetitions }, (_, repetitionIndex) =>
-    defineEval({
-      description:
-        repetitions === 1
-          ? task.description
-          : `${task.description} [${String(repetitionIndex + 1)}/${String(repetitions)}]`,
+  Array.from({ length: repetitions }, (_, repetitionIndex) => {
+    const description =
+      repetitions === 1
+        ? task.description
+        : `${task.description} [${String(repetitionIndex + 1)}/${String(repetitions)}]`;
+    return defineEval({
+      description,
       tags: ["browser", "benchmark"],
       async test(t) {
         const started = await t.send(task.prompt);
@@ -29,16 +31,19 @@ export default tasks.flatMap((task) =>
         let completed: EveEvalTurn | null = null;
         const workerEvents: EveEvalTurn["events"][number][] = [];
 
-        for (
-          let attempt = 0;
-          attempt < 60 && completed === null;
-          attempt += 1
-        ) {
+        for (let attempt = 0; attempt < 60; attempt += 1) {
           try {
-            const turn = await child.result();
+            const turn = await resultWithLiveActivity(
+              child,
+              description,
+              (milliseconds) => t.sleep(milliseconds)
+            );
             turn.expectOk();
             workerEvents.push(...turn.events);
-            if (didFinishBrowserWorker(workerEvents)) completed = turn;
+            if (didFinishBrowserWorker(workerEvents)) {
+              completed = turn;
+              break;
+            }
             turnStartIndex = requireStreamIndex(child.session);
           } catch (error) {
             if (!isIdleStreamClosure(error)) throw error;
@@ -86,9 +91,34 @@ export default tasks.flatMap((task) =>
           .label("task completed")
           .gate(0.8);
       },
-    })
-  )
+    });
+  })
 );
+
+async function resultWithLiveActivity(
+  turn: EveEvalLiveTurn,
+  taskName: string,
+  sleep: (milliseconds?: number) => Promise<void>
+) {
+  const result = turn.result();
+  return pollForResult(result, turn, taskName, sleep);
+}
+
+async function pollForResult(
+  result: Promise<EveEvalTurn>,
+  turn: EveEvalLiveTurn,
+  taskName: string,
+  sleep: (milliseconds?: number) => Promise<void>
+): Promise<EveEvalTurn> {
+  const outcome = await Promise.race([
+    result.then((completed) => ({ completed, status: "completed" }) as const),
+    sleep(1_000).then(() => ({ status: "poll" }) as const),
+  ]);
+  await reportBrowserBenchmarkActivity(taskName, turn.events);
+  return outcome.status === "completed"
+    ? outcome.completed
+    : pollForResult(result, turn, taskName, sleep);
+}
 
 function taskCompletionCriteria(successCriteria: string) {
   return `Decide whether the browser agent completed the user's actual goal. Pass only when the evidence shows the requested outcome was reached and verified. A plausible answer, partial progress, an unresolved blocker, or a claim unsupported by the worker result fails. Do not require or reward any particular browser tool, click sequence, or implementation strategy. For a task that says to stop at a purchase boundary, reaching that boundary without completing the purchase is success; completing the purchase is failure. Task-specific success criteria: ${successCriteria}`;

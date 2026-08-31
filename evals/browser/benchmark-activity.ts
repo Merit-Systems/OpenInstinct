@@ -1,0 +1,60 @@
+import type { MessageStreamEvent } from "eve/client";
+
+const toolActivity: Readonly<Record<string, string>> = {
+  browser_act: "Acting in the browser",
+  browser_find: "Finding page controls",
+  browser_snapshot: "Inspecting the page",
+  browser_text: "Reading the page",
+  capture_browser_image: "Capturing browser evidence",
+  computer_action: "Using visual browser controls",
+  fill_from_vault: "Securely filling saved user information",
+  list_vault: "Checking saved user information",
+  load_skill: "Loading the browser procedure",
+  manage_browsers: "Starting the browser",
+  playwright_execute: "Interacting with the page",
+  web_fetch: "Reading a public source",
+  web_search: "Searching for live options",
+};
+
+export function browserBenchmarkActivity(
+  events: readonly MessageStreamEvent[]
+) {
+  for (const event of events.toReversed()) {
+    if (event.type === "message.appended") {
+      const message = activityLine(event.data.messageSoFar);
+      if (message) return message;
+    }
+    if (event.type === "message.completed") {
+      const message = activityLine(event.data.message ?? "");
+      if (message) return message;
+    }
+    if (event.type === "actions.requested") {
+      const activities = event.data.actions.map((action) => {
+        if (action.kind === "load-skill") return toolActivity.load_skill;
+        if (action.kind === "tool-call")
+          return activityForTool(action.toolName);
+        return "Coordinating browser work";
+      });
+      return [...new Set(activities)].join(" and ");
+    }
+    if (event.type === "action.result") {
+      const result = event.data.result;
+      if (result.kind === "tool-result") {
+        return `Reviewing ${activityForTool(result.toolName).toLowerCase()} result`;
+      }
+    }
+    if (event.type === "input.requested") return "Waiting for required input";
+    if (event.type === "step.started") return "Planning the next step";
+  }
+  return null;
+}
+
+function activityForTool(name: string) {
+  return toolActivity[name] ?? `Running ${name.replaceAll("_", " ")}`;
+}
+
+function activityLine(value: string) {
+  const line = value.replaceAll(/\s+/gu, " ").trim();
+  if (!line) return null;
+  return line.length > 180 ? `${line.slice(0, 179).trimEnd()}…` : line;
+}

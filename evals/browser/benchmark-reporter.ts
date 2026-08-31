@@ -2,6 +2,8 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import type { EveEvalResult, EveEvalRunSummary } from "eve/evals";
 import type { EvalReporter } from "eve/evals/reporters";
+import type { MessageStreamEvent } from "eve/client";
+import { browserBenchmarkActivity } from "@/evals/browser/benchmark-activity";
 import { browserBenchmarkEnv } from "@/evals/browser/env";
 import {
   measureBrowserTask,
@@ -20,11 +22,13 @@ const completedTasks = new Map<
   string,
   ReturnType<typeof summarizeTaskResult>
 >();
+const liveActivities = new Map<string, string>();
 
 export const browserBenchmarkReporter: EvalReporter = {
   async onRunStart(evaluations) {
     taskNames.clear();
     completedTasks.clear();
+    liveActivities.clear();
 
     for (const evaluation of evaluations) {
       taskNames.set(evaluation.id, evaluation.description ?? evaluation.id);
@@ -44,6 +48,7 @@ export const browserBenchmarkReporter: EvalReporter = {
       startedAt: new Date().toISOString(),
       status: "running",
       tasks: evaluations.map((evaluation) => ({
+        activity: null,
         completedAt: null,
         costComplete: false,
         costUsd: null,
@@ -133,6 +138,21 @@ export const browserBenchmarkReporter: EvalReporter = {
     }));
   },
 };
+
+export async function reportBrowserBenchmarkActivity(
+  taskName: string,
+  events: readonly MessageStreamEvent[]
+) {
+  const activity = browserBenchmarkActivity(events);
+  if (!activity || liveActivities.get(taskName) === activity) return;
+  liveActivities.set(taskName, activity);
+  await updateLiveVariant((variant) => ({
+    ...variant,
+    tasks: variant.tasks.map((task) =>
+      task.name === taskName ? { ...task, activity } : task
+    ),
+  }));
+}
 
 function summarizeTaskResult(result: EveEvalResult, name: string) {
   const metrics = measureBrowserTask(
