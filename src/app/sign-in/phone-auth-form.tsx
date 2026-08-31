@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, type FormEvent } from "react";
+import { MessageSquareIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -12,10 +13,12 @@ type AuthStep = "phone-number" | "verification-code";
 export function PhoneAuthForm({
   callbackUrl,
   linqConfigured,
+  linqPhoneNumber,
   skipOtp,
 }: {
   readonly callbackUrl: string;
   readonly linqConfigured: boolean;
+  readonly linqPhoneNumber?: string;
   readonly skipOtp: boolean;
 }) {
   const [error, setError] = useState<string>();
@@ -144,32 +147,79 @@ export function PhoneAuthForm({
   }
 
   return (
-    <form className="mt-6 space-y-4" onSubmit={submitDetails}>
-      <div className="space-y-2">
-        <Label htmlFor="phone-number">Phone number</Label>
-        <Input
-          autoComplete="tel"
-          id="phone-number"
-          onChange={(event) => setPhoneNumber(event.target.value.trim())}
-          placeholder="(202) 555-0123"
-          required
-          type="tel"
-          value={phoneNumber}
-        />
+    <>
+      {!skipOtp ? <FirstTimeLinqSetup phoneNumber={linqPhoneNumber} /> : null}
+      <form
+        className={skipOtp ? "mt-6 space-y-4" : "mt-4 space-y-4"}
+        onSubmit={submitDetails}
+      >
+        <div className="space-y-2">
+          <Label htmlFor="phone-number">Phone number</Label>
+          <Input
+            autoComplete="tel"
+            id="phone-number"
+            onChange={(event) => setPhoneNumber(event.target.value.trim())}
+            placeholder="(202) 555-0123"
+            required
+            type="tel"
+            value={phoneNumber}
+          />
+        </div>
+        {error ? (
+          <p className="type-supporting-body text-destructive">{error}</p>
+        ) : null}
+        <Button className="w-full" disabled={loading} type="submit">
+          {loading
+            ? skipOtp
+              ? "Signing in…"
+              : "Sending…"
+            : skipOtp
+              ? "Continue locally"
+              : "Send code"}
+        </Button>
+      </form>
+    </>
+  );
+}
+
+function FirstTimeLinqSetup({
+  phoneNumber,
+}: {
+  readonly phoneNumber?: string;
+}) {
+  return (
+    <section className="mt-6 space-y-3 rounded-lg border border-border/60 bg-muted/30 p-4">
+      <div className="space-y-1">
+        <h2 className="type-supporting-body font-medium">
+          First time signing in?
+        </h2>
+        <p className="type-caption text-muted-foreground">
+          Linq requires one message from your phone before it can send a sign-in
+          code.
+        </p>
       </div>
-      {error ? (
-        <p className="type-supporting-body text-destructive">{error}</p>
-      ) : null}
-      <Button className="w-full" disabled={loading} type="submit">
-        {loading
-          ? skipOtp
-            ? "Signing in…"
-            : "Sending…"
-          : skipOtp
-            ? "Continue locally"
-            : "Send code"}
-      </Button>
-    </form>
+      <ol className="list-decimal space-y-1 pl-4 type-caption text-muted-foreground">
+        <li>Open Messages to the Linq number.</li>
+        <li>Send any message from the phone number you will enter below.</li>
+        <li>Return here and select Send code.</li>
+      </ol>
+      {phoneNumber ? (
+        <Button
+          className="w-full"
+          nativeButton={false}
+          render={<a href={`sms:${phoneNumber}`} />}
+          variant="outline"
+        >
+          <MessageSquareIcon />
+          Text Linq in Messages
+        </Button>
+      ) : (
+        <p className="type-caption text-muted-foreground">
+          Find the Linq number in Vercel Connect or the Linq dashboard, text it
+          once, then return here.
+        </p>
+      )}
+    </section>
   );
 }
 

@@ -60,7 +60,7 @@ describe("Linq phone authentication", () => {
 
     const body = linqApiErrorSchema.parse(error.body);
     expect(body).toMatchObject({
-      code: "LINQ_SENDING_LINE_NOT_VERIFIED",
+      code: "LINQ_SENDING_LINE_UNAVAILABLE",
       linqError: {
         code: 2015,
         message: "no eligible sending line available",
@@ -68,8 +68,6 @@ describe("Linq phone authentication", () => {
         trace_id: "trace-123",
       },
     });
-    expect(phoneOtpErrorMessage(body)).toContain(
-      "Phone Numbers verification instruction"
-    );
+    expect(phoneOtpErrorMessage(body)).toContain("line's health");
   });
 });

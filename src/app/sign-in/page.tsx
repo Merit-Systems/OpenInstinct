@@ -4,6 +4,7 @@ import { PhoneAuthForm } from "@/app/sign-in/phone-auth-form";
 import { Logo } from "@/components/ui/logo";
 import { env, localPhoneAuthBypassEnabled } from "@/lib/env";
 import { getAuthSession } from "@/auth/session";
+import { readLinqOnboardingPhoneNumber } from "@/auth/linq";
 
 export default async function SignInPage({
   searchParams,
@@ -18,15 +19,22 @@ export default async function SignInPage({
     requestedCallback?.startsWith("/") && !requestedCallback.startsWith("//")
       ? requestedCallback
       : "/";
+  const linqConfigured = env.LINQ_CONNECTOR !== undefined;
+  const linqPhoneNumber =
+    localPhoneAuthBypassEnabled || !env.LINQ_CONNECTOR
+      ? undefined
+      : (env.LINQ_PHONE_NUMBER ??
+        (await readLinqOnboardingPhoneNumber(env.LINQ_CONNECTOR)));
 
   return (
-    <main className="flex min-h-svh items-center justify-center bg-background px-4 text-foreground">
+    <main className="flex min-h-svh items-center justify-center bg-background px-4 py-8 text-foreground">
       <section className="w-full max-w-sm">
         <Logo className="size-9" />
         <h1 className="type-page-title mt-6">Sign in</h1>
         <PhoneAuthForm
           callbackUrl={callbackUrl}
-          linqConfigured={env.LINQ_CONNECTOR !== undefined}
+          linqConfigured={linqConfigured}
+          linqPhoneNumber={linqPhoneNumber}
           skipOtp={localPhoneAuthBypassEnabled}
         />
       </section>
