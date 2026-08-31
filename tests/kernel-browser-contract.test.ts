@@ -152,7 +152,7 @@ describe("Kernel browser contract", () => {
         timeout_seconds: 900,
         viewport: undefined,
       },
-      { signal: undefined }
+      { maxRetries: 8, signal: undefined }
     );
     expect(mocks.createBrowserSession).toHaveBeenCalledExactlyOnceWith(
       { userId: "user-1", workspaceId: "workspace-1" },

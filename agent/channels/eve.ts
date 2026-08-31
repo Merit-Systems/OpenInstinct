@@ -11,7 +11,7 @@ export default eveChannel({
     async (request) => {
       const identity = await requestIdentityFromRequest(request);
       if (!identity) return null;
-      const { phoneNumber, scope } = identity;
+      const { emailAddress, fullName, phoneNumber, scope } = identity;
 
       const sessionId = sessionIdFromPath(new URL(request.url).pathname);
       if (sessionId && !(await waitForSessionOwnership(scope, sessionId))) {
@@ -19,7 +19,12 @@ export default eveChannel({
       }
 
       return {
-        attributes: { phoneNumber, workspaceId: scope.workspaceId },
+        attributes: {
+          emailAddress,
+          fullName,
+          phoneNumber,
+          workspaceId: scope.workspaceId,
+        },
         authenticator: "authjs",
         principalId: scope.userId,
         principalType: "user",
@@ -39,6 +44,9 @@ export default eveChannel({
         ...local,
         attributes: {
           ...local.attributes,
+          countryRegion: "United States",
+          emailAddress: "browser-benchmark@example.com",
+          fullName: "Alex Morgan",
           phoneNumber: "+15555550100",
           workspaceId: scope.workspaceId,
         },
@@ -65,6 +73,8 @@ async function requestIdentityFromRequest(request: Request) {
   if (!session || typeof phoneNumber !== "string") return;
 
   return {
+    emailAddress: session.user.email,
+    fullName: session.user.name,
     phoneNumber,
     scope: accessScopeForUser(`better-auth:${session.user.id}`),
   };

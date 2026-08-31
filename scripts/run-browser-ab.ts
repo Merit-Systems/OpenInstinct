@@ -76,7 +76,7 @@ try {
         cwd: repositoryRoot,
       }
     );
-    await installBenchmarkChannel(current.path);
+    await installBenchmarkContext(current.path);
   }
 
   await Promise.all(
@@ -199,10 +199,14 @@ function variant(kind: "baseline" | "candidate", sha: string) {
   };
 }
 
-async function installBenchmarkChannel(worktree: string) {
+async function installBenchmarkContext(worktree: string) {
   const sourcePath = join(repositoryRoot, "agent", "channels", "eve.ts");
   const targetPath = join(worktree, "agent", "channels", "eve.ts");
   await copyFile(sourcePath, targetPath);
+  await copyFile(
+    join(repositoryRoot, "agent", "instructions", "authenticated-profile.ts"),
+    join(worktree, "agent", "instructions", "authenticated-profile.ts")
+  );
   await copyFile(
     join(repositoryRoot, ".env.local"),
     join(worktree, ".env.local")
