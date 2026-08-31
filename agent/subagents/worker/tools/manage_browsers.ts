@@ -13,9 +13,14 @@ import {
   listBrowserSessions,
   withBrowserProfileWriteLock,
 } from "@/db/services/browsers";
+import { recordBrowserTraceDomains } from "@/db/services/browser-traces";
 import { kernel } from "@/lib/kernel";
 import { requireWorkerScope } from "@/agent/subagents/worker/lib/access";
 import { requireOwnedBrowserSession } from "@/agent/subagents/worker/lib/owned-browser";
+import {
+  domainFromUrl,
+  harvestBrowserTraceDomains,
+} from "@/agent/subagents/worker/lib/trace-domains";
 
 const browserTimeoutFloorSeconds = 15 * 60;
 
@@ -71,6 +76,10 @@ export default defineTool({
               },
               start_url: input.start_url,
               stealth: true,
+              telemetry: {
+                browser: { page: { enabled: true } },
+                enabled: true,
+              },
               timeout_seconds:
                 input.timeout_seconds ?? browserTimeoutFloorSeconds,
               viewport: browserViewport(input),
@@ -81,12 +90,21 @@ export default defineTool({
             await createBrowserSession(scope, {
               createdAt: browser.created_at,
               sessionId: browser.session_id,
+              workerSessionId: context.session.id,
             });
           } catch (error) {
             await kernel.browsers
               .deleteByID(browser.session_id, { signal })
               .catch(() => undefined);
             throw error;
+          }
+          const startDomain = input.start_url
+            ? domainFromUrl(input.start_url)
+            : undefined;
+          if (startDomain) {
+            await recordBrowserTraceDomains(scope, context.session.id, [
+              startDomain,
+            ]).catch(() => undefined);
           }
           return lifecycleResult(browser);
         };
@@ -149,7 +167,13 @@ export default defineTool({
       }
       case "delete": {
         const sessionId = requireSessionId(input.session_id);
-        await requireOwnedBrowserSession(scope, sessionId);
+        const record = await requireOwnedBrowserSession(scope, sessionId);
+        await harvestBrowserTraceDomains(
+          scope,
+          record.workerSessionId ?? context.session.id,
+          { createdAt: record.createdAt, sessionId: record.sessionId },
+          signal
+        );
         await kernel.browsers
           .deleteByID(sessionId, { signal })
           .catch((error: unknown) => {

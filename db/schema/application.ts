@@ -148,6 +148,7 @@ export const browserSessions = pgTable(
     workspaceId: text("workspace_id").notNull(),
     createdByUserId: text("created_by_user_id").notNull(),
     createdAt: text("created_at").notNull(),
+    workerSessionId: text("worker_session_id"),
   },
   (table) => [
     foreignKey({
@@ -162,6 +163,88 @@ export const browserSessions = pgTable(
       table.workspaceId,
       table.createdAt.desc().nullsFirst()
     ),
+    index("browser_sessions_worker_idx").on(
+      table.workspaceId,
+      table.workerSessionId
+    ),
+  ]
+);
+
+export const browserTraces = pgTable(
+  "browser_traces",
+  {
+    sessionId: text("session_id").primaryKey(),
+    workspaceId: text("workspace_id").notNull(),
+    createdByUserId: text("created_by_user_id").notNull(),
+    task: text("task").notNull(),
+    status: text("status").notNull(),
+    resultMessage: text("result_message"),
+    startedAt: text("started_at").notNull(),
+    completedAt: text("completed_at"),
+    durationMs: integer("duration_ms"),
+  },
+  (table) => [
+    foreignKey({
+      name: "browser_traces_membership_fkey",
+      columns: [table.workspaceId, table.createdByUserId],
+      foreignColumns: [
+        workspaceMemberships.workspaceId,
+        workspaceMemberships.userId,
+      ],
+    }).onDelete("cascade"),
+    check(
+      "browser_traces_status_check",
+      sql`${table.status} IN ('running', 'success', 'failure', 'error', 'cancelled')`
+    ),
+    check(
+      "browser_traces_duration_ms_check",
+      sql`${table.durationMs} IS NULL OR ${table.durationMs} >= 0`
+    ),
+    index("browser_traces_workspace_started_idx").on(
+      table.workspaceId,
+      table.startedAt.desc().nullsFirst()
+    ),
+  ]
+);
+
+export const browserTraceEvents = pgTable(
+  "browser_trace_events",
+  {
+    id: text("id").primaryKey(),
+    traceSessionId: text("trace_session_id").notNull(),
+    at: text("at").notNull(),
+    type: text("type").notNull(),
+    label: text("label").notNull(),
+    detail: text("detail").notNull(),
+  },
+  (table) => [
+    foreignKey({
+      name: "browser_trace_events_trace_fkey",
+      columns: [table.traceSessionId],
+      foreignColumns: [browserTraces.sessionId],
+    }).onDelete("cascade"),
+    index("browser_trace_events_trace_idx").on(table.traceSessionId, table.id),
+  ]
+);
+
+export const browserTraceDomains = pgTable(
+  "browser_trace_domains",
+  {
+    traceSessionId: text("trace_session_id").notNull(),
+    domain: text("domain").notNull(),
+    firstSeenAt: text("first_seen_at").notNull(),
+  },
+  (table) => [
+    primaryKey({
+      columns: [table.traceSessionId, table.domain],
+      name: "browser_trace_domains_pkey",
+    }),
+    foreignKey({
+      name: "browser_trace_domains_trace_fkey",
+      columns: [table.traceSessionId],
+      foreignColumns: [browserTraces.sessionId],
+    }).onDelete("cascade"),
+    index("browser_trace_domains_domain_idx").on(table.domain),
   ]
 );
 

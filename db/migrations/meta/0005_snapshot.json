@@ -1,6 +1,6 @@
 {
-  "id": "175ad1cd-8a92-491f-8522-ce29807f9f4c",
-  "prevId": "1c769219-6a0b-4edf-a72a-82e04f9605e5",
+  "id": "454f727a-6123-463e-bb42-9e06236816a2",
+  "prevId": "175ad1cd-8a92-491f-8522-ce29807f9f4c",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -401,6 +401,87 @@
           "columns": ["trace_session_id", "domain"]
         }
       },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.browser_trace_events": {
+      "name": "browser_trace_events",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "trace_session_id": {
+          "name": "trace_session_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "at": {
+          "name": "at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "type": {
+          "name": "type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "label": {
+          "name": "label",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "detail": {
+          "name": "detail",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {
+        "browser_trace_events_trace_idx": {
+          "name": "browser_trace_events_trace_idx",
+          "columns": [
+            {
+              "expression": "trace_session_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "browser_trace_events_trace_fkey": {
+          "name": "browser_trace_events_trace_fkey",
+          "tableFrom": "browser_trace_events",
+          "tableTo": "browser_traces",
+          "columnsFrom": ["trace_session_id"],
+          "columnsTo": ["session_id"],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
       "checkConstraints": {},

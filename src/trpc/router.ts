@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { readModelCatalog } from "@/lib/model-catalog/server";
-import { readTaskHistoryPage } from "@/lib/task-history/server";
+import { listBrowserTraces } from "@/db/services/browser-traces";
 import { saveChat } from "@/db/services/chats";
 import { replaceUserProfile } from "@/db/services/user-profile";
 import { saveChatSchema } from "@/lib/chat";
@@ -54,11 +54,11 @@ export const appRouter = createTRPCRouter({
       .output(userProfileSchema)
       .mutation(({ ctx, input }) => replaceUserProfile(ctx.scope, input)),
   },
-  tasks: {
+  traces: {
     list: protectedProcedure
       .input(z.object({ cursor: z.string().nullish() }))
       .query(({ ctx, input }) =>
-        readTaskHistoryPage(ctx.scope, input.cursor ?? undefined)
+        listBrowserTraces(ctx.scope, input.cursor ?? undefined)
       ),
   },
 });

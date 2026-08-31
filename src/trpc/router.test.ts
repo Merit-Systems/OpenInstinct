@@ -6,12 +6,12 @@ const mocks = vi.hoisted(() => ({
     vi.fn<(scope: AccessScope, input: unknown) => Promise<unknown>>(),
   disconnectGoogleWorkspace: vi.fn<(scope: AccessScope) => Promise<void>>(),
   readModelCatalog: vi.fn<() => Promise<unknown[]>>(),
-  readTaskHistoryPage:
+  listBrowserTraces:
     vi.fn<
       (
         scope: AccessScope,
         cursor?: string
-      ) => Promise<{ cursor: string | null; hasMore: boolean; runs: never[] }>
+      ) => Promise<{ nextCursor: string | null; traces: never[] }>
     >(),
   saveChat: vi.fn<(scope: AccessScope, input: unknown) => Promise<void>>(),
   startGoogleWorkspaceAuthorization:
@@ -21,8 +21,8 @@ const mocks = vi.hoisted(() => ({
 vi.mock("@/lib/model-catalog/server", () => ({
   readModelCatalog: mocks.readModelCatalog,
 }));
-vi.mock("@/lib/task-history/server", () => ({
-  readTaskHistoryPage: mocks.readTaskHistoryPage,
+vi.mock("@/db/services/browser-traces", () => ({
+  listBrowserTraces: mocks.listBrowserTraces,
 }));
 vi.mock("@/db/services/chats", () => ({ saveChat: mocks.saveChat }));
 vi.mock("@/lib/google-workspace/server", () => ({
@@ -43,18 +43,17 @@ const scope = {
 describe("appRouter", () => {
   beforeEach(() => vi.clearAllMocks());
 
-  it("passes the authenticated scope and cursor to task history", async () => {
-    mocks.readTaskHistoryPage.mockResolvedValue({
-      cursor: null,
-      hasMore: false,
-      runs: [],
+  it("passes the authenticated scope and cursor to the trace history", async () => {
+    mocks.listBrowserTraces.mockResolvedValue({
+      nextCursor: null,
+      traces: [],
     });
 
     await appRouter
       .createCaller({ origin: "https://example.com", scope })
-      .tasks.list({ cursor: "next-page" });
+      .traces.list({ cursor: "next-page" });
 
-    expect(mocks.readTaskHistoryPage).toHaveBeenCalledWith(scope, "next-page");
+    expect(mocks.listBrowserTraces).toHaveBeenCalledWith(scope, "next-page");
   });
 
   it("rejects invalid chat writes before persistence", async () => {

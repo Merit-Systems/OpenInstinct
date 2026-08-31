@@ -33,8 +33,22 @@
     {
       "idx": 4,
       "version": "7",
-      "when": 1788197776133,
-      "tag": "0004_flowery_inertia",
+      "when": 1788189936361,
+      "tag": "0004_kind_manta",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1788192764428,
+      "tag": "0005_brave_kang",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1788198215119,
+      "tag": "0006_illegal_tattoo",
       "breakpoints": true
     }
   ]
