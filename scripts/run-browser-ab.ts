@@ -92,8 +92,8 @@ try {
         env: databaseEnvironment(current.databaseUrl),
       });
       await run(
-        "pnpm",
-        ["exec", "tsx", "scripts/seed-browser-benchmark-vault.ts"],
+        join(repositoryRoot, "node_modules", ".bin", "tsx"),
+        ["scripts/seed-browser-benchmark-vault.ts"],
         {
           cwd: current.path,
           env: databaseEnvironment(current.databaseUrl),

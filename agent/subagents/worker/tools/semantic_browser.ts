@@ -37,7 +37,7 @@ export default defineDynamic({
             description: toolDescription(spec),
             execute: executeSemanticTool,
             inputSchema: withSessionId(spec),
-            toModelOutput: (output) => toModelOutput(spec, output),
+            toModelOutput,
           }),
         ])
       );
@@ -92,8 +92,8 @@ function boundedTimeout(value: unknown, maximum: number) {
     : maximum;
 }
 
-function toModelOutput(spec: LoopToolSpec, output: LoopToolExecutionResult) {
-  if (spec.name === "browser_act") {
+function toModelOutput(output: LoopToolExecutionResult) {
+  if (browserActResult(output)) {
     return toolOutput.text(relaxedBrowserActModelText(output));
   }
   const parts = output.content.map((part) =>
