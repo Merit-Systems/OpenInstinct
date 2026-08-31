@@ -16,7 +16,7 @@ vi.mock("better-auth/next-js", () => ({
   toNextJsHandler: mocks.toNextJsHandler,
 }));
 
-import { GET } from "../app/api/auth/[...all]/route";
+import { GET } from "@/app/api/auth/[...all]/route";
 
 beforeEach(() => {
   vi.clearAllMocks();

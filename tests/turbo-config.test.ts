@@ -55,41 +55,37 @@ describe("Turbo configuration", () => {
         /\[!\[Deploy with Vercel(?: and Linq)?\]\([^)]+\)\]\((https:\/\/vercel\.com\/new\/clone\?[^)]+)\)/gu
       ),
     ].map((match) => new URL(z.url().parse(match[1])));
-    expect(deployButtons).toHaveLength(2);
-    const [baseDeployButton, linqDeployButton] = deployButtons;
-    expect(baseDeployButton).toBeDefined();
-    expect(linqDeployButton).toBeDefined();
+    expect(deployButtons).toHaveLength(1);
+    const [deployButton] = deployButtons;
+    expect(deployButton).toBeDefined();
     const blobSetup = readme
       .split("### Blob storage", 2)[1]
       ?.split("### Linq iMessage setup", 1)[0];
 
-    for (const deployButton of deployButtons) {
-      expect(deployButton.searchParams.get("repository-url")).toBe(
-        "https://github.com/Merit-Systems/OpenInstinct"
-      );
-      expect(deployButton.searchParams.has("env")).toBe(false);
-      expect(deployButton.searchParams.has("products")).toBe(false);
-      expect(
-        JSON.parse(deployButton.searchParams.get("stores") ?? "null")
-      ).toEqual([
-        {
-          integrationSlug: "kernel",
-          productSlug: "kernel",
-          protocol: "other",
-          type: "integration",
-        },
-        {
-          integrationSlug: "neon",
-          productSlug: "neon",
-          protocol: "storage",
-          type: "integration",
-        },
-        { access: "private", type: "blob" },
-      ]);
-    }
-    expect(baseDeployButton?.searchParams.has("connect")).toBe(false);
+    expect(deployButton?.searchParams.get("repository-url")).toBe(
+      "https://github.com/Merit-Systems/OpenInstinct"
+    );
+    expect(deployButton?.searchParams.has("env")).toBe(false);
+    expect(deployButton?.searchParams.has("products")).toBe(false);
     expect(
-      JSON.parse(linqDeployButton?.searchParams.get("connect") ?? "null")
+      JSON.parse(deployButton?.searchParams.get("stores") ?? "null")
+    ).toEqual([
+      {
+        integrationSlug: "kernel",
+        productSlug: "kernel",
+        protocol: "other",
+        type: "integration",
+      },
+      {
+        integrationSlug: "neon",
+        productSlug: "neon",
+        protocol: "storage",
+        type: "integration",
+      },
+      { access: "private", type: "blob" },
+    ]);
+    expect(
+      JSON.parse(deployButton?.searchParams.get("connect") ?? "null")
     ).toEqual([
       {
         env: "LINQ_CONNECTOR",

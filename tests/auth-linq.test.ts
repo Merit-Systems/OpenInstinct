@@ -2,7 +2,7 @@ import { getToken } from "@vercel/connect";
 import { APIError } from "better-auth/api";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
-import { phoneOtpErrorMessage } from "../app/sign-in/phone-auth-form";
+import { phoneOtpErrorMessage } from "@/app/sign-in/phone-auth-form";
 
 vi.mock("@vercel/connect", () => ({ getToken: vi.fn<typeof getToken>() }));
 
@@ -49,7 +49,7 @@ describe("Linq phone authentication", () => {
       )
     );
 
-    const { sendPhoneCode } = await import("../auth");
+    const { sendPhoneCode } = await import("@/auth");
     const error: unknown = await sendPhoneCode({
       code: "123456",
       to: "+12025550123",

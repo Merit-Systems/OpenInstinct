@@ -1,7 +1,7 @@
 /* oxlint-disable vitest/require-mock-type-parameters -- Hoisted Blob fakes are configured per test. */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { get, put } from "@vercel/blob";
-import { installationSecretsSchema } from "../lib/installation-secrets-schema";
+import { installationSecretsSchema } from "@/lib/installation-secrets-schema";
 
 const mocks = vi.hoisted(() => ({
   get: vi.fn<typeof get>(),
@@ -40,7 +40,7 @@ describe("installation secrets", () => {
     });
 
     const { getInstallationSecrets } =
-      await import("../lib/installation-secrets");
+      await import("@/lib/installation-secrets");
     const [first, second] = await Promise.all([
       getInstallationSecrets(),
       getInstallationSecrets(),
@@ -82,7 +82,7 @@ describe("installation secrets", () => {
     mocks.put.mockRejectedValue(new Error("pathname already exists"));
 
     const { getInstallationSecrets } =
-      await import("../lib/installation-secrets");
+      await import("@/lib/installation-secrets");
 
     await expect(getInstallationSecrets()).resolves.toEqual(winner);
     expect(mocks.get).toHaveBeenCalledTimes(2);
@@ -98,7 +98,7 @@ describe("installation secrets", () => {
     vi.stubEnv("SECRET_ENCRYPTION_KEY", configured.secretEncryptionKey);
 
     const { getInstallationSecrets } =
-      await import("../lib/installation-secrets");
+      await import("@/lib/installation-secrets");
 
     await expect(getInstallationSecrets()).resolves.toEqual(configured);
     expect(mocks.get).not.toHaveBeenCalled();
@@ -109,7 +109,7 @@ describe("installation secrets", () => {
     vi.stubEnv("BETTER_AUTH_SECRET", Buffer.alloc(32, 6).toString("base64"));
 
     const { getInstallationSecrets } =
-      await import("../lib/installation-secrets");
+      await import("@/lib/installation-secrets");
 
     await expect(getInstallationSecrets()).rejects.toThrow(
       "Set both BETTER_AUTH_SECRET and SECRET_ENCRYPTION_KEY"
@@ -131,7 +131,7 @@ describe("installation secrets", () => {
     });
 
     const { getInstallationSecrets } =
-      await import("../lib/installation-secrets");
+      await import("@/lib/installation-secrets");
 
     await expect(getInstallationSecrets()).rejects.toThrow(
       "Blob temporarily unavailable"
@@ -147,7 +147,7 @@ describe("installation secrets", () => {
     mocks.get.mockResolvedValue(blobResult({ version: 1 }));
 
     const { getInstallationSecrets } =
-      await import("../lib/installation-secrets");
+      await import("@/lib/installation-secrets");
 
     await expect(getInstallationSecrets()).rejects.toThrow(
       "Invalid input: expected string"

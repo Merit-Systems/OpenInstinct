@@ -25,7 +25,7 @@ vi.mock("@/lib/installation-secrets", () => ({
     }),
 }));
 
-import { readSecret, writeSecret } from "../lib/manager/server/secret-store";
+import { readSecret, writeSecret } from "@/lib/manager/server/secret-store";
 
 const scope = { userId: "user-1", workspaceId: "workspace-1" };
 

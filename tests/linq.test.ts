@@ -1,6 +1,6 @@
 import { getToken } from "@vercel/connect";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { LinqDeliveryError, linqOtpFailure, sendLinqText } from "../auth/linq";
+import { LinqDeliveryError, linqOtpFailure, sendLinqText } from "@/auth/linq";
 
 vi.mock("@vercel/connect", () => ({ getToken: vi.fn<typeof getToken>() }));
 

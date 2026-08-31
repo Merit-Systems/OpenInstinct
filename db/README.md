@@ -1,6 +1,6 @@
 # Database
 
-This directory owns the nine workspace application tables, the four Better
+This directory owns the twelve workspace application tables, the four Better
 Auth tables, and the application domain query services. Better Auth uses the
 canonical Drizzle client from `db/index.ts`; request paths never create or
 migrate tables.
@@ -32,7 +32,7 @@ exists. PostgreSQL enforces those constraints for new writes immediately without
 rejecting the deployment because of an unknown historical orphan.
 
 Migration `0001` adopts the singular `user`, `session`, `account`, and
-`verification` tables previously managed from `auth/index.ts`. It preserves the
+`verification` tables previously managed from `src/auth/index.ts`. It preserves the
 existing `timestamptz` representation and rows, safely adds the nullable
 phone-number plugin fields when absent, and installs the indexes used by Better
 Auth. The runtime now assumes versioned migrations have run before requests are

@@ -20,7 +20,7 @@ describe("application origin", () => {
     vi.stubEnv("BETTER_AUTH_URL", "https://assistant.example/path");
 
     const { applicationOrigin, betterAuthBaseURL } =
-      await import("../lib/application-origin");
+      await import("@/lib/application-origin");
 
     expect(applicationOrigin()).toBe("https://assistant.example");
     expect(betterAuthBaseURL()).toBe("https://assistant.example");
@@ -33,7 +33,7 @@ describe("application origin", () => {
     vi.stubEnv("VERCEL_URL", "openinstinct-preview-123.vercel.app");
 
     const { applicationOrigin, betterAuthBaseURL } =
-      await import("../lib/application-origin");
+      await import("@/lib/application-origin");
 
     expect(applicationOrigin()).toBe("https://openinstinct.example.com");
     expect(betterAuthBaseURL()).toEqual({
@@ -51,7 +51,7 @@ describe("application origin", () => {
   it("fails clearly when a non-Vercel production host has no URL", async () => {
     vi.stubEnv("VERCEL_URL", "stale-preview.vercel.app");
 
-    const { applicationOrigin } = await import("../lib/application-origin");
+    const { applicationOrigin } = await import("@/lib/application-origin");
 
     expect(() => applicationOrigin()).toThrow("Set BETTER_AUTH_URL");
   });

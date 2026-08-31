@@ -1,7 +1,7 @@
 /* oxlint-disable vitest/require-mock-type-parameters -- Hoisted Blob and database fakes are configured per test. */
 import { createHash } from "node:crypto";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { maximumBrowserImageBytes } from "../lib/browser-images";
+import { maximumBrowserImageBytes } from "@/lib/browser-images";
 
 const mocks = vi.hoisted(() => ({
   del: vi.fn(),
@@ -26,7 +26,7 @@ import {
   persistReservedBrowserImage,
   readBoundedResponse,
   readBrowserImageBytes,
-} from "../lib/browser-images/server";
+} from "@/lib/browser-images/server";
 
 const png = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
 const scope = { userId: "user-1", workspaceId: "workspace-1" };

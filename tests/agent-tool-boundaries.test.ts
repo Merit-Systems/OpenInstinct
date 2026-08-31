@@ -101,7 +101,7 @@ describe("root and worker capability boundaries", () => {
     expect(existsSync(`${workerRoot}/lib/browser-runtime.ts`)).toBe(false);
     expect(existsSync(`${workerRoot}/lib/owned-browser.ts`)).toBe(true);
 
-    expect(readFileSync("lib/kernel.ts", "utf8")).toContain("new Kernel(");
+    expect(readFileSync("src/lib/kernel.ts", "utf8")).toContain("new Kernel(");
     for (const tool of [
       "capture_browser_image",
       "computer_action",

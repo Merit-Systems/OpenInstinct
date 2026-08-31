@@ -16,7 +16,7 @@ vi.mock("@/auth", () => ({
   getAuth: () => Promise.resolve({ api: { getSession: mocks.getSession } }),
 }));
 
-import { getAuthSession } from "../auth/session";
+import { getAuthSession } from "@/auth/session";
 
 beforeEach(() => {
   vi.clearAllMocks();

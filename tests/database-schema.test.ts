@@ -7,6 +7,9 @@ import {
   agentSessions,
   browserImageArtifacts,
   browserSessions,
+  browserTraceDomains,
+  browserTraceEvents,
+  browserTraces,
   chats,
   encryptedSecrets,
   session,
@@ -29,6 +32,9 @@ describe("database schema", () => {
         agentSessions,
         browserImageArtifacts,
         browserSessions,
+        browserTraces,
+        browserTraceDomains,
+        browserTraceEvents,
         chats,
         encryptedSecrets,
         user,
@@ -44,6 +50,9 @@ describe("database schema", () => {
       "agent_sessions",
       "browser_image_artifacts",
       "browser_sessions",
+      "browser_traces",
+      "browser_trace_domains",
+      "browser_trace_events",
       "chats",
       "encrypted_secrets",
       "user",
@@ -58,6 +67,7 @@ describe("database schema", () => {
       agentSessions,
       browserImageArtifacts,
       browserSessions,
+      browserTraces,
     ]) {
       const foreignKeys = getTableConfig(table).foreignKeys;
       expect(foreignKeys.map((foreignKey) => foreignKey.getName())).toContain(
@@ -160,6 +170,7 @@ describe("migration deployment policy", () => {
     );
     const services = await Promise.all(
       [
+        "browser-traces",
         "browsers",
         "chats",
         "scope",
@@ -176,7 +187,7 @@ describe("migration deployment policy", () => {
       )
     );
     const authSource = await readFile(
-      new URL("../auth/index.ts", import.meta.url),
+      new URL("../src/auth/index.ts", import.meta.url),
       "utf8"
     );
     const authMigration = await readFile(
