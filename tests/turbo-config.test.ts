@@ -68,9 +68,24 @@ describe("Turbo configuration", () => {
         "https://github.com/Merit-Systems/OpenInstinct"
       );
       expect(deployButton.searchParams.has("env")).toBe(false);
-      expect(deployButton.search).toContain(
-        "stores=%5B%7B%22type%22%3A%22blob%22%2C%22access%22%3A%22private%22%7D%5D"
-      );
+      expect(deployButton.searchParams.has("products")).toBe(false);
+      expect(
+        JSON.parse(deployButton.searchParams.get("stores") ?? "null")
+      ).toEqual([
+        {
+          integrationSlug: "kernel",
+          productSlug: "kernel",
+          protocol: "other",
+          type: "integration",
+        },
+        {
+          integrationSlug: "neon",
+          productSlug: "neon",
+          protocol: "storage",
+          type: "integration",
+        },
+        { access: "private", type: "blob" },
+      ]);
     }
     expect(baseDeployButton?.searchParams.has("connect")).toBe(false);
     expect(
