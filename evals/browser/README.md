@@ -16,18 +16,25 @@ surprise spend):
 BROWSER_BENCH_LABEL=baseline BROWSER_BENCH_REPETITIONS=3 pnpm bench:browser
 ```
 
-The live suite contains real, profile-dependent purchase-boundary tasks such as
-finding movie tickets for tonight and preparing the user's last-purchased soap
-on Amazon without buying either item:
+The live suite contains real public booking and purchase-boundary tasks across
+movie tickets, restaurants, rail, hotels, and retail. Every task stops before
+the irreversible confirmation:
 
 ```sh
 BROWSER_BENCH_SUITE=live pnpm bench:browser
 ```
 
-Set `BROWSER_BENCH_SCOPE_PRINCIPAL` when the live suite must use an existing
-workspace browser profile. Its value is the same stable access-scope principal
-used by the signed-in application user; the runner does not write it to an
-artifact.
+The profile suite contains tasks that require an existing signed-in browser,
+such as preparing the user's last-purchased soap on Amazon without buying it:
+
+```sh
+BROWSER_BENCH_SUITE=profile pnpm bench:browser
+```
+
+Set `BROWSER_BENCH_SCOPE_PRINCIPAL` for the profile suite. Its value is the same
+stable access-scope principal used by the signed-in application user; the
+runner does not write it to an artifact. The `all` suite includes smoke, live,
+and profile tasks.
 
 Target a deployment with the same suite:
 

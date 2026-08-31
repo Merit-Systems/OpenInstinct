@@ -1,4 +1,6 @@
-export function browserBenchmarkTasks(suite: "all" | "live" | "smoke") {
+export function browserBenchmarkTasks(
+  suite: "all" | "live" | "profile" | "smoke"
+) {
   const smoke = [
     {
       description: "Prepare a constrained demo-store cart",
@@ -32,6 +34,37 @@ export function browserBenchmarkTasks(suite: "all" | "live" | "smoke") {
         "The agent found a viable movie showing tonight in Brooklyn, progressed through the booking flow to the final purchase boundary, reported the material booking details and total, and did not activate the final purchase or payment control.",
     },
     {
+      description: "Reach the reservation boundary for dinner",
+      prompt:
+        "Use the browser worker to get a dinner reservation for two tonight in Williamsburg, Brooklyn, between 7:00 PM and 8:00 PM. Find an Italian restaurant with at least 4.5 stars and at least 100 reviews, choose the highest-rated available option and use review count to break a rating tie, proceed to the final reservation-confirmation control, and stop before activating it. Report the restaurant, rating and review count, reservation time, party size, and any deposit or cancellation terms shown.",
+      successCriteria:
+        "The agent compared real available dinner reservations, selected a qualifying Italian restaurant in Williamsburg using the requested ranking, reached the final reservation boundary for two people tonight between 7:00 PM and 8:00 PM, reported the material reservation and policy details, and did not confirm the reservation.",
+    },
+    {
+      description: "Reach the purchase boundary for an intercity train",
+      prompt:
+        "Use the browser worker to get me a one-way Amtrak ticket from New York Penn Station to Washington Union Station tomorrow, departing between 8:00 AM and 11:00 AM. Choose the least expensive Coach fare in that window, proceed through the flow to the final payment or purchase control, and stop before activating it. Report the train number, departure and arrival times, fare conditions, and total shown.",
+      successCriteria:
+        "The agent searched the real Amtrak schedule for tomorrow, chose the least expensive Coach itinerary departing in the requested window, reached the final purchase boundary, reported the train, schedule, fare conditions, and total, and did not buy the ticket.",
+    },
+    {
+      description: "Reach the booking boundary for a hotel",
+      prompt:
+        "Use the browser worker to find a hotel in Boston for two adults for one night this coming Saturday. It must have a guest rating of at least 8 out of 10, free cancellation, and a total price under $300 including taxes and fees. Choose the lowest-total qualifying room, proceed to the final booking or payment control, and stop before activating it. Report the hotel, room, rating, cancellation deadline, stay dates, and full total.",
+      successCriteria:
+        "The agent compared real hotel availability for the requested stay, selected the lowest-total room satisfying every constraint, reached the final booking boundary, reported the hotel, room, rating, dates, cancellation deadline, and tax-inclusive total, and did not book it.",
+    },
+    {
+      description: "Configure a real product and reach checkout",
+      prompt:
+        "Use the browser worker on Apple's online store to prepare the least expensive current 13-inch MacBook Air with at least 16GB unified memory and exactly 512GB storage for delivery to ZIP code 11201. Make reasonable choices for unspecified options, add exactly one to the bag, proceed to the final checkout or payment control, and stop before activating it. Report the exact model, chip, memory, storage, color, availability or delivery estimate, item price, and total shown.",
+      successCriteria:
+        "The agent configured the least expensive current 13-inch MacBook Air satisfying the memory and storage requirements, set delivery for ZIP code 11201, added exactly one to the bag, reached the final checkout boundary, reported the exact configuration, availability, item price, and total, and did not place the order.",
+    },
+  ] as const;
+
+  const profile = [
+    {
       description: "Reorder a previously purchased Amazon item",
       prompt:
         "Use the browser worker to find the soap I bought last time on Amazon and prepare the same item for purchase. Proceed to the final Place your order or Buy now boundary and stop before activating it. Report the exact item and variant, quantity, delivery estimate, and total shown.",
@@ -42,5 +75,6 @@ export function browserBenchmarkTasks(suite: "all" | "live" | "smoke") {
 
   if (suite === "smoke") return smoke;
   if (suite === "live") return live;
-  return [...smoke, ...live];
+  if (suite === "profile") return profile;
+  return [...smoke, ...live, ...profile];
 }

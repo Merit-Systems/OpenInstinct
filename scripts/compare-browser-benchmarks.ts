@@ -66,6 +66,20 @@ console.log(
 console.log(
   `LLM cost: ${formatCost(baseline.summary.totalCostUsd)} → ${formatCost(candidate.summary.totalCostUsd)} (${formatNullableDelta(baseline.summary.totalCostUsd, candidate.summary.totalCostUsd, "$")})`
 );
+console.log(
+  `Judge score: ${formatScore(baseline.summary.meanJudgeScore)} → ${formatScore(candidate.summary.meanJudgeScore)}`
+);
+console.log(
+  `Model steps: ${String(baseline.summary.totalModelSteps)} → ${String(candidate.summary.totalModelSteps)}`
+);
+console.log(
+  `Tool calls: ${String(baseline.summary.totalToolCalls)} → ${String(candidate.summary.totalToolCalls)} (failed ${String(baseline.summary.failedToolCalls)} → ${String(candidate.summary.failedToolCalls)})`
+);
+console.log(
+  `Tokens (input/output): ${formatTokens(baseline.summary.totalInputTokens)}/${formatTokens(baseline.summary.totalOutputTokens)} → ${formatTokens(candidate.summary.totalInputTokens)}/${formatTokens(candidate.summary.totalOutputTokens)}`
+);
+console.log(`Baseline tool mix: ${formatToolMix(baseline.tasks)}`);
+console.log(`Candidate tool mix: ${formatToolMix(candidate.tasks)}`);
 console.log("");
 
 async function readBenchmark(filePath: string) {
@@ -105,6 +119,29 @@ function formatCost(costUsd: number | null) {
 
 function formatRate(rate: number) {
   return `${(rate * 100).toFixed(1)}%`;
+}
+
+function formatScore(score: number | null) {
+  return score === null ? "—" : score.toFixed(2);
+}
+
+function formatTokens(tokens: number | null) {
+  return tokens === null ? "—" : tokens.toLocaleString("en-US");
+}
+
+function formatToolMix(tasks: (typeof baseline.tasks)[number][]) {
+  const counts = new Map<string, number>();
+  for (const task of tasks) {
+    for (const [name, calls] of Object.entries(task.toolCalls)) {
+      counts.set(name, (counts.get(name) ?? 0) + calls);
+    }
+  }
+  return [...counts.entries()]
+    .toSorted(
+      (left, right) => right[1] - left[1] || left[0].localeCompare(right[0])
+    )
+    .map(([name, calls]) => `${name} ${String(calls)}`)
+    .join(", ");
 }
 
 function formatNullableDelta(

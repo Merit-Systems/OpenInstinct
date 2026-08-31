@@ -11,7 +11,9 @@ export const browserBenchmarkEnv = createEnv({
       .max(20)
       .default(1),
     BROWSER_BENCH_SCOPE_PRINCIPAL: z.string().min(1).optional(),
-    BROWSER_BENCH_SUITE: z.enum(["all", "live", "smoke"]).default("smoke"),
+    BROWSER_BENCH_SUITE: z
+      .enum(["all", "live", "profile", "smoke"])
+      .default("smoke"),
   },
   experimental__runtimeEnv: {},
 });

@@ -397,7 +397,7 @@ async function cleanup() {
 
 function parseArguments(args: string[]) {
   const positional: string[] = [];
-  let suite: "all" | "live" | "smoke" = "smoke";
+  let suite: "all" | "live" | "profile" | "smoke" = "smoke";
   let repetitions = 1;
   let maxConcurrency = 1;
   let keep = false;
@@ -410,8 +410,13 @@ function parseArguments(args: string[]) {
     }
     if (argument === "--suite") {
       const value = args[++index];
-      if (value !== "all" && value !== "live" && value !== "smoke") {
-        throw new Error("--suite must be smoke, live, or all.");
+      if (
+        value !== "all" &&
+        value !== "live" &&
+        value !== "profile" &&
+        value !== "smoke"
+      ) {
+        throw new Error("--suite must be smoke, live, profile, or all.");
       }
       suite = value;
       continue;
@@ -434,7 +439,7 @@ function parseArguments(args: string[]) {
   const [baselineRef, candidateRef] = positional;
   if (positional.length !== 2 || !baselineRef || !candidateRef) {
     throw new Error(
-      "Usage: pnpm bench:ab <baseline-ref> <candidate-ref> [--suite smoke|live|all] [--repetitions n] [--max-concurrency n] [--keep]"
+      "Usage: pnpm bench:ab <baseline-ref> <candidate-ref> [--suite smoke|live|profile|all] [--repetitions n] [--max-concurrency n] [--keep]"
     );
   }
   return {

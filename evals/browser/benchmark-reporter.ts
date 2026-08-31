@@ -77,6 +77,21 @@ function summarizeTaskResult(result: EveEvalResult, name: string) {
     fallbackMessage,
     result.result.events
   );
+  const workerFacts =
+    result.result.sessions
+      ?.filter((session) => !session.primary)
+      .map((session) => session.derived) ?? [];
+  const facts = workerFacts.length > 0 ? workerFacts : [result.result.derived];
+  const calls = facts.flatMap((derived) => derived.toolCalls);
+  const toolCalls = calls.reduce<Record<string, number>>((counts, call) => {
+    counts[call.name] = (counts[call.name] ?? 0) + 1;
+    return counts;
+  }, {});
+  const judge = result.assertions.find(
+    (assertion) =>
+      assertion.name === "judge.autoevals.closedQA [task completed]"
+  );
+  const rationale = judge?.metadata?.rationale;
 
   return {
     costComplete: metrics.costComplete,
@@ -84,12 +99,27 @@ function summarizeTaskResult(result: EveEvalResult, name: string) {
     durationMs: metrics.durationMs,
     error: result.error ?? null,
     evalDurationMs: elapsedMs(result.startedAt, result.completedAt),
+    failedToolCalls: calls.filter((call) => call.status === "failed").length,
     id: result.id,
+    inputTokens: metrics.inputTokens,
+    judgeRationale: typeof rationale === "string" ? rationale : null,
+    judgeScore: judge?.score ?? null,
+    messageCount: facts.reduce(
+      (count, derived) => count + derived.messageCount,
+      0
+    ),
+    modelSteps: metrics.modelSteps,
     name,
+    outputTokens: metrics.outputTokens,
+    reasoningBlockCount: facts.reduce(
+      (count, derived) => count + derived.reasoningBlockCount,
+      0
+    ),
     sessionId: result.result.sessionId ?? null,
     status: result.result.status,
     success: result.verdict === "passed" && completion?.status === "success",
     terminalMessage,
+    toolCalls,
     verdict: result.verdict,
   };
 }
@@ -108,6 +138,15 @@ async function buildBenchmark(
     .toSorted((left, right) => left - right);
   const measuredCosts = tasks.flatMap((task) =>
     task.costUsd === null ? [] : [task.costUsd]
+  );
+  const judgeScores = tasks.flatMap((task) =>
+    task.judgeScore === null ? [] : [task.judgeScore]
+  );
+  const inputTokens = tasks.flatMap((task) =>
+    task.inputTokens === null ? [] : [task.inputTokens]
+  );
+  const outputTokens = tasks.flatMap((task) =>
+    task.outputTokens === null ? [] : [task.outputTokens]
   );
   const runtimeIdentity = summary.results.find(
     (result) => result.result.runtimeIdentity !== undefined
@@ -128,10 +167,40 @@ async function buildBenchmark(
       costComplete:
         tasks.length > 0 && tasks.every((task) => task.costComplete),
       failed: tasks.filter((task) => !task.success).length,
+      failedToolCalls: tasks.reduce(
+        (count, task) => count + task.failedToolCalls,
+        0
+      ),
+      meanJudgeScore:
+        judgeScores.length === 0
+          ? null
+          : judgeScores.reduce((total, score) => total + score, 0) /
+            judgeScores.length,
       medianDurationMs: percentile(successfulDurations, 0.5),
       passed: tasks.filter((task) => task.success).length,
       p95DurationMs: percentile(successfulDurations, 0.95),
       successRate: tasks.length === 0 ? 0 : summary.passed / tasks.length,
+      totalInputTokens:
+        inputTokens.length === 0
+          ? null
+          : inputTokens.reduce((total, tokens) => total + tokens, 0),
+      totalModelSteps: tasks.reduce(
+        (count, task) => count + task.modelSteps,
+        0
+      ),
+      totalOutputTokens:
+        outputTokens.length === 0
+          ? null
+          : outputTokens.reduce((total, tokens) => total + tokens, 0),
+      totalToolCalls: tasks.reduce(
+        (count, task) =>
+          count +
+          Object.values(task.toolCalls).reduce(
+            (taskCount, calls) => taskCount + calls,
+            0
+          ),
+        0
+      ),
       totalCostUsd:
         measuredCosts.length === 0
           ? null

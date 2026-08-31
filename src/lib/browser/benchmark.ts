@@ -43,15 +43,30 @@ export function measureBrowserTask(
   let completedSteps = 0;
   let measuredSteps = 0;
   let costUsd = 0;
+  let measuredInputTokenSteps = 0;
+  let measuredOutputTokenSteps = 0;
+  let inputTokens = 0;
+  let outputTokens = 0;
 
   for (const event of events) {
     if (event.type !== "step.completed") continue;
     completedSteps += 1;
 
     const cost = event.data.usage?.costUsd;
-    if (cost === undefined) continue;
-    measuredSteps += 1;
-    costUsd += cost;
+    if (cost !== undefined) {
+      measuredSteps += 1;
+      costUsd += cost;
+    }
+    const input = event.data.usage?.inputTokens;
+    if (input !== undefined) {
+      measuredInputTokenSteps += 1;
+      inputTokens += input;
+    }
+    const output = event.data.usage?.outputTokens;
+    if (output !== undefined) {
+      measuredOutputTokenSteps += 1;
+      outputTokens += output;
+    }
   }
 
   return {
@@ -61,6 +76,9 @@ export function measureBrowserTask(
       start && terminal
         ? elapsedMs(start, terminal)
         : Math.max(0, fallbackDurationMs),
+    inputTokens: measuredInputTokenSteps === 0 ? null : inputTokens,
+    modelSteps: completedSteps,
+    outputTokens: measuredOutputTokenSteps === 0 ? null : outputTokens,
   };
 }
 
