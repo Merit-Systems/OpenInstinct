@@ -84,11 +84,13 @@ concurrently against the same task array, compares the artifacts, then cleans
 up:
 
 ```sh
-pnpm bench:ab <baseline-ref> <candidate-ref> --suite smoke
+pnpm bench:ab <baseline-ref> <candidate-ref> --suite all --label "semantic browser loop"
 ```
 
-Real flows default to a 15-minute per-task timeout. Use
+Runs default to nine concurrent tasks per revision, so an A/B suite can execute
+up to 18 tasks at once. Real flows default to a 15-minute per-task timeout. Use
 `--task-timeout-minutes <n>` to change that budget, `--repetitions 3` for a less
-noisy speed decision, `--max-concurrency 2` to trade isolation for runtime, and
+noisy speed decision, `--max-concurrency <n>` to override parallelism, and
 `--keep` to leave both Portless instances and worktrees running for inspection.
-Combined artifacts land under `.eve/browser-ab/<timestamp>/`.
+`--label "…"` records a short note in the run list and detail view. Combined
+artifacts land under `.eve/browser-ab/<timestamp>/`.

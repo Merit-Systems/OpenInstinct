@@ -48,6 +48,7 @@ const liveBenchmarkVariantSchema = z.object({
 export const browserBenchmarkLiveStatusSchema = z.object({
   completedAt: nullableDateTime,
   error: z.string().nullable(),
+  label: z.string().min(1).optional(),
   maxConcurrency: z.number().int().min(1),
   outputDirectory: z.string().min(1),
   repetitions: z.number().int().min(1),

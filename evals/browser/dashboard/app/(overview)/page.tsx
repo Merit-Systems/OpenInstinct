@@ -79,9 +79,10 @@ function RunRow({ run }: { run: BrowserBenchmarkLiveStatus }) {
           className="font-medium hover:underline"
           href={`/runs/${run.runId}`}
         >
-          {formatRunDate(run.startedAt)}
+          {run.label ?? formatRunDate(run.startedAt)}
         </Link>
         <div className="type-compact-code mt-0.5 text-muted-foreground">
+          {run.label ? `${formatRunDate(run.startedAt)} · ` : ""}
           {run.variants.baseline.sha.slice(0, 7)} →{" "}
           {run.variants.candidate.sha.slice(0, 7)}
         </div>

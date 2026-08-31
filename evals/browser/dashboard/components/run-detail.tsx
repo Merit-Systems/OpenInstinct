@@ -42,7 +42,9 @@ export function RunDetail({ runId }: { runId: string }) {
           >
             ← All runs
           </Link>
-          <h1 className="type-page-title mt-3">Browser A/B</h1>
+          <h1 className="type-page-title mt-3">
+            {run?.label ?? "Browser A/B"}
+          </h1>
           {run ? (
             <p className="type-supporting-body mt-1 text-muted-foreground">
               {run.suite} · {run.variants.baseline.sha.slice(0, 7)} →{" "}

@@ -134,6 +134,7 @@ try {
     baseline: { artifact: artifacts.baseline, gitSha: baselineSha },
     candidate: { artifact: artifacts.candidate, gitSha: candidateSha },
     completedAt: new Date().toISOString(),
+    label: options.label,
     repetitions: options.repetitions,
     suite: options.suite,
     taskTimeoutMs: options.taskTimeoutMs,
@@ -296,7 +297,14 @@ async function startAgent(current: ReturnType<typeof variant>) {
 }
 
 async function runBenchmark(current: ReturnType<typeof variant>) {
-  const label = `${current.kind}-${shortSha(current.sha)}-${options.suite}`;
+  const label = [
+    options.label,
+    current.kind,
+    shortSha(current.sha),
+    options.suite,
+  ]
+    .filter(Boolean)
+    .join("-");
   const artifact = join(outputDirectory, `${current.kind}.json`);
   await run(
     "node_modules/eve/bin/eve.js",
@@ -375,6 +383,7 @@ function initialLiveStatus(
   return {
     completedAt: null,
     error: null,
+    ...(options.label ? { label: options.label } : {}),
     maxConcurrency: options.maxConcurrency,
     outputDirectory,
     repetitions: options.repetitions,
@@ -542,9 +551,10 @@ function parseArguments(args: string[]) {
   const positional: string[] = [];
   let suite: "all" | "live" | "profile" | "smoke" = "smoke";
   let repetitions = 1;
-  let maxConcurrency = 1;
+  let maxConcurrency = 9;
   let taskTimeoutMs = 15 * 60_000;
   let keep = false;
+  let label: string | undefined;
 
   for (let index = 0; index < args.length; index += 1) {
     const argument = args[index];
@@ -563,6 +573,12 @@ function parseArguments(args: string[]) {
         throw new Error("--suite must be smoke, live, profile, or all.");
       }
       suite = value;
+      continue;
+    }
+    if (argument === "--label") {
+      const value = args[++index]?.trim();
+      if (!value) throw new Error("--label requires a non-empty value.");
+      label = value;
       continue;
     }
     if (argument === "--repetitions" || argument === "--max-concurrency") {
@@ -593,13 +609,14 @@ function parseArguments(args: string[]) {
   const [baselineRef, candidateRef] = positional;
   if (positional.length !== 2 || !baselineRef || !candidateRef) {
     throw new Error(
-      "Usage: pnpm bench:ab <baseline-ref> <candidate-ref> [--suite smoke|live|profile|all] [--repetitions n] [--max-concurrency n] [--task-timeout-minutes n] [--keep]"
+      'Usage: pnpm bench:ab <baseline-ref> <candidate-ref> [--label "description"] [--suite smoke|live|profile|all] [--repetitions n] [--max-concurrency n] [--task-timeout-minutes n] [--keep]'
     );
   }
   return {
     baselineRef,
     candidateRef,
     keep,
+    label,
     maxConcurrency,
     repetitions,
     suite,
