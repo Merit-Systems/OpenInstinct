@@ -15,7 +15,7 @@
   "options": {
     "denyWarnings": true,
     "typeAware": true,
-    "reportUnusedDisableDirectives": "off"
+    "reportUnusedDisableDirectives": "error"
   },
   "categories": {
     "correctness": "error",

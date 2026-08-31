@@ -1,7 +1,5 @@
 "use client";
 
-/* oxlint-disable eslint/no-empty-function, eslint/no-underscore-dangle, jsx-a11y/heading-has-content, typescript/no-confusing-void-expression, typescript/no-misused-promises, typescript/no-unnecessary-condition, typescript/no-unnecessary-type-assertion, typescript/no-unsafe-type-assertion, typescript/return-await, unicorn/prefer-add-event-listener -- Preserve the public AI Elements browser and form API for source-compatible consumer migration. */
-
 import {
   Command,
   CommandEmpty,

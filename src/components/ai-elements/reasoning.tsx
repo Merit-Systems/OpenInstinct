@@ -1,6 +1,5 @@
 "use client";
 
-/* oxlint-disable typescript/no-confusing-void-expression -- Preserve the AI Elements controlled and uncontrolled disclosure API. */
 import {
   Collapsible,
   CollapsibleContent,

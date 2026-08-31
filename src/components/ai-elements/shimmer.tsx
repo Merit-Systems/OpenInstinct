@@ -1,6 +1,6 @@
 "use client";
 
-/* oxlint-disable hooks/static-components, typescript/no-unnecessary-condition, typescript/no-unsafe-type-assertion, typescript/restrict-template-expressions -- AI Elements supports a caller-selected intrinsic motion element. */
+/* oxlint-disable hooks/static-components -- AI Elements supports a caller-selected intrinsic motion element. */
 
 import { cn } from "@/lib/utils";
 import { LazyMotion, domAnimation, m } from "motion/react";

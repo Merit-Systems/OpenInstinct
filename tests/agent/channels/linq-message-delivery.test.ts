@@ -1,4 +1,4 @@
-/* oxlint-disable typescript/no-unsafe-type-assertion, vitest/require-mock-type-parameters -- The handler fixture supplies only the Chat SDK fields exercised here. */
+/* oxlint-disable typescript/no-unsafe-type-assertion -- The handler fixture supplies only the Chat SDK fields exercised here. */
 import type { HookContext } from "eve/hooks";
 import { describe, expect, it, vi } from "vitest";
 import type * as Blob from "@vercel/blob";

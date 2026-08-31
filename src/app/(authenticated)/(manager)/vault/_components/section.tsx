@@ -253,7 +253,6 @@ function VaultItemIcon({ item }: { readonly item: VaultItem }) {
       <Globe2Icon className="size-4" />
       {faviconUrl ? (
         // Imported domains cannot be declared in Next Image configuration.
-        // oxlint-disable-next-line nextjs/no-img-element
         <img
           alt=""
           className="absolute inset-0 size-full bg-background object-contain p-1"
