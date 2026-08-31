@@ -30,7 +30,6 @@ describe("Linq phone authentication", () => {
       "0123456789abcdefghijklmnopqrstuvwxyzABCD"
     );
     vi.stubEnv("LINQ_CONNECTOR", "linq/open-instinct");
-    vi.stubEnv("LINQ_PHONE_NUMBER", "+12025550123");
     vi.mocked(getToken).mockResolvedValue("test-token");
     vi.stubGlobal(
       "fetch",

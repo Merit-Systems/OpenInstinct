@@ -1,7 +1,9 @@
 import { vi } from "vitest";
 
+vi.mock("server-only", () => ({}));
+
 const testEnvironment = {
-  BETTER_AUTH_SECRET: "test-auth-secret",
+  BETTER_AUTH_SECRET: "test-auth-secret-0123456789abcdefghijklmnop",
   BETTER_AUTH_URL: "https://example.com",
   BLOB_READ_WRITE_TOKEN: "vercel_blob_rw_test",
   DATABASE_URL: "postgresql://user:password@example.com/database",

@@ -3,7 +3,7 @@ import {
   createManagerSetupUrl,
   managerSetupRequestSchema,
 } from "@/lib/manager";
-import { env } from "@/lib/env";
+import { applicationOrigin } from "@/lib/application-origin";
 
 export default defineTool({
   description:
@@ -13,7 +13,7 @@ export default defineTool({
     return {
       message:
         "Open this page in your Local Vault Assistant deployment and complete the form. Do not send the secret in chat.",
-      url: createManagerSetupUrl(env.BETTER_AUTH_URL, request),
+      url: createManagerSetupUrl(applicationOrigin(), request),
     };
   },
 });
