@@ -24,8 +24,7 @@
 body {
   margin: 0;
   min-width: 320px;
-  background:
-    radial-gradient(circle at 14% 0%, #fff, transparent 32rem), var(--bg);
+  background: var(--bg);
   color: var(--ink);
 }
 main {
