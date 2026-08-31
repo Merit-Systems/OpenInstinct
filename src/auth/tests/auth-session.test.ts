@@ -1,11 +1,17 @@
+/* oxlint-disable vitest/require-mock-type-parameters -- Session lookup needs a deliberately partial Better Auth fixture. */
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { authSessionDependencies, getAuthSession } from "@/auth/session";
+import { getAuthSession } from "@/auth/session";
 import { authSessionFor } from "@/tests/helpers/auth-session";
 
-const getSessionMock = vi.spyOn(authSessionDependencies, "getSession");
+const mocks = vi.hoisted(() => ({ getAuth: vi.fn(), getSession: vi.fn() }));
+
+vi.mock("@/auth", () => ({ getAuth: mocks.getAuth }));
 
 beforeEach(() => {
   vi.clearAllMocks();
+  mocks.getAuth.mockResolvedValue({
+    api: { getSession: mocks.getSession },
+  });
 });
 
 describe("auth session", () => {
@@ -15,7 +21,7 @@ describe("auth session", () => {
       phoneNumber: "+12025550123",
       phoneNumberVerified: true,
     });
-    getSessionMock
+    mocks.getSession
       .mockResolvedValueOnce(verified)
       .mockResolvedValueOnce(
         authSessionFor({

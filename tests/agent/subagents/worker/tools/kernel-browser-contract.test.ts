@@ -1,55 +1,71 @@
+/* oxlint-disable typescript/no-unsafe-type-assertion -- Kernel's page type has private members beyond the AsyncIterable contract consumed by the browser tool. */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
+import type {
+  createBrowserSession,
+  deleteBrowserSession,
+  listBrowserSessions,
+  withBrowserProfileWriteLock,
+} from "@/db/services/browsers";
+import type { recordBrowserTraceDomains } from "@/db/services/browser-traces";
+import type { requireWorkerScope } from "@/agent/subagents/worker/lib/access";
+import type { requireOwnedBrowserSession } from "@/agent/subagents/worker/lib/owned-browser";
+import type * as TraceDomainsModule from "@/agent/subagents/worker/lib/trace/domains";
+import type { harvestBrowserTraceDomains } from "@/agent/subagents/worker/lib/trace/domains";
 import { kernel } from "@/lib/kernel";
 import { toolContextFor } from "@/tests/helpers/tool-context";
 import manageBrowsers, {
-  createManageBrowsers,
   kernelProfileNameForWorkspace,
-  manageBrowsersDependencies,
 } from "@/agent/subagents/worker/tools/manage_browsers";
 
-type ListKernelBrowsers = NonNullable<
-  Parameters<typeof createManageBrowsers>[0]
->["listKernelBrowsers"];
+const serviceMocks = vi.hoisted(() => ({
+  createBrowserSession: vi.fn<typeof createBrowserSession>(),
+  deleteBrowserSession: vi.fn<typeof deleteBrowserSession>(),
+  harvestBrowserTraceDomains: vi.fn<typeof harvestBrowserTraceDomains>(),
+  listBrowserSessions: vi.fn<typeof listBrowserSessions>(),
+  recordBrowserTraceDomains: vi.fn<typeof recordBrowserTraceDomains>(),
+  requireOwnedBrowserSession: vi.fn<typeof requireOwnedBrowserSession>(),
+  requireWorkerScope: vi.fn<typeof requireWorkerScope>(),
+  withBrowserProfileWriteLock: vi.fn<typeof withBrowserProfileWriteLock>(),
+}));
+
+vi.mock("@/db/services/browsers", () => ({
+  createBrowserSession: serviceMocks.createBrowserSession,
+  deleteBrowserSession: serviceMocks.deleteBrowserSession,
+  listBrowserSessions: serviceMocks.listBrowserSessions,
+  withBrowserProfileWriteLock: serviceMocks.withBrowserProfileWriteLock,
+}));
+vi.mock("@/db/services/browser-traces", () => ({
+  recordBrowserTraceDomains: serviceMocks.recordBrowserTraceDomains,
+}));
+vi.mock("@/agent/subagents/worker/lib/access", () => ({
+  requireWorkerScope: serviceMocks.requireWorkerScope,
+}));
+vi.mock("@/agent/subagents/worker/lib/owned-browser", () => ({
+  requireOwnedBrowserSession: serviceMocks.requireOwnedBrowserSession,
+}));
+vi.mock(
+  "@/agent/subagents/worker/lib/trace/domains",
+  async (importOriginal) => ({
+    ...(await importOriginal<typeof TraceDomainsModule>()),
+    harvestBrowserTraceDomains: serviceMocks.harvestBrowserTraceDomains,
+  })
+);
 
 const mocks = {
   createBrowser: vi.spyOn(kernel.browsers, "create"),
-  createBrowserSession: vi.spyOn(
-    manageBrowsersDependencies,
-    "createBrowserSession"
-  ),
+  createBrowserSession: serviceMocks.createBrowserSession,
   deleteBrowser: vi.spyOn(kernel.browsers, "deleteByID"),
-  deleteBrowserSession: vi.spyOn(
-    manageBrowsersDependencies,
-    "deleteBrowserSession"
-  ),
-  harvestBrowserTraceDomains: vi.spyOn(
-    manageBrowsersDependencies,
-    "harvestBrowserTraceDomains"
-  ),
-  listBrowserSessions: vi.spyOn(
-    manageBrowsersDependencies,
-    "listBrowserSessions"
-  ),
-  listKernelBrowsers: vi.fn<ListKernelBrowsers>(),
-  readBrowserSession: vi.spyOn(
-    manageBrowsersDependencies,
-    "requireOwnedBrowserSession"
-  ),
-  recordBrowserTraceDomains: vi.spyOn(
-    manageBrowsersDependencies,
-    "recordBrowserTraceDomains"
-  ),
+  deleteBrowserSession: serviceMocks.deleteBrowserSession,
+  harvestBrowserTraceDomains: serviceMocks.harvestBrowserTraceDomains,
+  listBrowserSessions: serviceMocks.listBrowserSessions,
+  listKernelBrowsers: vi.spyOn(kernel.browsers, "list"),
+  readBrowserSession: serviceMocks.requireOwnedBrowserSession,
+  recordBrowserTraceDomains: serviceMocks.recordBrowserTraceDomains,
   retrieveBrowser: vi.spyOn(kernel.browsers, "retrieve"),
   retrieveProfile: vi.spyOn(kernel.profiles, "retrieve"),
-  requireWorkerScope: vi.spyOn(
-    manageBrowsersDependencies,
-    "requireWorkerScope"
-  ),
-  withBrowserProfileWriteLock: vi.spyOn(
-    manageBrowsersDependencies,
-    "withBrowserProfileWriteLock"
-  ),
+  requireWorkerScope: serviceMocks.requireWorkerScope,
+  withBrowserProfileWriteLock: serviceMocks.withBrowserProfileWriteLock,
 };
 
 beforeEach(() => {
@@ -63,7 +79,7 @@ beforeEach(() => {
     id: "profile-1",
     name: "opaque-profile",
   });
-  mocks.listKernelBrowsers.mockReturnValue(asyncItems([]));
+  mocks.listKernelBrowsers.mockReturnValue(kernelBrowserPage([]));
   mocks.createBrowser.mockResolvedValue({
     browser_live_view_url: "https://live.kernel.test/browser-1",
     cdp_ws_url: "wss://kernel.test/cdp",
@@ -184,7 +200,7 @@ describe("Kernel browser contract", () => {
 
   it("allows only one writable profile browser", async () => {
     mocks.listKernelBrowsers.mockReturnValue(
-      asyncItems([
+      kernelBrowserPage([
         {
           profile: { id: "profile-1" },
           profile_save_changes: true,
@@ -192,12 +208,11 @@ describe("Kernel browser contract", () => {
         },
       ])
     );
-    const tool = createManageBrowsers({
-      listKernelBrowsers: mocks.listKernelBrowsers,
-    });
-
     await expect(
-      tool.execute({ action: "create", save_changes: true }, toolContextFor())
+      manageBrowsers.execute(
+        { action: "create", save_changes: true },
+        toolContextFor()
+      )
     ).rejects.toThrow(/browser-active.*saving login state/i);
     expect(mocks.withBrowserProfileWriteLock).toHaveBeenCalledOnce();
     expect(mocks.createBrowser).not.toHaveBeenCalled();
@@ -243,4 +258,9 @@ function asyncItems<T>(items: readonly T[]): AsyncIterable<T> {
       yield* items;
     },
   };
+}
+
+function kernelBrowserPage(items: readonly unknown[]) {
+  // SAFETY: manage_browsers consumes only the SDK page's AsyncIterable contract.
+  return asyncItems(items) as ReturnType<typeof kernel.browsers.list>;
 }

@@ -1,11 +1,21 @@
 import { createEnv } from "@t3-oss/env-nextjs";
 import { z } from "zod";
-import { isE164PhoneNumber } from "../auth/phone-number";
+import { isE164PhoneNumber } from "@/auth/phone-number";
 import { databaseUrlSchema } from "@/db/env/utils";
-import {
-  betterAuthSecretSchema,
-  secretEncryptionKeySchema,
-} from "./installation-secrets-schema";
+
+export const betterAuthSecretSchema = z
+  .string()
+  .refine(
+    (value) => value.trim().length >= 32,
+    "BETTER_AUTH_SECRET must contain at least 32 characters."
+  );
+
+export const secretEncryptionKeySchema = z
+  .string()
+  .refine(
+    (value) => Buffer.from(value, "base64").length === 32,
+    "SECRET_ENCRYPTION_KEY must be a base64-encoded 32-byte key."
+  );
 
 const localDevelopment =
   process.env.NODE_ENV === "development" &&

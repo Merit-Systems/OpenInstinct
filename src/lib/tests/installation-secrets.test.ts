@@ -1,13 +1,18 @@
-/* oxlint-disable vitest/require-mock-type-parameters -- Hoisted Blob fakes are configured per test. */
+/* oxlint-disable vitest/require-mock-type-parameters -- The Blob mock implements only the persistence operations exercised here. */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { get, put } from "@vercel/blob";
 import { z } from "zod";
-import { installationSecretsSchema } from "@/lib/installation-secrets-schema";
+import type { InstallationSecrets } from "@/lib/installation-secrets";
 
-const mocks = {
+const mocks = vi.hoisted(() => ({
   get: vi.fn<typeof get>(),
   put: vi.fn<typeof put>(),
-};
+}));
+
+vi.mock("@vercel/blob", () => ({
+  get: mocks.get,
+  put: mocks.put,
+}));
 
 beforeEach(() => {
   vi.resetModules();
@@ -57,15 +62,14 @@ describe("installation secrets", () => {
       /^openinstinct\/system\/[a-f0-9]{32}\/installation-secrets\.v1\.json$/u
     );
     const serialized = z.string().parse(body);
-    expect(installationSecretsSchema.parse(JSON.parse(serialized))).toEqual(
-      first
-    );
+    expect(JSON.parse(serialized)).toEqual(first);
     expect(options).toMatchObject({
       access: "private",
       addRandomSuffix: false,
       allowOverwrite: false,
-      storeId: "store_openinstinct",
     });
+    expect(options).not.toHaveProperty("storeId");
+    expect(options).not.toHaveProperty("token");
   });
 
   it("reads the winning value when another runtime creates it first", async () => {
@@ -149,16 +153,13 @@ describe("installation secrets", () => {
   });
 });
 
-type InstallationSecretsFixture =
-  | z.input<typeof installationSecretsSchema>
-  | { readonly version: 1 };
-
 async function loadInstallationSecrets() {
   const secretsModule = await import("@/lib/installation-secrets");
-  secretsModule.installationSecretsDependencies.get = mocks.get;
-  secretsModule.installationSecretsDependencies.put = mocks.put;
   return secretsModule.getInstallationSecrets;
 }
+
+type InstallationSecretsFixture = Partial<InstallationSecrets> &
+  Pick<InstallationSecrets, "version">;
 
 function blobResult(value: InstallationSecretsFixture) {
   const body = JSON.stringify(value);

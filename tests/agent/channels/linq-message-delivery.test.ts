@@ -1,4 +1,4 @@
-/* oxlint-disable anti-slop/no-module-mocking, typescript/no-unsafe-type-assertion, vitest/require-mock-type-parameters -- Linq delivery owns Blob I/O. These fakes isolate storage without adding a production wrapper; the handler fixture supplies only exercised Chat SDK fields. */
+/* oxlint-disable typescript/no-unsafe-type-assertion, vitest/require-mock-type-parameters -- The handler fixture supplies only the Chat SDK fields exercised here. */
 import type { HookContext } from "eve/hooks";
 import { describe, expect, it, vi } from "vitest";
 import type * as Blob from "@vercel/blob";

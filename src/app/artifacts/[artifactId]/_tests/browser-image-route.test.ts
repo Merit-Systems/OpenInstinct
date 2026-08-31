@@ -1,4 +1,4 @@
-/* oxlint-disable anti-slop/no-module-mocking, vitest/require-mock-type-parameters -- The route owns the private Blob read. These fakes isolate external auth and storage without a production wrapper. */
+/* oxlint-disable vitest/require-mock-type-parameters -- The auth and Blob mocks implement only the route boundaries exercised here. */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const artifactId = "0d01e667-d128-4bb7-a248-1ae21db72f4f";

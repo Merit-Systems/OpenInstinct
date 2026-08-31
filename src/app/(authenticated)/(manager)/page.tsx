@@ -16,7 +16,7 @@ import { z } from "zod";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { getGatewayModel } from "@/db/services/settings";
-import { env } from "@/lib/env";
+import { env } from "@/env";
 import { googleWorkspaceTokenParams } from "@/lib/google-workspace";
 import { requireRequestScope } from "@/lib/request-scope";
 import { GoogleWorkspaceAction } from "./_components/google-workspace-action";

@@ -1,10 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { HookContext } from "eve/hooks";
-import sessionOwner, {
-  sessionOwnerDependencies,
-} from "@/agent/hooks/session-owner";
+import type { saveChat } from "@/db/services/chats";
+import sessionOwner from "@/agent/hooks/session-owner";
 
-const saveChatMock = vi.spyOn(sessionOwnerDependencies, "saveChat");
+const mocks = vi.hoisted(() => ({
+  saveChat: vi.fn<typeof saveChat>(),
+}));
+
+vi.mock("@/db/services/chats", () => ({ saveChat: mocks.saveChat }));
 
 type MessageReceivedHandler = NonNullable<
   NonNullable<typeof sessionOwner.events>["message.received"]
@@ -37,7 +40,7 @@ const context = {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  saveChatMock.mockResolvedValue();
+  mocks.saveChat.mockResolvedValue();
 });
 
 describe("session ownership hook", () => {
@@ -55,7 +58,7 @@ describe("session ownership hook", () => {
     } satisfies Parameters<MessageReceivedHandler>[0];
     await handler?.(event, context);
 
-    expect(saveChatMock).toHaveBeenCalledWith(scope, {
+    expect(mocks.saveChat).toHaveBeenCalledWith(scope, {
       sessionId: "session-1",
     });
   });

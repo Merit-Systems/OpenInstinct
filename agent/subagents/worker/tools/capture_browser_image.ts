@@ -15,7 +15,7 @@ import {
   maximumBrowserImageBytes,
   sniffBrowserImageMediaType,
 } from "@/lib/browser-artifact";
-import { env } from "@/lib/env";
+import { env } from "@/env";
 import { kernel } from "@/lib/kernel";
 
 const regionSchema = z.object({
@@ -297,15 +297,11 @@ async function persistCapturedImage(
     throw new Error("The captured resource is not a supported browser image.");
   const contentHash = createHash("sha256").update(input.bytes).digest("hex");
   const storagePathname = `${reservation.storagePathname}/${contentHash}`;
-  const blobAuth = env.BLOB_STORE_ID
-    ? { storeId: env.BLOB_STORE_ID }
-    : env.BLOB_READ_WRITE_TOKEN
-      ? { token: env.BLOB_READ_WRITE_TOKEN }
-      : undefined;
-  if (!blobAuth) throw new Error("Browser image storage is not configured.");
+  if (!env.BLOB_STORE_ID && !env.BLOB_READ_WRITE_TOKEN) {
+    throw new Error("Browser image storage is not configured.");
+  }
 
   await put(storagePathname, Buffer.from(input.bytes), {
-    ...blobAuth,
     access: "private",
     abortSignal: signal,
     addRandomSuffix: false,
@@ -324,11 +320,11 @@ async function persistCapturedImage(
       storagePathname,
     });
     if (finalized.storagePathname !== storagePathname) {
-      await del(storagePathname, blobAuth).catch(() => undefined);
+      await del(storagePathname).catch(() => undefined);
     }
     return finalized.image;
   } catch (error) {
-    await del(storagePathname, blobAuth).catch(() => undefined);
+    await del(storagePathname).catch(() => undefined);
     throw error;
   }
 }

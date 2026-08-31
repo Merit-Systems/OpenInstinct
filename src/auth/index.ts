@@ -5,7 +5,7 @@ import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { phoneNumber } from "better-auth/plugins/phone-number";
 import { account, db, session, user, verification } from "@/db";
 import { betterAuthBaseURL } from "@/lib/application-origin";
-import { env, localPhoneAuthBypassEnabled } from "@/lib/env";
+import { env, localPhoneAuthBypassEnabled } from "@/env";
 import { getInstallationSecrets } from "@/lib/installation-secrets";
 import { LinqDeliveryError, linqOtpFailure, sendLinqText } from "./linq";
 import { isE164PhoneNumber } from "./phone-number";
