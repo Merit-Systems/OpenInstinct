@@ -1,6 +1,6 @@
 "use client";
 
-import { type FormEvent, useState } from "react";
+import { type SubmitEvent, useState } from "react";
 import { useRouter } from "next/navigation";
 import { z } from "zod";
 import { Button } from "@/components/ui/button";
@@ -84,9 +84,11 @@ export function LoginForm({
   });
   const result = loginFormSchema.safeParse(form);
   const errors =
-    attempted && !result.success ? result.error.flatten().fieldErrors : {};
+    attempted && !result.success
+      ? z.flattenError(result.error).fieldErrors
+      : {};
 
-  const submit = (event: FormEvent) => {
+  const submit = (event: SubmitEvent<HTMLFormElement>) => {
     event.preventDefault();
     setAttempted(true);
     if (!result.success) return;

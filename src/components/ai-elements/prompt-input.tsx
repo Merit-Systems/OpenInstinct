@@ -1,6 +1,6 @@
 "use client";
 
-/* oxlint-disable eslint/no-empty-function, eslint/no-underscore-dangle, jsx-a11y/heading-has-content, typescript/no-confusing-void-expression, typescript/no-deprecated, typescript/no-misused-promises, typescript/no-unnecessary-condition, typescript/no-unnecessary-type-assertion, typescript/no-unsafe-type-assertion, typescript/return-await, unicorn/prefer-add-event-listener -- Preserve the public AI Elements browser and form API for source-compatible consumer migration. */
+/* oxlint-disable eslint/no-empty-function, eslint/no-underscore-dangle, jsx-a11y/heading-has-content, typescript/no-confusing-void-expression, typescript/no-misused-promises, typescript/no-unnecessary-condition, typescript/no-unnecessary-type-assertion, typescript/no-unsafe-type-assertion, typescript/return-await, unicorn/prefer-add-event-listener -- Preserve the public AI Elements browser and form API for source-compatible consumer migration. */
 
 import {
   Command,
@@ -58,13 +58,13 @@ import type {
   ChangeEventHandler,
   ClipboardEventHandler,
   ComponentProps,
-  FormEvent,
-  FormEventHandler,
   HTMLAttributes,
   KeyboardEventHandler,
   PropsWithChildren,
   ReactNode,
   RefObject,
+  SubmitEvent,
+  SubmitEventHandler,
 } from "react";
 import {
   Children,
@@ -511,7 +511,7 @@ export type PromptInputProps = Omit<
   }) => void;
   onSubmit: (
     message: PromptInputMessage,
-    event: FormEvent<HTMLFormElement>
+    event: SubmitEvent<HTMLFormElement>
   ) => void | Promise<void>;
 };
 
@@ -844,7 +844,7 @@ export const PromptInput = ({
     [referencedSources, clearReferencedSources]
   );
 
-  const handleSubmit: FormEventHandler<HTMLFormElement> = useCallback(
+  const handleSubmit: SubmitEventHandler<HTMLFormElement> = useCallback(
     async (event) => {
       event.preventDefault();
 

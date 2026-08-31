@@ -482,7 +482,6 @@
         "tailwindcss/no-unknown-classes": "off",
         "typescript/consistent-type-definitions": "off",
         "typescript/no-confusing-void-expression": "off",
-        "typescript/no-deprecated": "off",
         "typescript/no-floating-promises": "off",
         "typescript/no-misused-promises": "off",
         "typescript/no-unnecessary-condition": "off",

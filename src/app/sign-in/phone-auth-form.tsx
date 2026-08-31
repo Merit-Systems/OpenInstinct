@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useState, type SubmitEvent } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -24,7 +24,7 @@ export function PhoneAuthForm({
   const [step, setStep] = useState<AuthStep>("phone-number");
   const [verificationCode, setVerificationCode] = useState("");
 
-  async function submitDetails(event: FormEvent<HTMLFormElement>) {
+  async function submitDetails(event: SubmitEvent<HTMLFormElement>) {
     event.preventDefault();
     setError(undefined);
     const normalizedPhoneNumber = normalizeAuthPhoneNumber(phoneNumber);
@@ -58,7 +58,7 @@ export function PhoneAuthForm({
     }
   }
 
-  async function submitCode(event: FormEvent<HTMLFormElement>) {
+  async function submitCode(event: SubmitEvent<HTMLFormElement>) {
     event.preventDefault();
     setError(undefined);
     const code = verificationCode.trim();
