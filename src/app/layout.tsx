@@ -15,7 +15,7 @@ export const metadata: Metadata = {
 
 export default async function RootLayout({ children }: LayoutProps<"/">) {
   const session = await getAuthSession(await headers());
-  const workspaceId = session?.user?.id
+  const workspaceId = session
     ? accessScopeForUser(`better-auth:${session.user.id}`).workspaceId
     : undefined;
 

@@ -172,7 +172,9 @@ export const Question = ({
           "space-y-4 rounded-lg border bg-background p-4",
           className
         )}
-        onSubmit={handleSubmit}
+        onSubmit={(event) => {
+          void handleSubmit(event);
+        }}
         {...props}
       >
         {children}
@@ -317,7 +319,7 @@ export const QuestionSubmit = ({
 
   return (
     <Button
-      disabled={question.disabled || disabled || !hasResponse}
+      disabled={question.disabled || disabled === true || !hasResponse}
       type="submit"
       {...props}
     >

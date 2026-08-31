@@ -309,9 +309,9 @@ describe("vault browser autofill", () => {
 
   it("lets a vault-owned adapter supply masked suggestions and claims", async () => {
     const adapter: AutofillVaultAdapter = {
-      async listSuggestions(_scope, origin, surface) {
+      async listSuggestions(_scope, origin, targetSurface) {
         expect(origin).toBe("https://merchant.example");
-        expect(surface.kind).toBe("payment-card");
+        expect(targetSurface.kind).toBe("payment-card");
         return [
           {
             candidateId: "opaque-card",

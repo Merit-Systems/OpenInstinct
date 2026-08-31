@@ -73,5 +73,6 @@ export default defineTool({
           ...(await searchGoogleContacts(ctx, input.query, input.pageSize)),
         };
     }
+    throw new Error("Unsupported Google Workspace read action.");
   },
 });

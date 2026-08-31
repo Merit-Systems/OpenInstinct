@@ -105,7 +105,12 @@ export function PhoneAuthForm({
 
   if (step === "verification-code") {
     return (
-      <form className="mt-6 space-y-4" onSubmit={submitCode}>
+      <form
+        className="mt-6 space-y-4"
+        onSubmit={(event) => {
+          void submitCode(event);
+        }}
+      >
         <div className="space-y-2">
           <Label htmlFor="code">Verification code</Label>
           <Input
@@ -114,7 +119,9 @@ export function PhoneAuthForm({
             inputMode="numeric"
             maxLength={6}
             name="code"
-            onChange={(event) => setVerificationCode(event.target.value)}
+            onChange={(event) => {
+              setVerificationCode(event.target.value);
+            }}
             pattern="[0-9]{6}"
             required
             value={verificationCode}
@@ -144,13 +151,20 @@ export function PhoneAuthForm({
   }
 
   return (
-    <form className="mt-6 space-y-4" onSubmit={submitDetails}>
+    <form
+      className="mt-6 space-y-4"
+      onSubmit={(event) => {
+        void submitDetails(event);
+      }}
+    >
       <div className="space-y-2">
         <Label htmlFor="phone-number">Phone number</Label>
         <Input
           autoComplete="tel"
           id="phone-number"
-          onChange={(event) => setPhoneNumber(event.target.value.trim())}
+          onChange={(event) => {
+            setPhoneNumber(event.target.value.trim());
+          }}
           placeholder="(202) 555-0123"
           required
           type="tel"

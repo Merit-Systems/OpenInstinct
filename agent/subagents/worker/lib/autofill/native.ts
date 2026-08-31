@@ -157,6 +157,7 @@ export async function fillWithKernelNativeAutofill({
       }
 
       let lastError: unknown;
+      /* oxlint-disable eslint/no-await-in-loop -- Autofill tries controls in priority order and stops after the first accepted target. */
       for (const control of controls) {
         try {
           await markNativeAutofilledControls(connection, control);
@@ -175,6 +176,7 @@ export async function fillWithKernelNativeAutofill({
         }
         return { filledClaims: claims.length, origin };
       }
+      /* oxlint-enable eslint/no-await-in-loop */
 
       throw new Error(
         "Chromium could not autofill any visible control. Focus a field in the intended card or address form and retry.",
@@ -208,12 +210,14 @@ async function fillNativeLoginControls(
     );
   }
 
+  /* oxlint-disable eslint/no-await-in-loop -- Login fields must be filled in DOM order so page validation sees coherent intermediate state. */
   for (const { control, value } of fills) {
     const accepted = await fillNativeLoginControl(connection, control, value);
     if (!accepted) {
       throw new Error("The login form rejected secure credential autofill.");
     }
   }
+  /* oxlint-enable eslint/no-await-in-loop */
   return fills.length;
 }
 
@@ -552,6 +556,7 @@ async function withKernelPage<T>(
       const iframeTargets = targetInfos.filter(
         ({ targetId, type }) => type === "iframe" && frameIds.has(targetId)
       );
+      /* oxlint-disable eslint/no-await-in-loop -- CDP target attachment mutates one connection and session IDs are collected in target order. */
       for (const iframeTarget of iframeTargets) {
         const attached = attachedTargetSchema.safeParse(
           await connection
@@ -563,6 +568,7 @@ async function withKernelPage<T>(
         );
         if (attached.success) sessionIds.push(attached.data.sessionId);
       }
+      /* oxlint-enable eslint/no-await-in-loop */
 
       return await operation({
         connection,

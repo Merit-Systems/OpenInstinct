@@ -218,7 +218,9 @@ export function VaultItemList({
 function VaultItemRow({ item }: { readonly item: VaultItem }) {
   const router = useRouter();
   const remove = api.vault.remove.useMutation({
-    onSuccess: () => router.refresh(),
+    onSuccess: () => {
+      router.refresh();
+    },
   });
 
   return (
@@ -235,7 +237,9 @@ function VaultItemRow({ item }: { readonly item: VaultItem }) {
       <Button
         aria-label={`Remove ${item.label}`}
         disabled={remove.isPending}
-        onClick={() => remove.mutate({ id: item.id })}
+        onClick={() => {
+          remove.mutate({ id: item.id });
+        }}
         size="icon-sm"
         type="button"
         variant="quiet"
@@ -253,10 +257,13 @@ function VaultItemIcon({ item }: { readonly item: VaultItem }) {
       <Globe2Icon className="size-4" />
       {faviconUrl ? (
         // Imported domains cannot be declared in Next Image configuration.
+        // oxlint-disable-next-line nextjs/no-img-element -- user-imported favicon URL
         <img
           alt=""
           className="absolute inset-0 size-full bg-background object-contain p-1"
-          onError={(event) => event.currentTarget.remove()}
+          onError={(event) => {
+            event.currentTarget.remove();
+          }}
           referrerPolicy="no-referrer"
           src={faviconUrl}
         />

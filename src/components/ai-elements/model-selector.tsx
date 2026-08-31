@@ -86,6 +86,7 @@ export function ModelSelectorLogo({
 }) {
   return (
     // The official AI Elements selector uses the models.dev provider artwork.
+    // oxlint-disable-next-line nextjs/no-img-element -- external provider artwork
     <img
       {...props}
       alt=""

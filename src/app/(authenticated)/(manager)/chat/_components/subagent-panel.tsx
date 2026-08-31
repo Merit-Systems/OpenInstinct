@@ -57,7 +57,7 @@ export function SubagentPanel({
   const subscriptionKey = getSubagentSubscriptionKey(sessions);
 
   useEffect(() => {
-    if (!subscriptionKey) return;
+    if (!subscriptionKey) return undefined;
     const controllers = subscriptionKey.split("\n").map((subscription) => {
       const [encodedSessionId] = subscription.split(":");
       const childSessionId = decodeURIComponent(encodedSessionId ?? "");
@@ -124,10 +124,10 @@ export function SubagentPanel({
   }, [subscriptionKey]);
 
   useEffect(() => {
-    if (!window.matchMedia("(min-width: 48rem)").matches) return;
+    if (!window.matchMedia("(min-width: 48rem)").matches) return undefined;
     if (!selectedId) {
       const taskId = restoreFocusId.current;
-      if (!taskId) return;
+      if (!taskId) return undefined;
       const frame = requestAnimationFrame(() => {
         document
           .querySelector<HTMLButtonElement>(
@@ -136,7 +136,9 @@ export function SubagentPanel({
           ?.focus();
         restoreFocusId.current = undefined;
       });
-      return () => cancelAnimationFrame(frame);
+      return () => {
+        cancelAnimationFrame(frame);
+      };
     }
 
     const frame = requestAnimationFrame(() =>
@@ -176,7 +178,9 @@ export function SubagentPanel({
     restoreFocusId.current = sessionId;
     setSelectedId(sessionId);
   };
-  const closeTask = () => setSelectedId(undefined);
+  const closeTask = () => {
+    setSelectedId(undefined);
+  };
   const activity = (
     <ActivityCard
       doneCount={doneCount}
@@ -215,7 +219,9 @@ export function SubagentPanel({
       <Button
         aria-label="Open activity panel"
         className="absolute top-2 right-3 z-30 md:hidden"
-        onClick={() => setMobileOpen(true)}
+        onClick={() => {
+          setMobileOpen(true);
+        }}
         size="icon-sm"
         type="button"
         variant="ghost"
@@ -315,7 +321,7 @@ function ActivityCard({
       <CardContent className="min-h-0 overflow-y-auto pr-6">
         <p className="type-section-title text-muted-foreground">Activity</p>
         <label
-          className="mt-4 flex cursor-pointer items-center gap-3 rounded-lg px-2 py-2 hover:bg-muted"
+          className="mt-4 flex cursor-pointer items-center gap-3 rounded-lg p-2 hover:bg-muted"
           htmlFor="show-full-trace"
         >
           <span className="type-supporting-body min-w-0 flex-1">
@@ -324,12 +330,12 @@ function ActivityCard({
           <Switch
             checked={traceView === "trace"}
             id="show-full-trace"
-            onCheckedChange={(checked) =>
-              onTraceViewChange(checked ? "trace" : "imessage")
-            }
+            onCheckedChange={(checked) => {
+              onTraceViewChange(checked ? "trace" : "imessage");
+            }}
           />
         </label>
-        <div className="type-supporting-body flex items-center px-2 py-2 text-muted-foreground">
+        <div className="type-supporting-body flex items-center p-2 text-muted-foreground">
           <span>Usage</span>
           <span className="ml-auto">{formatChatUsage(usage)}</span>
         </div>
@@ -359,10 +365,12 @@ function ActivityCard({
                   return (
                     <button
                       aria-label={`${agentLabel(session.name)} task, ${status}`}
-                      className="group flex w-full items-center gap-3 rounded-md py-3 pr-2 pl-2 text-left"
+                      className="group flex w-full items-center gap-3 rounded-md px-2 py-3 text-left"
                       data-task-session={session.childSessionId}
                       key={session.childSessionId}
-                      onClick={() => onSelect(session.childSessionId)}
+                      onClick={() => {
+                        onSelect(session.childSessionId);
+                      }}
                       type="button"
                     >
                       <span className="min-w-0 flex-1">

@@ -138,8 +138,11 @@ export const Reasoning = memo(
           hasAutoClosedRef.current = true;
         }, AUTO_CLOSE_DELAY);
 
-        return () => clearTimeout(timer);
+        return () => {
+          clearTimeout(timer);
+        };
       }
+      return undefined;
     }, [isStreaming, isOpen, setIsOpen]);
 
     const handleOpenChange = useCallback(

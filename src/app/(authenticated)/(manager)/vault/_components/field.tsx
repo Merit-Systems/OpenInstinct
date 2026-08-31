@@ -21,7 +21,9 @@ export function FormField({
         {...inputProps}
         aria-invalid={error ? true : undefined}
         id={id}
-        onChange={(event) => onChange(event.target.value)}
+        onChange={(event) => {
+          onChange(event.target.value);
+        }}
       />
       <FieldError errors={error ? [{ message: error }] : undefined} />
     </Field>

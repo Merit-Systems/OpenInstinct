@@ -44,7 +44,7 @@ export default async function TraceDetailPage({
   const events = await listBrowserTraceEvents(scope, trace.sessionId);
 
   return (
-    <div className="flex w-full flex-col gap-6 px-4 py-6 sm:px-8 sm:py-8">
+    <div className="flex w-full flex-col gap-6 px-4 py-6 sm:p-8">
       <header className="flex flex-col gap-4">
         <div>
           <Button

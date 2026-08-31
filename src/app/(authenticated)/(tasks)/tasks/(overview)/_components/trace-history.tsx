@@ -57,17 +57,17 @@ export function TraceHistory({
   readonly initialPage?: BrowserTracePage;
 }) {
   const router = useRouter();
-  const history = api.traces.list.useInfiniteQuery(
-    {},
-    {
-      getNextPageParam: (page) => page.nextCursor ?? undefined,
-      initialData: initialPage
-        ? { pageParams: [null], pages: [initialPage] }
-        : undefined,
-      initialCursor: null,
-      staleTime: 30 * 1000,
-    }
-  );
+  const queryOptions = {
+    getNextPageParam: (page: BrowserTracePage) => page.nextCursor ?? undefined,
+    initialCursor: null,
+    staleTime: 30 * 1000,
+  };
+  if (initialPage) {
+    Object.assign(queryOptions, {
+      initialData: { pageParams: [null], pages: [initialPage] },
+    });
+  }
+  const history = api.traces.list.useInfiniteQuery({}, queryOptions);
   const pages = history.data?.pages;
   const traces = useMemo(
     () => [

@@ -30,7 +30,7 @@ export default async function AuthenticatedLayout({
     <TRPCProvider>
       <SidebarProvider style={sidebarStyle}>
         <Sidebar>
-          <SidebarHeader className="border-b border-sidebar-border px-4 py-4">
+          <SidebarHeader className="border-b border-sidebar-border p-4">
             <Link aria-label="Workspace" className="w-fit" href="/">
               <Logo className="size-7" />
             </Link>

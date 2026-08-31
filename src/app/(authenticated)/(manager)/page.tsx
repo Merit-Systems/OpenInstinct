@@ -60,7 +60,7 @@ export default async function Page({ searchParams }: PageProps<"/">) {
           <ConnectorRow
             action={
               <span className="type-caption text-muted-foreground">
-                {browserReady ? "Connected" : "Unavailable"}
+                Connected
               </span>
             }
             description="Run isolated browsers in your Kernel account."
@@ -120,10 +120,10 @@ function GoogleWorkspaceSection({
   );
 }
 
-type GoogleWorkspaceConnection = {
+interface GoogleWorkspaceConnection {
   readonly accountLabel: string | null;
   readonly state: "connected" | "disconnected" | "unavailable";
-};
+}
 
 async function readGoogleWorkspaceConnection(
   userId: string
@@ -185,7 +185,9 @@ export function ChannelsSection({
           <Button
             className="h-11 justify-start"
             nativeButton={false}
-            render={<a href={`sms:${linqPhoneNumber}`} />}
+            render={
+              <a aria-label="Open iMessage" href={`sms:${linqPhoneNumber}`} />
+            }
             variant="outline"
           >
             <MailIcon />

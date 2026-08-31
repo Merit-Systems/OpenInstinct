@@ -4,13 +4,7 @@
 
 import { cn } from "@/lib/utils";
 import { LazyMotion, domAnimation, m } from "motion/react";
-import {
-  type CSSProperties,
-  type ElementType,
-  type JSX,
-  memo,
-  useMemo,
-} from "react";
+import { type ElementType, memo, useMemo } from "react";
 
 interface TextShimmerProps {
   children: string;
@@ -27,11 +21,10 @@ const ShimmerComponent = ({
   duration = 2,
   spread = 2,
 }: TextShimmerProps) => {
-  // SAFETY: The public `as` prop is constrained to React element types accepted by motion.create.
-  const MotionComponent = m.create(Component as keyof JSX.IntrinsicElements);
+  const MotionComponent = m.create(Component);
 
   const dynamicSpread = useMemo(
-    () => (children?.length ?? 0) * spread,
+    () => children.length * spread,
     [children, spread]
   );
 
@@ -45,14 +38,11 @@ const ShimmerComponent = ({
           className
         )}
         initial={{ backgroundPosition: "100% center" }}
-        style={
-          // SAFETY: CSSProperties omits repository-owned custom properties even though React passes them through.
-          {
-            "--spread": `${dynamicSpread}px`,
-            backgroundImage:
-              "var(--bg), linear-gradient(color-mix(in oklab, var(--color-muted-foreground) 60%, transparent), color-mix(in oklab, var(--color-muted-foreground) 60%, transparent))",
-          } as CSSProperties
-        }
+        style={{
+          "--spread": `${String(dynamicSpread)}px`,
+          backgroundImage:
+            "var(--bg), linear-gradient(color-mix(in oklab, var(--color-muted-foreground) 60%, transparent), color-mix(in oklab, var(--color-muted-foreground) 60%, transparent))",
+        }}
         transition={{
           repeat: Number.POSITIVE_INFINITY,
           duration,
