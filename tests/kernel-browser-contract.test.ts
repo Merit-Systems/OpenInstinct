@@ -142,6 +142,10 @@ describe("Kernel browser contract", () => {
     }
     expect(result.next_actions.join(" ")).toContain("browser_snapshot");
     expect(result.next_actions.join(" ")).toContain("browser_act");
+    expect(result.next_actions.join(" ")).toContain("playwright_execute");
+    expect(result.next_actions.join(" ")).toContain(
+      "instead of waiting for Playwright to fail"
+    );
     expect(JSON.stringify(result)).not.toContain("execute_playwright_code");
     expect(mocks.createBrowser).toHaveBeenCalledExactlyOnceWith(
       {
