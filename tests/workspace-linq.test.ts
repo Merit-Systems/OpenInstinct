@@ -8,6 +8,7 @@ describe("workspace Linq channel", () => {
     const html = renderToStaticMarkup(
       createElement(ChannelsSection, {
         browserReady: true,
+        linqConfigured: false,
         linqPhoneNumber: undefined,
       })
     );
@@ -21,11 +22,38 @@ describe("workspace Linq channel", () => {
     const html = renderToStaticMarkup(
       createElement(ChannelsSection, {
         browserReady: true,
+        linqConfigured: true,
         linqPhoneNumber: "+12025550123",
       })
     );
 
     expect(html).toContain("sms:+12025550123");
     expect(html).toContain("iMessage opens +12025550123.");
+  });
+
+  it("reports a connected Linq line without requiring its number", () => {
+    const html = renderToStaticMarkup(
+      createElement(ChannelsSection, {
+        browserReady: true,
+        linqConfigured: true,
+        linqPhoneNumber: undefined,
+      })
+    );
+
+    expect(html).toContain("Linq is connected.");
+    expect(html).not.toContain("sms:");
+  });
+
+  it("does not advertise a phone-number override without its connector", () => {
+    const html = renderToStaticMarkup(
+      createElement(ChannelsSection, {
+        browserReady: true,
+        linqConfigured: false,
+        linqPhoneNumber: "+12025550123",
+      })
+    );
+
+    expect(html).toContain("Set up Linq to enable iMessage.");
+    expect(html).not.toContain("sms:");
   });
 });

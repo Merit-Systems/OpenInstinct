@@ -43,6 +43,7 @@ export default async function Page({ searchParams }: PageProps<"/">) {
 
       <ChannelsSection
         browserReady={browserReady}
+        linqConfigured={env.LINQ_CONNECTOR !== undefined}
         linqPhoneNumber={env.LINQ_PHONE_NUMBER}
       />
       <GoogleWorkspaceSection connection={snapshot.googleWorkspace} />
@@ -114,9 +115,11 @@ function GoogleWorkspaceSection({
 
 export function ChannelsSection({
   browserReady,
+  linqConfigured,
   linqPhoneNumber,
 }: {
   readonly browserReady: boolean;
+  readonly linqConfigured: boolean;
   readonly linqPhoneNumber?: string;
 }) {
   return (
@@ -138,7 +141,7 @@ export function ChannelsSection({
             WebChat
           </Button>
         )}
-        {linqPhoneNumber ? (
+        {linqConfigured && linqPhoneNumber ? (
           <Button
             className="h-11 justify-start"
             nativeButton={false}
@@ -156,7 +159,11 @@ export function ChannelsSection({
         )}
       </div>
       <p className="type-caption text-muted-foreground">
-        {channelAvailabilityMessage({ browserReady, linqPhoneNumber })}
+        {channelAvailabilityMessage({
+          browserReady,
+          linqConfigured,
+          linqPhoneNumber,
+        })}
       </p>
     </WorkspaceSection>
   );
@@ -164,18 +171,22 @@ export function ChannelsSection({
 
 function channelAvailabilityMessage({
   browserReady,
+  linqConfigured,
   linqPhoneNumber,
 }: {
   readonly browserReady: boolean;
+  readonly linqConfigured: boolean;
   readonly linqPhoneNumber?: string;
 }) {
   return [
     browserReady
       ? "WebChat is ready."
       : "KERNEL_API_KEY is required to enable WebChat.",
-    linqPhoneNumber
+    linqConfigured && linqPhoneNumber
       ? `iMessage opens ${linqPhoneNumber}.`
-      : "Set up Linq to enable iMessage.",
+      : linqConfigured
+        ? "Linq is connected. Use its assigned line to start an iMessage."
+        : "Set up Linq to enable iMessage.",
   ].join(" ");
 }
 
