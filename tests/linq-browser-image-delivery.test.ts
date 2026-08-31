@@ -1,4 +1,4 @@
-/* oxlint-disable anti-slop/no-module-mocking, vitest/require-mock-type-parameters -- Linq delivery owns the Blob read. These fakes isolate storage without a production wrapper. */
+/* oxlint-disable vitest/require-mock-type-parameters -- The Blob mock implements only the read operation exercised here. */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { AccessScope } from "@/lib/access-scope";
 

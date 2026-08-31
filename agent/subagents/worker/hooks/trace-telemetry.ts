@@ -12,14 +12,6 @@ import { scopeFromPrincipal } from "@/lib/access-scope";
 import { taskCompletionOutputSchema } from "@/lib/worker-completion";
 import { harvestBrowserTraceDomains } from "@/agent/subagents/worker/lib/trace/domains";
 
-export const traceTelemetryDependencies = {
-  beginBrowserTrace,
-  completeBrowserTrace,
-  harvestBrowserTraceDomains,
-  listWorkerBrowserSessions,
-  recordBrowserTraceEvents,
-};
-
 function traceScope(ctx: HookContext) {
   const initiator = ctx.session.auth.initiator;
   return initiator ? scopeFromPrincipal(initiator) : undefined;
@@ -30,17 +22,10 @@ function logTraceFailure(sessionId: string, cause: unknown) {
 }
 
 async function sweepLiveBrowserDomains(scope: AccessScope, sessionId: string) {
-  const browsers = await traceTelemetryDependencies.listWorkerBrowserSessions(
-    scope,
-    sessionId
-  );
+  const browsers = await listWorkerBrowserSessions(scope, sessionId);
   await Promise.all(
     browsers.map((browser) =>
-      traceTelemetryDependencies.harvestBrowserTraceDomains(
-        scope,
-        sessionId,
-        browser
-      )
+      harvestBrowserTraceDomains(scope, sessionId, browser)
     )
   );
 }
@@ -55,7 +40,7 @@ async function finishTrace(
 ) {
   const scope = traceScope(ctx);
   if (!scope) return;
-  await traceTelemetryDependencies.completeBrowserTrace(scope, ctx.session.id, {
+  await completeBrowserTrace(scope, ctx.session.id, {
     completedAt: emittedAt,
     resultMessage: outcome.resultMessage,
     status: outcome.status,
@@ -69,7 +54,7 @@ export default defineHook({
       try {
         const scope = traceScope(ctx);
         if (!scope) return;
-        await traceTelemetryDependencies.recordBrowserTraceEvents(
+        await recordBrowserTraceEvents(
           scope,
           ctx.session.id,
           traceTimelineRows(event)
@@ -82,7 +67,7 @@ export default defineHook({
       try {
         const scope = traceScope(ctx);
         if (!scope) return;
-        await traceTelemetryDependencies.beginBrowserTrace(scope, {
+        await beginBrowserTrace(scope, {
           sessionId: ctx.session.id,
           startedAt: event.meta.at,
           task: event.data.message,

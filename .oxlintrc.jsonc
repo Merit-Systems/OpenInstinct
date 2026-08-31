@@ -436,6 +436,7 @@
     {
       "files": ["**/tests/**/*.{ts,tsx,mts,cts}", "**/*.test.{ts,tsx,mts,cts}"],
       "rules": {
+        "anti-slop/no-module-mocking": "off",
         "vitest/consistent-test-filename": [
           "error",
           {

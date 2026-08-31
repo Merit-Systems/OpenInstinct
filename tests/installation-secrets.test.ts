@@ -1,4 +1,4 @@
-/* oxlint-disable anti-slop/no-module-mocking, vitest/require-mock-type-parameters -- The module owns Blob persistence. These fakes isolate the external SDK without adding a production test seam. */
+/* oxlint-disable vitest/require-mock-type-parameters -- The Blob mock implements only the persistence operations exercised here. */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { get, put } from "@vercel/blob";
 import { z } from "zod";

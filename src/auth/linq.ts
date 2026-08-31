@@ -14,8 +14,6 @@ const linqErrorResponseSchema = z.object({
   trace_id: z.string().min(1).optional(),
 });
 
-export const linqDeliveryDependencies = { getToken };
-
 export class LinqDeliveryError extends Error {
   readonly code: number | undefined;
   readonly linqMessage: string | undefined;
@@ -104,7 +102,7 @@ export async function sendLinqText({
   readonly message: string;
   readonly to: string;
 }) {
-  const token = await linqDeliveryDependencies.getToken(connector, {
+  const token = await getToken(connector, {
     subject: { type: "app" },
   });
   const response = await fetch(LINQ_MESSAGES_URL, {

@@ -1,4 +1,3 @@
-/* oxlint-disable anti-slop/no-module-mocking -- The vault provider intentionally reads the concrete vault service. This focused test replaces only persistence I/O without adding a production-only factory. */
 import { runInNewContext } from "node:vm";
 import { describe, expect, it, vi } from "vitest";
 import { z } from "zod";
