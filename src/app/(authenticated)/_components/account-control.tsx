@@ -3,7 +3,6 @@
 import { LogOutIcon, UserIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { authClient } from "@/app/_lib/auth-client";
-import { browserRunStoreKeyForWorkspace } from "@/app/(authenticated)/_lib/browser-run-store";
 
 export function AuthenticatedAccountControl() {
   const { data: session } = authClient.useSession();
@@ -18,7 +17,6 @@ export function AuthenticatedAccountControl() {
       <Button
         aria-label="Sign out"
         onClick={() => {
-          clearWorkspaceBrowserData();
           void authClient.signOut().finally(() => {
             window.location.assign("/sign-in");
           });
@@ -31,10 +29,4 @@ export function AuthenticatedAccountControl() {
       </Button>
     </div>
   );
-}
-
-function clearWorkspaceBrowserData() {
-  const workspaceId = document.body.dataset.workspaceId;
-  if (!workspaceId) return;
-  window.localStorage.removeItem(browserRunStoreKeyForWorkspace(workspaceId));
 }
