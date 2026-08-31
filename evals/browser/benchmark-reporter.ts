@@ -1,9 +1,14 @@
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { randomUUID } from "node:crypto";
+import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import type { EveEvalResult, EveEvalRunSummary } from "eve/evals";
 import type { EvalReporter } from "eve/evals/reporters";
 import type { MessageStreamEvent } from "eve/client";
-import { browserBenchmarkActivity } from "@/evals/browser/benchmark-activity";
+import { traceTimelineRows } from "@/agent/subagents/worker/lib/trace-timeline";
+import {
+  browserBenchmarkActivity,
+  browserBenchmarkActivityDurations,
+} from "@/evals/browser/benchmark-activity";
 import { browserBenchmarkEnv } from "@/evals/browser/env";
 import {
   measureBrowserTask,
@@ -23,12 +28,14 @@ const completedTasks = new Map<
   ReturnType<typeof summarizeTaskResult>
 >();
 const liveActivities = new Map<string, string>();
+const liveActivityDurations = new Map<string, string>();
 
 export const browserBenchmarkReporter: EvalReporter = {
   async onRunStart(evaluations) {
     taskNames.clear();
     completedTasks.clear();
     liveActivities.clear();
+    liveActivityDurations.clear();
 
     for (const evaluation of evaluations) {
       taskNames.set(evaluation.id, evaluation.description ?? evaluation.id);
@@ -49,6 +56,7 @@ export const browserBenchmarkReporter: EvalReporter = {
       status: "running",
       tasks: evaluations.map((evaluation) => ({
         activity: null,
+        activityDurationsMs: {},
         completedAt: null,
         costComplete: false,
         costUsd: null,
@@ -141,17 +149,61 @@ export const browserBenchmarkReporter: EvalReporter = {
 
 export async function reportBrowserBenchmarkActivity(
   taskName: string,
+  sessionId: string,
   events: readonly MessageStreamEvent[]
 ) {
   const activity = browserBenchmarkActivity(events);
-  if (!activity || liveActivities.get(taskName) === activity) return;
-  liveActivities.set(taskName, activity);
+  const activityDurationsMs = browserBenchmarkActivityDurations(events);
+  const durationSignature = JSON.stringify(activityDurationsMs);
+  const activityChanged =
+    activity !== null && liveActivities.get(taskName) !== activity;
+  const durationsChanged =
+    liveActivityDurations.get(taskName) !== durationSignature;
+  await writeLiveTrace(taskName, sessionId, events);
+  if (!activityChanged && !durationsChanged) return;
+  if (activity !== null) liveActivities.set(taskName, activity);
+  liveActivityDurations.set(taskName, durationSignature);
   await updateLiveVariant((variant) => ({
     ...variant,
     tasks: variant.tasks.map((task) =>
-      task.name === taskName ? { ...task, activity } : task
+      task.name === taskName
+        ? {
+            ...task,
+            ...(activity === null ? {} : { activity }),
+            activityDurationsMs,
+          }
+        : task
     ),
   }));
+}
+
+async function writeLiveTrace(
+  taskName: string,
+  sessionId: string,
+  events: readonly MessageStreamEvent[]
+) {
+  const config = liveStatusConfig();
+  if (!config || !/^[A-Za-z0-9._:-]+$/u.test(sessionId)) return;
+  const traceDirectory = join(dirname(config.path), config.runId, "traces");
+  const tracePath = join(traceDirectory, `${sessionId}.json`);
+  const temporaryPath = `${tracePath}.${String(process.pid)}.${randomUUID()}.tmp`;
+  await mkdir(traceDirectory, { recursive: true });
+  await writeFile(
+    temporaryPath,
+    `${JSON.stringify(
+      {
+        events: events.flatMap((event) => traceTimelineRows(event)),
+        sessionId,
+        taskName,
+        updatedAt: new Date().toISOString(),
+        version: 1,
+      },
+      null,
+      2
+    )}\n`,
+    "utf8"
+  );
+  await rename(temporaryPath, tracePath);
 }
 
 function summarizeTaskResult(result: EveEvalResult, name: string) {
@@ -243,6 +295,7 @@ async function buildBenchmark(
   const outputTokens = tasks.flatMap((task) =>
     task.outputTokens === null ? [] : [task.outputTokens]
   );
+  const passed = tasks.filter((task) => task.success).length;
   const runtimeIdentity = summary.results.find(
     (result) => result.result.runtimeIdentity !== undefined
   )?.result.runtimeIdentity;
@@ -272,9 +325,9 @@ async function buildBenchmark(
           : judgeScores.reduce((total, score) => total + score, 0) /
             judgeScores.length,
       medianDurationMs: percentile(successfulDurations, 0.5),
-      passed: tasks.filter((task) => task.success).length,
+      passed,
       p95DurationMs: percentile(successfulDurations, 0.95),
-      successRate: tasks.length === 0 ? 0 : summary.passed / tasks.length,
+      successRate: tasks.length === 0 ? 0 : passed / tasks.length,
       totalInputTokens:
         inputTokens.length === 0
           ? null

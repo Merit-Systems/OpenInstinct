@@ -28,9 +28,7 @@ describe("worker input bubbling", () => {
     expect(workerInstructions).toContain(
       "Before returning `Needs user input:` or `Needs vault setup:`"
     );
-    expect(workerInstructions).toContain(
-      "select the relevant compatible available item"
-    );
+    expect(workerInstructions).toContain("select the relevant compatible item");
     expect(workerInstructions).toContain(
       "native `final_output` tool exactly once"
     );

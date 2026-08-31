@@ -251,7 +251,7 @@ function lifecycleResult(browser: KernelBrowser) {
     next_actions: [
       `Use playwright_execute with session_id "${value.session_id}" for deterministic read-heavy extraction, JavaScript, loops, pagination, or bounded programmatic batches.`,
       `Before semantic UI mutations, call browser_snapshot with session_id "${value.session_id}" to mint current refs; use browser_find or browser_text to narrow large pages.`,
-      `Use browser_act with session_id "${value.session_id}" for short ref-based click, fill, and submit plans with semantic verification; choose it directly instead of waiting for Playwright to fail.`,
+      `Use browser_act with session_id "${value.session_id}" as a relaxed fallback for short ref-based click, fill, and submit plans; inspect its successor state instead of waiting on per-action postconditions.`,
       `Use computer_action with session_id "${value.session_id}" only when visual reasoning or coordinate control is necessary.`,
       `Use manage_browsers with action "delete" and session_id "${value.session_id}" when finished.`,
     ],

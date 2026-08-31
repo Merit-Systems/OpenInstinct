@@ -127,13 +127,13 @@ describe("root and worker capability boundaries", () => {
       "Never use the browser for general web search"
     );
     expect(workerInstructions).toContain(
-      "Choose the execution surface by operation shape before acting"
+      "Use `playwright_execute` as the primary browser execution surface"
     );
     expect(workerInstructions).toContain(
-      "Use `playwright_execute` for read-heavy or programmatic work"
+      "Prefer one bounded program per page state"
     );
     expect(workerInstructions).toContain(
-      "Do not wait for Playwright to fail before choosing `browser_act`"
+      "`browser_act` dispatches actions and returns the successor state"
     );
     expect(existsSync(`${workerRoot}/lib/browser-contract.ts`)).toBe(false);
     expect(existsSync(`${workerRoot}/lib/browser-runtime.ts`)).toBe(false);

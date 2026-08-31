@@ -1,5 +1,6 @@
 import {
   loop,
+  type BrowserActResult,
   type LoopToolExecutionResult,
   type LoopToolSpec,
 } from "@onkernel/browser-loop";
@@ -22,6 +23,9 @@ const allSpecs = [
   loop.tools.playwright(),
 ];
 const specsByName = new Map(allSpecs.map((spec) => [spec.name, spec]));
+const relaxedBrowserActTimeoutMs = 8_000;
+const relaxedBrowserActSnapshotCharacters = 8_000;
+const relaxedBrowserActOutputCharacters = 10_000;
 
 export default defineDynamic({
   events: {
@@ -30,10 +34,10 @@ export default defineDynamic({
         allSpecs.map((spec) => [
           spec.name,
           defineTool({
-            description: spec.declaration.description,
+            description: toolDescription(spec),
             execute: executeSemanticTool,
             inputSchema: withSessionId(spec),
-            toModelOutput,
+            toModelOutput: (output) => toModelOutput(spec, output),
           }),
         ])
       );
@@ -71,10 +75,7 @@ function boundedToolInput(spec: LoopToolSpec, input: Record<string, unknown>) {
     return freshPageInput;
   }
   if (spec.name === "browser_act") {
-    return {
-      ...input,
-      timeout_ms: boundedTimeout(input.timeout_ms, 12_000),
-    };
+    return relaxedBrowserActInput(input);
   }
   if (spec.name === "playwright_execute") {
     return {
@@ -91,7 +92,10 @@ function boundedTimeout(value: unknown, maximum: number) {
     : maximum;
 }
 
-function toModelOutput(output: LoopToolExecutionResult) {
+function toModelOutput(spec: LoopToolSpec, output: LoopToolExecutionResult) {
+  if (spec.name === "browser_act") {
+    return toolOutput.text(relaxedBrowserActModelText(output));
+  }
   const parts = output.content.map((part) =>
     part.type === "text"
       ? toolOutputPart.text(part.text)
@@ -113,7 +117,9 @@ function splitSessionInput(input: Record<string, unknown>) {
 
 function withSessionId(spec: LoopToolSpec) {
   const schema: Record<string, unknown> = {
-    ...spec.declaration.parameters,
+    ...(spec.name === "browser_act"
+      ? relaxedBrowserActSchema(spec.declaration.parameters)
+      : spec.declaration.parameters),
   };
   const properties = isRecord(schema.properties) ? schema.properties : {};
   const required = Array.isArray(schema.required)
@@ -135,6 +141,138 @@ function withSessionId(spec: LoopToolSpec) {
     required: ["session_id", ...required],
     type: "object",
   };
+}
+
+function toolDescription(spec: LoopToolSpec) {
+  if (spec.name !== "browser_act") return spec.declaration.description;
+  return "Run 1–8 short dependent browser actions against current refs without waiting for model-authored postconditions. The result distinguishes dispatch failures and browser boundaries, then returns a compact successor state. Use current refs from browser_snapshot or browser_find; snapshot again after navigation, a stale ref, or an unavailable successor.";
+}
+
+function relaxedBrowserActInput(input: Record<string, unknown>) {
+  const {
+    expect: _expect,
+    poll_ms: _pollMs,
+    timeout_ms: _timeoutMs,
+    ...relaxed
+  } = input;
+  const steps = Array.isArray(relaxed.steps)
+    ? relaxed.steps.map((step) => {
+        if (!isRecord(step)) {
+          throw new Error("A relaxed browser action step must be an object.");
+        }
+        const {
+          expect: _stepExpect,
+          timeout_ms: _stepTimeoutMs,
+          ...action
+        } = step;
+        return action;
+      })
+    : relaxed.steps;
+  const successor = isRecord(relaxed.successor)
+    ? {
+        ...relaxed.successor,
+        depth: boundedTimeout(relaxed.successor.depth, 8),
+      }
+    : { depth: 6, filter: "interactive" };
+  return {
+    ...relaxed,
+    steps,
+    successor,
+    timeout_ms: relaxedBrowserActTimeoutMs,
+  };
+}
+
+function relaxedBrowserActSchema(value: unknown): Record<string, unknown> {
+  if (!isRecord(value)) return {};
+  const schema = structuredClone(value);
+  const properties = isRecord(schema.properties) ? schema.properties : {};
+  delete properties.expect;
+  delete properties.poll_ms;
+  delete properties.timeout_ms;
+
+  const steps = isRecord(properties.steps) ? properties.steps : undefined;
+  if (steps) {
+    steps.maxItems = 8;
+    const items = isRecord(steps.items) ? steps.items : undefined;
+    const variants = items && Array.isArray(items.anyOf) ? items.anyOf : [];
+    for (const variant of variants) {
+      if (!isRecord(variant)) continue;
+      const stepProperties = isRecord(variant.properties)
+        ? variant.properties
+        : undefined;
+      if (!stepProperties) continue;
+      delete stepProperties.expect;
+      delete stepProperties.timeout_ms;
+    }
+  }
+  return schema;
+}
+
+function relaxedBrowserActModelText(output: LoopToolExecutionResult) {
+  const result = browserActResult(output);
+  if (!result) {
+    return truncate(modelText(output), relaxedBrowserActOutputCharacters);
+  }
+
+  const dispatched = result.steps.filter((step) =>
+    step.diagnostics.includes("action dispatched")
+  ).length;
+  const uncertain =
+    result.stop_reason === "action_failed" ||
+    result.stop_reason === "global_timeout" ||
+    result.stop_reason === "step_timeout";
+  const status =
+    dispatched === 0
+      ? "not_dispatched"
+      : uncertain
+        ? "uncertain"
+        : "dispatched";
+  const lines = [
+    `browser_act: ${status}`,
+    `dispatched_steps: ${String(dispatched)}`,
+  ];
+  if (result.stop_reason) lines.push(`boundary: ${result.stop_reason}`);
+  for (const step of result.steps) {
+    const diagnostics = step.diagnostics.filter(
+      (diagnostic) => diagnostic !== "action dispatched"
+    );
+    if (diagnostics.length > 0) {
+      lines.push(
+        `step ${String(step.index)} ${step.type}: ${diagnostics.join("; ")}`
+      );
+    }
+  }
+
+  if (result.successor.status === "unavailable") {
+    lines.push(`successor unavailable: ${result.successor.error}`);
+  } else {
+    lines.push(
+      `state_changed: ${String(result.successor.diff.changed)}`,
+      `successor: ${result.successor.title} (${result.successor.url})`,
+      "current interactive state:",
+      truncate(result.successor.text, relaxedBrowserActSnapshotCharacters)
+    );
+  }
+  return truncate(lines.join("\n"), relaxedBrowserActOutputCharacters);
+}
+
+function browserActResult(output: LoopToolExecutionResult) {
+  for (const read of output.details.readResults ?? []) {
+    if (!isRecord(read) || read.type !== "browser_act") continue;
+    if (isBrowserActResult(read.result)) return read.result;
+  }
+  return undefined;
+}
+
+function isBrowserActResult(value: unknown): value is BrowserActResult {
+  return (
+    isRecord(value) && Array.isArray(value.steps) && isRecord(value.successor)
+  );
+}
+
+function truncate(value: string, limit: number) {
+  if (value.length <= limit) return value;
+  return `${value.slice(0, limit)}\n[truncated ${String(value.length - limit)} characters]`;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

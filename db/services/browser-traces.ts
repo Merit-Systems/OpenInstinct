@@ -213,6 +213,7 @@ export async function listBrowserTraceEvents(
       detail: browserTraceEvents.detail,
       id: browserTraceEvents.id,
       label: browserTraceEvents.label,
+      type: browserTraceEvents.type,
     })
     .from(browserTraceEvents)
     .innerJoin(

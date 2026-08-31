@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import "../../../../app/globals.css";
+import "../../../../src/app/globals.css";
 
 export const metadata: Metadata = {
   description: "Live local browser benchmark comparisons",

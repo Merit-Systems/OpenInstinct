@@ -55,7 +55,7 @@ for (const pair of pairs) {
 
 console.log(tableBorder());
 console.log(
-  `Success: ${formatRate(baseline.summary.successRate)} → ${formatRate(candidate.summary.successRate)}`
+  `Success: ${formatRate(taskSuccessRate(baseline.tasks))} → ${formatRate(taskSuccessRate(candidate.tasks))}`
 );
 console.log(
   `Median: ${formatOptionalDuration(baseline.summary.medianDurationMs)} → ${formatOptionalDuration(candidate.summary.medianDurationMs)} (${formatNullableDelta(baseline.summary.medianDurationMs, candidate.summary.medianDurationMs, "ms")})`
@@ -119,6 +119,12 @@ function formatCost(costUsd: number | null) {
 
 function formatRate(rate: number) {
   return `${(rate * 100).toFixed(1)}%`;
+}
+
+function taskSuccessRate(tasks: (typeof baseline.tasks)[number][]) {
+  return tasks.length === 0
+    ? 0
+    : tasks.filter((task) => task.success).length / tasks.length;
 }
 
 function formatScore(score: number | null) {

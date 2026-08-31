@@ -36,6 +36,8 @@ export default tasks.flatMap((task) =>
             const turn = await resultWithLiveActivity(
               child,
               description,
+              childSessionId,
+              workerEvents,
               (milliseconds) => t.sleep(milliseconds)
             );
             turn.expectOk();
@@ -98,26 +100,33 @@ export default tasks.flatMap((task) =>
 async function resultWithLiveActivity(
   turn: EveEvalLiveTurn,
   taskName: string,
+  sessionId: string,
+  priorEvents: readonly EveEvalTurn["events"][number][],
   sleep: (milliseconds?: number) => Promise<void>
 ) {
   const result = turn.result();
-  return pollForResult(result, turn, taskName, sleep);
+  return pollForResult(result, turn, taskName, sessionId, priorEvents, sleep);
 }
 
 async function pollForResult(
   result: Promise<EveEvalTurn>,
   turn: EveEvalLiveTurn,
   taskName: string,
+  sessionId: string,
+  priorEvents: readonly EveEvalTurn["events"][number][],
   sleep: (milliseconds?: number) => Promise<void>
 ): Promise<EveEvalTurn> {
   const outcome = await Promise.race([
     result.then((completed) => ({ completed, status: "completed" }) as const),
     sleep(1_000).then(() => ({ status: "poll" }) as const),
   ]);
-  await reportBrowserBenchmarkActivity(taskName, turn.events);
+  await reportBrowserBenchmarkActivity(taskName, sessionId, [
+    ...priorEvents,
+    ...turn.events,
+  ]);
   return outcome.status === "completed"
     ? outcome.completed
-    : pollForResult(result, turn, taskName, sleep);
+    : pollForResult(result, turn, taskName, sessionId, priorEvents, sleep);
 }
 
 function taskCompletionCriteria(successCriteria: string) {

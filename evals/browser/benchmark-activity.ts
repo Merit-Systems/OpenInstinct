@@ -1,4 +1,9 @@
 import type { MessageStreamEvent } from "eve/client";
+import {
+  browserActivityKindForTool,
+  type BrowserActivityKind,
+  sumBrowserActivityDurations,
+} from "@/lib/browser/activity-timing";
 
 const toolActivity: Readonly<Record<string, string>> = {
   browser_act: "Acting in the browser",
@@ -47,6 +52,46 @@ export function browserBenchmarkActivity(
     if (event.type === "step.started") return "Planning the next step";
   }
   return null;
+}
+
+export function browserBenchmarkActivityDurations(
+  events: readonly MessageStreamEvent[],
+  now = Date.now()
+) {
+  return sumBrowserActivityDurations(
+    events.flatMap((event) => {
+      const kind = activityKindForEvent(event);
+      return kind ? [{ at: Date.parse(event.meta.at), kind }] : [];
+    }),
+    now
+  );
+}
+
+function activityKindForEvent(
+  event: MessageStreamEvent
+): BrowserActivityKind | null {
+  if (
+    event.type === "step.started" ||
+    event.type === "message.appended" ||
+    event.type === "message.completed" ||
+    event.type === "action.result"
+  ) {
+    return "model";
+  }
+  if (event.type === "input.requested") return "waiting";
+  if (event.type !== "actions.requested") return null;
+
+  const kinds = new Set(
+    event.data.actions.map((action) => {
+      if (action.kind === "load-skill") return "setup";
+      if (action.kind === "tool-call") {
+        return browserActivityKindForTool(action.toolName);
+      }
+      return "other";
+    })
+  );
+  if (kinds.size !== 1) return "other";
+  return kinds.values().next().value ?? "other";
 }
 
 function activityForTool(name: string) {

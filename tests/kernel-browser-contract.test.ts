@@ -67,6 +67,18 @@ vi.mock("@/lib/kernel", () => ({
   },
 }));
 
+vi.mock("eve/context", () => ({
+  defineState: <T>(_name: string, initial: () => T) => {
+    let value = initial();
+    return {
+      get: () => value,
+      update: (update: (current: T) => T) => {
+        value = update(value);
+      },
+    };
+  },
+}));
+
 import manageBrowsers, {
   kernelProfileNameForWorkspace,
 } from "../agent/subagents/worker/tools/manage_browsers";
@@ -143,9 +155,7 @@ describe("Kernel browser contract", () => {
     expect(result.next_actions.join(" ")).toContain("browser_snapshot");
     expect(result.next_actions.join(" ")).toContain("browser_act");
     expect(result.next_actions.join(" ")).toContain("playwright_execute");
-    expect(result.next_actions.join(" ")).toContain(
-      "instead of waiting for Playwright to fail"
-    );
+    expect(result.next_actions.join(" ")).toContain("relaxed fallback");
     expect(JSON.stringify(result)).not.toContain("execute_playwright_code");
     expect(mocks.createBrowser).toHaveBeenCalledExactlyOnceWith(
       {

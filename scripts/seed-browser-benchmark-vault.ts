@@ -1,51 +1,34 @@
 import { randomUUID } from "node:crypto";
 import { ensureScope } from "../db/services/scope";
+import { replaceUserProfile } from "../db/services/user-profile";
 import { createVaultItem } from "../db/services/vault";
-import { accessScopeForUser } from "../lib/access-scope";
-import { serializePaymentCard } from "../lib/manager/payment-card";
-import { writeSecret } from "../lib/manager/server/secret-store";
-import {
-  serializeAddressVaultPayload,
-  serializeContactVaultPayload,
-} from "../lib/manager/vault-payload";
+import { accessScopeForUser } from "../src/lib/access-scope";
+import { serializePaymentCard } from "../src/lib/manager/payment-card";
+import { writeSecret } from "../src/lib/manager/server/secret-store";
 
 const scope = accessScopeForUser("better-auth:browser-benchmark");
 
-await seedVaultItem(
-  "contact",
-  "Benchmark traveler",
-  "",
-  serializeContactVaultPayload({
-    dateOfBirth: "1990-01-01",
-    email: "browser-benchmark@example.com",
-    fullName: "Alex Morgan",
-    kind: "contact",
-    phone: "+15555550100",
-    version: 1,
-  })
-);
-await seedVaultItem(
-  "address",
-  "Benchmark address",
-  "",
-  serializeAddressVaultPayload({
-    city: "Brooklyn",
-    countryCode: "US",
-    kind: "address",
-    line1: "300 Kent Ave",
-    postalCode: "11249",
-    recipientName: "Alex Morgan",
-    region: "NY",
-    version: 1,
-  })
-);
+await replaceUserProfile(scope, {
+  addressLine1: "123 Test Street",
+  addressLine2: "Apartment 4B",
+  city: "Brooklyn",
+  countryCode: "US",
+  dateOfBirth: "1990-01-01",
+  email: "browser-benchmark@example.com",
+  firstName: "John",
+  lastName: "Smith",
+  phone: "+12025550100",
+  postalCode: "11201",
+  region: "NY",
+});
+
 await seedVaultItem(
   "payment",
   "Benchmark test card",
   "Visa · •••• 4242",
   serializePaymentCard({
-    billingPostalCode: "11249",
-    cardholderName: "Alex Morgan",
+    billingPostalCode: "11201",
+    cardholderName: "John Smith",
     expirationMonth: 12,
     expirationYear: 2034,
     kind: "payment-card",

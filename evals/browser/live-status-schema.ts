@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { browserActivityKinds } from "@/lib/browser/activity-timing";
 
 const dateTime = z.iso.datetime();
 const nullableDateTime = dateTime.nullable();
@@ -11,6 +12,9 @@ const benchmarkSessionSchema = z.object({
 
 const liveBenchmarkTaskSchema = z.object({
   activity: z.string().min(1).nullable().default(null),
+  activityDurationsMs: z
+    .partialRecord(z.enum(browserActivityKinds), z.number().int().nonnegative())
+    .default({}),
   completedAt: nullableDateTime,
   costComplete: z.boolean(),
   costUsd: z.number().nonnegative().nullable(),

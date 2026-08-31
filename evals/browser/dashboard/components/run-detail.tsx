@@ -10,7 +10,12 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { ActivityDurationBreakdown } from "@/components/browser/activity-duration-breakdown";
 import type { BrowserBenchmarkLiveStatus } from "../../live-status-schema";
+import {
+  averageBenchmarkImprovement,
+  compareBenchmarkTasks,
+} from "../lib/benchmark-comparison";
 import { useRuns } from "../lib/use-runs";
 
 type Variant = BrowserBenchmarkLiveStatus["variants"]["baseline"];
@@ -81,6 +86,7 @@ function RunTables({
 }) {
   const baseline = run.variants.baseline.tasks;
   const candidate = run.variants.candidate.tasks;
+  const averageImprovement = averageBenchmarkImprovement(baseline, candidate);
   const tasks = [
     ...baseline.map((task) => task.id),
     ...candidate
@@ -98,6 +104,8 @@ function RunTables({
           Wall {formatDuration(elapsed(run.startedAt, run.completedAt, now))}
         </span>
         <code>{run.runId}</code>
+        <Improvement label="Mean time" value={averageImprovement.time} />
+        <Improvement label="Mean cost" value={averageImprovement.cost} />
       </div>
 
       <div className="overflow-hidden border">
@@ -123,18 +131,31 @@ function RunTables({
       <div>
         <h2 className="type-section-title mb-3">Tasks</h2>
         <div className="overflow-hidden border">
-          <Table>
+          <Table className="min-w-[1120px] table-fixed">
             <TableHeader>
               <TableRow>
-                <TableHead className="w-[24%]">Task</TableHead>
-                <TableHead>Baseline</TableHead>
-                <TableHead>Candidate</TableHead>
+                <TableHead className="w-[22%]">Task</TableHead>
+                <TableHead className="w-[18%] border-l border-border">
+                  Baseline result
+                </TableHead>
+                <TableHead className="w-[13%] border-l border-border">
+                  Baseline trace
+                </TableHead>
+                <TableHead className="w-[18%] border-l border-border">
+                  Candidate result
+                </TableHead>
+                <TableHead className="w-[13%] border-l border-border">
+                  Candidate trace
+                </TableHead>
+                <TableHead className="w-[16%] border-l border-border">
+                  Improvement
+                </TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {tasks.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={3} variant="empty">
+                  <TableCell colSpan={6} variant="empty">
                     Preparing evaluations…
                   </TableCell>
                 </TableRow>
@@ -143,12 +164,21 @@ function RunTables({
                   const left = baseline.find((task) => task.id === taskId);
                   const right = candidate.find((task) => task.id === taskId);
                   return (
-                    <TableRow key={taskId}>
-                      <TableCell className="align-top font-medium whitespace-normal">
+                    <TableRow className="border-b border-border" key={taskId}>
+                      <TableCell className="align-top font-medium wrap-break-word whitespace-normal">
                         {left?.name ?? right?.name ?? "Task"}
                       </TableCell>
                       <TaskResultCell now={now} task={left} />
+                      <TaskTraceCell
+                        task={left}
+                        traceHref={traceHref(run.runId, left)}
+                      />
                       <TaskResultCell now={now} task={right} />
+                      <TaskTraceCell
+                        task={right}
+                        traceHref={traceHref(run.runId, right)}
+                      />
+                      <TaskImprovement baseline={left} candidate={right} />
                     </TableRow>
                   );
                 })
@@ -195,7 +225,7 @@ function TaskResultCell({ now, task }: { now: number; task?: Task }) {
     task.activity ??
     (task.status === "running" ? "Starting task" : "Waiting to start");
   return (
-    <TableCell className="max-w-0 align-top whitespace-normal">
+    <TableCell className="min-w-0 overflow-hidden border-l border-border align-top whitespace-normal">
       <div className="flex items-center gap-2">
         <StatusDot status={task.status} />
         <span className="type-compact-code text-muted-foreground">
@@ -204,11 +234,98 @@ function TaskResultCell({ now, task }: { now: number; task?: Task }) {
           )}
         </span>
       </div>
-      <p className="mt-1 truncate type-caption" title={message}>
+      <p
+        className="mt-2 overflow-hidden type-caption text-ellipsis whitespace-nowrap"
+        title={message}
+      >
         {message}
       </p>
     </TableCell>
   );
+}
+
+function TaskTraceCell({
+  task,
+  traceHref: taskTraceHref,
+}: {
+  task?: Task;
+  traceHref: string | null;
+}) {
+  if (!task) {
+    return (
+      <TableCell className="border-l border-border align-top text-muted-foreground">
+        —
+      </TableCell>
+    );
+  }
+  return (
+    <TableCell className="border-l border-border align-top whitespace-normal">
+      {taskTraceHref ? (
+        <a
+          className="type-caption text-information hover:underline"
+          href={taskTraceHref}
+          rel="noreferrer"
+          target="_blank"
+        >
+          Trace ↗
+        </a>
+      ) : null}
+      <div className="mt-2">
+        <ActivityDurationBreakdown durations={task.activityDurationsMs} />
+      </div>
+    </TableCell>
+  );
+}
+
+function TaskImprovement({
+  baseline,
+  candidate,
+}: {
+  baseline: Task | undefined;
+  candidate: Task | undefined;
+}) {
+  const improvement = compareBenchmarkTasks(baseline, candidate);
+  return (
+    <TableCell className="border-l border-border align-top whitespace-normal">
+      <div className="grid gap-1">
+        <Improvement label="Time" value={improvement.time} />
+        <Improvement label="Cost" value={improvement.cost} />
+      </div>
+    </TableCell>
+  );
+}
+
+function Improvement({
+  label,
+  value,
+}: {
+  label: string;
+  value: number | null;
+}) {
+  if (value === null) {
+    return (
+      <span className="type-caption text-muted-foreground">{label} —</span>
+    );
+  }
+  const improved = value < 0;
+  return (
+    <span
+      className={`type-caption ${improved ? "text-success" : "text-destructive"}`}
+      title="Candidate percentage change from baseline; lower is better"
+    >
+      {label} {value > 0 ? "+" : ""}
+      {(value * 100).toFixed(1)}%
+    </span>
+  );
+}
+
+function traceHref(runId: string, task: Task | undefined) {
+  const workerSession = task?.sessions.find(
+    (session) => session.role === "worker"
+  );
+  return workerSession
+    ? `/runs/${encodeURIComponent(runId)}/traces/${encodeURIComponent(workerSession.id)}`
+    : null;
 }
 
 function StatusDot({ status }: { status: Task["status"] }) {
