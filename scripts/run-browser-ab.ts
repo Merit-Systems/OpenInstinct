@@ -383,9 +383,11 @@ async function cleanup() {
     }
   }
   for (const project of composeProjects.toReversed()) {
-    await run("docker", ["compose", "--project-name", project.name, "down"], {
-      cwd: project.cwd,
-    }).catch(() => undefined);
+    await run(
+      "docker",
+      ["compose", "--project-name", project.name, "down", "--volumes"],
+      { cwd: project.cwd }
+    ).catch(() => undefined);
   }
   for (const name of ["candidate", "baseline"]) {
     const path = join(temporaryRoot, name);
