@@ -93,6 +93,7 @@ try {
     completedAt: new Date().toISOString(),
     repetitions: options.repetitions,
     suite: options.suite,
+    taskTimeoutMs: options.taskTimeoutMs,
     version: 1,
   };
   await writeFile(
@@ -242,7 +243,7 @@ async function runBenchmark(current: ReturnType<typeof variant>) {
       current.url,
       "--strict",
       "--timeout",
-      "300000",
+      String(options.taskTimeoutMs),
       "--max-concurrency",
       String(options.maxConcurrency),
     ],
@@ -400,6 +401,7 @@ function parseArguments(args: string[]) {
   let suite: "all" | "live" | "profile" | "smoke" = "smoke";
   let repetitions = 1;
   let maxConcurrency = 1;
+  let taskTimeoutMs = 15 * 60_000;
   let keep = false;
 
   for (let index = 0; index < args.length; index += 1) {
@@ -430,6 +432,16 @@ function parseArguments(args: string[]) {
       else maxConcurrency = value;
       continue;
     }
+    if (argument === "--task-timeout-minutes") {
+      const value = Number(args[++index]);
+      if (!Number.isInteger(value) || value < 1 || value > 60) {
+        throw new Error(
+          "--task-timeout-minutes must be an integer from 1 to 60."
+        );
+      }
+      taskTimeoutMs = value * 60_000;
+      continue;
+    }
     if (argument?.startsWith("--")) {
       throw new Error(`Unknown option: ${argument}`);
     }
@@ -439,7 +451,7 @@ function parseArguments(args: string[]) {
   const [baselineRef, candidateRef] = positional;
   if (positional.length !== 2 || !baselineRef || !candidateRef) {
     throw new Error(
-      "Usage: pnpm bench:ab <baseline-ref> <candidate-ref> [--suite smoke|live|profile|all] [--repetitions n] [--max-concurrency n] [--keep]"
+      "Usage: pnpm bench:ab <baseline-ref> <candidate-ref> [--suite smoke|live|profile|all] [--repetitions n] [--max-concurrency n] [--task-timeout-minutes n] [--keep]"
     );
   }
   return {
@@ -449,6 +461,7 @@ function parseArguments(args: string[]) {
     maxConcurrency,
     repetitions,
     suite,
+    taskTimeoutMs,
   };
 }
 

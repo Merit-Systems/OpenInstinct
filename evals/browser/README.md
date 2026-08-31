@@ -73,7 +73,8 @@ against both, compares the artifacts, then cleans up:
 pnpm bench:ab <baseline-ref> <candidate-ref> --suite smoke
 ```
 
-Use `--repetitions 3` for a less noisy speed decision, `--max-concurrency 2` to
-trade isolation for runtime, and `--keep` to leave both Portless instances and
-worktrees running for inspection. Combined artifacts land under
-`.eve/browser-ab/<timestamp>/`.
+Real flows default to a 15-minute per-task timeout. Use
+`--task-timeout-minutes <n>` to change that budget, `--repetitions 3` for a less
+noisy speed decision, `--max-concurrency 2` to trade isolation for runtime, and
+`--keep` to leave both Portless instances and worktrees running for inspection.
+Combined artifacts land under `.eve/browser-ab/<timestamp>/`.
