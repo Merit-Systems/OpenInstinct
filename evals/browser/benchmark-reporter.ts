@@ -33,6 +33,14 @@ export const browserBenchmarkReporter: EvalReporter = {
     );
     console.log(tableBorder());
   },
+  onEvalStart(event) {
+    console.log(`START ${event.evaluation.description ?? event.evaluation.id}`);
+  },
+  onSessionStart(event) {
+    console.log(
+      `SESSION ${event.primary ? "root" : "worker"} ${event.sessionId} · ${event.evaluation.description ?? event.evaluation.id}`
+    );
+  },
   onEvalComplete(result) {
     const task = summarizeTaskResult(
       result,

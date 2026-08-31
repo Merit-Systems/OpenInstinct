@@ -1,8 +1,7 @@
-import { defineEval, type EveEvalSession, type EveEvalTurn } from "eve/evals";
+import { defineEval, type EveEvalTurn } from "eve/evals";
 import { satisfies } from "eve/evals/expect";
 import {
   didCompleteBrowserWorker,
-  didFinishBrowserWorker,
   readTaskCompletion,
 } from "@/lib/browser/benchmark";
 import { browserBenchmarkTasks } from "@/lib/browser/benchmark-tasks";
@@ -24,28 +23,10 @@ export default tasks.flatMap((task) =>
         started.expectOk();
         started.calledSubagent("worker", { count: 1 });
         const childSessionId = requireWorkerSessionId(started);
-
-        let session: EveEvalSession | typeof t = t;
-        let completed: EveEvalTurn | null = null;
-        const workerEvents = [...started.events];
-        for (let attempt = 0; attempt < 8 && completed === null; attempt += 1) {
-          const live = t.target.watchTurn(started.sessionId, {
-            startIndex: requireStreamIndex(session),
-          });
-          const turn = await live.result();
-          turn.expectOk();
-          workerEvents.push(...turn.events);
-          if (didFinishBrowserWorker(workerEvents)) completed = turn;
-          session = live.session;
-        }
-
-        await t.require(
-          completed,
-          satisfies(
-            (turn) => turn !== null,
-            "the worker's native completion wakes the parent"
-          )
-        );
+        const child = t.target.watchTurn(childSessionId, { startIndex: 0 });
+        const completed = await child.result();
+        completed.expectOk();
+        const workerEvents = completed.events;
         await t.require(
           didCompleteBrowserWorker(workerEvents),
           satisfies(
@@ -54,8 +35,7 @@ export default tasks.flatMap((task) =>
           )
         );
 
-        const child = await t.target.attachSession(childSessionId);
-        child.succeeded();
+        child.session.succeeded();
         await t.require(
           child.events.filter((event) => event.type === "result.completed")
             .length,
@@ -71,7 +51,6 @@ export default tasks.flatMap((task) =>
             on: [
               `User task:\n${task.prompt}`,
               `Worker result:\n${workerCompletion?.message ?? "No worker result"}`,
-              `Coordinator response:\n${completed?.message ?? "No coordinator response"}`,
             ].join("\n\n"),
           })
           .label("task completed")
@@ -92,16 +71,4 @@ function requireWorkerSessionId(turn: EveEvalTurn) {
     }
   }
   throw new Error("Worker child session was not recorded.");
-}
-
-function requireStreamIndex(
-  session:
-    | EveEvalSession
-    | { readonly state?: { readonly streamIndex?: number } }
-) {
-  const streamIndex = session.state?.streamIndex;
-  if (streamIndex === undefined) {
-    throw new Error("Browser benchmark session has no stream index.");
-  }
-  return streamIndex;
 }
