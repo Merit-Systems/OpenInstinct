@@ -3,7 +3,7 @@
 The benchmark grades the user's end goal with an independent LLM judge. Tool
 choice and click sequences are diagnostic data, never pass conditions.
 
-Run the high-level public-demo suite against the dev server:
+Run a smaller smoke slice of the real-site suite against the dev server:
 
 ```sh
 BROWSER_BENCH_LABEL=baseline BROWSER_BENCH_SUITE=smoke pnpm bench:browser
@@ -82,8 +82,8 @@ The A/B runner checks out two revisions into temporary worktrees, starts an
 isolated database and Portless Eve server for each, runs both revisions
 concurrently against the same task array, compares the artifacts, then cleans
 up. Each revision receives the same synthetic authenticated user context with
-a non-secret name, email address, phone number, and country so routine checkout
-forms do not become benchmark blockers:
+a non-secret name, email address, phone number, and mailing address so routine
+checkout forms do not become benchmark blockers:
 
 ```sh
 pnpm bench:ab <baseline-ref> <candidate-ref> --suite all --label "semantic browser loop"

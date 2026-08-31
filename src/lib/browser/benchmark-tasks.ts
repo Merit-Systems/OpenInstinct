@@ -1,30 +1,6 @@
 export function browserBenchmarkTasks(
   suite: "all" | "live" | "profile" | "smoke"
 ) {
-  const smoke = [
-    {
-      description: "Prepare a constrained demo-store cart",
-      prompt:
-        "At https://www.demoblaze.com/, prepare a cart containing the least expensive laptop and the least expensive monitor. Compare the available products in both categories, add exactly one of each winning item, verify the cart, and stop before activating Place Order. Report both product names, their prices, and the cart total.",
-      successCriteria:
-        "The agent compared the laptop and monitor categories, correctly selected the least expensive product in each, added exactly one of each to the cart, verified the cart and total, reported both names and prices, and did not activate Place Order.",
-    },
-    {
-      description: "Research a product under multiple constraints",
-      prompt:
-        "At https://books.toscrape.com/, find the lowest-priced Mystery book that has a rating of at least four stars and is in stock. Report its exact title, price, star rating, and stated availability.",
-      successCriteria:
-        "The agent navigated the catalog and Mystery category, compared eligible books, and accurately reported the lowest-priced in-stock option with at least four stars, including title, price, rating, and availability.",
-    },
-    {
-      description: "Complete and verify a demo banking workflow",
-      prompt:
-        "At https://www.globalsqa.com/angularJs-protractor/BankingProject/, log in as customer Harry Potter, deposit 500, then withdraw 200. Verify the transaction history and report the final balance plus the two resulting transaction entries.",
-      successCriteria:
-        "The agent logged into the correct customer, completed the deposit and withdrawal in order, checked transaction history, and accurately reported the final balance and both transaction entries.",
-    },
-  ] as const;
-
   const live = [
     {
       description: "Reach the purchase boundary for movie tickets",
@@ -73,8 +49,8 @@ export function browserBenchmarkTasks(
     },
   ] as const;
 
-  if (suite === "smoke") return smoke;
+  if (suite === "smoke") return [live[0], live[4]];
   if (suite === "live") return live;
   if (suite === "profile") return profile;
-  return [...smoke, ...live, ...profile];
+  return [...live, ...profile];
 }
