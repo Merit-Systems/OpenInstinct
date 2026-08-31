@@ -10,7 +10,7 @@ import type { listWorkerBrowserSessions } from "@/db/services/browsers";
 import type * as TraceDomainsModule from "@/agent/subagents/worker/lib/trace/domains";
 import type { harvestBrowserTraceDomains } from "@/agent/subagents/worker/lib/trace/domains";
 import { domainFromUrl } from "@/agent/subagents/worker/lib/trace/domains";
-import traceTelemetry from "../agent/subagents/worker/hooks/trace-telemetry";
+import traceTelemetry from "@/agent/subagents/worker/hooks/trace-telemetry";
 
 const mocks = vi.hoisted(() => ({
   beginBrowserTrace: vi.fn<typeof beginBrowserTrace>(),

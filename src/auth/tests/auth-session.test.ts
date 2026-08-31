@@ -1,7 +1,7 @@
 /* oxlint-disable vitest/require-mock-type-parameters -- Session lookup needs a deliberately partial Better Auth fixture. */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { getAuthSession } from "@/auth/session";
-import { authSessionFor } from "./helpers/auth-session";
+import { authSessionFor } from "@/tests/helpers/auth-session";
 
 const mocks = vi.hoisted(() => ({ getAuth: vi.fn(), getSession: vi.fn() }));
 

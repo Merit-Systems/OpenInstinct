@@ -2,8 +2,8 @@ import type { RouteHandlerArgs } from "eve/channels";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import * as AuthSession from "@/auth/session";
 import * as SessionService from "@/db/services/sessions";
-import { authSessionFor } from "./helpers/auth-session";
-import eveChannel from "../agent/channels/eve";
+import { authSessionFor } from "@/tests/helpers/auth-session";
+import eveChannel from "@/agent/channels/eve";
 
 const getAuthSessionMock = vi.spyOn(AuthSession, "getAuthSession");
 const isSessionOwnedMock = vi.spyOn(SessionService, "isSessionOwned");

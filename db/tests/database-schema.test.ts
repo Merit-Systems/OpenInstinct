@@ -19,7 +19,7 @@ import {
   verification,
   workspaceMemberships,
   workspaces,
-} from "../db/schema";
+} from "../schema";
 
 describe("database schema", () => {
   it("owns the application and Better Auth tables", () => {
@@ -119,7 +119,7 @@ describe("migration deployment policy", () => {
       })
       .parse(
         JSON.parse(
-          await readFile(new URL("../package.json", import.meta.url), "utf8")
+          await readFile(new URL("../../package.json", import.meta.url), "utf8")
         )
       );
     const turbo = z
@@ -134,14 +134,14 @@ describe("migration deployment policy", () => {
       })
       .parse(
         JSON.parse(
-          await readFile(new URL("../turbo.json", import.meta.url), "utf8")
+          await readFile(new URL("../../turbo.json", import.meta.url), "utf8")
         )
       );
     const vercel = z
       .object({ buildCommand: z.string() })
       .parse(
         JSON.parse(
-          await readFile(new URL("../vercel.json", import.meta.url), "utf8")
+          await readFile(new URL("../../vercel.json", import.meta.url), "utf8")
         )
       );
 
@@ -165,7 +165,7 @@ describe("migration deployment policy", () => {
 
   it("adopts existing tables without request-time DDL", async () => {
     const migration = await readFile(
-      new URL("../db/migrations/0000_fluffy_the_spike.sql", import.meta.url),
+      new URL("../migrations/0000_fluffy_the_spike.sql", import.meta.url),
       "utf8"
     );
     const services = await Promise.all(
@@ -181,17 +181,17 @@ describe("migration deployment policy", () => {
       ].map(
         async (name) =>
           await readFile(
-            new URL(`../db/services/${name}.ts`, import.meta.url),
+            new URL(`../services/${name}.ts`, import.meta.url),
             "utf8"
           )
       )
     );
     const authSource = await readFile(
-      new URL("../src/auth/index.ts", import.meta.url),
+      new URL("../../src/auth/index.ts", import.meta.url),
       "utf8"
     );
     const authMigration = await readFile(
-      new URL("../db/migrations/0001_better-auth.sql", import.meta.url),
+      new URL("../migrations/0001_better-auth.sql", import.meta.url),
       "utf8"
     );
 

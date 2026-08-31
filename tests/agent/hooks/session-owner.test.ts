@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { HookContext } from "eve/hooks";
 import type { saveChat } from "@/db/services/chats";
-import sessionOwner from "../agent/hooks/session-owner";
+import sessionOwner from "@/agent/hooks/session-owner";
 
 const mocks = vi.hoisted(() => ({
   saveChat: vi.fn<typeof saveChat>(),
