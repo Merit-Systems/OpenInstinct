@@ -1,4 +1,4 @@
-import { env } from "@/lib/env";
+import { env } from "@/env";
 
 export function applicationOrigin() {
   if (env.BETTER_AUTH_URL) return new URL(env.BETTER_AUTH_URL).origin;

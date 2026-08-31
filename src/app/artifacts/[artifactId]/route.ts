@@ -3,7 +3,7 @@ import { z } from "zod";
 import { getAuthSession } from "@/auth/session";
 import { readReadyBrowserImageArtifact } from "@/db/services/browser-images";
 import { accessScopeForUser } from "@/lib/access-scope";
-import { env } from "@/lib/env";
+import { env } from "@/env";
 
 export const runtime = "nodejs";
 
@@ -47,14 +47,8 @@ async function openArtifact(
   const filename = artifact?.filename;
   const mediaType = artifact?.mediaType;
   if (!artifact || !byteSize || !filename || !mediaType) return;
-  const blobAuth = env.BLOB_STORE_ID
-    ? { storeId: env.BLOB_STORE_ID }
-    : env.BLOB_READ_WRITE_TOKEN
-      ? { token: env.BLOB_READ_WRITE_TOKEN }
-      : undefined;
-  if (!blobAuth) return;
+  if (!env.BLOB_STORE_ID && !env.BLOB_READ_WRITE_TOKEN) return;
   const result = await get(artifact.storagePathname, {
-    ...blobAuth,
     access: "private",
     abortSignal: options.signal,
     ifNoneMatch: options.ifNoneMatch,

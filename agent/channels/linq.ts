@@ -15,7 +15,7 @@ import {
   extractBrowserImageMarkdownReferences,
   stripBrowserImageMarkdownReferences,
 } from "../lib/linq-browser-image-markdown";
-import { env } from "@/lib/env";
+import { env } from "@/env";
 import { consumeWorkerCancellationTurn } from "../lib/worker-cancellation-delivery";
 
 const verifiedPhoneUserSchema = z.object({

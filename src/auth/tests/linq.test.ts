@@ -1,13 +1,15 @@
+/* oxlint-disable vitest/require-mock-type-parameters -- The connector mock needs only the token operation exercised here. */
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   LinqDeliveryError,
-  linqDeliveryDependencies,
   linqOtpFailure,
   readLinqOnboardingPhoneNumber,
   sendLinqText,
 } from "@/auth/linq";
 
-const getTokenMock = vi.spyOn(linqDeliveryDependencies, "getToken");
+const mocks = vi.hoisted(() => ({ getToken: vi.fn() }));
+
+vi.mock("@vercel/connect", () => ({ getToken: mocks.getToken }));
 
 describe("Linq delivery", () => {
   afterEach(() => {
@@ -16,7 +18,7 @@ describe("Linq delivery", () => {
   });
 
   it("uses the configured connector and sends the OTP", async () => {
-    getTokenMock.mockResolvedValue("test-token");
+    mocks.getToken.mockResolvedValue("test-token");
     const fetchMock = vi
       .fn<typeof fetch>()
       .mockResolvedValue(new Response(null, { status: 202 }));
@@ -29,7 +31,7 @@ describe("Linq delivery", () => {
       to: "+12025550123",
     });
 
-    expect(getTokenMock).toHaveBeenCalledWith("linq/open-instinct", {
+    expect(mocks.getToken).toHaveBeenCalledWith("linq/open-instinct", {
       subject: { type: "app" },
     });
     const [url, init] = fetchMock.mock.calls[0] ?? [];
@@ -42,7 +44,7 @@ describe("Linq delivery", () => {
   });
 
   it("retrieves the Linq number used for first-time onboarding", async () => {
-    getTokenMock.mockResolvedValue("test-token");
+    mocks.getToken.mockResolvedValue("test-token");
     const fetchMock = vi
       .fn<typeof fetch>()
       .mockResolvedValue(Response.json({ phone_number: "+12025550123" }));
@@ -51,7 +53,7 @@ describe("Linq delivery", () => {
     await expect(
       readLinqOnboardingPhoneNumber("linq/open-instinct")
     ).resolves.toBe("+12025550123");
-    expect(getTokenMock).toHaveBeenCalledWith("linq/open-instinct", {
+    expect(mocks.getToken).toHaveBeenCalledWith("linq/open-instinct", {
       subject: { type: "app" },
     });
     const [url, init] = fetchMock.mock.calls[0] ?? [];
@@ -60,7 +62,7 @@ describe("Linq delivery", () => {
   });
 
   it("fails soft when Linq cannot provide an onboarding number", async () => {
-    getTokenMock.mockRejectedValue(new Error("connector unavailable"));
+    mocks.getToken.mockRejectedValue(new Error("connector unavailable"));
 
     await expect(
       readLinqOnboardingPhoneNumber("linq/open-instinct")
@@ -68,7 +70,7 @@ describe("Linq delivery", () => {
   });
 
   it("preserves diagnostics from Linq's current error envelope", async () => {
-    getTokenMock.mockResolvedValue("test-token");
+    mocks.getToken.mockResolvedValue("test-token");
     vi.stubGlobal(
       "fetch",
       vi.fn<typeof fetch>().mockResolvedValue(
@@ -98,7 +100,7 @@ describe("Linq delivery", () => {
   });
 
   it("preserves diagnostics from Linq's legacy error envelope", async () => {
-    getTokenMock.mockResolvedValue("test-token");
+    mocks.getToken.mockResolvedValue("test-token");
     vi.stubGlobal(
       "fetch",
       vi.fn<typeof fetch>().mockResolvedValue(
@@ -124,7 +126,7 @@ describe("Linq delivery", () => {
   });
 
   it("falls back to Linq's trace response header", async () => {
-    getTokenMock.mockResolvedValue("test-token");
+    mocks.getToken.mockResolvedValue("test-token");
     vi.stubGlobal(
       "fetch",
       vi.fn<typeof fetch>().mockResolvedValue(

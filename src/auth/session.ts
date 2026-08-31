@@ -13,15 +13,9 @@ const authenticatedSessionSchema = z
   })
   .loose();
 
-export const authSessionDependencies = {
-  async getSession(headers: Headers) {
-    const auth = await getAuth();
-    return auth.api.getSession({ headers });
-  },
-};
-
 export async function getAuthSession(headers: Headers) {
-  const session = await authSessionDependencies.getSession(headers);
+  const auth = await getAuth();
+  const session = await auth.api.getSession({ headers });
   const parsed = authenticatedSessionSchema.safeParse(session);
   return parsed.success ? parsed.data : null;
 }

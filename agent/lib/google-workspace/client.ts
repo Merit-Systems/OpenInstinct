@@ -2,7 +2,7 @@ import { auth } from "@googleapis/gmail";
 import { connect, type EveAuthorizationOptions } from "@vercel/connect/eve";
 import type { ToolContext } from "eve/tools";
 import { z } from "zod";
-import { env } from "@/lib/env";
+import { env } from "@/env";
 import {
   googleWorkspaceSubject,
   googleWorkspaceScopes,

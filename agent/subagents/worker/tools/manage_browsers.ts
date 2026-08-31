@@ -42,210 +42,151 @@ const inputSchema = z.object({
   offset: z.number().int().min(0).optional(),
 });
 
-interface ManageBrowsersDependencies {
-  readonly listKernelBrowsers: (
-    profileId: string,
-    signal?: AbortSignal
-  ) => AsyncIterable<{
-    readonly profile?: { readonly id?: string };
-    readonly profile_save_changes?: boolean;
-    readonly session_id: string;
-  }>;
-}
+const manageBrowsers = defineTool({
+  description:
+    'Manage browser sessions backed by the workspace persistent profile. Create read-only browsers by default so tasks can run in parallel. Immediately before a login, replace that task browser with one created using save_changes: true, then delete it after authentication so the session is saved. Only one profile writer may be active. Use "list" or "get" to inspect sessions.',
+  inputSchema,
+  async execute(input, context) {
+    const scope = await requireWorkerScope(context);
+    const signal = context.abortSignal;
 
-const defaultDependencies: ManageBrowsersDependencies = {
-  listKernelBrowsers(profileId, signal) {
-    return kernel.browsers.list(
-      { query: profileId, status: "active" },
-      { signal }
-    );
-  },
-};
-
-export const manageBrowsersDependencies = {
-  createBrowserSession,
-  deleteBrowserSession,
-  harvestBrowserTraceDomains,
-  listBrowserSessions,
-  recordBrowserTraceDomains,
-  requireOwnedBrowserSession,
-  requireWorkerScope,
-  withBrowserProfileWriteLock,
-};
-
-export function createManageBrowsers(
-  dependencies: ManageBrowsersDependencies = defaultDependencies
-) {
-  return defineTool({
-    description:
-      'Manage browser sessions backed by the workspace persistent profile. Create read-only browsers by default so tasks can run in parallel. Immediately before a login, replace that task browser with one created using save_changes: true, then delete it after authentication so the session is saved. Only one profile writer may be active. Use "list" or "get" to inspect sessions.',
-    inputSchema,
-    async execute(input, context) {
-      const scope =
-        await manageBrowsersDependencies.requireWorkerScope(context);
-      const signal = context.abortSignal;
-
-      switch (input.action) {
-        case "create": {
-          const create = async () => {
-            const profile = await ensureWorkspaceProfile(
-              scope.workspaceId,
-              signal
-            );
-            if (input.save_changes) {
-              const activeWriter = await findActiveProfileWriter(
-                profile.id,
-                signal,
-                dependencies
-              );
-              if (activeWriter) {
-                throw new Error(
-                  `Browser session ${activeWriter.session_id} is already saving login state for this workspace. Retry after it finishes.`
-                );
-              }
-            }
-            const browser = await kernel.browsers.create(
-              {
-                profile: {
-                  id: profile.id,
-                  save_changes: input.save_changes ?? false,
-                },
-                start_url: input.start_url,
-                stealth: true,
-                telemetry: {
-                  browser: { page: { enabled: true } },
-                  enabled: true,
-                },
-                timeout_seconds:
-                  input.timeout_seconds ?? browserTimeoutFloorSeconds,
-                viewport: browserViewport(input),
-              },
-              { signal }
-            );
-            try {
-              await manageBrowsersDependencies.createBrowserSession(scope, {
-                createdAt: browser.created_at,
-                sessionId: browser.session_id,
-                workerSessionId: context.session.id,
-              });
-            } catch (error) {
-              await kernel.browsers
-                .deleteByID(browser.session_id, { signal })
-                .catch(() => undefined);
-              throw error;
-            }
-            const startDomain = input.start_url
-              ? domainFromUrl(input.start_url)
-              : undefined;
-            if (startDomain) {
-              await manageBrowsersDependencies
-                .recordBrowserTraceDomains(scope, context.session.id, [
-                  startDomain,
-                ])
-                .catch(() => undefined);
-            }
-            return lifecycleResult(browser);
-          };
-          return input.save_changes
-            ? manageBrowsersDependencies.withBrowserProfileWriteLock(
-                scope,
-                create
-              )
-            : create();
-        }
-        case "list": {
-          const records =
-            await manageBrowsersDependencies.listBrowserSessions(scope);
-          const includeDeleted = input.status !== "active";
-          const browsers = await Promise.all(
-            records.map(async ({ sessionId }) => {
-              try {
-                const browser = await kernel.browsers.retrieve(
-                  sessionId,
-                  { include_deleted: includeDeleted },
-                  { signal }
-                );
-                const value = browserDescriptor(browser);
-                if (input.status === "deleted" && value.status !== "deleted") {
-                  return null;
-                }
-                if (input.status === "active" && value.status !== "active") {
-                  return null;
-                }
-                return value;
-              } catch (error) {
-                if (isNotFoundError(error)) {
-                  await manageBrowsersDependencies.deleteBrowserSession(
-                    scope,
-                    sessionId
-                  );
-                }
-                return null;
-              }
-            })
-          );
-          const offset = input.offset ?? 0;
-          const limit = input.limit ?? 100;
-          return {
-            has_more: false,
-            items: browsers
-              .filter((browser) => browser !== null)
-              .slice(offset, offset + limit),
-            next_offset: null,
-          };
-        }
-        case "get": {
-          const sessionId = requireSessionId(input.session_id);
-          await manageBrowsersDependencies.requireOwnedBrowserSession(
-            scope,
-            sessionId
-          );
-          return browserDescriptor(
-            await retrieveBrowser(scope, sessionId, signal)
-          );
-        }
-        case "update": {
-          const sessionId = requireSessionId(input.session_id);
-          await manageBrowsersDependencies.requireOwnedBrowserSession(
-            scope,
-            sessionId
-          );
-          const viewport = browserViewport(input);
-          const browser = viewport
-            ? await kernel.browsers.update(sessionId, { viewport }, { signal })
-            : await retrieveBrowser(scope, sessionId, signal);
-          return lifecycleResult(browser);
-        }
-        case "delete": {
-          const sessionId = requireSessionId(input.session_id);
-          const record =
-            await manageBrowsersDependencies.requireOwnedBrowserSession(
-              scope,
-              sessionId
-            );
-          await manageBrowsersDependencies.harvestBrowserTraceDomains(
-            scope,
-            record.workerSessionId ?? context.session.id,
-            { createdAt: record.createdAt, sessionId: record.sessionId },
+    switch (input.action) {
+      case "create": {
+        const create = async () => {
+          const profile = await ensureWorkspaceProfile(
+            scope.workspaceId,
             signal
           );
-          await kernel.browsers
-            .deleteByID(sessionId, { signal })
-            .catch((cause: unknown) => {
-              if (!isNotFoundError(cause)) throw cause;
-            });
-          await manageBrowsersDependencies.deleteBrowserSession(
-            scope,
-            sessionId
+          if (input.save_changes) {
+            const activeWriter = await findActiveProfileWriter(
+              profile.id,
+              signal
+            );
+            if (activeWriter) {
+              throw new Error(
+                `Browser session ${activeWriter.session_id} is already saving login state for this workspace. Retry after it finishes.`
+              );
+            }
+          }
+          const browser = await kernel.browsers.create(
+            {
+              profile: {
+                id: profile.id,
+                save_changes: input.save_changes ?? false,
+              },
+              start_url: input.start_url,
+              stealth: true,
+              telemetry: {
+                browser: { page: { enabled: true } },
+                enabled: true,
+              },
+              timeout_seconds:
+                input.timeout_seconds ?? browserTimeoutFloorSeconds,
+              viewport: browserViewport(input),
+            },
+            { signal }
           );
-          return "Browser session deleted successfully";
-        }
+          try {
+            await createBrowserSession(scope, {
+              createdAt: browser.created_at,
+              sessionId: browser.session_id,
+              workerSessionId: context.session.id,
+            });
+          } catch (error) {
+            await kernel.browsers
+              .deleteByID(browser.session_id, { signal })
+              .catch(() => undefined);
+            throw error;
+          }
+          const startDomain = input.start_url
+            ? domainFromUrl(input.start_url)
+            : undefined;
+          if (startDomain) {
+            await recordBrowserTraceDomains(scope, context.session.id, [
+              startDomain,
+            ]).catch(() => undefined);
+          }
+          return lifecycleResult(browser);
+        };
+        return input.save_changes
+          ? withBrowserProfileWriteLock(scope, create)
+          : create();
       }
-    },
-  });
-}
+      case "list": {
+        const records = await listBrowserSessions(scope);
+        const includeDeleted = input.status !== "active";
+        const browsers = await Promise.all(
+          records.map(async ({ sessionId }) => {
+            try {
+              const browser = await kernel.browsers.retrieve(
+                sessionId,
+                { include_deleted: includeDeleted },
+                { signal }
+              );
+              const value = browserDescriptor(browser);
+              if (input.status === "deleted" && value.status !== "deleted") {
+                return null;
+              }
+              if (input.status === "active" && value.status !== "active") {
+                return null;
+              }
+              return value;
+            } catch (error) {
+              if (isNotFoundError(error)) {
+                await deleteBrowserSession(scope, sessionId);
+              }
+              return null;
+            }
+          })
+        );
+        const offset = input.offset ?? 0;
+        const limit = input.limit ?? 100;
+        return {
+          has_more: false,
+          items: browsers
+            .filter((browser) => browser !== null)
+            .slice(offset, offset + limit),
+          next_offset: null,
+        };
+      }
+      case "get": {
+        const sessionId = requireSessionId(input.session_id);
+        await requireOwnedBrowserSession(scope, sessionId);
+        return browserDescriptor(
+          await retrieveBrowser(scope, sessionId, signal)
+        );
+      }
+      case "update": {
+        const sessionId = requireSessionId(input.session_id);
+        await requireOwnedBrowserSession(scope, sessionId);
+        const viewport = browserViewport(input);
+        const browser = viewport
+          ? await kernel.browsers.update(sessionId, { viewport }, { signal })
+          : await retrieveBrowser(scope, sessionId, signal);
+        return lifecycleResult(browser);
+      }
+      case "delete": {
+        const sessionId = requireSessionId(input.session_id);
+        const record = await requireOwnedBrowserSession(scope, sessionId);
+        await harvestBrowserTraceDomains(
+          scope,
+          record.workerSessionId ?? context.session.id,
+          { createdAt: record.createdAt, sessionId: record.sessionId },
+          signal
+        );
+        await kernel.browsers
+          .deleteByID(sessionId, { signal })
+          .catch((cause: unknown) => {
+            if (!isNotFoundError(cause)) throw cause;
+          });
+        await deleteBrowserSession(scope, sessionId);
+        return "Browser session deleted successfully";
+      }
+    }
+  },
+});
 
-export default createManageBrowsers();
+export default manageBrowsers;
 
 function requireSessionId(sessionId: string | undefined) {
   if (!sessionId) throw new Error("A browser session ID is required.");
@@ -261,7 +202,7 @@ async function retrieveBrowser(
     return await kernel.browsers.retrieve(sessionId, {}, { signal });
   } catch (error) {
     if (!isNotFoundError(error)) throw error;
-    await manageBrowsersDependencies.deleteBrowserSession(scope, sessionId);
+    await deleteBrowserSession(scope, sessionId);
     throw new Error(
       "Browser session no longer exists. Its stale record was removed; create a fresh browser instead of retrying this session ID.",
       { cause: error }
@@ -337,13 +278,12 @@ async function ensureWorkspaceProfile(
 
 async function findActiveProfileWriter(
   profileId: string | undefined,
-  signal: AbortSignal | undefined,
-  dependencies: ManageBrowsersDependencies
+  signal: AbortSignal | undefined
 ) {
   if (!profileId) return undefined;
-  for await (const browser of dependencies.listKernelBrowsers(
-    profileId,
-    signal
+  for await (const browser of kernel.browsers.list(
+    { query: profileId, status: "active" },
+    { signal }
   )) {
     if (browser.profile?.id === profileId && browser.profile_save_changes) {
       return browser;
