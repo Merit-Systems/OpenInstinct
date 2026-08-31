@@ -11,11 +11,8 @@ export default {
     "db/drizzle.config.ts",
     "evals/**/*.eval.ts",
     "evals/evals.config.ts",
-    "evals/browser/dashboard/{next.config.ts,app/**/*.{ts,tsx}}",
-    "scripts/seed-browser-benchmark-vault.ts",
     "taze.config.ts",
   ],
-  ignoreBinaries: ["portless"],
   ignoreDependencies: [
     // Imported through the owning Tailwind stylesheet rather than TypeScript.
     "shadcn",
@@ -24,8 +21,6 @@ export default {
     "eslint-plugin-react-hooks",
     "eslint-plugin-turbo",
     "oxlint-tailwindcss",
-    // Spawned by the A/B runner inside each isolated revision worktree.
-    "tsx",
     // Invoked as a CLI.
     "vercel",
   ],

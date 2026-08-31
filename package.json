@@ -59,6 +59,7 @@
     "oxlint": "1.80.0",
     "oxlint-tailwindcss": "1.10.0",
     "oxlint-tsgolint": "7.0.2001",
+    "portless": "0.15.1",
     "shadcn": "4.19.0",
     "taze": "21.1.0",
     "tsx": "4.21.0",
@@ -70,6 +71,9 @@
   "engines": {
     "node": "24.x"
   },
+  "exports": {
+    "./browser-benchmark-dashboard": "./evals/browser/dashboard/index.ts"
+  },
   "name": "local-vault-assistant",
   "packageManager": "pnpm@11.24.0",
   "scripts": {
@@ -77,6 +81,7 @@
     "bench:browser": "eve eval browser",
     "bench:compare": "node --experimental-strip-types scripts/compare-browser-benchmarks.ts",
     "bench:dashboard": "portless --name eve-browser-bench next dev evals/browser/dashboard",
+    "bench:seed": "tsx scripts/seed-browser-benchmark-vault.ts",
     "boundaries": "turbo boundaries",
     "build": "turbo run build:app",
     "build:app": "next build",

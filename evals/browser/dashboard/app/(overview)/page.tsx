@@ -50,8 +50,8 @@ export default function RunsPage() {
               <TableHead>Candidate</TableHead>
               <TableHead>Cost</TableHead>
               <TableHead>Wall</TableHead>
-              <TableHead>Time improvement</TableHead>
-              <TableHead>Cost improvement</TableHead>
+              <TableHead>Time</TableHead>
+              <TableHead>Cost</TableHead>
               <TableHead aria-label="Open run" />
             </TableRow>
           </TableHeader>

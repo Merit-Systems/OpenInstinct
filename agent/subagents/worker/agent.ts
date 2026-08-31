@@ -7,7 +7,7 @@ export default defineAgent({
   },
   description:
     "Execute one bounded browser assignment for the root coordinator, including secure vault autofill, transaction preparation, optional durable browser images, human-takeover handoff, cleanup, and a concise verified result. Every initial and resumed call must include the task-completion outputSchema required by the root instructions.",
-  model: "openai/gpt-5.6-terra-fast",
+  model: "zai/glm-5.2",
   reasoning: "low",
   outputSchema: taskCompletionSchema,
   compaction: {

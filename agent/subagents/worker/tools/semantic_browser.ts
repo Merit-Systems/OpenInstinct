@@ -24,8 +24,8 @@ const allSpecs = [
 ];
 const specsByName = new Map(allSpecs.map((spec) => [spec.name, spec]));
 const relaxedBrowserActTimeoutMs = 8_000;
-const relaxedBrowserActSnapshotCharacters = 8_000;
-const relaxedBrowserActOutputCharacters = 10_000;
+const relaxedBrowserActSnapshotCharacters = 4_000;
+const relaxedBrowserActOutputCharacters = 6_000;
 
 export default defineDynamic({
   events: {
