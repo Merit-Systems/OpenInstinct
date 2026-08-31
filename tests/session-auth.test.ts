@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { accessScopeForUser } from "../lib/access-scope";
-import { normalizeAuthPhoneNumber } from "../auth/phone-number";
+import { accessScopeForUser } from "@/lib/access-scope";
+import { normalizeAuthPhoneNumber } from "@/auth/phone-number";
 
 describe("multi-user request identity", () => {
   it("derives stable personal workspaces without exposing provider ids", () => {

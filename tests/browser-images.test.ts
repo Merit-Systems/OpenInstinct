@@ -7,12 +7,12 @@ import {
   safeBrowserImageFilename,
   sniffBrowserImageMediaType,
   stripBrowserImageMarkdownReferences,
-} from "../lib/browser-images";
-import { isBrowserImageArtifactUrl } from "../lib/browser-image-path";
+} from "@/lib/browser-images";
+import { isBrowserImageArtifactUrl } from "@/lib/browser-image-path";
 import {
   parseTaskCompletionOutput,
   taskCompletionSchema,
-} from "../lib/task-completion";
+} from "@/lib/task-completion";
 
 const artifactId = "0d01e667-d128-4bb7-a248-1ae21db72f4f";
 

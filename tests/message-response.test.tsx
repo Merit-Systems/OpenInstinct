@@ -4,7 +4,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import {
   ArtifactMessageImage,
   MessageResponse,
-} from "../components/ai-elements/message";
+} from "@/components/ai-elements/message";
 
 describe("message response rendering", () => {
   it("uses the synchronous renderer for settled text", () => {
