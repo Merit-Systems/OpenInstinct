@@ -1,6 +1,7 @@
 /* oxlint-disable typescript/no-unsafe-type-assertion -- The handler fixture supplies only the Chat SDK fields exercised here. */
 import type { HookContext } from "eve/hooks";
-import { describe, expect, it, vi } from "vitest";
+import type { AuditableLogger } from "evlog";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import type * as Blob from "@vercel/blob";
 import type { AccessScope } from "@/lib/access-scope";
 import workerCancellationHook from "@/agent/hooks/worker-cancellation-delivery";
@@ -25,6 +26,15 @@ const linqChannelCapture = vi.hoisted(() => ({
       }
     ) => Promise<BrowserImage | undefined>
   >(),
+}));
+const evlogCapture = vi.hoisted(() => ({
+  info: vi.fn<AuditableLogger["info"]>(),
+  set: vi.fn<AuditableLogger["set"]>(),
+  useLogger: vi.fn<() => Pick<AuditableLogger, "info" | "set" | "warn">>(),
+  warn: vi.fn<AuditableLogger["warn"]>(),
+}));
+vi.mock("evlog/eve", () => ({
+  useLogger: evlogCapture.useLogger,
 }));
 vi.mock("@/db/services/browser-images", () => ({
   async readReadyBrowserImageArtifact(
@@ -88,6 +98,14 @@ interface LinqTestState {
 }
 
 describe("Linq message delivery", () => {
+  beforeEach(() => {
+    evlogCapture.info.mockClear();
+    evlogCapture.set.mockClear();
+    evlogCapture.useLogger.mockReset();
+    evlogCapture.useLogger.mockReturnValue(evlogCapture);
+    evlogCapture.warn.mockClear();
+  });
+
   it("posts final responses as native iMessage Markdown", async () => {
     const message = [
       "Still blocked. No order was submitted.",
@@ -238,7 +256,184 @@ describe("Linq message delivery", () => {
       "message-1",
       "thumbs_up"
     );
+    expect(evlogCapture.set).toHaveBeenCalledExactlyOnceWith({
+      channel: {
+        linq: {
+          reactions: [
+            {
+              emoji: "thumbs_up",
+              messageId: "message-1",
+              outcome: "accepted",
+              threadId: "linq:dm:chat-1",
+            },
+          ],
+        },
+      },
+    });
     expect(state.pendingToolCallMessage).toBe("Checking the checkout");
+  });
+
+  it("records Linq reaction failures without failing the turn", async () => {
+    const { addReaction, context, post } = handlerContext();
+    const consoleWarn = vi.spyOn(console, "warn").mockReturnValue(undefined);
+    const error = Object.assign(new Error("Reaction denied"), {
+      code: "LINQ_REACTION_DENIED",
+      status: 403,
+      traceId: "trace-1",
+    });
+    addReaction.mockRejectedValueOnce(error);
+
+    await deliverCompletedMessage(
+      completedEvent({ finishReason: "tool-calls", message: "Checking" }),
+      context,
+      sessionContext()
+    );
+
+    expect(post).not.toHaveBeenCalled();
+    expect(evlogCapture.warn).toHaveBeenCalledExactlyOnceWith(
+      "Linq reaction failed",
+      {
+        channel: {
+          linq: {
+            reactions: [
+              {
+                emoji: "thumbs_up",
+                error: {
+                  code: "LINQ_REACTION_DENIED",
+                  message: "Reaction denied",
+                  raw: error,
+                  status: 403,
+                },
+                messageId: "message-1",
+                outcome: "failed",
+                threadId: "linq:dm:chat-1",
+              },
+            ],
+          },
+        },
+      }
+    );
+    expect(consoleWarn).toHaveBeenCalledExactlyOnceWith(
+      "[linq] reaction failed",
+      {
+        emoji: "thumbs_up",
+        error: {
+          code: "LINQ_REACTION_DENIED",
+          message: "Reaction denied",
+          raw: error,
+          status: 403,
+        },
+        messageId: "message-1",
+        outcome: "failed",
+        sessionId: "session-1",
+        threadId: "linq:dm:chat-1",
+        turnId: "turn-1",
+      }
+    );
+    consoleWarn.mockRestore();
+  });
+
+  it("falls back for accepted and skipped reactions when evlog is unavailable", async () => {
+    const { addReaction, context } = handlerContext();
+    const error = new Error("No logger for this resumed turn");
+    const consoleWarn = vi.spyOn(console, "warn").mockReturnValue(undefined);
+    const consoleInfo = vi.spyOn(console, "info").mockReturnValue(undefined);
+    evlogCapture.useLogger.mockImplementation(() => {
+      throw error;
+    });
+
+    await deliverCompletedMessage(
+      completedEvent({ finishReason: "tool-calls", message: "Checking" }),
+      context,
+      sessionContext()
+    );
+    await deliverCompletedMessage(
+      completedEvent({ finishReason: "tool-calls", message: "Still checking" }),
+      context,
+      sessionContext()
+    );
+
+    expect(addReaction).toHaveBeenCalledExactlyOnceWith(
+      "linq:dm:chat-1",
+      "message-1",
+      "thumbs_up"
+    );
+    expect(consoleWarn).toHaveBeenCalledTimes(2);
+    for (const call of consoleWarn.mock.calls) {
+      expect(call).toEqual([
+        "[linq] evlog unavailable",
+        {
+          error: {
+            message: "No logger for this resumed turn",
+            raw: error,
+            status: 500,
+          },
+          sessionId: "session-1",
+          turnId: "turn-1",
+        },
+      ]);
+    }
+    expect(consoleInfo).toHaveBeenNthCalledWith(1, "[linq] reaction accepted", {
+      emoji: "thumbs_up",
+      messageId: "message-1",
+      outcome: "accepted",
+      sessionId: "session-1",
+      threadId: "linq:dm:chat-1",
+      turnId: "turn-1",
+    });
+    expect(consoleInfo).toHaveBeenNthCalledWith(2, "[linq] reaction skipped", {
+      messageId: "message-1",
+      outcome: "already-acknowledged",
+      sessionId: "session-1",
+      threadId: "linq:dm:chat-1",
+      turnId: "turn-1",
+    });
+    consoleWarn.mockRestore();
+    consoleInfo.mockRestore();
+  });
+
+  it("appends repeated reaction outcomes within one turn", async () => {
+    const { context } = handlerContext();
+    const session = sessionContext();
+
+    await deliverCompletedMessage(
+      completedEvent({ finishReason: "tool-calls", message: "Checking" }),
+      context,
+      session
+    );
+    await deliverCompletedMessage(
+      completedEvent({ finishReason: "tool-calls", message: "Still checking" }),
+      context,
+      session
+    );
+
+    expect(evlogCapture.set).toHaveBeenCalledWith({
+      channel: {
+        linq: {
+          reactions: [
+            {
+              emoji: "thumbs_up",
+              messageId: "message-1",
+              outcome: "accepted",
+              threadId: "linq:dm:chat-1",
+            },
+          ],
+        },
+      },
+    });
+    expect(evlogCapture.info).toHaveBeenCalledWith("Linq reaction skipped", {
+      channel: {
+        linq: {
+          reactions: [
+            {
+              messageId: "message-1",
+              outcome: "already-acknowledged",
+              threadId: "linq:dm:chat-1",
+            },
+          ],
+        },
+      },
+    });
   });
 
   it("does not post an empty final response", async () => {
