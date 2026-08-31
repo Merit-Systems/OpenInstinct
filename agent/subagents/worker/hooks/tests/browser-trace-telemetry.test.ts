@@ -2,9 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { HookContext } from "eve/hooks";
 import { z } from "zod";
 import { domainFromUrl } from "@/agent/subagents/worker/lib/trace/domains";
-import traceTelemetry, {
-  traceTelemetryDependencies,
-} from "../agent/subagents/worker/hooks/trace-telemetry";
+import traceTelemetry, { traceTelemetryDependencies } from "../trace-telemetry";
 
 const beginBrowserTraceMock = vi.spyOn(
   traceTelemetryDependencies,

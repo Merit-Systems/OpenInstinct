@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { authSessionDependencies, getAuthSession } from "@/auth/session";
-import { authSessionFor } from "./helpers/auth-session";
+import { authSessionFor } from "@/tests/helpers/auth-session";
 
 const getSessionMock = vi.spyOn(authSessionDependencies, "getSession");
 

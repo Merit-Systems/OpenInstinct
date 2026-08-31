@@ -1,8 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { HookContext } from "eve/hooks";
-import sessionOwner, {
-  sessionOwnerDependencies,
-} from "../agent/hooks/session-owner";
+import sessionOwner, { sessionOwnerDependencies } from "../session-owner";
 
 const saveChatMock = vi.spyOn(sessionOwnerDependencies, "saveChat");
 

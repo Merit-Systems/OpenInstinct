@@ -1,6 +1,6 @@
 /* oxlint-disable anti-slop/no-module-mocking, typescript/no-unsafe-type-assertion, vitest/require-mock-type-parameters -- The tool owns Kernel and Blob I/O. These fakes isolate external APIs without adding a production wrapper. */
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { toolContextFor } from "./helpers/tool-context";
+import { toolContextFor } from "@/tests/helpers/tool-context";
 
 const artifactId = "0d01e667-d128-4bb7-a248-1ae21db72f4f";
 const png = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
@@ -58,7 +58,7 @@ vi.mock("@/lib/kernel", () => ({
   },
 }));
 
-import captureBrowserImage from "../agent/subagents/worker/tools/capture_browser_image";
+import captureBrowserImage from "../capture_browser_image";
 
 const scope = { userId: "user-1", workspaceId: "workspace-1" };
 const reservation = {

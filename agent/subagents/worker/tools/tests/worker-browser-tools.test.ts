@@ -4,9 +4,9 @@ import { z } from "zod";
 import * as WorkerAccess from "@/agent/subagents/worker/lib/access";
 import * as OwnedBrowser from "@/agent/subagents/worker/lib/owned-browser";
 import { kernel } from "@/lib/kernel";
-import { toolContextFor } from "./helpers/tool-context";
-import computerAction from "../agent/subagents/worker/tools/computer_action";
-import executePlaywrightCode from "../agent/subagents/worker/tools/execute_playwright_code";
+import { toolContextFor } from "@/tests/helpers/tool-context";
+import computerAction from "../computer_action";
+import executePlaywrightCode from "../execute_playwright_code";
 
 const mocks = {
   batch: vi.spyOn(kernel.browsers.computer, "batch"),
