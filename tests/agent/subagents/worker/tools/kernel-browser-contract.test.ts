@@ -6,7 +6,7 @@ import manageBrowsers, {
   createManageBrowsers,
   kernelProfileNameForWorkspace,
   manageBrowsersDependencies,
-} from "../manage_browsers";
+} from "@/agent/subagents/worker/tools/manage_browsers";
 
 type ListKernelBrowsers = NonNullable<
   Parameters<typeof createManageBrowsers>[0]
