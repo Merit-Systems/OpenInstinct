@@ -6,6 +6,8 @@ import {
   type LinqChannelConfig,
   type LinqChannelCredentials,
 } from "eve/channels/linq";
+import { parseError } from "evlog";
+import { useLogger as getEvlog } from "evlog/eve";
 import { z } from "zod";
 import { getAuth } from "@/auth";
 import { normalizeAuthPhoneNumber } from "@/auth/phone-number";
@@ -118,21 +120,115 @@ export const linqChannelConfig = {
               .map((line) => line.trim())
               .find(Boolean) ?? null)
           : null;
-        if (context.thread) {
-          const messageId = context.thread.toJSON().currentMessage?.id;
-          if (
-            messageId &&
-            context.state.acknowledgedLinqMessageId !== messageId
-          ) {
-            try {
-              await context.bot
-                .getAdapter("linq")
-                .addReaction(context.thread.id, messageId, "thumbs_up");
-              context.state.acknowledgedLinqMessageId = messageId;
-            } catch {
-              // SMS/RCS and some carrier paths do not support iMessage tapbacks.
-            }
+        let log: ReturnType<typeof getEvlog> | undefined;
+        try {
+          log = getEvlog(session);
+        } catch (error) {
+          console.warn("[linq] evlog unavailable", {
+            error: parseError(error),
+            sessionId: session.session.id,
+            turnId: event.turnId,
+          });
+        }
+        if (!context.thread) {
+          const reaction = { outcome: "missing-thread" };
+          if (log) {
+            log.warn("Linq reaction skipped", {
+              channel: { linq: { reactions: [reaction] } },
+            });
+          } else {
+            console.warn("[linq] reaction skipped", {
+              ...reaction,
+              sessionId: session.session.id,
+              turnId: event.turnId,
+            });
           }
+          return;
+        }
+
+        const messageId = context.thread.toJSON().currentMessage?.id;
+        if (!messageId) {
+          const reaction = {
+            outcome: "missing-message-id",
+            threadId: context.thread.id,
+          };
+          if (log) {
+            log.warn("Linq reaction skipped", {
+              channel: { linq: { reactions: [reaction] } },
+            });
+          } else {
+            console.warn("[linq] reaction skipped", {
+              ...reaction,
+              sessionId: session.session.id,
+              turnId: event.turnId,
+            });
+          }
+          return;
+        }
+
+        if (context.state.acknowledgedLinqMessageId === messageId) {
+          const reaction = {
+            messageId,
+            outcome: "already-acknowledged",
+            threadId: context.thread.id,
+          };
+          if (log) {
+            log.info("Linq reaction skipped", {
+              channel: { linq: { reactions: [reaction] } },
+            });
+          } else {
+            console.info("[linq] reaction skipped", {
+              ...reaction,
+              sessionId: session.session.id,
+              turnId: event.turnId,
+            });
+          }
+          return;
+        }
+
+        try {
+          await context.bot
+            .getAdapter("linq")
+            .addReaction(context.thread.id, messageId, "thumbs_up");
+          context.state.acknowledgedLinqMessageId = messageId;
+          const reaction = {
+            emoji: "thumbs_up",
+            messageId,
+            outcome: "accepted",
+            threadId: context.thread.id,
+          };
+          if (log) {
+            log.set({
+              channel: { linq: { reactions: [reaction] } },
+            });
+          } else {
+            console.info("[linq] reaction accepted", {
+              ...reaction,
+              sessionId: session.session.id,
+              turnId: event.turnId,
+            });
+          }
+        } catch (error) {
+          const failure = parseError(error);
+          const reaction = {
+            emoji: "thumbs_up",
+            error: failure,
+            messageId,
+            outcome: "failed",
+            threadId: context.thread.id,
+          };
+          log?.warn("Linq reaction failed", {
+            channel: {
+              linq: {
+                reactions: [reaction],
+              },
+            },
+          });
+          console.warn("[linq] reaction failed", {
+            ...reaction,
+            sessionId: session.session.id,
+            turnId: event.turnId,
+          });
         }
         return;
       }
