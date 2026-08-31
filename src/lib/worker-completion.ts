@@ -15,18 +15,22 @@ const historicalTaskCompletionSchema = taskCompletionSchema.omit({
   images: true,
 });
 
-export function parseTaskCompletionOutput(output: unknown) {
-  let value = output;
-  if (typeof value === "string") {
+export const taskCompletionOutputSchema = z.preprocess(
+  (input) => {
+    const text = z.string().safeParse(input);
+    if (!text.success) return input;
     try {
-      value = JSON.parse(value) as unknown;
+      const parsed = z.json().safeParse(JSON.parse(text.data));
+      return parsed.success ? parsed.data : input;
     } catch {
-      return undefined;
+      return input;
     }
-  }
-
-  const current = taskCompletionSchema.safeParse(value);
-  if (current.success) return current.data;
-  const historical = historicalTaskCompletionSchema.safeParse(value);
-  return historical.success ? { ...historical.data, images: [] } : undefined;
-}
+  },
+  z.union([
+    taskCompletionSchema,
+    historicalTaskCompletionSchema.transform((value) => ({
+      ...value,
+      images: [],
+    })),
+  ])
+);

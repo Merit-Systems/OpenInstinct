@@ -24,27 +24,27 @@ const regionSchema = z.object({
   x: z.number().int().nonnegative(),
   y: z.number().int().nonnegative(),
 });
-const commonShape = {
+const commonFields = {
   label: z.string().trim().min(1).max(200),
   session_id: z.string().min(1),
 };
 const inputSchema = z.discriminatedUnion("source", [
   z.object({
-    ...commonShape,
+    ...commonFields,
     region: regionSchema.optional(),
     source: z.literal("viewport"),
   }),
   z.object({
-    ...commonShape,
+    ...commonFields,
     source: z.literal("full_page"),
   }),
   z.object({
-    ...commonShape,
+    ...commonFields,
     selector: z.string().trim().min(1).max(2_000),
     source: z.literal("element"),
   }),
   z.object({
-    ...commonShape,
+    ...commonFields,
     selector: z.string().trim().min(1).max(2_000),
     source: z.literal("image_resource"),
   }),

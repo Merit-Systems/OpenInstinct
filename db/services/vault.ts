@@ -22,7 +22,7 @@ import {
   writeEncryptedSecret,
 } from "@/db/services/secrets";
 import { ensureScope } from "@/db/services/scope";
-import { env } from "@/lib/env";
+import { getInstallationSecrets } from "@/lib/installation-secrets";
 
 const vaultRecordSchema = z.object({
   account: z.string(),
@@ -123,7 +123,9 @@ export async function saveVaultItem(
 
 export async function readVaultSecret(scope: AccessScope, id: string) {
   const encrypted = await readEncryptedSecret(scope, id);
-  return encrypted ? decryptVaultSecret(scope, id, encrypted) : undefined;
+  if (!encrypted) return undefined;
+  const { secretEncryptionKey } = await getInstallationSecrets();
+  return decryptVaultSecret(scope, id, encrypted, secretEncryptionKey);
 }
 
 export async function hasVaultSecret(scope: AccessScope, id: string) {
@@ -131,7 +133,12 @@ export async function hasVaultSecret(scope: AccessScope, id: string) {
 }
 
 async function writeVaultSecret(scope: AccessScope, id: string, value: string) {
-  await writeEncryptedSecret(scope, id, encryptVaultSecret(scope, id, value));
+  const { secretEncryptionKey } = await getInstallationSecrets();
+  await writeEncryptedSecret(
+    scope,
+    id,
+    encryptVaultSecret(scope, id, value, secretEncryptionKey)
+  );
 }
 
 function vaultAccountHint(input: VaultCreateItem) {
@@ -155,11 +162,16 @@ function vaultAccountHint(input: VaultCreateItem) {
   }
 }
 
-function encryptVaultSecret(scope: AccessScope, id: string, value: string) {
+function encryptVaultSecret(
+  scope: AccessScope,
+  id: string,
+  value: string,
+  secretEncryptionKey: string
+) {
   const iv = randomBytes(12);
   const cipher = createCipheriv(
     "aes-256-gcm",
-    Buffer.from(env.SECRET_ENCRYPTION_KEY, "base64"),
+    Buffer.from(secretEncryptionKey, "base64"),
     iv
   );
   cipher.setAAD(vaultSecretAad(scope, id));
@@ -175,7 +187,12 @@ function encryptVaultSecret(scope: AccessScope, id: string, value: string) {
   ].join(".");
 }
 
-function decryptVaultSecret(scope: AccessScope, id: string, value: string) {
+function decryptVaultSecret(
+  scope: AccessScope,
+  id: string,
+  value: string,
+  secretEncryptionKey: string
+) {
   const [version, encodedIv, encodedTag, encodedCiphertext] = value.split(".");
   if (version !== "v1" || !encodedIv || !encodedTag || !encodedCiphertext) {
     throw new Error("The stored secret uses an unsupported format.");
@@ -183,7 +200,7 @@ function decryptVaultSecret(scope: AccessScope, id: string, value: string) {
 
   const decipher = createDecipheriv(
     "aes-256-gcm",
-    Buffer.from(env.SECRET_ENCRYPTION_KEY, "base64"),
+    Buffer.from(secretEncryptionKey, "base64"),
     Buffer.from(encodedIv, "base64url")
   );
   decipher.setAAD(vaultSecretAad(scope, id));

@@ -367,7 +367,9 @@ function lastCharacters(value: string, count: number) {
 }
 
 function firstQueryValue(value: string | readonly string[] | undefined) {
-  return typeof value === "string" ? value : value?.[0];
+  const parsed = z.union([z.string(), z.array(z.string())]).safeParse(value);
+  if (!parsed.success) return undefined;
+  return Array.isArray(parsed.data) ? parsed.data[0] : parsed.data;
 }
 
 function serializedPayloadSchema(schema: z.ZodType, message: string) {

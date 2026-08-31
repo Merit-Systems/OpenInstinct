@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const requiredEnvironment = {
-  BETTER_AUTH_SECRET: "test-auth-secret",
+  BETTER_AUTH_SECRET: "test-auth-secret-0123456789abcdefghijklmnop",
   BETTER_AUTH_URL: "https://example.com",
   BLOB_READ_WRITE_TOKEN: "vercel_blob_rw_test",
   DATABASE_URL: "postgresql://user:password@example.com/database",
@@ -58,6 +58,23 @@ describe("environment", () => {
     expect(localPhoneAuthBypassEnabled).toBe(true);
   });
 
+  it.each([
+    ["test-auth-secret-0123456789abcdefghijklmnop", ""],
+    ["", Buffer.alloc(32, 2).toString("base64")],
+  ])(
+    "rejects asymmetric local installation-secret overrides",
+    async (betterAuthSecret, secretEncryptionKey) => {
+      vi.stubEnv("BETTER_AUTH_SECRET", betterAuthSecret);
+      vi.stubEnv("SECRET_ENCRYPTION_KEY", secretEncryptionKey);
+      vi.stubEnv("NODE_ENV", "development");
+      vi.stubEnv("VERCEL_ENV", undefined);
+
+      await expect(import("@/lib/env")).rejects.toThrow(
+        "Set both BETTER_AUTH_SECRET and SECRET_ENCRYPTION_KEY"
+      );
+    }
+  );
+
   it("accepts connector overrides", async () => {
     vi.stubEnv("GOOGLE_CONNECTOR_UID", "google/custom");
     vi.stubEnv("LINQ_CONNECTOR", "linq/custom");
@@ -76,10 +93,13 @@ describe("environment", () => {
     vi.stubEnv("SECRET_ENCRYPTION_KEY", "");
     vi.stubEnv("NODE_ENV", "development");
     vi.stubEnv("VERCEL_ENV", "development");
+    vi.stubEnv("VERCEL_URL", "open-instinct-preview.vercel.app");
 
-    await expect(import("@/lib/env")).rejects.toThrow(
-      "Invalid environment variables"
-    );
+    const { env } = await import("@/lib/env");
+
+    expect(env.BETTER_AUTH_SECRET).toBeUndefined();
+    expect(env.BETTER_AUTH_URL).toBeUndefined();
+    expect(env.SECRET_ENCRYPTION_KEY).toBeUndefined();
   });
 
   it.each(["DATABASE_URL", "KERNEL_API_KEY"])(
@@ -106,11 +126,8 @@ describe("environment", () => {
   });
 
   it.each([
-    ["BETTER_AUTH_SECRET", "Invalid environment variables"],
-    ["BETTER_AUTH_URL", "Invalid environment variables"],
     ["DATABASE_URL", "Invalid environment variables"],
     ["KERNEL_API_KEY", "Invalid environment variables"],
-    ["SECRET_ENCRYPTION_KEY", "Invalid environment variables"],
   ])(
     "rejects a missing required %s value during import",
     async (name, errorMessage) => {
@@ -136,14 +153,14 @@ describe("environment", () => {
     );
   });
 
-  it("accepts a configured Linq connector and E.164 phone number", async () => {
+  it("accepts a Linq connector without a copied phone number", async () => {
     vi.stubEnv("LINQ_CONNECTOR", "linq/open-instinct");
-    vi.stubEnv("LINQ_PHONE_NUMBER", "+12025550123");
+    vi.stubEnv("LINQ_PHONE_NUMBER", "");
 
     const { env } = await import("@/lib/env");
 
     expect(env.LINQ_CONNECTOR).toBe("linq/open-instinct");
-    expect(env.LINQ_PHONE_NUMBER).toBe("+12025550123");
+    expect(env.LINQ_PHONE_NUMBER).toBeUndefined();
   });
 
   it("accepts Vercel OIDC Blob storage without a static token", async () => {
@@ -154,18 +171,6 @@ describe("environment", () => {
 
     expect(env.BLOB_READ_WRITE_TOKEN).toBeUndefined();
     expect(env.BLOB_STORE_ID).toBe("store_openinstinct");
-  });
-
-  it.each([
-    ["linq/open-instinct", ""],
-    ["", "+12025550123"],
-  ])("rejects partial Linq configuration", async (connector, phoneNumber) => {
-    vi.stubEnv("LINQ_CONNECTOR", connector);
-    vi.stubEnv("LINQ_PHONE_NUMBER", phoneNumber);
-
-    await expect(import("@/lib/env")).rejects.toThrow(
-      "LINQ_CONNECTOR and LINQ_PHONE_NUMBER must be configured together"
-    );
   });
 
   it("rejects a Linq phone number outside E.164 format", async () => {

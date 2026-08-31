@@ -1,6 +1,6 @@
 import type { MessageStreamEvent } from "eve/client";
 import { z } from "zod";
-import { parseTaskCompletionOutput } from "@/lib/worker-completion";
+import { taskCompletionOutputSchema } from "@/lib/worker-completion";
 
 const workerTaskNotificationPrefix = /^Background task (\S+) \(worker\) /u;
 const terminalTaskControlSchema = z.object({
@@ -103,8 +103,10 @@ export function readTaskCompletion(events: readonly MessageStreamEvent[]) {
 
     const latest = backgroundTasks.at(-1);
     if (latest?.status === "completed" && latest.output && latest.terminalAt) {
-      const completion = parseTaskCompletionOutput(latest.output);
-      if (completion) return { ...completion, completedAt: latest.terminalAt };
+      const completion = taskCompletionOutputSchema.safeParse(latest.output);
+      if (completion.success) {
+        return { ...completion.data, completedAt: latest.terminalAt };
+      }
     }
     return undefined;
   }
@@ -115,8 +117,12 @@ export function readTaskCompletion(events: readonly MessageStreamEvent[]) {
         event.data.subagentName === "worker" &&
         event.data.backgroundTask === undefined
       ) {
-        const completion = parseTaskCompletionOutput(event.data.output);
-        if (completion) return { ...completion, completedAt: event.meta.at };
+        const completion = taskCompletionOutputSchema.safeParse(
+          event.data.output
+        );
+        if (completion.success) {
+          return { ...completion.data, completedAt: event.meta.at };
+        }
       }
       continue;
     }
@@ -131,8 +137,10 @@ export function readTaskCompletion(events: readonly MessageStreamEvent[]) {
         result.subagentName === "worker" &&
         (result.origin !== "child" || result.backgroundTask === undefined)
       ) {
-        const completion = parseTaskCompletionOutput(result.output);
-        if (completion) return { ...completion, completedAt: event.meta.at };
+        const completion = taskCompletionOutputSchema.safeParse(result.output);
+        if (completion.success) {
+          return { ...completion.data, completedAt: event.meta.at };
+        }
       }
       continue;
     }
@@ -173,9 +181,7 @@ function readWorkerTaskNotification(event: MessageStreamEvent) {
   return undefined;
 }
 
-export function readBackgroundWorkerTasks(
-  events: readonly MessageStreamEvent[]
-) {
+function readBackgroundWorkerTasks(events: readonly MessageStreamEvent[]) {
   const tasks = new Map<string, BackgroundWorkerTaskState>();
 
   for (const event of events) {

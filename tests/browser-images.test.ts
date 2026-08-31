@@ -6,7 +6,7 @@ import {
   sniffBrowserImageMediaType,
 } from "@/lib/browser-artifact";
 import {
-  parseTaskCompletionOutput,
+  taskCompletionOutputSchema,
   taskCompletionSchema,
 } from "@/lib/worker-completion";
 import {
@@ -78,7 +78,7 @@ describe("browser image contracts", () => {
 
   it("defaults historical worker results to no images and caps new results", () => {
     expect(
-      parseTaskCompletionOutput({ message: "Done", status: "success" })
+      taskCompletionOutputSchema.parse({ message: "Done", status: "success" })
     ).toEqual({ images: [], message: "Done", status: "success" });
     expect(
       taskCompletionSchema.safeParse({ message: "Done", status: "success" })

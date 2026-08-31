@@ -1,9 +1,8 @@
 import { gateway } from "ai";
-import { z } from "zod";
-import { createWorld } from "@workflow/world-vercel";
 import { revokeToken, startAuthorization } from "@vercel/connect";
+import { z } from "zod";
+import { listBrowserTraces } from "@/db/services/browser-traces";
 import { saveChat } from "@/db/services/chats";
-import { listOwnedSessionIds } from "@/db/services/sessions";
 import { selectGatewayModel } from "@/db/services/settings";
 import { deleteVaultItem, saveVaultItem } from "@/db/services/vault";
 import type { AccessScope } from "@/lib/access-scope";
@@ -15,9 +14,6 @@ import {
 } from "@/lib/google-workspace";
 import { vaultCreateItemSchema, vaultImportItemsSchema } from "@/lib/vault";
 import { createTRPCRouter, protectedProcedure } from "./init";
-
-const taskHistoryPageSize = 25;
-const taskHistoryWorkflowName = "workflow//eve//workflowEntry";
 
 export const appRouter = createTRPCRouter({
   chats: {
@@ -53,6 +49,13 @@ export const appRouter = createTRPCRouter({
         selectGatewayModel(ctx.scope, input.modelId)
       ),
   },
+  traces: {
+    list: protectedProcedure
+      .input(z.object({ cursor: z.string().nullish() }))
+      .query(({ ctx, input }) =>
+        listBrowserTraces(ctx.scope, input.cursor ?? undefined)
+      ),
+  },
   vault: {
     create: protectedProcedure
       .input(vaultCreateItemSchema)
@@ -69,13 +72,6 @@ export const appRouter = createTRPCRouter({
   models: {
     list: protectedProcedure.query(readModelCatalog),
   },
-  tasks: {
-    list: protectedProcedure
-      .input(z.object({ cursor: z.string().nullish() }))
-      .query(({ ctx, input }) =>
-        readTaskHistoryPage(ctx.scope, input.cursor ?? undefined)
-      ),
-  },
 });
 
 export type AppRouter = typeof appRouter;
@@ -90,65 +86,6 @@ async function startGoogleWorkspaceAuthorization(
     { callbackUrl, expiresInMs: 10 * 60_000 }
   );
   return authorization.url;
-}
-
-export async function readTaskHistoryPage(scope: AccessScope, cursor?: string) {
-  const ownedSessionIds = await listOwnedSessionIds(scope);
-  const world = createWorld({
-    headers: { "User-Agent": "local-vault-assistant/task-history" },
-  });
-  const runs: Awaited<ReturnType<typeof world.runs.list>>["data"][number][] =
-    [];
-  let nextCursor = cursor;
-  let hasMore = true;
-  let pagesRead = 0;
-
-  while (runs.length < taskHistoryPageSize && hasMore && pagesRead < 10) {
-    const page = await world.runs.list({
-      pagination: {
-        cursor: nextCursor,
-        limit: taskHistoryPageSize - runs.length,
-        sortOrder: "desc",
-      },
-      resolveData: "none",
-      workflowName: taskHistoryWorkflowName,
-    });
-    runs.push(
-      ...page.data.filter(
-        (run) =>
-          run.attributes["$eve.type"] === "session" &&
-          ownedSessionIds.has(run.runId)
-      )
-    );
-    nextCursor = page.cursor ?? undefined;
-    hasMore = page.hasMore;
-    pagesRead += 1;
-  }
-
-  return {
-    cursor: nextCursor ?? null,
-    hasMore,
-    runs: runs.map((run) => ({
-      createdAt: run.createdAt.toISOString(),
-      prompt: run.attributes["$eve.title"] ?? "Untitled task",
-      sessionId: run.runId,
-      status: taskHistoryStatus(run.status),
-      updatedAt: run.updatedAt.toISOString(),
-    })),
-  };
-}
-
-function taskHistoryStatus(status: string) {
-  switch (status) {
-    case "cancelled":
-    case "completed":
-    case "failed":
-    case "pending":
-    case "running":
-      return status;
-    default:
-      return "failed";
-  }
 }
 
 async function readModelCatalog() {

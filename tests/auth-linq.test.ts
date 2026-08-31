@@ -1,10 +1,10 @@
-import { getToken } from "@vercel/connect";
 import { APIError } from "better-auth/api";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 import { phoneOtpErrorMessage } from "@/app/sign-in/phone-auth-form";
+import { linqDeliveryDependencies } from "@/auth/linq";
 
-vi.mock("@vercel/connect", () => ({ getToken: vi.fn<typeof getToken>() }));
+const getTokenMock = vi.spyOn(linqDeliveryDependencies, "getToken");
 
 const linqApiErrorSchema = z.object({
   code: z.string(),
@@ -19,7 +19,7 @@ const linqApiErrorSchema = z.object({
 
 describe("Linq phone authentication", () => {
   afterEach(() => {
-    vi.restoreAllMocks();
+    vi.clearAllMocks();
     vi.unstubAllEnvs();
     vi.unstubAllGlobals();
   });
@@ -30,15 +30,18 @@ describe("Linq phone authentication", () => {
       "0123456789abcdefghijklmnopqrstuvwxyzABCD"
     );
     vi.stubEnv("LINQ_CONNECTOR", "linq/open-instinct");
-    vi.stubEnv("LINQ_PHONE_NUMBER", "+12025550123");
-    vi.mocked(getToken).mockResolvedValue("test-token");
+    getTokenMock.mockResolvedValue("test-token");
     vi.stubGlobal(
       "fetch",
       vi.fn<typeof fetch>().mockResolvedValue(
         Response.json(
           {
-            code: 2015,
-            message: "no eligible sending line available",
+            error: {
+              code: 2015,
+              message: "no eligible sending line available",
+              status: 409,
+            },
+            success: false,
             trace_id: "trace-123",
           },
           { status: 409 }
@@ -50,14 +53,14 @@ describe("Linq phone authentication", () => {
     const error: unknown = await sendPhoneCode({
       code: "123456",
       to: "+12025550123",
-    }).catch((caught: unknown) => caught);
+    }).catch((cause: unknown) => cause);
 
     expect(error).toBeInstanceOf(APIError);
     if (!(error instanceof APIError)) throw new TypeError("Expected APIError");
 
     const body = linqApiErrorSchema.parse(error.body);
     expect(body).toMatchObject({
-      code: "LINQ_CONTACT_NOT_ALLOWED",
+      code: "LINQ_SENDING_LINE_NOT_VERIFIED",
       linqError: {
         code: 2015,
         message: "no eligible sending line available",
@@ -65,6 +68,8 @@ describe("Linq phone authentication", () => {
         trace_id: "trace-123",
       },
     });
-    expect(phoneOtpErrorMessage(body)).toContain("Messaging Contacts");
+    expect(phoneOtpErrorMessage(body)).toContain(
+      "Phone Numbers verification instruction"
+    );
   });
 });

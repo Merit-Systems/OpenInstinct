@@ -27,6 +27,7 @@ import {
   useState,
 } from "react";
 import { Streamdown, type Components } from "streamdown";
+import { z } from "zod";
 import { isBrowserImageArtifactUrl } from "@/lib/browser-artifact";
 
 export type MessageProps = HTMLAttributes<HTMLDivElement> & {
@@ -331,7 +332,8 @@ export function ArtifactMessageImage({
   ...props
 }: ComponentProps<"img"> & { readonly node?: unknown }) {
   void _node;
-  if (typeof src !== "string" || !isBrowserImageArtifactUrl(src)) {
+  const parsedSource = z.string().safeParse(src);
+  if (!parsedSource.success || !isBrowserImageArtifactUrl(parsedSource.data)) {
     return (
       <span className="text-muted-foreground">
         Image not displayed: {alt || "external image"}
@@ -340,7 +342,7 @@ export function ArtifactMessageImage({
   }
 
   return (
-    <a href={src} rel="noreferrer" target="_blank">
+    <a href={parsedSource.data} rel="noreferrer" target="_blank">
       <img
         {...props}
         alt={alt || "Browser image"}

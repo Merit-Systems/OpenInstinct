@@ -4,6 +4,8 @@ import { ensureScope } from "@/db/services/scope";
 import { claimSession } from "@/db/services/sessions";
 import { scopeFromPrincipal } from "@/lib/access-scope";
 
+export const sessionOwnerDependencies = { claimSession, ensureScope, saveChat };
+
 export default defineHook({
   events: {
     async "session.started"(_event, ctx) {
@@ -11,14 +13,14 @@ export default defineHook({
       if (!initiator) return;
 
       const scope = scopeFromPrincipal(initiator);
-      await ensureScope(scope);
-      await claimSession(scope, ctx.session.id);
+      await sessionOwnerDependencies.ensureScope(scope);
+      await sessionOwnerDependencies.claimSession(scope, ctx.session.id);
     },
     async "message.received"(_event, ctx) {
       const initiator = ctx.session.auth.initiator;
       if (!initiator) return;
 
-      await saveChat(scopeFromPrincipal(initiator), {
+      await sessionOwnerDependencies.saveChat(scopeFromPrincipal(initiator), {
         sessionId: ctx.session.id,
       });
     },

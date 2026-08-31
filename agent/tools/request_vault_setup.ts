@@ -1,6 +1,6 @@
 import { defineTool } from "eve/tools";
-import { env } from "@/lib/env";
 import { createVaultSetupUrl, vaultSetupRequestSchema } from "@/lib/vault";
+import { applicationOrigin } from "@/lib/application-origin";
 
 export default defineTool({
   description:
@@ -10,7 +10,7 @@ export default defineTool({
     return {
       message:
         "Open this page in your Local Vault Assistant deployment and complete the form. Do not send the secret in chat.",
-      url: createVaultSetupUrl(env.BETTER_AUTH_URL, request),
+      url: createVaultSetupUrl(applicationOrigin(), request),
     };
   },
 });

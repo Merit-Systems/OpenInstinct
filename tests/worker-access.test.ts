@@ -1,20 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { accessScopeForUser, type AccessScope } from "@/lib/access-scope";
-
-const mocks = vi.hoisted(() => ({
-  isSessionOwned:
-    vi.fn<(_scope: AccessScope, _sessionId: string) => Promise<boolean>>(),
-}));
-
-vi.mock("@/db/services/sessions", () => ({
-  isSessionOwned: mocks.isSessionOwned,
-}));
-
+import * as SessionService from "@/db/services/sessions";
+import { accessScopeForUser } from "@/lib/access-scope";
 import { requireWorkerScope } from "@/agent/subagents/worker/lib/access";
+
+const isSessionOwnedMock = vi.spyOn(SessionService, "isSessionOwned");
 
 beforeEach(() => {
   vi.clearAllMocks();
-  mocks.isSessionOwned.mockResolvedValue(true);
+  isSessionOwnedMock.mockResolvedValue(true);
 });
 
 describe("worker access", () => {
@@ -26,13 +19,13 @@ describe("worker access", () => {
       })
     ).resolves.toEqual(accessScopeForUser(principal.principalId));
 
-    expect(mocks.isSessionOwned).toHaveBeenCalledTimes(2);
-    expect(mocks.isSessionOwned).toHaveBeenNthCalledWith(
+    expect(isSessionOwnedMock).toHaveBeenCalledTimes(2);
+    expect(isSessionOwnedMock).toHaveBeenNthCalledWith(
       1,
       accessScopeForUser(principal.principalId),
       "worker-session"
     );
-    expect(mocks.isSessionOwned).toHaveBeenNthCalledWith(
+    expect(isSessionOwnedMock).toHaveBeenNthCalledWith(
       2,
       accessScopeForUser(principal.principalId),
       "root-session"
@@ -47,9 +40,7 @@ describe("worker access", () => {
       requireWorkerScope({ session: { ...session, parent: undefined } })
     ).rejects.toThrow("require a delegated worker");
 
-    mocks.isSessionOwned
-      .mockResolvedValueOnce(true)
-      .mockResolvedValueOnce(false);
+    isSessionOwnedMock.mockResolvedValueOnce(true).mockResolvedValueOnce(false);
     await expect(requireWorkerScope({ session })).rejects.toThrow(
       "does not own this worker session"
     );

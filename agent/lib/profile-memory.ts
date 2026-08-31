@@ -1,4 +1,5 @@
 import type { MemoryScopeContext } from "eve/memory";
+import { z } from "zod";
 import type { env } from "@/lib/env";
 
 export function resolveProfileMemoryBackend(
@@ -19,9 +20,9 @@ export function resolveProfileMemoryBackend(
 
 export function resolveProfileMemoryScope(context: MemoryScopeContext) {
   const caller = context.session.auth.current;
-  const workspaceId = caller?.attributes.workspaceId;
+  const workspaceId = z.string().safeParse(caller?.attributes.workspaceId);
 
-  return caller?.principalType === "user" && typeof workspaceId === "string"
-    ? workspaceId
+  return caller?.principalType === "user" && workspaceId.success
+    ? workspaceId.data
     : null;
 }

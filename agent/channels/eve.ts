@@ -1,5 +1,6 @@
 import { eveChannel } from "eve/channels/eve";
 import { ForbiddenError, UnauthenticatedError } from "eve/channels/auth";
+import { z } from "zod";
 import { isSessionOwned } from "@/db/services/sessions";
 import { accessScopeForUser, type AccessScope } from "@/lib/access-scope";
 import { getAuthSession } from "@/auth/session";
@@ -43,11 +44,12 @@ function sessionIdFromPath(pathname: string) {
 
 async function requestIdentityFromRequest(request: Request) {
   const session = await getAuthSession(request.headers);
-  const phoneNumber = session?.user.phoneNumber;
-  if (!session || typeof phoneNumber !== "string") return;
+  if (!session) return;
+  const phoneNumber = z.string().safeParse(session.user.phoneNumber);
+  if (!phoneNumber.success) return;
 
   return {
-    phoneNumber,
+    phoneNumber: phoneNumber.data,
     scope: accessScopeForUser(`better-auth:${session.user.id}`),
   };
 }
