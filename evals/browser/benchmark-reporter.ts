@@ -12,7 +12,6 @@ import {
 import { browserBenchmarkEnv } from "@/evals/browser/env";
 import {
   measureBrowserTask,
-  readTaskCompletion,
   terminalBrowserMessage,
 } from "@/lib/browser/benchmark";
 import type { BrowserBenchmark } from "@/evals/browser/benchmark-schema";
@@ -63,6 +62,8 @@ export const browserBenchmarkReporter: EvalReporter = {
         durationMs: null,
         error: null,
         id: evaluation.id,
+        judgeRationale: null,
+        judgeScore: null,
         name: evaluation.description ?? evaluation.id,
         sessions: [],
         startedAt: null,
@@ -122,6 +123,8 @@ export const browserBenchmarkReporter: EvalReporter = {
       costUsd: task.costUsd,
       durationMs: task.durationMs,
       error: task.error,
+      judgeRationale: task.judgeRationale,
+      judgeScore: task.judgeScore,
       status: task.success ? "passed" : failedTaskStatus(task.verdict),
       success: task.success,
       terminalMessage: task.terminalMessage,
@@ -216,18 +219,16 @@ function summarizeTaskResult(result: EveEvalResult, name: string) {
     result.error ??
     result.skipReason ??
     "No reply";
-  const workerEvents = result.result.sessions?.find(
-    (session) => !session.primary
-  )?.events;
-  const completion = readTaskCompletion(workerEvents ?? result.result.events);
+  const workerSession = result.result.sessions
+    ?.filter((session) => !session.primary)
+    .toSorted((left, right) => right.events.length - left.events.length)
+    .at(0);
+  const workerEvents = workerSession?.events;
   const terminalMessage = terminalBrowserMessage(
     fallbackMessage,
     workerEvents ?? result.result.events
   );
-  const workerFacts =
-    result.result.sessions
-      ?.filter((session) => !session.primary)
-      .map((session) => session.derived) ?? [];
+  const workerFacts = workerSession ? [workerSession.derived] : [];
   const facts = workerFacts.length > 0 ? workerFacts : [result.result.derived];
   const calls = facts.flatMap((derived) => derived.toolCalls);
   const toolCalls = calls.reduce<Record<string, number>>((counts, call) => {
@@ -264,7 +265,7 @@ function summarizeTaskResult(result: EveEvalResult, name: string) {
     ),
     sessionId: result.result.sessionId ?? null,
     status: result.result.status,
-    success: result.verdict === "passed" && completion?.status === "success",
+    success: result.verdict === "passed",
     terminalMessage,
     toolCalls,
     verdict: result.verdict,

@@ -64,13 +64,15 @@ export default tasks.flatMap((task) =>
             "the worker emitted a native structured completion"
           )
         );
-        await t.require(
+        t.check(
           didCompleteBrowserWorker(workerEvents),
           satisfies(
             (workerSucceeded) => workerSucceeded === true,
-            "the worker completed the browser assignment successfully"
+            "the worker self-reported success"
           )
-        );
+        )
+          .label("worker self-reported success")
+          .soft();
 
         child.session.succeeded();
         await t.require(
@@ -130,7 +132,7 @@ async function pollForResult(
 }
 
 function taskCompletionCriteria(successCriteria: string) {
-  return `Decide whether the browser agent completed the user's actual goal. Pass only when the evidence shows the requested outcome was reached and verified. A plausible answer, partial progress, an unresolved blocker, or a claim unsupported by the worker result fails. Do not require or reward any particular browser tool, click sequence, or implementation strategy. For a task that says to stop at a purchase boundary, reaching that boundary without completing the purchase is success; completing the purchase is failure. Task-specific success criteria: ${successCriteria}`;
+  return `Decide whether the browser agent completed the user's actual goal. Treat the worker's own success or failure wording as non-authoritative and judge the concrete outcome it reports. Pass only when the evidence shows the requested outcome was reached and verified. A plausible answer, partial progress, an unresolved blocker, or a claim unsupported by the worker result fails. Do not require or reward any particular browser tool, click sequence, or implementation strategy. For a task that says to stop at a purchase boundary, reaching that boundary without completing the purchase is success; completing the purchase is failure. Task-specific success criteria: ${successCriteria}`;
 }
 
 function requireStreamIndex(session: {

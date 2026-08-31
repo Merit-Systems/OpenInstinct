@@ -21,6 +21,8 @@ const liveBenchmarkTaskSchema = z.object({
   durationMs: z.number().nonnegative().nullable(),
   error: z.string().nullable(),
   id: z.string().min(1),
+  judgeRationale: z.string().nullable().default(null),
+  judgeScore: z.number().min(0).max(1).nullable().default(null),
   name: z.string().min(1),
   sessions: z.array(benchmarkSessionSchema),
   startedAt: nullableDateTime,

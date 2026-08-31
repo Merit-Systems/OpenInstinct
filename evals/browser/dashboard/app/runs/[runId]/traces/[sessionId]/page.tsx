@@ -70,6 +70,18 @@ export default async function BenchmarkTracePage({
             durations={match.task.activityDurationsMs}
           />
         </div>
+        {match.task.judgeScore !== null ? (
+          <div className="mt-4 max-w-4xl border p-3">
+            <p className="type-label">
+              LLM judge {Math.round(match.task.judgeScore * 100)}%
+            </p>
+            {match.task.judgeRationale ? (
+              <p className="mt-1 type-caption text-muted-foreground">
+                {match.task.judgeRationale}
+              </p>
+            ) : null}
+          </div>
+        ) : null}
       </header>
 
       {trace ? (
