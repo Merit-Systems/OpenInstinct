@@ -1,6 +1,11 @@
 /* oxlint-disable vitest/require-mock-type-parameters -- The connector mock needs only the token operation exercised here. */
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { LinqDeliveryError, linqOtpFailure, sendLinqText } from "@/auth/linq";
+import {
+  LinqDeliveryError,
+  linqOtpFailure,
+  readLinqOnboardingPhoneNumber,
+  sendLinqText,
+} from "@/auth/linq";
 
 const mocks = vi.hoisted(() => ({ getToken: vi.fn() }));
 
@@ -36,6 +41,32 @@ describe("Linq delivery", () => {
       "Idempotency-Key": "otp-idempotency-key",
     });
     expect(init?.method).toBe("POST");
+  });
+
+  it("retrieves the Linq number used for first-time onboarding", async () => {
+    mocks.getToken.mockResolvedValue("test-token");
+    const fetchMock = vi
+      .fn<typeof fetch>()
+      .mockResolvedValue(Response.json({ phone_number: "+12025550123" }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(
+      readLinqOnboardingPhoneNumber("linq/open-instinct")
+    ).resolves.toBe("+12025550123");
+    expect(mocks.getToken).toHaveBeenCalledWith("linq/open-instinct", {
+      subject: { type: "app" },
+    });
+    const [url, init] = fetchMock.mock.calls[0] ?? [];
+    expect(url).toBe("https://api.linqapp.com/api/partner/v3/available_number");
+    expect(init?.headers).toEqual({ Authorization: "Bearer test-token" });
+  });
+
+  it("fails soft when Linq cannot provide an onboarding number", async () => {
+    mocks.getToken.mockRejectedValue(new Error("connector unavailable"));
+
+    await expect(
+      readLinqOnboardingPhoneNumber("linq/open-instinct")
+    ).resolves.toBeUndefined();
   });
 
   it("preserves diagnostics from Linq's current error envelope", async () => {
@@ -120,7 +151,8 @@ describe("Linq delivery", () => {
   });
 
   it.each([
-    [2008, "LINQ_RECIPIENT_NOT_VERIFIED", "message your deployment"],
+    [2006, "LINQ_SENDING_LINE_NOT_AUTHORIZED", "API token"],
+    [2008, "LINQ_RECIPIENT_NOT_VERIFIED", "first-time sign-in steps"],
     [2024, "LINQ_RECIPIENT_OPTED_OUT", "opted out"],
     [2027, "LINQ_REPUTATION_BLOCKED", "messaging reputation"],
   ])("maps Linq code %i to actionable OTP copy", (code, expectedCode, copy) => {
@@ -141,8 +173,8 @@ describe("Linq delivery", () => {
       })
     );
 
-    expect(failure.code).toBe("LINQ_SENDING_LINE_NOT_VERIFIED");
-    expect(failure.message).toContain("Phone Numbers verification instruction");
+    expect(failure.code).toBe("LINQ_SENDING_LINE_UNAVAILABLE");
+    expect(failure.message).toContain("line's health");
   });
 
   it("does not mislabel unrelated Linq conflicts as verification failures", () => {
