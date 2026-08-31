@@ -67,3 +67,7 @@ export const browserBenchmarkLiveStatusSchema = z.object({
 export type BrowserBenchmarkLiveStatus = z.infer<
   typeof browserBenchmarkLiveStatusSchema
 >;
+
+export const browserBenchmarkRunListSchema = z.object({
+  runs: z.array(browserBenchmarkLiveStatusSchema),
+});

@@ -16,6 +16,7 @@ import { z } from "zod";
 import { browserBenchmarkEnv } from "../evals/browser/env.ts";
 import {
   type BrowserBenchmarkLiveStatus,
+  readBrowserBenchmarkLiveStatus,
   updateBrowserBenchmarkLiveStatus,
   writeBrowserBenchmarkLiveStatus,
 } from "../evals/browser/live-status.ts";
@@ -53,6 +54,7 @@ try {
     variant("baseline", baselineSha),
     variant("candidate", candidateSha),
   ] as const;
+  await archivePreviousLiveStatus();
   await writeBrowserBenchmarkLiveStatus(
     liveStatusPath,
     initialLiveStatus(variants)
@@ -83,17 +85,17 @@ try {
     )
   );
 
-  for (const current of variants) {
-    current.databaseUrl = await startDatabase(current);
-    await run("pnpm", ["db:migrate"], {
-      cwd: current.path,
-      env: databaseEnvironment(current.databaseUrl),
-    });
-  }
+  await Promise.all(
+    variants.map(async (current) => {
+      current.databaseUrl = await startDatabase(current);
+      await run("pnpm", ["db:migrate"], {
+        cwd: current.path,
+        env: databaseEnvironment(current.databaseUrl),
+      });
+    })
+  );
 
-  for (const current of variants) {
-    await startAgent(current);
-  }
+  await Promise.all(variants.map(startAgent));
 
   await updateLiveStatus((status) => ({ ...status, status: "running" }));
 
@@ -101,18 +103,31 @@ try {
     baseline: "",
     candidate: "",
   };
-  for (const current of variants) {
-    try {
-      artifacts[current.kind] = await runBenchmark(current);
-    } catch (error) {
-      await updateVariant(current.kind, (status) => ({
-        ...status,
-        completedAt: new Date().toISOString(),
-        error: formatError(error),
-        status: "failed",
-      }));
-      throw error;
+  const results = await Promise.allSettled(
+    variants.map(async (current) => {
+      try {
+        artifacts[current.kind] = await runBenchmark(current);
+      } catch (error) {
+        await updateVariant(current.kind, (status) => ({
+          ...status,
+          completedAt: new Date().toISOString(),
+          error: formatError(error),
+          status: "failed",
+        }));
+        throw error;
+      }
+    })
+  );
+  const failureMessages: string[] = [];
+  for (const result of results) {
+    if (result.status === "rejected") {
+      failureMessages.push(formatError(result.reason));
     }
+  }
+  if (failureMessages.length > 0) {
+    throw new Error(
+      `One or more benchmark variants failed: ${failureMessages.join("; ")}`
+    );
   }
 
   const manifest = {
@@ -282,6 +297,7 @@ async function startAgent(current: ReturnType<typeof variant>) {
 
 async function runBenchmark(current: ReturnType<typeof variant>) {
   const label = `${current.kind}-${shortSha(current.sha)}-${options.suite}`;
+  const artifact = join(outputDirectory, `${current.kind}.json`);
   await run(
     "node_modules/eve/bin/eve.js",
     [
@@ -298,6 +314,7 @@ async function runBenchmark(current: ReturnType<typeof variant>) {
     {
       cwd: repositoryRoot,
       env: {
+        BROWSER_BENCH_ARTIFACT_PATH: artifact,
         BROWSER_BENCH_LABEL: label,
         BROWSER_BENCH_RUN_ID: timestamp,
         BROWSER_BENCH_REPETITIONS: String(options.repetitions),
@@ -312,16 +329,26 @@ async function runBenchmark(current: ReturnType<typeof variant>) {
       validExitCodes: [0, 1],
     }
   );
-
-  const latest = join(
-    repositoryRoot,
-    ".eve",
-    "browser-benchmarks",
-    "latest.json"
-  );
-  const artifact = join(outputDirectory, `${current.kind}.json`);
-  await copyFile(latest, artifact);
   return artifact;
+}
+
+async function archivePreviousLiveStatus() {
+  const previous = await readBrowserBenchmarkLiveStatus(liveStatusPath);
+  if (!previous) return;
+  const active =
+    previous.status === "preparing" || previous.status === "running";
+  await writeBrowserBenchmarkLiveStatus(
+    join(previous.outputDirectory, "status.json"),
+    active
+      ? {
+          ...previous,
+          completedAt: new Date().toISOString(),
+          error: "Superseded by a newer benchmark run.",
+          status: "failed",
+          updatedAt: new Date().toISOString(),
+        }
+      : previous
+  );
 }
 
 function initialLiveStatus(

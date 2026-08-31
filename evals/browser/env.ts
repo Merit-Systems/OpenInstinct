@@ -3,6 +3,7 @@ import { z } from "zod";
 
 export const browserBenchmarkEnv = createEnv({
   server: {
+    BROWSER_BENCH_ARTIFACT_PATH: z.string().min(1).optional(),
     BROWSER_BENCH_LABEL: z.string().min(1).optional(),
     BROWSER_BENCH_RUN_ID: z.string().min(1).optional(),
     BROWSER_BENCH_REPETITIONS: z.coerce

@@ -1,5 +1,5 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import type { EveEvalResult, EveEvalRunSummary } from "eve/evals";
 import type { EvalReporter } from "eve/evals/reporters";
 import { browserBenchmarkEnv } from "@/evals/browser/env";
@@ -310,17 +310,21 @@ async function readCurrentGitSha() {
 }
 
 async function writeBenchmark(benchmark: BrowserBenchmark) {
-  const directory = join(process.cwd(), ".eve", "browser-benchmarks");
+  const explicitPath = browserBenchmarkEnv.BROWSER_BENCH_ARTIFACT_PATH?.trim();
+  const directory = explicitPath
+    ? dirname(explicitPath)
+    : join(process.cwd(), ".eve", "browser-benchmarks");
   const safeLabel = benchmark.label.replaceAll(/[^a-zA-Z0-9._-]/gu, "-");
   const timestamp = benchmark.startedAt.replaceAll(":", "-");
-  const artifactPath = join(directory, `${timestamp}-${safeLabel}.json`);
+  const artifactPath =
+    explicitPath ?? join(directory, `${timestamp}-${safeLabel}.json`);
   const serialized = `${JSON.stringify(benchmark, null, 2)}\n`;
 
   await mkdir(directory, { recursive: true });
-  await Promise.all([
-    writeFile(artifactPath, serialized, "utf8"),
-    writeFile(join(directory, "latest.json"), serialized, "utf8"),
-  ]);
+  await writeFile(artifactPath, serialized, "utf8");
+  if (!explicitPath) {
+    await writeFile(join(directory, "latest.json"), serialized, "utf8");
+  }
 
   return artifactPath;
 }

@@ -75,10 +75,13 @@ pnpm bench:dashboard
 Open `https://eve-browser-bench.localhost`, then run an A/B suite from another
 terminal. The dashboard updates as Eve schedules tasks, discovers root and
 worker sessions, and records judged results, cost, duration, and tool counts.
+The run index keeps completed and interrupted comparisons available, with a
+table view for each run's task-level results.
 
 The A/B runner checks out two revisions into temporary worktrees, starts an
-isolated database and Portless Eve server for each, runs the same task array
-against both, compares the artifacts, then cleans up:
+isolated database and Portless Eve server for each, runs both revisions
+concurrently against the same task array, compares the artifacts, then cleans
+up:
 
 ```sh
 pnpm bench:ab <baseline-ref> <candidate-ref> --suite smoke
