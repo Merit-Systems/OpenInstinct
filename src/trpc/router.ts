@@ -2,6 +2,7 @@ import { z } from "zod";
 import { readModelCatalog } from "@/lib/model-catalog/server";
 import { readTaskHistoryPage } from "@/lib/task-history/server";
 import { saveChat } from "@/db/services/chats";
+import { replaceUserProfile } from "@/db/services/user-profile";
 import { saveChatSchema } from "@/lib/chat";
 import { googleWorkspaceActionSchema } from "@/lib/google-workspace/config";
 import {
@@ -10,6 +11,7 @@ import {
 } from "@/lib/google-workspace/server";
 import { managerMutationSchema, managerSnapshotSchema } from "@/lib/manager";
 import { applyManagerMutation } from "@/lib/manager/server/store";
+import { userProfileSchema } from "@/lib/user-profile";
 import { createTRPCRouter, protectedProcedure } from "./init";
 
 export const appRouter = createTRPCRouter({
@@ -45,6 +47,12 @@ export const appRouter = createTRPCRouter({
   },
   models: {
     list: protectedProcedure.query(readModelCatalog),
+  },
+  userProfile: {
+    update: protectedProcedure
+      .input(userProfileSchema)
+      .output(userProfileSchema)
+      .mutation(({ ctx, input }) => replaceUserProfile(ctx.scope, input)),
   },
   tasks: {
     list: protectedProcedure

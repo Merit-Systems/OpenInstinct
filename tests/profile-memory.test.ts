@@ -1,6 +1,7 @@
 import type { MemoryScopeContext } from "eve/memory";
 import { describe, expect, it } from "vitest";
 import {
+  resolvePersonalInfoMemoryScope,
   resolveProfileMemoryBackend,
   resolveProfileMemoryScope,
 } from "@/agent/lib/profile-memory";
@@ -58,16 +59,33 @@ describe("profile memory", () => {
       resolveProfileMemoryScope(memoryContext(userPrincipal("authjs")))
     ).toBeNull();
   });
+
+  it("shares personal information with a worker acting for the user", () => {
+    expect(
+      resolvePersonalInfoMemoryScope(
+        memoryContext(
+          {
+            attributes: {},
+            authenticator: "runtime",
+            principalId: "worker",
+            principalType: "runtime",
+          },
+          userPrincipal("authjs", "personal:workspace")
+        )
+      )
+    ).toBe("personal:workspace");
+  });
 });
 
 function memoryContext(
-  current: MemoryScopeContext["session"]["auth"]["current"]
+  current: MemoryScopeContext["session"]["auth"]["current"],
+  initiator: MemoryScopeContext["session"]["auth"]["initiator"] = null
 ): MemoryScopeContext {
   return {
     abortSignal: new AbortController().signal,
     channel: {},
     session: {
-      auth: { current, initiator: null },
+      auth: { current, initiator },
       id: "session",
     },
   };

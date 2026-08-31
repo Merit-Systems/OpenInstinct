@@ -46,16 +46,6 @@ const categories = [
     kind: "payment",
     title: "Cards",
   },
-  {
-    addLabel: "Add address",
-    kind: "address",
-    title: "Addresses",
-  },
-  {
-    addLabel: "Add contact",
-    kind: "contact",
-    title: "Contact info",
-  },
 ] as const;
 
 const VAULT_DIALOG_PAGE_SIZE = 50;
@@ -91,7 +81,11 @@ export function VaultManager({
   };
   const legacyItems = snapshot.vaultItems.filter(
     (item) =>
-      item.kind === "identity" || item.kind === "token" || item.kind === "phone"
+      item.kind === "address" ||
+      item.kind === "contact" ||
+      item.kind === "identity" ||
+      item.kind === "phone" ||
+      item.kind === "token"
   );
 
   return (
