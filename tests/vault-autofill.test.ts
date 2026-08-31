@@ -1,30 +1,53 @@
+/* oxlint-disable anti-slop/no-module-mocking -- The vault provider intentionally reads the concrete vault service. This focused test replaces only persistence I/O without adding a production-only factory. */
 import { runInNewContext } from "node:vm";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 import type { AccessScope } from "@/lib/access-scope";
-import type { VaultItemKind } from "@/lib/manager";
-import { serializePaymentCard } from "@/lib/manager/payment-card";
-import {
-  classifyNativeLoginControl,
-  selectNativeLoginFills,
-  type NativeLoginControlDescriptor,
-} from "@/lib/manager/server/kernel-login-autofill";
-import {
-  buildNativeAutofillPayload,
-  nativeAutofillSecretMarkingExpression,
-  nativeAutofillTokens,
-} from "@/lib/manager/server/kernel-native-autofill";
-import {
-  listAutofillSuggestions,
-  materializeAutofillClaims,
-  type AutofillVaultAdapter,
-} from "@/lib/manager/server/vault-autofill";
-import { createVaultAutofillProvider } from "@/lib/manager/server/vault-autofill-provider";
 import {
   serializeAddressVaultPayload,
   serializeContactVaultPayload,
   serializeLoginVaultPayload,
-} from "@/lib/manager/vault-payload";
+  serializePaymentCard,
+  type VaultItemKind,
+} from "@/lib/vault";
+import {
+  classifyNativeLoginControl,
+  selectNativeLoginFills,
+  type NativeLoginControlDescriptor,
+} from "@/agent/subagents/worker/lib/autofill/login";
+import {
+  buildNativeAutofillPayload,
+  nativeAutofillSecretMarkingExpression,
+  nativeAutofillTokens,
+} from "@/agent/subagents/worker/lib/autofill/native";
+import {
+  listAutofillSuggestions,
+  materializeAutofillClaims,
+  type AutofillVaultAdapter,
+} from "@/agent/subagents/worker/lib/autofill/service";
+import { vaultAutofillProvider } from "@/agent/subagents/worker/lib/autofill/provider";
+
+interface VaultStore {
+  items: { id: string }[];
+  secret: string;
+}
+
+function createVaultStore(): VaultStore {
+  return {
+    items: [],
+    secret: "",
+  };
+}
+
+const vaultStore = vi.hoisted(createVaultStore);
+
+vi.mock("@/db/services/vault", () => ({
+  hasVaultSecret: async () => true,
+  listVaultItems: async () => vaultStore.items,
+  readVaultItem: async (_scope: AccessScope, id: string) =>
+    vaultStore.items.find((item) => item.id === id),
+  readVaultSecret: async () => vaultStore.secret,
+}));
 
 const scope: AccessScope = {
   userId: "user-1",
@@ -65,29 +88,19 @@ describe("vault browser autofill", () => {
       label: "Travel card",
       updatedAt: "2026-08-27T00:00:00.000Z",
     };
-    const provider = createVaultAutofillProvider({
-      async hasSecret() {
-        return true;
-      },
-      async listVaultItems() {
-        return [card];
-      },
-      async readSecret() {
-        return serializePaymentCard({
-          billingPostalCode: "10001",
-          cardholderName: "Grace Hopper",
-          expirationMonth: 9,
-          expirationYear: 2031,
-          kind: "payment-card",
-          number: "4111111111111111",
-          securityCode: "321",
-          version: 1,
-        });
-      },
-      async readVaultItem() {
-        return card;
-      },
-    });
+    const provider = providerFor(
+      card,
+      serializePaymentCard({
+        billingPostalCode: "10001",
+        cardholderName: "Grace Hopper",
+        expirationMonth: 9,
+        expirationYear: 2031,
+        kind: "payment-card",
+        number: "4111111111111111",
+        securityCode: "321",
+        version: 1,
+      })
+    );
 
     await expect(
       provider.listSuggestions(
@@ -607,20 +620,9 @@ function vaultItem(kind: VaultItemKind, label: string, account: string) {
 }
 
 function providerFor(item: ReturnType<typeof vaultItem>, secret: string) {
-  return createVaultAutofillProvider({
-    async hasSecret() {
-      return true;
-    },
-    async listVaultItems() {
-      return [item];
-    },
-    async readSecret() {
-      return secret;
-    },
-    async readVaultItem() {
-      return item;
-    },
-  });
+  vaultStore.items = [item];
+  vaultStore.secret = secret;
+  return vaultAutofillProvider;
 }
 
 function claimValues(

@@ -7,22 +7,29 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import type { ReactNode } from "react";
+import {
+  getTokenResponse,
+  NoValidTokenError,
+  UserAuthorizationRequiredError,
+} from "@vercel/connect";
+import { z } from "zod";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
+import { getGatewayModel } from "@/db/services/settings";
 import { env } from "@/lib/env";
+import { googleWorkspaceTokenParams } from "@/lib/google-workspace";
 import { requireRequestScope } from "@/lib/request-scope";
-import { managerSnapshotSchema, type ManagerSnapshot } from "@/lib/manager";
-import { readManagerSnapshot } from "@/lib/manager/server/store";
 import { GoogleWorkspaceAction } from "./_components/google-workspace-action";
 import { ModelSelector } from "./_components/model-selector";
 
 export default async function Page({ searchParams }: PageProps<"/">) {
   const google = (await searchParams).google;
   const scope = await requireRequestScope();
-  const snapshot = managerSnapshotSchema.parse(
-    await readManagerSnapshot(scope)
-  );
-  const browserReady = snapshot.browser.available;
+  const [googleWorkspace, gatewayModel] = await Promise.all([
+    readGoogleWorkspaceConnection(scope.userId),
+    getGatewayModel(scope),
+  ]);
+  const browserReady = true;
   const imageStorageReady = Boolean(
     env.BLOB_STORE_ID ?? env.BLOB_READ_WRITE_TOKEN
   );
@@ -46,7 +53,7 @@ export default async function Page({ searchParams }: PageProps<"/">) {
         linqConfigured={env.LINQ_CONNECTOR !== undefined}
         linqPhoneNumber={env.LINQ_PHONE_NUMBER}
       />
-      <GoogleWorkspaceSection connection={snapshot.googleWorkspace} />
+      <GoogleWorkspaceSection connection={googleWorkspace} />
 
       <WorkspaceSection headingId="connectors-heading" title="Infrastructure">
         <div className="divide-y divide-border/50 border-y border-border/50">
@@ -75,8 +82,8 @@ export default async function Page({ searchParams }: PageProps<"/">) {
             label="Vercel Blob"
           />
           <ConnectorRow
-            action={<ModelSelector modelId={snapshot.runtime.inference} />}
-            description={snapshot.runtime.inference}
+            action={<ModelSelector modelId={gatewayModel} />}
+            description={gatewayModel}
             icon={<BotIcon />}
             label="AI Gateway model"
           />
@@ -89,7 +96,7 @@ export default async function Page({ searchParams }: PageProps<"/">) {
 function GoogleWorkspaceSection({
   connection,
 }: {
-  readonly connection?: ManagerSnapshot["googleWorkspace"];
+  readonly connection?: GoogleWorkspaceConnection;
 }) {
   const state = connection?.state;
   const description =
@@ -111,6 +118,39 @@ function GoogleWorkspaceSection({
       </div>
     </WorkspaceSection>
   );
+}
+
+type GoogleWorkspaceConnection = {
+  readonly accountLabel: string | null;
+  readonly state: "connected" | "disconnected" | "unavailable";
+};
+
+async function readGoogleWorkspaceConnection(
+  userId: string
+): Promise<GoogleWorkspaceConnection> {
+  try {
+    const response = await getTokenResponse(
+      env.GOOGLE_CONNECTOR_UID,
+      googleWorkspaceTokenParams(userId),
+      { forceRefresh: true }
+    );
+    const claims = z
+      .object({ email: z.string().optional() })
+      .safeParse(response.claims);
+    return {
+      accountLabel:
+        response.name ?? (claims.success ? (claims.data.email ?? null) : null),
+      state: "connected",
+    };
+  } catch (error) {
+    if (
+      error instanceof UserAuthorizationRequiredError ||
+      error instanceof NoValidTokenError
+    ) {
+      return { accountLabel: null, state: "disconnected" };
+    }
+    return { accountLabel: null, state: "unavailable" };
+  }
 }
 
 export function ChannelsSection({

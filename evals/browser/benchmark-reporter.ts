@@ -4,10 +4,10 @@ import type { EveEvalResult, EveEvalRunSummary } from "eve/evals";
 import type { EvalReporter } from "eve/evals/reporters";
 import { browserBenchmarkEnv } from "@/evals/browser/env";
 import {
-  measureBrowserTask,
+  measureWorkerTask,
   readTaskCompletion,
-  terminalBrowserMessage,
-} from "@/lib/browser/benchmark";
+  terminalWorkerMessage,
+} from "@/lib/worker-events";
 import type { BrowserBenchmark } from "@/evals/browser/benchmark-schema";
 
 const tableWidths = [34, 8, 10, 12, 64] as const;
@@ -63,7 +63,7 @@ export const browserBenchmarkReporter: EvalReporter = {
 };
 
 function summarizeTaskResult(result: EveEvalResult, name: string) {
-  const metrics = measureBrowserTask(
+  const metrics = measureWorkerTask(
     result.result.events,
     elapsedMs(result.startedAt, result.completedAt)
   );
@@ -73,7 +73,7 @@ function summarizeTaskResult(result: EveEvalResult, name: string) {
     result.skipReason ??
     "No reply";
   const completion = readTaskCompletion(result.result.events);
-  const terminalMessage = terminalBrowserMessage(
+  const terminalMessage = terminalWorkerMessage(
     fallbackMessage,
     result.result.events
   );

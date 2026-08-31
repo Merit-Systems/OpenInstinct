@@ -1,26 +1,43 @@
-/* oxlint-disable vitest/require-mock-type-parameters -- The hoisted storage fake is configured per test. */
+/* oxlint-disable anti-slop/no-module-mocking, vitest/require-mock-type-parameters -- Linq delivery owns the Blob read. These fakes isolate storage without a production wrapper. */
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import * as BrowserImageServer from "@/lib/browser-images/server";
-import { prepareLinqBrowserImageDelivery } from "../agent/lib/linq-browser-image-delivery";
+import type { AccessScope } from "@/lib/access-scope";
 
 const firstId = "0d01e667-d128-4bb7-a248-1ae21db72f4f";
 const secondId = "206c3a7e-c0b8-4317-9e34-552cff646673";
-const readImageMock = vi.spyOn(BrowserImageServer, "readBrowserImageBytes");
+const mocks = vi.hoisted(() => ({ getBlob: vi.fn(), readArtifact: vi.fn() }));
+
+vi.mock("@/db/services/browser-images", () => ({
+  readReadyBrowserImageArtifact: mocks.readArtifact,
+}));
+vi.mock("@vercel/blob", () => ({
+  get: mocks.getBlob,
+}));
+
+import { prepareLinqBrowserImageDelivery } from "../agent/lib/linq-browser-image-delivery";
 
 const scope = { userId: "user-1", workspaceId: "workspace-1" };
 
 beforeEach(() => {
   vi.clearAllMocks();
-  readImageMock.mockImplementation(async (_scope, id) =>
-    id === firstId
-      ? {
-          bytes: new Uint8Array([1, 2, 3]),
-          filename: "product.png",
-          id,
-          mediaType: "image/png",
-        }
-      : undefined
+  mocks.readArtifact.mockImplementation(
+    async (_scope: AccessScope, id: string) =>
+      id === firstId
+        ? {
+            byteSize: 3,
+            contentHash:
+              "039058c6f2c0cb492c533b0a4d14ef77cc0f78abccced5287d84a1a2011cfb81",
+            filename: "product.png",
+            id,
+            mediaType: "image/png",
+            storagePathname: "artifacts/first",
+          }
+        : undefined
   );
+  mocks.getBlob.mockResolvedValue({
+    blob: { contentType: "image/png", size: 3 },
+    statusCode: 200,
+    stream: new Response(new Uint8Array([1, 2, 3])).body,
+  });
 });
 
 describe("Linq browser image delivery", () => {
@@ -36,7 +53,7 @@ describe("Linq browser image delivery", () => {
       scope,
     });
 
-    expect(readImageMock).toHaveBeenCalledExactlyOnceWith(scope, firstId, {
+    expect(mocks.readArtifact).toHaveBeenCalledExactlyOnceWith(scope, firstId, {
       rootSessionId: "root-session",
       signal: undefined,
     });
@@ -78,6 +95,6 @@ describe("Linq browser image delivery", () => {
       files: [],
       markdown,
     });
-    expect(readImageMock).not.toHaveBeenCalled();
+    expect(mocks.readArtifact).not.toHaveBeenCalled();
   });
 });

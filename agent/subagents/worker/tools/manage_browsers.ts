@@ -20,7 +20,7 @@ import { requireOwnedBrowserSession } from "@/agent/subagents/worker/lib/owned-b
 import {
   domainFromUrl,
   harvestBrowserTraceDomains,
-} from "@/agent/subagents/worker/lib/trace-domains";
+} from "@/agent/subagents/worker/lib/trace/domains";
 
 const browserTimeoutFloorSeconds = 15 * 60;
 

@@ -113,7 +113,7 @@ describe("root and worker capability boundaries", () => {
       expect(source).not.toContain("new Kernel(");
     }
     expect(readFileSync(`${workerTools}/fill_from_vault.ts`, "utf8")).toContain(
-      'from "@/lib/manager/server/kernel-native-autofill"'
+      'from "../lib/autofill/native"'
     );
   });
 

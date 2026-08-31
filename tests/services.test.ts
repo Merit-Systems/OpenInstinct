@@ -227,6 +227,7 @@ describe("database services", () => {
       false
     );
 
+    const { serializeLoginVaultPayload } = await import("@/lib/vault");
     await browserTraces.beginBrowserTrace(alice, {
       sessionId: "worker-alice",
       startedAt: "2026-08-31T00:00:00.000Z",
@@ -303,21 +304,29 @@ describe("database services", () => {
     });
     expect((await browserTraces.listBrowserTraces(bob)).traces).toEqual([]);
 
-    const now = new Date().toISOString();
-    await vault.createVaultItem(alice, {
+    await vault.saveVaultItem(alice, {
       account: "alice@example.com",
-      createdAt: now,
-      id: "vault-alice",
       kind: "login",
       label: "Alice",
-      updatedAt: now,
+      secret: serializeLoginVaultPayload({
+        authentication: { password: "correct horse", type: "password" },
+        identifier: { type: "email", value: "alice@example.com" },
+        kind: "login",
+        origin: "https://example.com",
+        version: 2,
+      }),
     });
-    expect(await vault.readVaultItem(alice, "vault-alice")).toMatchObject({
-      id: "vault-alice",
+    const [aliceVaultItem] = await vault.listVaultItems(alice);
+    expect(aliceVaultItem).toMatchObject({
+      label: "Alice",
     });
-    expect(await vault.readVaultItem(bob, "vault-alice")).toBeUndefined();
+    expect(
+      await vault.readVaultItem(bob, aliceVaultItem?.id ?? "vault-alice")
+    ).toBeUndefined();
     expect(await vault.listVaultItems(alice)).toHaveLength(1);
-    expect(await vault.deleteVaultItem(bob, "vault-alice")).toBe(false);
+    expect(
+      await vault.deleteVaultItem(bob, aliceVaultItem?.id ?? "vault-alice")
+    ).toBe(false);
 
     await secrets.writeEncryptedSecret(alice, "shared-id", "ciphertext-alice");
     await secrets.writeEncryptedSecret(bob, "shared-id", "ciphertext-bob");
@@ -336,8 +345,8 @@ describe("database services", () => {
     );
 
     await settings.selectGatewayModel(alice, "openai/test");
-    expect(await settings.readGatewayModel(alice)).toBe("openai/test");
-    expect(await settings.readGatewayModel(bob)).toBeUndefined();
+    expect(await settings.getGatewayModel(alice)).toBe("openai/test");
+    expect(await settings.getGatewayModel(bob)).toBe("openai/gpt-5.6-sol-fast");
   }, 15_000);
 });
 

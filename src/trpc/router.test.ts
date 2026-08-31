@@ -1,17 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import * as BrowserTraces from "@/db/services/browser-traces";
+import * as Chats from "@/db/services/chats";
 import type { AccessScope } from "@/lib/access-scope";
-import { appRouter, routerDependencies } from "./router";
+import { appRouter } from "./router";
 
-const disconnectGoogleWorkspaceMock = vi.spyOn(
-  routerDependencies,
-  "disconnectGoogleWorkspace"
-);
-const listBrowserTracesMock = vi.spyOn(routerDependencies, "listBrowserTraces");
-const saveChatMock = vi.spyOn(routerDependencies, "saveChat");
-const startGoogleWorkspaceAuthorizationMock = vi.spyOn(
-  routerDependencies,
-  "startGoogleWorkspaceAuthorization"
-);
+const listBrowserTracesMock = vi.spyOn(BrowserTraces, "listBrowserTraces");
+const saveChatMock = vi.spyOn(Chats, "saveChat");
 
 const scope = {
   userId: "user-1",
@@ -22,10 +16,7 @@ describe("appRouter", () => {
   beforeEach(() => vi.clearAllMocks());
 
   it("passes the authenticated scope and cursor to the trace history", async () => {
-    listBrowserTracesMock.mockResolvedValue({
-      nextCursor: null,
-      traces: [],
-    });
+    listBrowserTracesMock.mockResolvedValue({ nextCursor: null, traces: [] });
 
     await appRouter
       .createCaller({ origin: "https://example.com", scope })
@@ -41,35 +32,5 @@ describe("appRouter", () => {
         .chats.save({ sessionId: "" })
     ).rejects.toThrow("Too small");
     expect(saveChatMock).not.toHaveBeenCalled();
-  });
-
-  it("returns a typed Google authorization redirect", async () => {
-    startGoogleWorkspaceAuthorizationMock.mockResolvedValue(
-      "https://accounts.google.com/authorize"
-    );
-
-    const result = await appRouter
-      .createCaller({ origin: "https://example.com", scope })
-      .googleWorkspace.update("connect");
-
-    expect(startGoogleWorkspaceAuthorizationMock).toHaveBeenCalledWith(
-      scope,
-      "https://example.com/?google=connected"
-    );
-    expect(result).toEqual({
-      redirectTo: "https://accounts.google.com/authorize",
-    });
-  });
-
-  it("surfaces Google connector failures", async () => {
-    disconnectGoogleWorkspaceMock.mockRejectedValue(
-      new Error("connector unavailable")
-    );
-
-    await expect(
-      appRouter
-        .createCaller({ origin: "https://example.com", scope })
-        .googleWorkspace.update("disconnect")
-    ).rejects.toThrow("connector unavailable");
   });
 });

@@ -7,7 +7,7 @@ import {
   browserImageMediaTypeSchema,
   browserImageSourceKindSchema,
   type BrowserImageArtifactReference,
-} from "@/lib/browser-images";
+} from "@/lib/browser-artifact";
 import { browserImageArtifacts, db } from "@/db";
 
 type ArtifactRow = typeof browserImageArtifacts.$inferSelect;

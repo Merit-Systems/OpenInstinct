@@ -28,7 +28,7 @@ import {
 } from "react";
 import { Streamdown, type Components } from "streamdown";
 import { z } from "zod";
-import { isBrowserImageArtifactUrl } from "@/lib/browser-image-path";
+import { isBrowserImageArtifactUrl } from "@/lib/browser-artifact";
 
 export type MessageProps = HTMLAttributes<HTMLDivElement> & {
   from: UIMessage["role"];
