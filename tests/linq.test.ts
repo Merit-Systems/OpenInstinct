@@ -1,17 +1,21 @@
-import { getToken } from "@vercel/connect";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { LinqDeliveryError, linqOtpFailure, sendLinqText } from "@/auth/linq";
+import {
+  LinqDeliveryError,
+  linqDeliveryDependencies,
+  linqOtpFailure,
+  sendLinqText,
+} from "@/auth/linq";
 
-vi.mock("@vercel/connect", () => ({ getToken: vi.fn<typeof getToken>() }));
+const getTokenMock = vi.spyOn(linqDeliveryDependencies, "getToken");
 
 describe("Linq delivery", () => {
   afterEach(() => {
-    vi.restoreAllMocks();
+    vi.clearAllMocks();
     vi.unstubAllGlobals();
   });
 
   it("uses the configured connector and sends the OTP", async () => {
-    vi.mocked(getToken).mockResolvedValue("test-token");
+    getTokenMock.mockResolvedValue("test-token");
     const fetchMock = vi
       .fn<typeof fetch>()
       .mockResolvedValue(new Response(null, { status: 202 }));
@@ -24,7 +28,7 @@ describe("Linq delivery", () => {
       to: "+12025550123",
     });
 
-    expect(getToken).toHaveBeenCalledWith("linq/open-instinct", {
+    expect(getTokenMock).toHaveBeenCalledWith("linq/open-instinct", {
       subject: { type: "app" },
     });
     const [url, init] = fetchMock.mock.calls[0] ?? [];
@@ -37,7 +41,7 @@ describe("Linq delivery", () => {
   });
 
   it("preserves diagnostics from Linq's current error envelope", async () => {
-    vi.mocked(getToken).mockResolvedValue("test-token");
+    getTokenMock.mockResolvedValue("test-token");
     vi.stubGlobal(
       "fetch",
       vi.fn<typeof fetch>().mockResolvedValue(
@@ -56,17 +60,7 @@ describe("Linq delivery", () => {
       )
     );
 
-    const error: unknown = await sendLinqText({
-      connector: "linq/open-instinct",
-      idempotencyKey: "otp-idempotency-key",
-      message: "Your code is 123456.",
-      to: "+12025550123",
-    }).catch((caught: unknown) => caught);
-
-    expect(error).toBeInstanceOf(LinqDeliveryError);
-    if (!(error instanceof LinqDeliveryError)) {
-      throw new TypeError("Expected LinqDeliveryError");
-    }
+    const error = await captureLinqDeliveryError();
     expect(error).toMatchObject({
       code: 2015,
       linqMessage: "no eligible sending line available",
@@ -77,7 +71,7 @@ describe("Linq delivery", () => {
   });
 
   it("preserves diagnostics from Linq's legacy error envelope", async () => {
-    vi.mocked(getToken).mockResolvedValue("test-token");
+    getTokenMock.mockResolvedValue("test-token");
     vi.stubGlobal(
       "fetch",
       vi.fn<typeof fetch>().mockResolvedValue(
@@ -92,12 +86,7 @@ describe("Linq delivery", () => {
       )
     );
 
-    const error: unknown = await sendLinqText({
-      connector: "linq/open-instinct",
-      idempotencyKey: "otp-idempotency-key",
-      message: "Your code is 123456.",
-      to: "+12025550123",
-    }).catch((caught: unknown) => caught);
+    const error = await captureLinqDeliveryError();
 
     expect(error).toMatchObject({
       code: 2024,
@@ -108,7 +97,7 @@ describe("Linq delivery", () => {
   });
 
   it("falls back to Linq's trace response header", async () => {
-    vi.mocked(getToken).mockResolvedValue("test-token");
+    getTokenMock.mockResolvedValue("test-token");
     vi.stubGlobal(
       "fetch",
       vi.fn<typeof fetch>().mockResolvedValue(
@@ -122,12 +111,7 @@ describe("Linq delivery", () => {
       )
     );
 
-    const error: unknown = await sendLinqText({
-      connector: "linq/open-instinct",
-      idempotencyKey: "otp-idempotency-key",
-      message: "Your code is 123456.",
-      to: "+12025550123",
-    }).catch((caught: unknown) => caught);
+    const error = await captureLinqDeliveryError();
 
     expect(error).toMatchObject({
       code: 2008,
@@ -175,3 +159,18 @@ describe("Linq delivery", () => {
     expect(failure.code).toBe("LINQ_DELIVERY_FAILED");
   });
 });
+
+async function captureLinqDeliveryError(): Promise<LinqDeliveryError> {
+  try {
+    await sendLinqText({
+      connector: "linq/open-instinct",
+      idempotencyKey: "otp-idempotency-key",
+      message: "Your code is 123456.",
+      to: "+12025550123",
+    });
+  } catch (error) {
+    if (error instanceof LinqDeliveryError) return error;
+    throw error;
+  }
+  throw new Error("Expected Linq delivery to fail.");
+}

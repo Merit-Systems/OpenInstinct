@@ -13,11 +13,17 @@ import { isE164PhoneNumber } from "./phone-number";
 let authPromise: ReturnType<typeof initializeAuth> | undefined;
 
 export function getAuth() {
-  authPromise ??= initializeAuth().catch((error: unknown) => {
+  authPromise ??= initializeAuthWithRetry();
+  return authPromise;
+}
+
+async function initializeAuthWithRetry() {
+  try {
+    return await initializeAuth();
+  } catch (error) {
     authPromise = undefined;
     throw error;
-  });
-  return authPromise;
+  }
 }
 
 async function initializeAuth() {

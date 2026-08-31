@@ -1,34 +1,24 @@
 import type { RouteHandlerArgs } from "eve/channels";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-
-const mocks = vi.hoisted(() => ({
-  getAuthSession:
-    vi.fn<
-      (
-        _headers: Headers
-      ) => Promise<{ user: { id: string; phoneNumber: string } } | null>
-    >(),
-  isSessionOwned:
-    vi.fn<(_scope: unknown, _sessionId: string) => Promise<boolean>>(),
-}));
-
-vi.mock("@/auth/session", () => ({
-  getAuthSession: mocks.getAuthSession,
-}));
-
-vi.mock("@/db/services/sessions", () => ({
-  isSessionOwned: mocks.isSessionOwned,
-}));
-
+import * as AuthSession from "@/auth/session";
+import * as SessionService from "@/db/services/sessions";
+import { authSessionFor } from "./helpers/auth-session";
 import eveChannel from "../agent/channels/eve";
+
+const getAuthSessionMock = vi.spyOn(AuthSession, "getAuthSession");
+const isSessionOwnedMock = vi.spyOn(SessionService, "isSessionOwned");
 
 beforeEach(() => {
   vi.useFakeTimers();
   vi.clearAllMocks();
-  mocks.getAuthSession.mockResolvedValue({
-    user: { id: "user-1", phoneNumber: "+12025550123" },
-  });
-  mocks.isSessionOwned.mockResolvedValue(false);
+  getAuthSessionMock.mockResolvedValue(
+    authSessionFor({
+      id: "user-1",
+      phoneNumber: "+12025550123",
+      phoneNumberVerified: true,
+    })
+  );
+  isSessionOwnedMock.mockResolvedValue(false);
 });
 
 afterEach(() => {
@@ -57,7 +47,7 @@ describe("Eve channel authentication", () => {
     const response = await responsePromise;
 
     expect(response.status).toBe(403);
-    expect(mocks.isSessionOwned).toHaveBeenCalledWith(
+    expect(isSessionOwnedMock).toHaveBeenCalledWith(
       expect.objectContaining({ userId: "better-auth:user-1" }),
       "session/one"
     );

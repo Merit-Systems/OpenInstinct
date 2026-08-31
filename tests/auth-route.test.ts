@@ -1,44 +1,32 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { authRouteDependencies, GET } from "@/app/api/auth/[...all]/route";
 
-const mocks = vi.hoisted(() => ({
-  getAuth: vi.fn<() => Promise<unknown>>(),
-  handler: vi.fn<(request: Request) => Promise<Response>>(),
-  toNextJsHandler: vi.fn<
-    (_auth: unknown) => {
-      GET: (request: Request) => Promise<Response>;
-      POST: (request: Request) => Promise<Response>;
-    }
-  >(),
-}));
-
-vi.mock("@/auth", () => ({ getAuth: mocks.getAuth }));
-vi.mock("better-auth/next-js", () => ({
-  toNextJsHandler: mocks.toNextJsHandler,
-}));
-
-import { GET } from "@/app/api/auth/[...all]/route";
+const handler = vi.fn<(request: Request) => Promise<Response>>();
+const loadHandlersMock = vi.spyOn(authRouteDependencies, "loadHandlers");
 
 beforeEach(() => {
   vi.clearAllMocks();
-  mocks.handler.mockResolvedValue(Response.json({ ok: true }));
-  mocks.toNextJsHandler.mockReturnValue({
-    GET: mocks.handler,
-    POST: mocks.handler,
-  });
+  handler.mockResolvedValue(Response.json({ ok: true }));
 });
 
 describe("auth route initialization", () => {
   it("retries after transient installation-secret failures", async () => {
-    mocks.getAuth
+    loadHandlersMock
       .mockRejectedValueOnce(new Error("Blob temporarily unavailable"))
-      .mockResolvedValueOnce({});
+      .mockResolvedValueOnce({
+        DELETE: handler,
+        GET: handler,
+        PATCH: handler,
+        POST: handler,
+        PUT: handler,
+      });
     const request = new Request(
       "https://openinstinct.example/api/auth/session"
     );
 
     await expect(GET(request)).rejects.toThrow("Blob temporarily unavailable");
     await expect(GET(request)).resolves.toMatchObject({ status: 200 });
-    expect(mocks.getAuth).toHaveBeenCalledTimes(2);
-    expect(mocks.handler).toHaveBeenCalledOnce();
+    expect(loadHandlersMock).toHaveBeenCalledTimes(2);
+    expect(handler).toHaveBeenCalledOnce();
   });
 });

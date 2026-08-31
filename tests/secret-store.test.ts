@@ -1,44 +1,38 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type {
-  deleteEncryptedSecret,
-  readEncryptedSecret,
-  writeEncryptedSecret,
-} from "../db/services/secrets";
+import {
+  readSecret,
+  secretStoreDependencies,
+  writeSecret,
+} from "@/lib/manager/server/secret-store";
 
-const mocks = vi.hoisted(() => ({
-  encrypted: undefined as string | undefined,
-  readEncryptedSecret: vi.fn<typeof readEncryptedSecret>(),
-  writeEncryptedSecret: vi.fn<typeof writeEncryptedSecret>(),
-}));
-
-vi.mock("@/db/services/secrets", () => ({
-  deleteEncryptedSecret: vi.fn<typeof deleteEncryptedSecret>(),
-  readEncryptedSecret: mocks.readEncryptedSecret,
-  writeEncryptedSecret: mocks.writeEncryptedSecret,
-}));
-vi.mock("@/lib/installation-secrets", () => ({
-  getInstallationSecrets: () =>
-    Promise.resolve({
-      betterAuthSecret: Buffer.alloc(32, 7).toString("base64"),
-      secretEncryptionKey: Buffer.alloc(32, 8).toString("base64"),
-      version: 1,
-    }),
-}));
-
-import { readSecret, writeSecret } from "@/lib/manager/server/secret-store";
-
+const readEncryptedSecretMock = vi.spyOn(
+  secretStoreDependencies,
+  "readEncryptedSecret"
+);
+const writeEncryptedSecretMock = vi.spyOn(
+  secretStoreDependencies,
+  "writeEncryptedSecret"
+);
+const getInstallationSecretsMock = vi.spyOn(
+  secretStoreDependencies,
+  "getInstallationSecrets"
+);
 const scope = { userId: "user-1", workspaceId: "workspace-1" };
+let encrypted: string | undefined;
 
 beforeEach(() => {
   vi.clearAllMocks();
-  mocks.encrypted = undefined;
-  mocks.writeEncryptedSecret.mockImplementation((_scope, _id, value) => {
-    mocks.encrypted = value;
+  encrypted = undefined;
+  getInstallationSecretsMock.mockResolvedValue({
+    betterAuthSecret: Buffer.alloc(32, 7).toString("base64"),
+    secretEncryptionKey: Buffer.alloc(32, 8).toString("base64"),
+    version: 1,
+  });
+  writeEncryptedSecretMock.mockImplementation((_scope, _id, value) => {
+    encrypted = value;
     return Promise.resolve();
   });
-  mocks.readEncryptedSecret.mockImplementation(() =>
-    Promise.resolve(mocks.encrypted)
-  );
+  readEncryptedSecretMock.mockImplementation(() => Promise.resolve(encrypted));
 });
 
 describe("vault secret store", () => {
@@ -50,8 +44,8 @@ describe("vault secret store", () => {
       value: "correct horse battery staple",
     });
 
-    expect(mocks.encrypted).toMatch(/^v1\./u);
-    expect(mocks.encrypted).not.toContain("correct horse battery staple");
+    expect(encrypted).toMatch(/^v1\./u);
+    expect(encrypted).not.toContain("correct horse battery staple");
     await expect(
       readSecret({ id: "credential-1", namespace: "vault", scope })
     ).resolves.toBe("correct horse battery staple");

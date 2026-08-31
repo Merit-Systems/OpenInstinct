@@ -23,6 +23,15 @@ const targetListSchema = z.object({
 
 const attachedTargetSchema = z.object({ sessionId: z.string() });
 
+type CdpCommandValue =
+  | boolean
+  | number
+  | string
+  | null
+  | undefined
+  | readonly CdpCommandValue[]
+  | { readonly [key: string]: CdpCommandValue };
+
 const frameTreeSchema = z.object({
   frameTree: z.lazy(() => frameTreeNodeSchema),
 });
@@ -35,8 +44,9 @@ const frameTreeNodeSchema: z.ZodType<{
 });
 
 const isolatedWorldSchema = z.object({ executionContextId: z.number() });
+const cdpValueSchema = z.json();
 const evaluatedValueSchema = z.object({
-  result: z.object({ value: z.unknown() }),
+  result: z.object({ value: cdpValueSchema }),
 });
 const evaluatedBooleanSchema = z.object({
   result: z.object({ value: z.boolean() }),
@@ -577,8 +587,10 @@ class CdpConnection {
   readonly #pending = new Map<
     number,
     {
-      readonly reject: (reason?: unknown) => void;
-      readonly resolve: (value: unknown) => void;
+      readonly reject: (cause?: unknown) => void;
+      readonly resolve: (
+        value: z.infer<typeof cdpValueSchema> | undefined
+      ) => void;
     }
   >();
   #nextId = 1;
@@ -634,29 +646,31 @@ class CdpConnection {
     return new CdpConnection(socket, signal);
   }
 
-  send(method: string, params?: object, sessionId?: string) {
+  send(method: string, params?: CdpCommandValue, sessionId?: string) {
     const id = this.#nextId++;
-    return new Promise<unknown>((resolve, reject) => {
-      const timeout = setTimeout(() => {
-        this.#pending.delete(id);
-        reject(new Error(`Chromium did not respond to ${method}.`));
-      }, 15_000);
-      this.#pending.set(id, {
-        reject(reason) {
-          clearTimeout(timeout);
-          reject(
-            reason instanceof Error
-              ? reason
-              : new Error("The Chromium command failed.")
-          );
-        },
-        resolve(value) {
-          clearTimeout(timeout);
-          resolve(value);
-        },
-      });
-      this.socket.send(JSON.stringify({ id, method, params, sessionId }));
-    });
+    return new Promise<z.infer<typeof cdpValueSchema> | undefined>(
+      (resolve, reject) => {
+        const timeout = setTimeout(() => {
+          this.#pending.delete(id);
+          reject(new Error(`Chromium did not respond to ${method}.`));
+        }, 15_000);
+        this.#pending.set(id, {
+          reject(cause) {
+            clearTimeout(timeout);
+            reject(
+              cause instanceof Error
+                ? cause
+                : new Error("The Chromium command failed.")
+            );
+          },
+          resolve(value) {
+            clearTimeout(timeout);
+            resolve(value);
+          },
+        });
+        this.socket.send(JSON.stringify({ id, method, params, sessionId }));
+      }
+    );
   }
 
   close() {
@@ -664,10 +678,13 @@ class CdpConnection {
   }
 
   #onMessage(event: MessageEvent) {
-    if (typeof event.data !== "string") return;
-    let rawMessage: unknown;
+    const eventData = z.string().safeParse(event.data);
+    if (!eventData.success) return;
+    let rawMessage: z.infer<typeof cdpValueSchema>;
     try {
-      rawMessage = JSON.parse(event.data);
+      const parsed = cdpValueSchema.safeParse(JSON.parse(eventData.data));
+      if (!parsed.success) return;
+      rawMessage = parsed.data;
     } catch {
       return;
     }
@@ -692,7 +709,7 @@ class CdpConnection {
 const cdpResponseSchema = z.object({
   error: z.object({ message: z.string() }).optional(),
   id: z.number().int().optional(),
-  result: z.unknown().optional(),
+  result: cdpValueSchema.optional(),
 });
 
 function flattenFrames(

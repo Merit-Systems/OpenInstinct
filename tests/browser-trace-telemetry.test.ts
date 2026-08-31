@@ -1,73 +1,90 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import type { HookContext } from "eve/hooks";
 import { z } from "zod";
-import type {
-  beginBrowserTrace,
-  completeBrowserTrace,
-} from "@/db/services/browser-traces";
-import type { listWorkerBrowserSessions } from "@/db/services/browsers";
-import type * as traceDomains from "@/agent/subagents/worker/lib/trace-domains";
-import type { harvestBrowserTraceDomains } from "@/agent/subagents/worker/lib/trace-domains";
+import { domainFromUrl } from "@/agent/subagents/worker/lib/trace-domains";
+import traceTelemetry, {
+  traceTelemetryDependencies,
+} from "../agent/subagents/worker/hooks/trace-telemetry";
 
-const mocks = vi.hoisted(() => ({
-  beginBrowserTrace: vi.fn<typeof beginBrowserTrace>(),
-  completeBrowserTrace: vi.fn<typeof completeBrowserTrace>(),
-  harvestBrowserTraceDomains: vi.fn<typeof harvestBrowserTraceDomains>(),
-  listWorkerBrowserSessions: vi.fn<typeof listWorkerBrowserSessions>(),
-  recordBrowserTraceEvents:
-    vi.fn<(scope: unknown, sessionId: string, events: unknown[]) => void>(),
-}));
-
-vi.mock("@/db/services/browser-traces", () => ({
-  beginBrowserTrace: mocks.beginBrowserTrace,
-  completeBrowserTrace: mocks.completeBrowserTrace,
-  recordBrowserTraceEvents: mocks.recordBrowserTraceEvents,
-}));
-
-vi.mock("@/db/services/browsers", () => ({
-  listWorkerBrowserSessions: mocks.listWorkerBrowserSessions,
-}));
-
-vi.mock("@/agent/subagents/worker/lib/trace-domains", () => ({
-  harvestBrowserTraceDomains: mocks.harvestBrowserTraceDomains,
-}));
-
-import traceTelemetry from "../agent/subagents/worker/hooks/trace-telemetry";
+const beginBrowserTraceMock = vi.spyOn(
+  traceTelemetryDependencies,
+  "beginBrowserTrace"
+);
+const completeBrowserTraceMock = vi.spyOn(
+  traceTelemetryDependencies,
+  "completeBrowserTrace"
+);
+const recordBrowserTraceEventsMock = vi.spyOn(
+  traceTelemetryDependencies,
+  "recordBrowserTraceEvents"
+);
+const listWorkerBrowserSessionsMock = vi.spyOn(
+  traceTelemetryDependencies,
+  "listWorkerBrowserSessions"
+);
+const harvestBrowserTraceDomainsMock = vi.spyOn(
+  traceTelemetryDependencies,
+  "harvestBrowserTraceDomains"
+);
 
 const scope = { userId: "user-1", workspaceId: "workspace-1" };
 const context = {
+  agent: { name: "test-agent" },
+  channel: {},
+  async getSandbox() {
+    throw new Error("Sandbox access is outside this focused test.");
+  },
+  getSkill() {
+    throw new Error("Skill access is outside this focused test.");
+  },
   session: {
     auth: {
+      current: null,
       initiator: {
         attributes: { workspaceId: scope.workspaceId },
+        authenticator: "test",
         principalId: scope.userId,
+        principalType: "user",
       },
     },
     id: "worker-session-1",
+    turn: { id: "turn-1", sequence: 0 },
   },
-};
+} satisfies HookContext;
 
 type TraceEvents = NonNullable<typeof traceTelemetry.events>;
 
-async function fire(type: keyof TraceEvents, event: unknown) {
+async function fire<Type extends keyof TraceEvents>(
+  type: Type,
+  event: Parameters<NonNullable<TraceEvents[Type]>>[0]
+) {
   const handler = traceTelemetry.events?.[type];
   expect(handler).toBeDefined();
-  // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- focused unit test supplies only the event and context fields each handler reads.
-  await handler?.(event as never, context as never);
+  await handler?.(event, context);
 }
 
 beforeEach(() => {
   vi.clearAllMocks();
-  mocks.listWorkerBrowserSessions.mockResolvedValue([]);
+  beginBrowserTraceMock.mockResolvedValue();
+  completeBrowserTraceMock.mockResolvedValue();
+  harvestBrowserTraceDomainsMock.mockResolvedValue();
+  listWorkerBrowserSessionsMock.mockResolvedValue([]);
+  recordBrowserTraceEventsMock.mockResolvedValue();
 });
 
 describe("browser trace telemetry hook", () => {
   it("opens a running trace from the delegated task message", async () => {
     await fire("message.received", {
-      data: { message: "Buy the blue mug on example.com" },
-      meta: { at: "2026-08-31T00:00:00.000Z" },
+      data: {
+        message: "Buy the blue mug on example.com",
+        sequence: 0,
+        turnId: "turn-1",
+      },
+      meta: { at: "2026-08-31T00:00:00.000Z", id: "event-1" },
+      type: "message.received",
     });
 
-    expect(mocks.beginBrowserTrace).toHaveBeenCalledExactlyOnceWith(scope, {
+    expect(beginBrowserTraceMock).toHaveBeenCalledExactlyOnceWith(scope, {
       sessionId: "worker-session-1",
       startedAt: "2026-08-31T00:00:00.000Z",
       task: "Buy the blue mug on example.com",
@@ -75,18 +92,22 @@ describe("browser trace telemetry hook", () => {
   });
 
   it("records the structured completion outcome and sweeps live browsers", async () => {
-    mocks.listWorkerBrowserSessions.mockResolvedValue([
+    listWorkerBrowserSessionsMock.mockResolvedValue([
       { createdAt: "2026-08-31T00:00:01.000Z", sessionId: "browser-1" },
     ]);
 
     await fire("result.completed", {
       data: {
         result: { images: [], message: "Order placed.", status: "success" },
+        sequence: 0,
+        stepIndex: 0,
+        turnId: "turn-1",
       },
-      meta: { at: "2026-08-31T00:05:00.000Z" },
+      meta: { at: "2026-08-31T00:05:00.000Z", id: "event-2" },
+      type: "result.completed",
     });
 
-    expect(mocks.completeBrowserTrace).toHaveBeenCalledExactlyOnceWith(
+    expect(completeBrowserTraceMock).toHaveBeenCalledExactlyOnceWith(
       scope,
       "worker-session-1",
       {
@@ -95,7 +116,7 @@ describe("browser trace telemetry hook", () => {
         status: "success",
       }
     );
-    expect(mocks.harvestBrowserTraceDomains).toHaveBeenCalledExactlyOnceWith(
+    expect(harvestBrowserTraceDomainsMock).toHaveBeenCalledExactlyOnceWith(
       scope,
       "worker-session-1",
       { createdAt: "2026-08-31T00:00:01.000Z", sessionId: "browser-1" }
@@ -104,24 +125,37 @@ describe("browser trace telemetry hook", () => {
 
   it("ignores structured results that are not task completions", async () => {
     await fire("result.completed", {
-      data: { result: { unrelated: true } },
-      meta: { at: "2026-08-31T00:05:00.000Z" },
+      data: {
+        result: { unrelated: true },
+        sequence: 0,
+        stepIndex: 0,
+        turnId: "turn-1",
+      },
+      meta: { at: "2026-08-31T00:05:00.000Z", id: "event-3" },
+      type: "result.completed",
     });
 
-    expect(mocks.completeBrowserTrace).not.toHaveBeenCalled();
+    expect(completeBrowserTraceMock).not.toHaveBeenCalled();
   });
 
   it("marks infrastructure failures and cancellations distinctly", async () => {
     await fire("turn.failed", {
-      data: { code: "model_error", message: "The model call failed." },
-      meta: { at: "2026-08-31T00:06:00.000Z" },
+      data: {
+        code: "model_error",
+        message: "The model call failed.",
+        sequence: 0,
+        turnId: "turn-1",
+      },
+      meta: { at: "2026-08-31T00:06:00.000Z", id: "event-4" },
+      type: "turn.failed",
     });
     await fire("turn.cancelled", {
-      data: {},
-      meta: { at: "2026-08-31T00:07:00.000Z" },
+      data: { sequence: 0, turnId: "turn-1" },
+      meta: { at: "2026-08-31T00:07:00.000Z", id: "event-5" },
+      type: "turn.cancelled",
     });
 
-    expect(mocks.completeBrowserTrace).toHaveBeenNthCalledWith(
+    expect(completeBrowserTraceMock).toHaveBeenNthCalledWith(
       1,
       scope,
       "worker-session-1",
@@ -131,7 +165,7 @@ describe("browser trace telemetry hook", () => {
         status: "error",
       }
     );
-    expect(mocks.completeBrowserTrace).toHaveBeenNthCalledWith(
+    expect(completeBrowserTraceMock).toHaveBeenNthCalledWith(
       2,
       scope,
       "worker-session-1",
@@ -144,13 +178,14 @@ describe("browser trace telemetry hook", () => {
   });
 
   it("never throws telemetry failures back into the turn", async () => {
-    mocks.beginBrowserTrace.mockRejectedValue(new Error("database offline"));
+    beginBrowserTraceMock.mockRejectedValue(new Error("database offline"));
     const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
 
     await expect(
       fire("message.received", {
-        data: { message: "task" },
-        meta: { at: "2026-08-31T00:00:00.000Z" },
+        data: { message: "task", sequence: 0, turnId: "turn-1" },
+        meta: { at: "2026-08-31T00:00:00.000Z", id: "event-6" },
+        type: "message.received",
       })
     ).resolves.toBeUndefined();
 
@@ -179,7 +214,7 @@ describe("trace event persistence", () => {
       type: "actions.requested",
     });
 
-    expect(mocks.recordBrowserTraceEvents).toHaveBeenCalledExactlyOnceWith(
+    expect(recordBrowserTraceEventsMock).toHaveBeenCalledExactlyOnceWith(
       scope,
       "worker-session-1",
       [
@@ -212,7 +247,7 @@ describe("trace event persistence", () => {
       type: "action.result",
     });
 
-    const [, , events] = mocks.recordBrowserTraceEvents.mock.calls[0] ?? [];
+    const [, , events] = recordBrowserTraceEventsMock.mock.calls[0] ?? [];
     const detail = z
       .array(z.object({ detail: z.string(), label: z.string() }))
       .parse(events)[0];
@@ -223,10 +258,6 @@ describe("trace event persistence", () => {
 
 describe("trace domain extraction", () => {
   it("keeps only http(s) hostnames", async () => {
-    const { domainFromUrl } = await vi.importActual<typeof traceDomains>(
-      "@/agent/subagents/worker/lib/trace-domains"
-    );
-
     expect(domainFromUrl("https://shop.example.com/cart?item=1")).toBe(
       "shop.example.com"
     );

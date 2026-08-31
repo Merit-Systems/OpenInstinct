@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import type { ComponentProps, ReactNode } from "react";
 import { isValidElement } from "react";
+import { z } from "zod";
 
 type ToolStatus = DynamicToolUIPart["state"];
 
@@ -167,10 +168,11 @@ function ToolOutput({
 }: ToolOutputProps) {
   if (output === undefined && !errorText) return null;
 
+  const text = z.string().safeParse(output);
   const content = isValidElement(output)
     ? output
-    : typeof output === "string"
-      ? output
+    : text.success
+      ? text.data
       : JSON.stringify(output, null, 2);
 
   return (
@@ -184,7 +186,7 @@ function ToolOutput({
           errorText && "bg-destructive/10 text-destructive"
         )}
       >
-        {errorText ?? (content as ReactNode)}
+        {errorText ?? content}
       </div>
     </div>
   );

@@ -1,23 +1,42 @@
 import { kernel } from "@/lib/kernel";
 
+interface VaultScreenshotMaskDependencies {
+  execute(
+    sessionId: string,
+    body: { readonly code: string; readonly timeout_sec: number },
+    options: { readonly signal?: AbortSignal }
+  ): Promise<{ readonly success: boolean }>;
+}
+
+const defaultDependencies: VaultScreenshotMaskDependencies = {
+  async execute(sessionId, body, options) {
+    return await kernel.browsers.playwright.execute(sessionId, body, options);
+  },
+};
+
 export async function withVaultScreenshotMask<T>(
   sessionId: string,
   signal: AbortSignal | undefined,
-  capture: () => Promise<T>
+  capture: () => Promise<T>,
+  dependencies: VaultScreenshotMaskDependencies = defaultDependencies
 ) {
-  await setVaultScreenshotMask(sessionId, "add", signal);
+  await setVaultScreenshotMask(sessionId, "add", dependencies, signal);
   try {
     return await capture();
   } finally {
-    await setVaultScreenshotMask(sessionId, "remove", undefined).catch(
-      () => undefined
-    );
+    await setVaultScreenshotMask(
+      sessionId,
+      "remove",
+      dependencies,
+      undefined
+    ).catch(() => undefined);
   }
 }
 
 async function setVaultScreenshotMask(
   sessionId: string,
   action: "add" | "remove",
+  dependencies: VaultScreenshotMaskDependencies,
   signal?: AbortSignal
 ) {
   const styleId = "vault-screenshot-mask";
@@ -57,7 +76,7 @@ for (const currentContext of browser.contexts()) {
   }
 }
 return true;`;
-  const result = await kernel.browsers.playwright.execute(
+  const result = await dependencies.execute(
     sessionId,
     { code, timeout_sec: 10 },
     { signal }

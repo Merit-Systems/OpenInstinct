@@ -10,14 +10,20 @@ import {
 const maximumInstallationSecretsBytes = 1024;
 let installationSecretsPromise: Promise<InstallationSecrets> | undefined;
 
+export const installationSecretsDependencies = { get, put };
+
 export function getInstallationSecrets() {
-  installationSecretsPromise ??= resolveInstallationSecrets().catch(
-    (error: unknown) => {
-      installationSecretsPromise = undefined;
-      throw error;
-    }
-  );
+  installationSecretsPromise ??= resolveInstallationSecretsWithRetry();
   return installationSecretsPromise;
+}
+
+async function resolveInstallationSecretsWithRetry() {
+  try {
+    return await resolveInstallationSecrets();
+  } catch (error) {
+    installationSecretsPromise = undefined;
+    throw error;
+  }
 }
 
 async function resolveInstallationSecrets() {
@@ -41,15 +47,19 @@ async function resolveInstallationSecrets() {
     version: 1,
   });
   try {
-    await put(pathname, JSON.stringify(generated), {
-      ...authentication,
-      access: "private",
-      addRandomSuffix: false,
-      allowOverwrite: false,
-      cacheControlMaxAge: 365 * 24 * 60 * 60,
-      contentType: "application/json",
-      maximumSizeInBytes: maximumInstallationSecretsBytes,
-    });
+    await installationSecretsDependencies.put(
+      pathname,
+      JSON.stringify(generated),
+      {
+        ...authentication,
+        access: "private",
+        addRandomSuffix: false,
+        allowOverwrite: false,
+        cacheControlMaxAge: 365 * 24 * 60 * 60,
+        contentType: "application/json",
+        maximumSizeInBytes: maximumInstallationSecretsBytes,
+      }
+    );
     return generated;
   } catch (error) {
     const winner = await readInstallationSecrets(authentication, pathname);
@@ -78,7 +88,7 @@ async function readInstallationSecrets(
   authentication: { readonly storeId: string } | { readonly token: string },
   pathname: string
 ) {
-  const result = await get(pathname, {
+  const result = await installationSecretsDependencies.get(pathname, {
     ...authentication,
     access: "private",
     useCache: false,

@@ -1,14 +1,13 @@
 /* oxlint-disable vitest/require-mock-type-parameters -- Hoisted Blob fakes are configured per test. */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { get, put } from "@vercel/blob";
+import { z } from "zod";
 import { installationSecretsSchema } from "@/lib/installation-secrets-schema";
 
-const mocks = vi.hoisted(() => ({
+const mocks = {
   get: vi.fn<typeof get>(),
   put: vi.fn<typeof put>(),
-}));
-
-vi.mock("@vercel/blob", () => ({ get: mocks.get, put: mocks.put }));
+};
 
 beforeEach(() => {
   vi.resetModules();
@@ -39,8 +38,7 @@ describe("installation secrets", () => {
       url: "https://store.private.blob.vercel-storage.com/openinstinct/system/installation-secrets.v1.json",
     });
 
-    const { getInstallationSecrets } =
-      await import("@/lib/installation-secrets");
+    const getInstallationSecrets = await loadInstallationSecrets();
     const [first, second] = await Promise.all([
       getInstallationSecrets(),
       getInstallationSecrets(),
@@ -58,10 +56,10 @@ describe("installation secrets", () => {
     expect(pathname).toMatch(
       /^openinstinct\/system\/[a-f0-9]{32}\/installation-secrets\.v1\.json$/u
     );
-    if (typeof body !== "string") {
-      throw new TypeError("Expected serialized installation secrets.");
-    }
-    expect(installationSecretsSchema.parse(JSON.parse(body))).toEqual(first);
+    const serialized = z.string().parse(body);
+    expect(installationSecretsSchema.parse(JSON.parse(serialized))).toEqual(
+      first
+    );
     expect(options).toMatchObject({
       access: "private",
       addRandomSuffix: false,
@@ -81,8 +79,7 @@ describe("installation secrets", () => {
       .mockResolvedValueOnce(blobResult(winner));
     mocks.put.mockRejectedValue(new Error("pathname already exists"));
 
-    const { getInstallationSecrets } =
-      await import("@/lib/installation-secrets");
+    const getInstallationSecrets = await loadInstallationSecrets();
 
     await expect(getInstallationSecrets()).resolves.toEqual(winner);
     expect(mocks.get).toHaveBeenCalledTimes(2);
@@ -97,8 +94,7 @@ describe("installation secrets", () => {
     vi.stubEnv("BETTER_AUTH_SECRET", configured.betterAuthSecret);
     vi.stubEnv("SECRET_ENCRYPTION_KEY", configured.secretEncryptionKey);
 
-    const { getInstallationSecrets } =
-      await import("@/lib/installation-secrets");
+    const getInstallationSecrets = await loadInstallationSecrets();
 
     await expect(getInstallationSecrets()).resolves.toEqual(configured);
     expect(mocks.get).not.toHaveBeenCalled();
@@ -108,8 +104,7 @@ describe("installation secrets", () => {
   it("rejects a partial explicit override", async () => {
     vi.stubEnv("BETTER_AUTH_SECRET", Buffer.alloc(32, 6).toString("base64"));
 
-    const { getInstallationSecrets } =
-      await import("@/lib/installation-secrets");
+    const getInstallationSecrets = await loadInstallationSecrets();
 
     await expect(getInstallationSecrets()).rejects.toThrow(
       "Set both BETTER_AUTH_SECRET and SECRET_ENCRYPTION_KEY"
@@ -130,8 +125,7 @@ describe("installation secrets", () => {
       url: "https://store.private.blob.vercel-storage.com/installation-secrets.json",
     });
 
-    const { getInstallationSecrets } =
-      await import("@/lib/installation-secrets");
+    const getInstallationSecrets = await loadInstallationSecrets();
 
     await expect(getInstallationSecrets()).rejects.toThrow(
       "Blob temporarily unavailable"
@@ -146,8 +140,7 @@ describe("installation secrets", () => {
   it("rejects malformed installation-secret storage", async () => {
     mocks.get.mockResolvedValue(blobResult({ version: 1 }));
 
-    const { getInstallationSecrets } =
-      await import("@/lib/installation-secrets");
+    const getInstallationSecrets = await loadInstallationSecrets();
 
     await expect(getInstallationSecrets()).rejects.toThrow(
       "Invalid input: expected string"
@@ -156,7 +149,18 @@ describe("installation secrets", () => {
   });
 });
 
-function blobResult(value: unknown) {
+type InstallationSecretsFixture =
+  | z.input<typeof installationSecretsSchema>
+  | { readonly version: 1 };
+
+async function loadInstallationSecrets() {
+  const secretsModule = await import("@/lib/installation-secrets");
+  secretsModule.installationSecretsDependencies.get = mocks.get;
+  secretsModule.installationSecretsDependencies.put = mocks.put;
+  return secretsModule.getInstallationSecrets;
+}
+
+function blobResult(value: InstallationSecretsFixture) {
   const body = JSON.stringify(value);
   const stream = new Response(body).body;
   if (!stream) throw new Error("Expected a response body.");

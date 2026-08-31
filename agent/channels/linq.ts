@@ -66,10 +66,11 @@ async function postLinqReply(
     return;
   }
   for (const [index, bubble] of bubbles.entries()) {
-    await thread.post({
-      markdown: bubble,
-      ...(index === bubbles.length - 1 && files.length > 0 ? { files } : {}),
-    });
+    if (index === bubbles.length - 1 && files.length > 0) {
+      await thread.post({ files, markdown: bubble });
+    } else {
+      await thread.post({ markdown: bubble });
+    }
   }
 }
 
@@ -83,7 +84,7 @@ const credentials: LinqChannelCredentials = env.LINQ_CONNECTOR
       },
     };
 
-export default linqChannel({
+export const linqChannelConfig = {
   credentials,
   events: {
     "action.result"(event, context) {
@@ -205,11 +206,10 @@ export default linqChannel({
     if (message.author.isBot) return null;
 
     const auth = defaultLinqAuth(message);
-    const authorUserName: unknown = message.author.userName;
-    const phoneNumber =
-      typeof authorUserName === "string"
-        ? normalizeAuthPhoneNumber(authorUserName)
-        : undefined;
+    const authorUserName = z.string().safeParse(message.author.userName);
+    const phoneNumber = authorUserName.success
+      ? normalizeAuthPhoneNumber(authorUserName.data)
+      : undefined;
     const verifiedUserId = phoneNumber
       ? await findVerifiedAuthUserIdByPhoneNumber(phoneNumber)
       : undefined;
@@ -217,19 +217,21 @@ export default linqChannel({
       ? `better-auth:${verifiedUserId}`
       : auth.principalId;
     const scope = accessScopeForUser(principalId);
+    const attributes =
+      verifiedUserId && phoneNumber
+        ? { ...auth.attributes, phoneNumber, workspaceId: scope.workspaceId }
+        : { ...auth.attributes, workspaceId: scope.workspaceId };
     return {
       auth: {
         ...auth,
-        attributes: {
-          ...auth.attributes,
-          ...(verifiedUserId && phoneNumber ? { phoneNumber } : {}),
-          workspaceId: scope.workspaceId,
-        },
+        attributes,
         principalId,
       },
     };
   },
-});
+} satisfies LinqChannelConfig;
+
+export default linqChannel(linqChannelConfig);
 
 async function findVerifiedAuthUserIdByPhoneNumber(phoneNumber: string) {
   const auth = await getAuth();

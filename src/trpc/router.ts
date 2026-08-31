@@ -12,28 +12,40 @@ import { managerMutationSchema, managerSnapshotSchema } from "@/lib/manager";
 import { applyManagerMutation } from "@/lib/manager/server/store";
 import { createTRPCRouter, protectedProcedure } from "./init";
 
+export const routerDependencies = {
+  applyManagerMutation,
+  disconnectGoogleWorkspace,
+  listBrowserTraces,
+  readModelCatalog,
+  saveChat,
+  startGoogleWorkspaceAuthorization,
+};
+
 export const appRouter = createTRPCRouter({
   chats: {
     save: protectedProcedure
       .input(saveChatSchema)
-      .mutation(({ ctx, input }) => saveChat(ctx.scope, input)),
+      .mutation(({ ctx, input }) =>
+        routerDependencies.saveChat(ctx.scope, input)
+      ),
   },
   googleWorkspace: {
     update: protectedProcedure
       .input(googleWorkspaceActionSchema)
       .mutation(async ({ ctx, input }) => {
         if (input === "disconnect") {
-          await disconnectGoogleWorkspace(ctx.scope);
+          await routerDependencies.disconnectGoogleWorkspace(ctx.scope);
           return { redirectTo: "/?google=disconnected" };
         }
 
         const callbackUrl = new URL("/", ctx.origin);
         callbackUrl.searchParams.set("google", "connected");
         return {
-          redirectTo: await startGoogleWorkspaceAuthorization(
-            ctx.scope,
-            callbackUrl.toString()
-          ),
+          redirectTo:
+            await routerDependencies.startGoogleWorkspaceAuthorization(
+              ctx.scope,
+              callbackUrl.toString()
+            ),
         };
       }),
   },
@@ -41,16 +53,21 @@ export const appRouter = createTRPCRouter({
     mutate: protectedProcedure
       .input(managerMutationSchema)
       .output(managerSnapshotSchema)
-      .mutation(({ ctx, input }) => applyManagerMutation(ctx.scope, input)),
+      .mutation(({ ctx, input }) =>
+        routerDependencies.applyManagerMutation(ctx.scope, input)
+      ),
   },
   models: {
-    list: protectedProcedure.query(readModelCatalog),
+    list: protectedProcedure.query(routerDependencies.readModelCatalog),
   },
   traces: {
     list: protectedProcedure
       .input(z.object({ cursor: z.string().nullish() }))
       .query(({ ctx, input }) =>
-        listBrowserTraces(ctx.scope, input.cursor ?? undefined)
+        routerDependencies.listBrowserTraces(
+          ctx.scope,
+          input.cursor ?? undefined
+        )
       ),
   },
 });

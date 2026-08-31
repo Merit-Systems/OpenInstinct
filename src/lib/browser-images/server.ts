@@ -15,6 +15,14 @@ import { env } from "@/lib/env";
 
 const blobOptions = { access: "private" as const };
 
+export const browserImageServerDependencies = {
+  del,
+  finalizeBrowserImageArtifact,
+  get,
+  put,
+  readReadyBrowserImageArtifact,
+};
+
 export function browserImageBlobAuthentication(input: {
   readonly readWriteToken?: string;
   readonly storeId?: string;
@@ -56,26 +64,35 @@ export async function persistReservedBrowserImage(
   const contentHash = createHash("sha256").update(input.bytes).digest("hex");
   const attemptPathname = `${reservation.storagePathname}/${contentHash}`;
 
-  await put(attemptPathname, Buffer.from(input.bytes), {
-    ...blobOptions,
-    ...blobAuthentication(),
-    abortSignal: signal,
-    addRandomSuffix: false,
-    allowOverwrite: true,
-    cacheControlMaxAge: 30 * 24 * 60 * 60,
-    contentType: mediaType,
-    maximumSizeInBytes: maximumBrowserImageBytes,
-  });
+  await browserImageServerDependencies.put(
+    attemptPathname,
+    Buffer.from(input.bytes),
+    {
+      ...blobOptions,
+      ...blobAuthentication(),
+      abortSignal: signal,
+      addRandomSuffix: false,
+      allowOverwrite: true,
+      cacheControlMaxAge: 30 * 24 * 60 * 60,
+      contentType: mediaType,
+      maximumSizeInBytes: maximumBrowserImageBytes,
+    }
+  );
 
   try {
-    const finalized = await finalizeBrowserImageArtifact(scope, reservation, {
-      byteSize: input.bytes.byteLength,
-      contentHash,
-      filename: input.filename,
-      mediaType,
-      sourceKind: input.sourceKind,
-      storagePathname: attemptPathname,
-    });
+    const finalized =
+      await browserImageServerDependencies.finalizeBrowserImageArtifact(
+        scope,
+        reservation,
+        {
+          byteSize: input.bytes.byteLength,
+          contentHash,
+          filename: input.filename,
+          mediaType,
+          sourceKind: input.sourceKind,
+          storagePathname: attemptPathname,
+        }
+      );
     if (finalized.storagePathname !== attemptPathname) {
       await deleteBlob(attemptPathname);
     }
@@ -87,7 +104,9 @@ export async function persistReservedBrowserImage(
 }
 
 async function deleteBlob(pathname: string) {
-  await del(pathname, blobAuthentication()).catch(() => undefined);
+  await browserImageServerDependencies
+    .del(pathname, blobAuthentication())
+    .catch(() => undefined);
 }
 
 export async function getBrowserImageBlob(
@@ -99,9 +118,12 @@ export async function getBrowserImageBlob(
     readonly signal?: AbortSignal;
   } = {}
 ) {
-  const artifact = await readReadyBrowserImageArtifact(scope, artifactId, {
-    rootSessionId: options.rootSessionId,
-  });
+  const artifact =
+    await browserImageServerDependencies.readReadyBrowserImageArtifact(
+      scope,
+      artifactId,
+      { rootSessionId: options.rootSessionId }
+    );
   if (!artifact) return undefined;
   const { byteSize, contentHash, filename, mediaType } = artifact;
   if (!byteSize || !contentHash || !filename || !mediaType) return undefined;
@@ -112,12 +134,15 @@ export async function getBrowserImageBlob(
     filename,
     mediaType,
   };
-  const result = await get(artifact.storagePathname, {
-    ...blobOptions,
-    ...blobAuthentication(),
-    abortSignal: options.signal,
-    ifNoneMatch: options.ifNoneMatch,
-  });
+  const result = await browserImageServerDependencies.get(
+    artifact.storagePathname,
+    {
+      ...blobOptions,
+      ...blobAuthentication(),
+      abortSignal: options.signal,
+      ifNoneMatch: options.ifNoneMatch,
+    }
+  );
   if (!result) return undefined;
   if (
     result.statusCode === 200 &&
