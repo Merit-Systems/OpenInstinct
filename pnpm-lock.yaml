@@ -180,6 +180,9 @@ importers:
       taze:
         specifier: 21.1.0
         version: 21.1.0
+      tsx:
+        specifier: 4.21.0
+        version: 4.21.0
       turbo:
         specifier: 2.10.12
         version: 2.10.12

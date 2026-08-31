@@ -15,14 +15,14 @@ import { fillFromVaultRequestSchema } from "@/lib/manager/vault-autofill";
 
 const outputSchema = z.object({
   filledClaims: z.number().int().nonnegative(),
-  kind: z.enum(["address", "login", "payment"]),
+  kind: z.enum(["address", "contact", "login", "payment"]),
   origin: z.string(),
   success: z.literal(true),
 });
 
 export default defineTool({
   description:
-    "Fill a login, card, or address form with an opaque handle returned by list_vault. Focus one control in the intended form first. Never supply vault fields, selectors, origins, or secret values.",
+    "Fill a login, card, contact, traveler, or address form with an opaque handle returned by list_vault. Focus one control in the intended form first. Never supply vault fields, selectors, origins, or secret values.",
   inputSchema: fillFromVaultRequestSchema,
   outputSchema,
   async execute(input, context) {
@@ -33,11 +33,12 @@ export default defineTool({
     if (!item) throw new Error("The selected vault item was not found.");
     if (
       item.kind !== "address" &&
+      item.kind !== "contact" &&
       item.kind !== "login" &&
       item.kind !== "payment"
     ) {
       throw new Error(
-        "Native browser autofill currently supports only logins, cards, and addresses."
+        "Native browser autofill currently supports only logins, cards, contacts, and addresses."
       );
     }
     if (item.kind === "login") {
@@ -62,7 +63,9 @@ export default defineTool({
         ? "payment-card"
         : item.kind === "login"
           ? "credentials"
-          : "postal-address";
+          : item.kind === "contact"
+            ? "contact"
+            : "postal-address";
     const tokens = nativeAutofillTokens[item.kind];
     const surface = {
       fields: tokens.map((token) => ({ score: 100, token })),

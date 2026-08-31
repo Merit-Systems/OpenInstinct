@@ -1,6 +1,4 @@
-export function browserBenchmarkTasks(
-  suite: "all" | "live" | "profile" | "smoke"
-) {
+export function browserBenchmarkTasks(suite: "all" | "live" | "smoke") {
   const live = [
     {
       description: "Reach the purchase boundary for movie tickets",
@@ -39,18 +37,6 @@ export function browserBenchmarkTasks(
     },
   ] as const;
 
-  const profile = [
-    {
-      description: "Reorder a previously purchased Amazon item",
-      prompt:
-        "Find the soap I bought last time on Amazon and prepare the same item for purchase. Proceed to the final Place your order or Buy now boundary and stop before activating it. Report the exact item and variant, quantity, delivery estimate, and total shown.",
-      successCriteria:
-        "Using the signed-in order history, the agent identified the most recently purchased soap, selected the same item and variant, reached the final order boundary, reported the material order details and total, and did not place the order.",
-    },
-  ] as const;
-
   if (suite === "smoke") return [live[0], live[4]];
-  if (suite === "live") return live;
-  if (suite === "profile") return profile;
-  return [...live, ...profile];
+  return live;
 }

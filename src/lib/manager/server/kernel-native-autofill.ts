@@ -88,13 +88,23 @@ const addressTokenToChromiumField = {
   country: "ADDRESS_HOME_COUNTRY",
 } as const;
 
+const contactTokenToChromiumField = {
+  name: "NAME_FULL",
+  email: "EMAIL_ADDRESS",
+  tel: "PHONE_HOME_WHOLE_NUMBER",
+  "bday-day": "BIRTHDATE_DAY",
+  "bday-month": "BIRTHDATE_MONTH",
+  "bday-year": "BIRTHDATE_4_DIGIT_YEAR",
+} as const;
+
 export const nativeAutofillTokens = {
   address: Object.keys(addressTokenToChromiumField),
+  contact: Object.keys(contactTokenToChromiumField),
   login: nativeLoginAutofillTokens,
   payment: [...cardTokens],
 } as const;
 
-type NativeAutofillKind = "address" | "login" | "payment";
+type NativeAutofillKind = "address" | "contact" | "login" | "payment";
 
 export async function currentKernelPageOrigin({
   browserSessionId,
@@ -315,7 +325,7 @@ async function fillNativeLoginControl(
 }
 
 export function buildNativeAutofillPayload(
-  kind: "address" | "payment",
+  kind: "address" | "contact" | "payment",
   claims: readonly Pick<AutofillClaim, "token" | "value">[]
 ) {
   const values = new Map(claims.map(({ token, value }) => [token, value]));
@@ -332,14 +342,16 @@ export function buildNativeAutofillPayload(
     };
   }
 
-  const fields = Object.entries(addressTokenToChromiumField).flatMap(
-    ([token, name]) => {
-      const value = values.get(token);
-      return value ? [{ name, value }] : [];
-    }
-  );
+  const tokenMap =
+    kind === "address"
+      ? addressTokenToChromiumField
+      : contactTokenToChromiumField;
+  const fields = Object.entries(tokenMap).flatMap(([token, name]) => {
+    const value = values.get(token);
+    return value ? [{ name, value }] : [];
+  });
   if (fields.length === 0) {
-    throw new Error("The saved address is incomplete or invalid.");
+    throw new Error(`The saved ${kind} is incomplete or invalid.`);
   }
   return { address: { fields } };
 }
@@ -347,7 +359,7 @@ export function buildNativeAutofillPayload(
 async function inspectControls(
   connection: CdpConnection,
   sessionIds: readonly string[],
-  kind: "address" | "payment"
+  kind: "address" | "contact" | "payment"
 ) {
   const controls = (
     await Promise.all(
@@ -387,7 +399,7 @@ async function inspectFrameControls(
   connection: CdpConnection,
   sessionId: string,
   frameId: string,
-  kind: "address" | "payment"
+  kind: "address" | "contact" | "payment"
 ) {
   const { executionContextId } = isolatedWorldSchema.parse(
     await connection.send(
@@ -705,7 +717,7 @@ function flattenFrames(
 }
 
 function standardAutocomplete(
-  kind: "address" | "payment",
+  kind: "address" | "contact" | "payment",
   autocomplete: string
 ) {
   const token = autocomplete
@@ -713,20 +725,22 @@ function standardAutocomplete(
     .split(/\s+/u)
     .findLast((value) => Boolean(value));
   if (!token) return false;
-  return kind === "payment"
-    ? token.startsWith("cc-")
-    : [
-        "name",
-        "street-address",
-        "address-line1",
-        "address-line2",
-        "address-line3",
-        "address-level1",
-        "address-level2",
-        "postal-code",
-        "country",
-        "country-name",
-      ].includes(token);
+  if (kind === "payment") return token.startsWith("cc-");
+  if (kind === "contact") {
+    return Object.keys(contactTokenToChromiumField).includes(token);
+  }
+  return [
+    "name",
+    "street-address",
+    "address-line1",
+    "address-line2",
+    "address-line3",
+    "address-level1",
+    "address-level2",
+    "postal-code",
+    "country",
+    "country-name",
+  ].includes(token);
 }
 
 function requiredClaim(values: ReadonlyMap<string, string>, token: string) {

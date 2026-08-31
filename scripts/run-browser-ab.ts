@@ -13,7 +13,6 @@ import { basename, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import nextEnvironment from "@next/env";
 import { z } from "zod";
-import { browserBenchmarkEnv } from "../evals/browser/env.ts";
 import {
   type BrowserBenchmarkLiveStatus,
   readBrowserBenchmarkLiveStatus,
@@ -92,6 +91,14 @@ try {
         cwd: current.path,
         env: databaseEnvironment(current.databaseUrl),
       });
+      await run(
+        "pnpm",
+        ["exec", "tsx", "scripts/seed-browser-benchmark-vault.ts"],
+        {
+          cwd: current.path,
+          env: databaseEnvironment(current.databaseUrl),
+        }
+      );
     })
   );
 
@@ -204,26 +211,12 @@ async function installBenchmarkContext(worktree: string) {
   const targetPath = join(worktree, "agent", "channels", "eve.ts");
   await copyFile(sourcePath, targetPath);
   await copyFile(
-    join(repositoryRoot, "agent", "instructions", "authenticated-profile.ts"),
-    join(worktree, "agent", "instructions", "authenticated-profile.ts")
+    join(repositoryRoot, "scripts", "seed-browser-benchmark-vault.ts"),
+    join(worktree, "scripts", "seed-browser-benchmark-vault.ts")
   );
   await copyFile(
     join(repositoryRoot, ".env.local"),
     join(worktree, ".env.local")
-  );
-
-  const principal = browserBenchmarkEnv.BROWSER_BENCH_SCOPE_PRINCIPAL?.trim();
-  if (!principal) return;
-  const source = await readFile(targetPath, "utf8");
-  const marker = '"better-auth:browser-benchmark"';
-  if (!source.includes(marker)) {
-    throw new Error(
-      "The benchmark channel has no replaceable local principal."
-    );
-  }
-  await writeFile(
-    targetPath,
-    source.replace(marker, JSON.stringify(principal))
   );
 }
 
@@ -553,7 +546,7 @@ async function cleanup() {
 
 function parseArguments(args: string[]) {
   const positional: string[] = [];
-  let suite: "all" | "live" | "profile" | "smoke" = "smoke";
+  let suite: "all" | "live" | "smoke" = "smoke";
   let repetitions = 1;
   let maxConcurrency = 9;
   let taskTimeoutMs = 15 * 60_000;
@@ -568,13 +561,8 @@ function parseArguments(args: string[]) {
     }
     if (argument === "--suite") {
       const value = args[++index];
-      if (
-        value !== "all" &&
-        value !== "live" &&
-        value !== "profile" &&
-        value !== "smoke"
-      ) {
-        throw new Error("--suite must be smoke, live, profile, or all.");
+      if (value !== "all" && value !== "live" && value !== "smoke") {
+        throw new Error("--suite must be smoke, live, or all.");
       }
       suite = value;
       continue;
@@ -613,7 +601,7 @@ function parseArguments(args: string[]) {
   const [baselineRef, candidateRef] = positional;
   if (positional.length !== 2 || !baselineRef || !candidateRef) {
     throw new Error(
-      'Usage: pnpm bench:ab <baseline-ref> <candidate-ref> [--label "description"] [--suite smoke|live|profile|all] [--repetitions n] [--max-concurrency n] [--task-timeout-minutes n] [--keep]'
+      'Usage: pnpm bench:ab <baseline-ref> <candidate-ref> [--label "description"] [--suite smoke|live|all] [--repetitions n] [--max-concurrency n] [--task-timeout-minutes n] [--keep]'
     );
   }
   return {

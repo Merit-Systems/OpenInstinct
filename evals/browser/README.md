@@ -24,17 +24,8 @@ the irreversible confirmation:
 BROWSER_BENCH_SUITE=live pnpm bench:browser
 ```
 
-The profile suite contains tasks that require an existing signed-in browser,
-such as preparing the user's last-purchased soap on Amazon without buying it:
-
-```sh
-BROWSER_BENCH_SUITE=profile pnpm bench:browser
-```
-
-Set `BROWSER_BENCH_SCOPE_PRINCIPAL` for the profile suite. Its value is the same
-stable access-scope principal used by the signed-in application user; the
-runner does not write it to an artifact. The `all` suite includes smoke, live,
-and profile tasks.
+Login-required tasks are intentionally out of scope. The `all` suite runs every
+enabled real-site task, while `smoke` runs a smaller subset.
 
 Target a deployment with the same suite:
 
@@ -81,9 +72,9 @@ table view for each run's task-level results.
 The A/B runner checks out two revisions into temporary worktrees, starts an
 isolated database and Portless Eve server for each, runs both revisions
 concurrently against the same task array, compares the artifacts, then cleans
-up. Each revision receives the same synthetic authenticated user context with
-a non-secret name, email address, phone number, and mailing address so routine
-checkout forms do not become benchmark blockers:
+up. Each isolated database is seeded with the same synthetic contact and
+address records in the existing encrypted vault so routine checkout forms do
+not become benchmark blockers:
 
 ```sh
 pnpm bench:ab <baseline-ref> <candidate-ref> --suite all --label "semantic browser loop"
