@@ -183,6 +183,7 @@ const manageBrowsers = defineTool({
         return "Browser session deleted successfully";
       }
     }
+    throw new Error("Unsupported browser management action.");
   },
 });
 

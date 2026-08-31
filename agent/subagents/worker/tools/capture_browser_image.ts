@@ -160,6 +160,7 @@ async function captureBrowserImage(
         };
       }
   }
+  throw new Error("Unsupported browser image source.");
 }
 
 async function captureImageResource(
@@ -342,6 +343,7 @@ async function readBoundedResponse(response: Response) {
   const chunks: Uint8Array[] = [];
   let total = 0;
   try {
+    /* oxlint-disable eslint/no-await-in-loop -- A response body is an ordered stream and must be read and cancelled sequentially. */
     for (;;) {
       const { done, value } = await reader.read();
       if (done) break;
@@ -352,6 +354,7 @@ async function readBoundedResponse(response: Response) {
       }
       chunks.push(value);
     }
+    /* oxlint-enable eslint/no-await-in-loop */
   } finally {
     reader.releaseLock();
   }

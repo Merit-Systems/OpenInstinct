@@ -52,7 +52,12 @@ export function VaultContacts({
               title="Contact info"
             />
             <div className="flex justify-end gap-2">
-              <Button onClick={() => section.setView("add")} type="button">
+              <Button
+                onClick={() => {
+                  section.setView("add");
+                }}
+                type="button"
+              >
                 <PlusIcon />
                 Add contact
               </Button>
@@ -61,7 +66,9 @@ export function VaultContacts({
         ) : (
           <>
             <VaultSectionBackButton
-              onClick={() => section.setView("list")}
+              onClick={() => {
+                section.setView("list");
+              }}
               title="Contact info"
             />
             <DialogHeader className="pr-10 sm:pr-6">
@@ -73,7 +80,9 @@ export function VaultContacts({
             </DialogHeader>
             <ContactForm
               initialLabel={initialAdd ? setup.label : undefined}
-              onSaved={() => section.setView("list")}
+              onSaved={() => {
+                section.setView("list");
+              }}
             />
           </>
         )}

@@ -16,7 +16,7 @@ export default async function TasksPage() {
     initialError = "Unable to read the browser trace history.";
   }
   return (
-    <div className="flex w-full flex-col gap-6 px-4 py-6 sm:px-8 sm:py-8">
+    <div className="flex w-full flex-col gap-6 px-4 py-6 sm:p-8">
       <header className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="max-w-2xl">
           <h1 className="type-page-title">Browser traces</h1>

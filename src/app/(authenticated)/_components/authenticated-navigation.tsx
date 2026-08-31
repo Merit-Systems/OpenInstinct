@@ -70,4 +70,5 @@ function activeRoute(pathname: string) {
   if (pathname.startsWith("/chats")) return "chats";
   if (pathname.startsWith("/chat")) return "chat";
   if (pathname.startsWith("/tasks")) return "tasks";
+  return undefined;
 }

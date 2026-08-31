@@ -113,6 +113,7 @@ export function ChromeImportPanel({ onDone }: { readonly onDone: () => void }) {
               nativeButton={false}
               render={
                 <a
+                  aria-label="Open Google Password Manager"
                   href={GOOGLE_PASSWORD_MANAGER_URL}
                   rel="noreferrer"
                   target="_blank"

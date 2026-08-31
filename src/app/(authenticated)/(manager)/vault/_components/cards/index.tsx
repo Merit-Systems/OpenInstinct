@@ -52,7 +52,12 @@ export function VaultCards({
               title="Cards"
             />
             <div className="flex justify-end gap-2">
-              <Button onClick={() => section.setView("add")} type="button">
+              <Button
+                onClick={() => {
+                  section.setView("add");
+                }}
+                type="button"
+              >
                 <PlusIcon />
                 Add card
               </Button>
@@ -61,7 +66,9 @@ export function VaultCards({
         ) : (
           <>
             <VaultSectionBackButton
-              onClick={() => section.setView("list")}
+              onClick={() => {
+                section.setView("list");
+              }}
               title="Cards"
             />
             <DialogHeader className="pr-10 sm:pr-6">
@@ -73,7 +80,9 @@ export function VaultCards({
             </DialogHeader>
             <CardForm
               initialLabel={initialAdd ? setup.label : undefined}
-              onSaved={() => section.setView("list")}
+              onSaved={() => {
+                section.setView("list");
+              }}
             />
           </>
         )}

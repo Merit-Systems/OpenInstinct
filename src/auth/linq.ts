@@ -112,11 +112,11 @@ export async function readLinqOnboardingPhoneNumber(connector: string) {
       headers: { Authorization: `Bearer ${token}` },
       signal: AbortSignal.timeout(3000),
     });
-    if (!response.ok) return;
+    if (!response.ok) return undefined;
     const body: unknown = await response.json().catch(() => undefined);
     return linqAvailableNumberSchema.safeParse(body).data?.phone_number;
   } catch {
-    return;
+    return undefined;
   }
 }
 

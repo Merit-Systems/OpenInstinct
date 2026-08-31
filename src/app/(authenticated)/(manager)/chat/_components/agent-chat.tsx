@@ -181,17 +181,18 @@ export function AgentChat({
 
   useEffect(() => {
     if (activeSessionId === undefined || latestTerminalTurnId === undefined) {
-      return;
+      return undefined;
     }
 
     const terminalTurn = `${activeSessionId}:${latestTerminalTurnId}`;
-    if (persistedUsageTurn.current === terminalTurn) return;
+    if (persistedUsageTurn.current === terminalTurn) return undefined;
     persistedUsageTurn.current = terminalTurn;
     saveChat({ sessionId: activeSessionId, usage });
+    return undefined;
   }, [activeSessionId, latestTerminalTurnId, saveChat, usage]);
 
   useEffect(() => {
-    if (activeSessionId === undefined || !hasPendingWorker) return;
+    if (activeSessionId === undefined || !hasPendingWorker) return undefined;
 
     const interval = window.setInterval(() => {
       if (agent.status !== "ready" || backgroundCatchUp.current !== undefined) {
@@ -207,7 +208,9 @@ export function AgentChat({
       });
     }, 750);
 
-    return () => window.clearInterval(interval);
+    return () => {
+      window.clearInterval(interval);
+    };
   }, [activeSessionId, agent, hasPendingWorker]);
 
   const handleSubmit = async (message: PromptInputMessage) => {
@@ -325,7 +328,7 @@ export function AgentChat({
           className={cn(
             "mx-auto w-full px-4 sm:px-6",
             showConversationLayout
-              ? "absolute bottom-0 left-1/2 z-20 max-w-3xl -translate-x-1/2 bg-gradient-to-t from-background via-background to-transparent pt-4 pb-6"
+              ? "absolute bottom-0 left-1/2 z-20 max-w-3xl -translate-x-1/2 bg-linear-to-t from-background via-background to-transparent pt-4 pb-6"
               : "flex max-w-xl flex-1 flex-col items-center justify-center gap-8 pb-[10vh]"
           )}
         >

@@ -1,6 +1,6 @@
 "use client";
 
-import { type FormEvent, useState } from "react";
+import { type SubmitEvent, useState } from "react";
 import { useRouter } from "next/navigation";
 import { z } from "zod";
 import { Button } from "@/components/ui/button";
@@ -47,9 +47,11 @@ export function AddressForm({
   });
   const result = addressFormSchema.safeParse(form);
   const errors =
-    attempted && !result.success ? result.error.flatten().fieldErrors : {};
+    attempted && !result.success
+      ? z.flattenError(result.error).fieldErrors
+      : {};
 
-  const submit = (event: FormEvent) => {
+  const submit = (event: SubmitEvent<HTMLFormElement>) => {
     event.preventDefault();
     setAttempted(true);
     if (!result.success) return;
@@ -65,8 +67,9 @@ export function AddressForm({
     });
   };
 
-  const update = (field: keyof typeof form, value: string) =>
+  const update = (field: keyof typeof form, value: string) => {
     setForm((current) => ({ ...current, [field]: value }));
+  };
 
   return (
     <form noValidate onSubmit={submit}>
@@ -76,7 +79,9 @@ export function AddressForm({
             error={errors.nickname?.[0]}
             id="vault-address-label"
             label="Name"
-            onChange={(value) => update("nickname", value)}
+            onChange={(value) => {
+              update("nickname", value);
+            }}
             placeholder="Home"
             value={form.nickname}
           />
@@ -85,7 +90,9 @@ export function AddressForm({
             error={errors.recipientName?.[0]}
             id="vault-address-recipient"
             label="Recipient name"
-            onChange={(value) => update("recipientName", value)}
+            onChange={(value) => {
+              update("recipientName", value);
+            }}
             value={form.recipientName}
           />
         </div>
@@ -94,7 +101,9 @@ export function AddressForm({
           error={errors.line1?.[0]}
           id="vault-address-line1"
           label="Address line 1"
-          onChange={(value) => update("line1", value)}
+          onChange={(value) => {
+            update("line1", value);
+          }}
           value={form.line1}
         />
         <FormField
@@ -102,7 +111,9 @@ export function AddressForm({
           error={errors.line2?.[0]}
           id="vault-address-line2"
           label="Address line 2 (optional)"
-          onChange={(value) => update("line2", value)}
+          onChange={(value) => {
+            update("line2", value);
+          }}
           value={form.line2}
         />
         <div className="grid gap-3 sm:grid-cols-2">
@@ -111,7 +122,9 @@ export function AddressForm({
             error={errors.city?.[0]}
             id="vault-address-city"
             label="City"
-            onChange={(value) => update("city", value)}
+            onChange={(value) => {
+              update("city", value);
+            }}
             value={form.city}
           />
           <FormField
@@ -119,7 +132,9 @@ export function AddressForm({
             error={errors.region?.[0]}
             id="vault-address-region"
             label="State / province / region"
-            onChange={(value) => update("region", value)}
+            onChange={(value) => {
+              update("region", value);
+            }}
             value={form.region}
           />
         </div>
@@ -129,7 +144,9 @@ export function AddressForm({
             error={errors.postalCode?.[0]}
             id="vault-address-postal"
             label="ZIP / postal code"
-            onChange={(value) => update("postalCode", value)}
+            onChange={(value) => {
+              update("postalCode", value);
+            }}
             value={form.postalCode}
           />
           <FormField
@@ -138,7 +155,9 @@ export function AddressForm({
             id="vault-address-country"
             label="Country"
             maxLength={2}
-            onChange={(value) => update("countryCode", value.toUpperCase())}
+            onChange={(value) => {
+              update("countryCode", value.toUpperCase());
+            }}
             value={form.countryCode}
           />
         </div>

@@ -13,7 +13,7 @@ import { requirePageRouteGroupRule } from "@/tools/oxlint/next/rules/require-pag
 const tester = new RuleTester();
 
 test("exports the repository-owned Next architecture rules", () => {
-  assert.deepEqual(Object.keys(plugin.rules).sort(), [
+  assert.deepEqual(Object.keys(plugin.rules).toSorted(), [
     "no-route-private-imports",
     "prefer-nearest-route-private-owner",
     "require-generated-route-props",

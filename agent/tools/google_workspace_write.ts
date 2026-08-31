@@ -60,5 +60,6 @@ export default defineTool({
           event: await createCalendarEvent(ctx, input),
         };
     }
+    throw new Error("Unsupported Google Workspace write action.");
   },
 });

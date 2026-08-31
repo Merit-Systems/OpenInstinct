@@ -80,29 +80,31 @@ async function readLinqBrowserImage(
     !artifact.filename ||
     !artifact.mediaType
   )
-    return;
-  if (!env.BLOB_STORE_ID && !env.BLOB_READ_WRITE_TOKEN) return;
+    return undefined;
+  if (!env.BLOB_STORE_ID && !env.BLOB_READ_WRITE_TOKEN) return undefined;
   const result = await get(artifact.storagePathname, {
     access: "private",
     abortSignal: options.signal,
   });
-  if (result?.statusCode !== 200) return;
+  if (result?.statusCode !== 200) return undefined;
   if (
     result.blob.size !== artifact.byteSize ||
     result.blob.contentType !== artifact.mediaType
   )
-    return;
+    return undefined;
   const reader = result.stream.getReader();
   const chunks: Uint8Array[] = [];
   let total = 0;
   try {
+    /* oxlint-disable eslint/no-await-in-loop -- Blob response chunks form an ordered stream. */
     for (;;) {
       const { done, value } = await reader.read();
       if (done) break;
       total += value.byteLength;
-      if (total > maximumBrowserImageBytes) return;
+      if (total > maximumBrowserImageBytes) return undefined;
       chunks.push(value);
     }
+    /* oxlint-enable eslint/no-await-in-loop */
   } finally {
     reader.releaseLock();
   }
@@ -113,7 +115,7 @@ async function readLinqBrowserImage(
     offset += chunk.byteLength;
   }
   if (createHash("sha256").update(bytes).digest("hex") !== artifact.contentHash)
-    return;
+    return undefined;
   return {
     bytes,
     filename: artifact.filename,

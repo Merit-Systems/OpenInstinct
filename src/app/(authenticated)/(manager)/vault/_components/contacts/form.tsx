@@ -1,6 +1,6 @@
 "use client";
 
-import { type FormEvent, useState } from "react";
+import { type SubmitEvent, useState } from "react";
 import { useRouter } from "next/navigation";
 import { z } from "zod";
 import { Button } from "@/components/ui/button";
@@ -57,9 +57,11 @@ export function ContactForm({
   });
   const result = contactFormSchema.safeParse(form);
   const errors =
-    attempted && !result.success ? result.error.flatten().fieldErrors : {};
+    attempted && !result.success
+      ? z.flattenError(result.error).fieldErrors
+      : {};
 
-  const submit = (event: FormEvent) => {
+  const submit = (event: SubmitEvent<HTMLFormElement>) => {
     event.preventDefault();
     setAttempted(true);
     if (!result.success) return;
@@ -79,8 +81,9 @@ export function ContactForm({
     });
   };
 
-  const update = (field: keyof typeof form, value: string) =>
+  const update = (field: keyof typeof form, value: string) => {
     setForm((current) => ({ ...current, [field]: value }));
+  };
 
   return (
     <form noValidate onSubmit={submit}>
@@ -89,7 +92,9 @@ export function ContactForm({
           error={errors.nickname?.[0]}
           id="vault-contact-label"
           label="Name"
-          onChange={(value) => update("nickname", value)}
+          onChange={(value) => {
+            update("nickname", value);
+          }}
           placeholder="Checkout"
           value={form.nickname}
         />
@@ -98,7 +103,9 @@ export function ContactForm({
           error={errors.fullName?.[0]}
           id="vault-contact-name"
           label="Full name (optional)"
-          onChange={(value) => update("fullName", value)}
+          onChange={(value) => {
+            update("fullName", value);
+          }}
           value={form.fullName}
         />
         <FormField
@@ -106,7 +113,9 @@ export function ContactForm({
           error={errors.email?.[0]}
           id="vault-contact-email"
           label="Email (optional)"
-          onChange={(value) => update("email", value)}
+          onChange={(value) => {
+            update("email", value);
+          }}
           type="email"
           value={form.email}
         />
@@ -115,7 +124,9 @@ export function ContactForm({
           error={errors.phone?.[0]}
           id="vault-contact-phone"
           label="Phone (optional)"
-          onChange={(value) => update("phone", value)}
+          onChange={(value) => {
+            update("phone", value);
+          }}
           type="tel"
           value={form.phone}
         />

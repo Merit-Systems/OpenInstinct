@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useState, type SubmitEvent } from "react";
 import { MessageSquareIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -27,7 +27,7 @@ export function PhoneAuthForm({
   const [step, setStep] = useState<AuthStep>("phone-number");
   const [verificationCode, setVerificationCode] = useState("");
 
-  async function submitDetails(event: FormEvent<HTMLFormElement>) {
+  async function submitDetails(event: SubmitEvent<HTMLFormElement>) {
     event.preventDefault();
     setError(undefined);
     const normalizedPhoneNumber = normalizeAuthPhoneNumber(phoneNumber);
@@ -61,7 +61,7 @@ export function PhoneAuthForm({
     }
   }
 
-  async function submitCode(event: FormEvent<HTMLFormElement>) {
+  async function submitCode(event: SubmitEvent<HTMLFormElement>) {
     event.preventDefault();
     setError(undefined);
     const code = verificationCode.trim();
@@ -108,7 +108,12 @@ export function PhoneAuthForm({
 
   if (step === "verification-code") {
     return (
-      <form className="mt-6 space-y-4" onSubmit={submitCode}>
+      <form
+        className="mt-6 space-y-4"
+        onSubmit={(event) => {
+          void submitCode(event);
+        }}
+      >
         <div className="space-y-2">
           <Label htmlFor="code">Verification code</Label>
           <Input
@@ -117,7 +122,9 @@ export function PhoneAuthForm({
             inputMode="numeric"
             maxLength={6}
             name="code"
-            onChange={(event) => setVerificationCode(event.target.value)}
+            onChange={(event) => {
+              setVerificationCode(event.target.value);
+            }}
             pattern="[0-9]{6}"
             required
             value={verificationCode}
@@ -151,14 +158,18 @@ export function PhoneAuthForm({
       {!skipOtp ? <FirstTimeLinqSetup phoneNumber={linqPhoneNumber} /> : null}
       <form
         className={skipOtp ? "mt-6 space-y-4" : "mt-4 space-y-4"}
-        onSubmit={submitDetails}
+        onSubmit={(event) => {
+          void submitDetails(event);
+        }}
       >
         <div className="space-y-2">
           <Label htmlFor="phone-number">Phone number</Label>
           <Input
             autoComplete="tel"
             id="phone-number"
-            onChange={(event) => setPhoneNumber(event.target.value.trim())}
+            onChange={(event) => {
+              setPhoneNumber(event.target.value.trim());
+            }}
             placeholder="(202) 555-0123"
             required
             type="tel"
@@ -207,7 +218,9 @@ function FirstTimeLinqSetup({
         <Button
           className="w-full"
           nativeButton={false}
-          render={<a href={`sms:${phoneNumber}`} />}
+          render={
+            <a aria-label="Text Linq in Messages" href={`sms:${phoneNumber}`} />
+          }
           variant="outline"
         >
           <MessageSquareIcon />

@@ -1,4 +1,3 @@
-/* oxlint-disable vitest/require-mock-type-parameters -- The Blob mock implements only the persistence operations exercised here. */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { get, put } from "@vercel/blob";
 import { z } from "zod";

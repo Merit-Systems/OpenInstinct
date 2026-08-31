@@ -1,6 +1,5 @@
 "use client";
 
-/* oxlint-disable typescript/no-confusing-void-expression -- Preserve the AI Elements controlled and uncontrolled disclosure API. */
 import {
   Collapsible,
   CollapsibleContent,
@@ -139,8 +138,11 @@ export const Reasoning = memo(
           hasAutoClosedRef.current = true;
         }, AUTO_CLOSE_DELAY);
 
-        return () => clearTimeout(timer);
+        return () => {
+          clearTimeout(timer);
+        };
       }
+      return undefined;
     }, [isStreaming, isOpen, setIsOpen]);
 
     const handleOpenChange = useCallback(

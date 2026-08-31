@@ -48,13 +48,14 @@ export function ModelSelector({ modelId }: { readonly modelId: string }) {
       providerModels.push(model);
       groups.set(model.ownedBy, providerModels);
     }
-    return [...groups.entries()].sort(([left], [right]) =>
+    return [...groups.entries()].toSorted(([left], [right]) =>
       left.localeCompare(right)
     );
   }, [catalog.data]);
 
-  const select = (selectedModelId: string) =>
+  const select = (selectedModelId: string) => {
     selectModel.mutate({ modelId: selectedModelId });
+  };
 
   const catalogError =
     catalog.error instanceof Error
@@ -99,7 +100,9 @@ export function ModelSelector({ modelId }: { readonly modelId: string }) {
                 <ModelSelectorItem
                   data-checked={model.id === modelId}
                   key={model.id}
-                  onSelect={() => select(model.id)}
+                  onSelect={() => {
+                    select(model.id);
+                  }}
                   value={`${model.name} ${model.id} ${model.ownedBy}`}
                 >
                   <ModelSelectorLogo provider={providerLogo(model.ownedBy)} />
@@ -133,6 +136,6 @@ function providerLogo(provider: string) {
 
 function formatPricing(model: ModelCatalogItem) {
   if (model.pricing?.input === undefined || model.pricing.output === undefined)
-    return;
+    return undefined;
   return `${priceFormatter.format(model.pricing.input)} / ${priceFormatter.format(model.pricing.output)} per M`;
 }

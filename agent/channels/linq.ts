@@ -65,6 +65,7 @@ async function postLinqReply(
     if (files.length > 0) await thread.post({ files, markdown: "" });
     return;
   }
+  /* oxlint-disable eslint/no-await-in-loop -- Reply bubbles must be posted in conversational order. */
   for (const [index, bubble] of bubbles.entries()) {
     if (index === bubbles.length - 1 && files.length > 0) {
       await thread.post({ files, markdown: bubble });
@@ -72,6 +73,7 @@ async function postLinqReply(
       await thread.post({ markdown: bubble });
     }
   }
+  /* oxlint-enable eslint/no-await-in-loop */
 }
 
 const credentials: LinqChannelCredentials = env.LINQ_CONNECTOR

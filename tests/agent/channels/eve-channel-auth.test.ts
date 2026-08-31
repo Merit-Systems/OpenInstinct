@@ -55,17 +55,17 @@ describe("Eve channel authentication", () => {
 });
 
 function unexpectedRouteContext() {
-  const unexpected = () => {
-    throw new Error("The request should stop at authorization.");
-  };
-
   return {
-    attachSession: unexpected,
-    from: unexpected,
+    attachSession: unexpectedRouteRequest,
+    from: unexpectedRouteRequest,
     params: { sessionId: "session/one" },
     requestIp: null,
-    resolveSession: unexpected,
-    to: unexpected,
-    waitUntil: unexpected,
+    resolveSession: unexpectedRouteRequest,
+    to: unexpectedRouteRequest,
+    waitUntil: unexpectedRouteRequest,
   } satisfies RouteHandlerArgs;
+}
+
+function unexpectedRouteRequest(): never {
+  throw new Error("The request should stop at authorization.");
 }
