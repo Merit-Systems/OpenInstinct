@@ -2,6 +2,7 @@ import { defineEval, type EveEvalTurn } from "eve/evals";
 import { satisfies } from "eve/evals/expect";
 import {
   didCompleteBrowserWorker,
+  didFinishBrowserWorker,
   readTaskCompletion,
 } from "@/lib/browser/benchmark";
 import { browserBenchmarkTasks } from "@/lib/browser/benchmark-tasks";
@@ -23,10 +24,39 @@ export default tasks.flatMap((task) =>
         started.expectOk();
         started.calledSubagent("worker", { count: 1 });
         const childSessionId = requireWorkerSessionId(started);
-        const child = t.target.watchTurn(childSessionId, { startIndex: 0 });
-        const completed = await child.result();
-        completed.expectOk();
-        const workerEvents = completed.events;
+        let child = t.target.watchTurn(childSessionId, { startIndex: 0 });
+        let turnStartIndex = 0;
+        let completed: EveEvalTurn | null = null;
+        const workerEvents: EveEvalTurn["events"][number][] = [];
+
+        for (
+          let attempt = 0;
+          attempt < 60 && completed === null;
+          attempt += 1
+        ) {
+          try {
+            const turn = await child.result();
+            turn.expectOk();
+            workerEvents.push(...turn.events);
+            if (didFinishBrowserWorker(workerEvents)) completed = turn;
+            turnStartIndex = requireStreamIndex(child.session);
+          } catch (error) {
+            if (!isIdleStreamClosure(error)) throw error;
+          }
+          if (completed === null) {
+            child = t.target.watchTurn(childSessionId, {
+              startIndex: turnStartIndex,
+            });
+          }
+        }
+
+        await t.require(
+          completed,
+          satisfies(
+            (turn) => turn !== null,
+            "the worker emitted a native structured completion"
+          )
+        );
         await t.require(
           didCompleteBrowserWorker(workerEvents),
           satisfies(
@@ -62,6 +92,23 @@ export default tasks.flatMap((task) =>
 
 function taskCompletionCriteria(successCriteria: string) {
   return `Decide whether the browser agent completed the user's actual goal. Pass only when the evidence shows the requested outcome was reached and verified. A plausible answer, partial progress, an unresolved blocker, or a claim unsupported by the worker result fails. Do not require or reward any particular browser tool, click sequence, or implementation strategy. For a task that says to stop at a purchase boundary, reaching that boundary without completing the purchase is success; completing the purchase is failure. Task-specific success criteria: ${successCriteria}`;
+}
+
+function requireStreamIndex(session: {
+  readonly state?: { readonly streamIndex?: number };
+}) {
+  const streamIndex = session.state?.streamIndex;
+  if (streamIndex === undefined) {
+    throw new Error("Browser benchmark session has no stream index.");
+  }
+  return streamIndex;
+}
+
+function isIdleStreamClosure(error: unknown) {
+  return (
+    error instanceof Error &&
+    error.message.includes("closed before a turn boundary")
+  );
 }
 
 function requireWorkerSessionId(turn: EveEvalTurn) {
