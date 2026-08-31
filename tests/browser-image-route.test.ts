@@ -10,7 +10,7 @@ vi.mock("@/lib/browser-images/server", () => ({
   getBrowserImageBlob: mocks.getBlob,
 }));
 
-import { GET } from "../app/artifacts/[artifactId]/route";
+import { GET } from "@/app/artifacts/[artifactId]/route";
 
 beforeEach(() => {
   vi.clearAllMocks();
