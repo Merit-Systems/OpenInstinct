@@ -69,7 +69,5 @@ function activeRoute(pathname: string) {
   if (pathname.startsWith("/vault")) return "vault";
   if (pathname.startsWith("/chats")) return "chats";
   if (pathname.startsWith("/chat")) return "chat";
-  if (pathname.startsWith("/tasks") || pathname.startsWith("/runs")) {
-    return "tasks";
-  }
+  if (pathname.startsWith("/tasks")) return "tasks";
 }
