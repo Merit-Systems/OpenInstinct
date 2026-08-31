@@ -4,11 +4,11 @@ import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import * as Database from "@/db";
-import * as schema from "../db/schema";
+import * as schema from "../schema";
 import {
   browserTraceDomains as browserTraceDomainsTable,
   browserTraces as browserTracesTable,
-} from "../db/schema";
+} from "../schema";
 
 const databases: PGlite[] = [];
 
@@ -352,7 +352,7 @@ describe("database services", () => {
 
 async function applyInitialMigration(database: PGlite) {
   const migration = await readFile(
-    new URL("../db/migrations/0000_fluffy_the_spike.sql", import.meta.url),
+    new URL("../migrations/0000_fluffy_the_spike.sql", import.meta.url),
     "utf8"
   );
   for (const statement of migration.split("--> statement-breakpoint")) {
@@ -362,7 +362,7 @@ async function applyInitialMigration(database: PGlite) {
 
 async function applyBrowserImageMigration(database: PGlite) {
   const migration = await readFile(
-    new URL("../db/migrations/0003_unusual_fabian_cortez.sql", import.meta.url),
+    new URL("../migrations/0003_unusual_fabian_cortez.sql", import.meta.url),
     "utf8"
   );
   for (const statement of migration.split("--> statement-breakpoint")) {
@@ -372,7 +372,7 @@ async function applyBrowserImageMigration(database: PGlite) {
 
 async function applyBrowserTraceMigration(database: PGlite) {
   const migration = await readFile(
-    new URL("../db/migrations/0004_kind_manta.sql", import.meta.url),
+    new URL("../migrations/0004_kind_manta.sql", import.meta.url),
     "utf8"
   );
   for (const statement of migration.split("--> statement-breakpoint")) {
@@ -382,7 +382,7 @@ async function applyBrowserTraceMigration(database: PGlite) {
 
 async function applyBrowserTraceEventMigration(database: PGlite) {
   const migration = await readFile(
-    new URL("../db/migrations/0005_brave_kang.sql", import.meta.url),
+    new URL("../migrations/0005_brave_kang.sql", import.meta.url),
     "utf8"
   );
   for (const statement of migration.split("--> statement-breakpoint")) {

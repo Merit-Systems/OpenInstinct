@@ -13,7 +13,7 @@ vi.mock("@vercel/blob", () => ({
   get: mocks.getBlob,
 }));
 
-import { prepareLinqBrowserImageDelivery } from "../agent/lib/linq-browser-image-delivery";
+import { prepareLinqBrowserImageDelivery } from "../linq-browser-image-delivery";
 
 const scope = { userId: "user-1", workspaceId: "workspace-1" };
 

@@ -14,7 +14,7 @@ describe("browser benchmark environment", () => {
   });
 
   it("provides benchmark defaults independently of the runtime environment", async () => {
-    const { browserBenchmarkEnv } = await import("../evals/browser/env");
+    const { browserBenchmarkEnv } = await import("../env");
 
     expect(browserBenchmarkEnv.BROWSER_BENCH_LABEL).toBeUndefined();
     expect(browserBenchmarkEnv.BROWSER_BENCH_REPETITIONS).toBe(1);
@@ -23,7 +23,7 @@ describe("browser benchmark environment", () => {
   it("validates the repetition count", async () => {
     vi.stubEnv("BROWSER_BENCH_REPETITIONS", "21");
 
-    await expect(import("../evals/browser/env")).rejects.toThrow(
+    await expect(import("../env")).rejects.toThrow(
       "Invalid environment variables"
     );
   });

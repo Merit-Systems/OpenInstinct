@@ -1,12 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 import { kernel } from "@/lib/kernel";
-import { toolContextFor } from "./helpers/tool-context";
+import { toolContextFor } from "@/tests/helpers/tool-context";
 import manageBrowsers, {
   createManageBrowsers,
   kernelProfileNameForWorkspace,
   manageBrowsersDependencies,
-} from "../agent/subagents/worker/tools/manage_browsers";
+} from "@/agent/subagents/worker/tools/manage_browsers";
 
 type ListKernelBrowsers = NonNullable<
   Parameters<typeof createManageBrowsers>[0]
