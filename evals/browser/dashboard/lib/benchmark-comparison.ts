@@ -2,15 +2,19 @@ interface ComparableTask {
   readonly costUsd: number | null;
   readonly durationMs: number | null;
   readonly id: string;
+  readonly success: boolean | null;
 }
 
 export function compareBenchmarkTasks(
   baseline: ComparableTask | undefined,
   candidate: ComparableTask | undefined
 ) {
+  if (baseline?.success !== true || candidate?.success !== true) {
+    return { cost: null, time: null };
+  }
   return {
-    cost: improvementRatio(baseline?.costUsd, candidate?.costUsd),
-    time: improvementRatio(baseline?.durationMs, candidate?.durationMs),
+    cost: improvementRatio(baseline.costUsd, candidate.costUsd),
+    time: improvementRatio(baseline.durationMs, candidate.durationMs),
   };
 }
 

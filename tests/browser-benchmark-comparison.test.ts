@@ -8,8 +8,13 @@ describe("browser benchmark comparison", () => {
   it("reports positive improvement when the candidate is faster and cheaper", () => {
     expect(
       compareBenchmarkTasks(
-        { costUsd: 2, durationMs: 10_000, id: "task" },
-        { costUsd: 1.5, durationMs: 8_000, id: "task" }
+        { costUsd: 2, durationMs: 10_000, id: "task", success: true },
+        {
+          costUsd: 1.5,
+          durationMs: 8_000,
+          id: "task",
+          success: true,
+        }
       )
     ).toEqual({ cost: -0.25, time: -0.2 });
   });
@@ -18,14 +23,38 @@ describe("browser benchmark comparison", () => {
     expect(
       averageBenchmarkImprovement(
         [
-          { costUsd: 2, durationMs: 10_000, id: "one" },
-          { costUsd: 1, durationMs: 20_000, id: "two" },
+          { costUsd: 2, durationMs: 10_000, id: "one", success: true },
+          { costUsd: 1, durationMs: 20_000, id: "two", success: true },
         ],
         [
-          { costUsd: 1, durationMs: 5_000, id: "one" },
-          { costUsd: 2, durationMs: 30_000, id: "two" },
+          { costUsd: 1, durationMs: 5_000, id: "one", success: true },
+          { costUsd: 2, durationMs: 30_000, id: "two", success: true },
         ]
       )
     ).toEqual({ cost: 0.25, time: 0 });
+  });
+
+  it("excludes pairs unless both variants passed", () => {
+    const baseline = {
+      costUsd: 2,
+      durationMs: 10_000,
+      id: "task",
+      success: true,
+    };
+    const candidate = {
+      costUsd: 1,
+      durationMs: 5_000,
+      id: "task",
+      success: false,
+    };
+
+    expect(compareBenchmarkTasks(baseline, candidate)).toEqual({
+      cost: null,
+      time: null,
+    });
+    expect(averageBenchmarkImprovement([baseline], [candidate])).toEqual({
+      cost: null,
+      time: null,
+    });
   });
 });
