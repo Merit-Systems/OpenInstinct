@@ -1,7 +1,13 @@
 import { getToken } from "@vercel/connect";
 import { z } from "zod";
+import { isE164PhoneNumber } from "./phone-number";
 
+const LINQ_AVAILABLE_NUMBER_URL =
+  "https://api.linqapp.com/api/partner/v3/available_number";
 const LINQ_MESSAGES_URL = "https://api.linqapp.com/api/partner/v3/messages";
+const linqAvailableNumberSchema = z.object({
+  phone_number: z.string().refine(isE164PhoneNumber),
+});
 const linqErrorResponseSchema = z.object({
   code: z.number().int().optional(),
   error: z
@@ -57,18 +63,24 @@ export function linqOtpFailure(error: LinqDeliveryError) {
     )
   ) {
     return {
-      code: "LINQ_SENDING_LINE_NOT_VERIFIED",
+      code: "LINQ_SENDING_LINE_UNAVAILABLE",
       message:
-        "This deployment's Linq phone number still needs its one-time verification. In Vercel Connect → Settings, follow the Phone Numbers verification instruction, then try again.",
+        "No Linq line is currently eligible to send a code. If this is a new line, complete the first-time sign-in steps above; otherwise review the line's health in Linq and try again.",
     };
   }
 
   switch (error.code) {
+    case 2006:
+      return {
+        code: "LINQ_SENDING_LINE_NOT_AUTHORIZED",
+        message:
+          "Linq has not authorized a sending line for this connector. If this is a new line, complete the first-time sign-in steps above; otherwise confirm the connector's API token can access the active line in Linq.",
+      };
     case 2008:
       return {
         code: "LINQ_RECIPIENT_NOT_VERIFIED",
         message:
-          "This phone number must message your deployment's Linq phone number once before it can receive a sign-in code. Find the Linq phone number in Vercel Connect → Settings, send it any message from this phone, then try again.",
+          "Complete the first-time sign-in steps above: text the deployment's Linq number once from this phone, then request another code.",
       };
     case 2024:
       return {
@@ -88,6 +100,23 @@ export function linqOtpFailure(error: LinqDeliveryError) {
         message:
           "Linq could not send a sign-in code. Check the connector and its sending line, then try again.",
       };
+  }
+}
+
+export async function readLinqOnboardingPhoneNumber(connector: string) {
+  try {
+    const token = await getToken(connector, {
+      subject: { type: "app" },
+    });
+    const response = await fetch(LINQ_AVAILABLE_NUMBER_URL, {
+      headers: { Authorization: `Bearer ${token}` },
+      signal: AbortSignal.timeout(3000),
+    });
+    if (!response.ok) return undefined;
+    const body: unknown = await response.json().catch(() => undefined);
+    return linqAvailableNumberSchema.safeParse(body).data?.phone_number;
+  } catch {
+    return undefined;
   }
 }
 
