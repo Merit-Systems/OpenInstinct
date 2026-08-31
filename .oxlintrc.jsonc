@@ -33,7 +33,7 @@
   ],
   "settings": {
     "tailwindcss": {
-      "entryPoint": "app/globals.css"
+      "entryPoint": "src/app/globals.css"
     }
   },
   "rules": {
@@ -251,7 +251,7 @@
     "tailwindcss/no-deprecated-classes": "warn",
     "tailwindcss/no-duplicate-classes": "error",
     // The semantic typography utilities are hand-authored `@layer utilities`
-    // classes in app/styles/brand/typography.css.
+    // classes in src/app/styles/brand/typography.css.
     "tailwindcss/no-unknown-classes": [
       "warn",
       {
@@ -438,7 +438,7 @@
     {
       // shadcn registry source uses behavior utilities that the Tailwind
       // linter cannot resolve through package stylesheet imports.
-      "files": ["components/ui/**/*.tsx"],
+      "files": ["src/components/ui/**/*.tsx"],
       "rules": {
         "tailwindcss/no-unknown-classes": "off"
       }
@@ -446,7 +446,7 @@
     {
       // Eve owns this generated Web Chat scaffold. Keep it updateable from the
       // framework.
-      "files": ["app/**/*.tsx", "components/ai-elements/**/*.tsx"],
+      "files": ["src/app/**/*.tsx", "src/components/ai-elements/**/*.tsx"],
       "rules": {
         "eslint/no-empty-function": "off",
         "eslint/no-underscore-dangle": "off",
