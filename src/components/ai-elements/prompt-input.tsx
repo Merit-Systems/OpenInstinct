@@ -52,6 +52,7 @@ import {
   XIcon,
 } from "lucide-react";
 import { nanoid } from "nanoid";
+import { z } from "zod";
 import type {
   ChangeEvent,
   ChangeEventHandler,
@@ -88,6 +89,7 @@ const convertBlobUrlToDataUrl = async (url: string): Promise<string | null> => {
     // FileReader uses callback-based API, wrapping in Promise is necessary
     return new Promise((resolve) => {
       const reader = new FileReader();
+      // SAFETY: FileReader.result is a string because readAsDataURL is the only read operation used here.
       reader.onloadend = () => resolve(reader.result as string);
       reader.onerror = () => resolve(null);
       reader.readAsDataURL(blob);
@@ -600,13 +602,13 @@ export const PromptInput = ({
       }
 
       setItems((prev) => {
-        const capacity =
-          typeof maxFiles === "number"
-            ? Math.max(0, maxFiles - prev.length)
-            : undefined;
+        const maximum = z.number().safeParse(maxFiles);
+        const capacity = maximum.success
+          ? Math.max(0, maximum.data - prev.length)
+          : undefined;
         const capped =
-          typeof capacity === "number" ? sized.slice(0, capacity) : sized;
-        if (typeof capacity === "number" && sized.length > capacity) {
+          capacity === undefined ? sized : sized.slice(0, capacity);
+        if (capacity !== undefined && sized.length > capacity) {
           onError?.({
             code: "max_files",
             message: "Too many files. Some were not added.",
@@ -664,13 +666,12 @@ export const PromptInput = ({
       }
 
       const currentCount = files.length;
-      const capacity =
-        typeof maxFiles === "number"
-          ? Math.max(0, maxFiles - currentCount)
-          : undefined;
-      const capped =
-        typeof capacity === "number" ? sized.slice(0, capacity) : sized;
-      if (typeof capacity === "number" && sized.length > capacity) {
+      const maximum = z.number().safeParse(maxFiles);
+      const capacity = maximum.success
+        ? Math.max(0, maximum.data - currentCount)
+        : undefined;
+      const capped = capacity === undefined ? sized : sized.slice(0, capacity);
+      if (capacity !== undefined && sized.length > capacity) {
         onError?.({
           code: "max_files",
           message: "Too many files. Some were not added.",
@@ -852,7 +853,7 @@ export const PromptInput = ({
         ? controller.textInput.value
         : (() => {
             const formData = new FormData(form);
-            return (formData.get("message") as string) || "";
+            return z.string().catch("").parse(formData.get("message"));
           })();
 
       // Reset form immediately after capturing text to avoid race condition
@@ -987,9 +988,9 @@ export const PromptInputTextarea = ({
 
         // Check if the submit button is disabled before submitting
         const { form } = e.currentTarget;
-        const submitButton = form?.querySelector(
+        const submitButton = form?.querySelector<HTMLButtonElement>(
           'button[type="submit"]'
-        ) as HTMLButtonElement | null;
+        );
         if (submitButton?.disabled) {
           return;
         }
@@ -1150,10 +1151,16 @@ export const PromptInputButton = ({
     return button;
   }
 
-  const tooltipContent =
-    typeof tooltip === "string" ? tooltip : tooltip.content;
-  const shortcut = typeof tooltip === "string" ? undefined : tooltip.shortcut;
-  const side = typeof tooltip === "string" ? "top" : (tooltip.side ?? "top");
+  const tooltipText = z.string().safeParse(tooltip);
+  // SAFETY: A failed string parse leaves only the object member of the declared tooltip union.
+  const tooltipOptions = tooltipText.success
+    ? undefined
+    : (tooltip as Exclude<PromptInputButtonTooltip, string>);
+  const tooltipContent = tooltipText.success
+    ? tooltipText.data
+    : tooltipOptions?.content;
+  const shortcut = tooltipOptions?.shortcut;
+  const side = tooltipOptions?.side ?? "top";
 
   return (
     <Tooltip>
@@ -1246,6 +1253,7 @@ export const PromptInputSubmit = ({
         onStop();
         return;
       }
+      // SAFETY: InputGroupButton exposes the same button click event contract used by this wrapper.
       (onClick as React.MouseEventHandler<HTMLButtonElement> | undefined)?.(e);
     },
     [isGenerating, onStop, onClick]

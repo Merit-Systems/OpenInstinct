@@ -10,7 +10,7 @@ import {
 } from "@/lib/browser-images";
 import { isBrowserImageArtifactUrl } from "@/lib/browser-image-path";
 import {
-  parseTaskCompletionOutput,
+  taskCompletionOutputSchema,
   taskCompletionSchema,
 } from "@/lib/task-completion";
 
@@ -84,7 +84,7 @@ describe("browser image contracts", () => {
 
   it("defaults historical worker results to no images and caps new results", () => {
     expect(
-      parseTaskCompletionOutput({ message: "Done", status: "success" })
+      taskCompletionOutputSchema.parse({ message: "Done", status: "success" })
     ).toEqual({ images: [], message: "Done", status: "success" });
     expect(
       taskCompletionSchema.safeParse({ message: "Done", status: "success" })

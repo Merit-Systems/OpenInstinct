@@ -1,10 +1,4 @@
-import {
-  getTokenResponse,
-  NoValidTokenError,
-  type ConnectTokenResponse,
-  startAuthorization,
-} from "@vercel/connect";
-import type * as VercelConnect from "@vercel/connect";
+import { NoValidTokenError, type ConnectTokenResponse } from "@vercel/connect";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { parseCalendarAvailability } from "@/agent/lib/google-workspace/calendar";
 import { googleWorkspaceAuthOptions } from "@/agent/lib/google-workspace/client";
@@ -17,14 +11,18 @@ import {
 } from "@/lib/google-workspace/config";
 import {
   getGoogleWorkspaceConnection,
+  googleWorkspaceServerDependencies,
   startGoogleWorkspaceAuthorization,
 } from "@/lib/google-workspace/server";
 
-vi.mock("@vercel/connect", async (importOriginal) => ({
-  ...(await importOriginal<typeof VercelConnect>()),
-  getTokenResponse: vi.fn<typeof getTokenResponse>(),
-  startAuthorization: vi.fn<typeof startAuthorization>(),
-}));
+const getTokenResponseMock = vi.spyOn(
+  googleWorkspaceServerDependencies,
+  "getTokenResponse"
+);
+const startAuthorizationMock = vi.spyOn(
+  googleWorkspaceServerDependencies,
+  "startAuthorization"
+);
 
 afterEach(() => vi.clearAllMocks());
 
@@ -62,13 +60,13 @@ describe("Google Workspace connection", () => {
       expiresAt: Date.now() + 60_000,
       token: "must-not-leak",
     };
-    vi.mocked(getTokenResponse).mockResolvedValue(response);
+    getTokenResponseMock.mockResolvedValue(response);
 
     await expect(getGoogleWorkspaceConnection(scope)).resolves.toEqual({
       accountLabel: "person@example.com",
       state: "connected",
     });
-    expect(getTokenResponse).toHaveBeenCalledWith(
+    expect(getTokenResponseMock).toHaveBeenCalledWith(
       expect.any(String),
       googleWorkspaceTokenParams(scope.userId),
       { forceRefresh: true }
@@ -76,7 +74,7 @@ describe("Google Workspace connection", () => {
   });
 
   it("reports a missing user grant as disconnected", async () => {
-    vi.mocked(getTokenResponse).mockRejectedValue(
+    getTokenResponseMock.mockRejectedValue(
       new NoValidTokenError("No Google grant for this user.")
     );
     await expect(getGoogleWorkspaceConnection(scope)).resolves.toEqual({
@@ -86,7 +84,7 @@ describe("Google Workspace connection", () => {
   });
 
   it("starts authorization with the canonical subject and scopes", async () => {
-    vi.mocked(startAuthorization).mockResolvedValue({
+    startAuthorizationMock.mockResolvedValue({
       request: "request",
       url: "https://connect.vercel.com/request",
       verifier: "verifier",
@@ -98,7 +96,7 @@ describe("Google Workspace connection", () => {
         "https://openinstinct.example/?google=connected"
       )
     ).resolves.toBe("https://connect.vercel.com/request");
-    expect(startAuthorization).toHaveBeenCalledWith(
+    expect(startAuthorizationMock).toHaveBeenCalledWith(
       expect.any(String),
       googleWorkspaceTokenParams(scope.userId),
       expect.objectContaining({

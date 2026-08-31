@@ -1,37 +1,34 @@
 /* oxlint-disable typescript/no-unsafe-type-assertion, vitest/require-mock-type-parameters -- Eve's Linq adapter exposes the handler context through a transitive Chat SDK `any`; the fixture supplies only the fields exercised here. */
-import type * as LinqModule from "eve/channels/linq";
+import type { HookContext } from "eve/hooks";
 import { describe, expect, it, vi } from "vitest";
+import * as BrowserImageServer from "@/lib/browser-images/server";
+import { linqChannelConfig } from "../agent/channels/linq";
 import workerCancellationHook from "../agent/hooks/worker-cancellation-delivery";
 
-const linqChannelCapture = vi.hoisted(() => ({
-  config: undefined as unknown,
-  readImage: vi.fn(),
-}));
-vi.mock("@/lib/browser-images/server", () => ({
-  readBrowserImageBytes: linqChannelCapture.readImage,
-}));
-vi.mock("eve/channels/linq", async (importOriginal) => {
-  const original = await importOriginal<typeof LinqModule>();
-  return {
-    ...original,
-    linqChannel(config: unknown) {
-      linqChannelCapture.config = config;
-      return config;
-    },
-  };
-});
-await import("../agent/channels/linq");
-
-const channelEvents = (
-  linqChannelCapture.config as LinqModule.LinqChannelConfig
-).events;
-const trackWorkerCancellation = channelEvents?.["action.result"];
-const deliverCompletedMessage = channelEvents?.["message.completed"];
-if (!trackWorkerCancellation || !deliverCompletedMessage) {
-  throw new Error("Linq event handlers are not configured.");
-}
+const readImageMock = vi.spyOn(BrowserImageServer, "readBrowserImageBytes");
+const channelEvents = linqChannelConfig.events;
+const trackWorkerCancellation = channelEvents["action.result"];
+const deliverCompletedMessage = channelEvents["message.completed"];
 
 type HandlerParameters = Parameters<typeof deliverCompletedMessage>;
+
+interface LinqTestMessage {
+  readonly files?: readonly {
+    readonly data: Buffer;
+    readonly filename: string;
+    readonly mimeType: string;
+  }[];
+  readonly markdown: string;
+}
+
+interface LinqTestState {
+  acknowledgedLinqMessageId?: string;
+  pendingToolCallMessage?: string | null;
+  workerCancellations?: readonly {
+    readonly sourceMessageId: string;
+    readonly taskId: string;
+  }[];
+}
 
 describe("Linq message delivery", () => {
   it("posts final responses as native iMessage Markdown", async () => {
@@ -54,7 +51,7 @@ describe("Linq message delivery", () => {
 
   it("replaces scoped artifact markdown with native iMessage files", async () => {
     const artifactId = "0d01e667-d128-4bb7-a248-1ae21db72f4f";
-    linqChannelCapture.readImage.mockResolvedValue({
+    readImageMock.mockResolvedValue({
       bytes: new Uint8Array([1, 2, 3]),
       filename: "product.png",
       id: artifactId,
@@ -70,7 +67,7 @@ describe("Linq message delivery", () => {
       sessionContext()
     );
 
-    expect(linqChannelCapture.readImage).toHaveBeenCalledWith(
+    expect(readImageMock).toHaveBeenCalledWith(
       expect.objectContaining({
         userId: "user-1",
         workspaceId: "workspace-1",
@@ -93,16 +90,14 @@ describe("Linq message delivery", () => {
   it("sends multiple artifact images as one native attachment gallery", async () => {
     const firstArtifactId = "0d01e667-d128-4bb7-a248-1ae21db72f4f";
     const secondArtifactId = "206c3a7e-c0b8-4317-9e34-552cff646673";
-    linqChannelCapture.readImage.mockImplementation(
-      async (_scope: unknown, artifactId: string) => ({
-        bytes: new Uint8Array(
-          artifactId === firstArtifactId ? [1, 2, 3] : [4, 5, 6]
-        ),
-        filename: artifactId === firstArtifactId ? "first.png" : "second.png",
-        id: artifactId,
-        mediaType: "image/png",
-      })
-    );
+    readImageMock.mockImplementation(async (_scope, artifactId) => ({
+      bytes: new Uint8Array(
+        artifactId === firstArtifactId ? [1, 2, 3] : [4, 5, 6]
+      ),
+      filename: artifactId === firstArtifactId ? "first.png" : "second.png",
+      id: artifactId,
+      mediaType: "image/png",
+    }));
     const { context, post } = handlerContext();
 
     await deliverCompletedMessage(
@@ -136,7 +131,7 @@ describe("Linq message delivery", () => {
 
   it("keeps reply bubbles and attaches images to the final bubble", async () => {
     const artifactId = "0d01e667-d128-4bb7-a248-1ae21db72f4f";
-    linqChannelCapture.readImage.mockResolvedValue({
+    readImageMock.mockResolvedValue({
       bytes: new Uint8Array([1, 2, 3]),
       filename: "product.png",
       id: artifactId,
@@ -202,11 +197,7 @@ describe("Linq message delivery", () => {
   it("suppresses the redundant turn after task cancellation", async () => {
     const { context, post } = handlerContext();
 
-    await trackWorkerCancellation(
-      workerCancellationResult(),
-      context,
-      sessionContext()
-    );
+    trackWorkerCancellation(workerCancellationResult(), context);
     await recordCancellationThroughHook(
       "session-1",
       "turn-2",
@@ -241,10 +232,9 @@ describe("Linq message delivery", () => {
   it("does not suppress an interleaved task result", async () => {
     const { context, post } = handlerContext();
 
-    await trackWorkerCancellation(
+    trackWorkerCancellation(
       workerCancellationResult("task-cancelled"),
-      context,
-      sessionContext()
+      context
     );
     await recordCancellationThroughHook(
       "session-1",
@@ -275,11 +265,7 @@ describe("Linq message delivery", () => {
 
   it("delivers user-authored cancellation text from a newer Linq message", async () => {
     const original = handlerContext("message-1");
-    await trackWorkerCancellation(
-      workerCancellationResult(),
-      original.context,
-      sessionContext()
-    );
+    trackWorkerCancellation(workerCancellationResult(), original.context);
 
     await recordCancellationThroughHook(
       "session-1",
@@ -304,10 +290,9 @@ describe("Linq message delivery", () => {
   it("retains older pending cancellations across many later tasks", async () => {
     const { context, post } = handlerContext();
     for (let index = 0; index < 60; index += 1) {
-      await trackWorkerCancellation(
+      trackWorkerCancellation(
         workerCancellationResult(`task-${String(index)}`),
-        context,
-        sessionContext()
+        context
       );
     }
     await recordCancellationThroughHook(
@@ -371,13 +356,14 @@ function completedEvent(
 
 function handlerContext(
   currentMessageId = "message-1",
-  state: Record<string, unknown> = {}
+  state: LinqTestState = {}
 ) {
-  const post = vi.fn<(message: unknown) => Promise<void>>();
+  const post = vi.fn<(message: LinqTestMessage) => Promise<void>>();
   post.mockResolvedValue();
   const addReaction = vi
     .fn<(threadId: string, messageId: string, emoji: string) => Promise<void>>()
     .mockResolvedValue(undefined);
+  // SAFETY: The fixture implements the Linq handler fields exercised by these tests.
   const context = {
     bot: {
       getAdapter: () => ({
@@ -398,7 +384,7 @@ function handlerContext(
         isDM: true,
       }),
     },
-  } as unknown as HandlerParameters[1];
+  } as HandlerParameters[1];
 
   return {
     addReaction,
@@ -410,16 +396,26 @@ function handlerContext(
 
 function sessionContext() {
   return {
+    async getSandbox() {
+      throw new Error("Sandbox access is outside this focused test.");
+    },
+    getSkill() {
+      throw new Error("Skill access is outside this focused test.");
+    },
     session: {
       auth: {
         current: {
           attributes: { workspaceId: "workspace-1" },
-          id: "user-1",
+          authenticator: "test",
+          principalId: "user-1",
+          principalType: "user",
         },
+        initiator: null,
       },
       id: "session-1",
+      turn: { id: "turn-1", sequence: 0 },
     },
-  } as unknown as HandlerParameters[2];
+  } satisfies HandlerParameters[2];
 }
 
 async function recordCancellationThroughHook(
@@ -429,16 +425,27 @@ async function recordCancellationThroughHook(
 ) {
   const handler = workerCancellationHook.events?.["message.received"];
   if (!handler) throw new Error("Worker cancellation hook is not configured.");
+  const context = {
+    agent: { name: "root" },
+    channel: { kind: "linq" },
+    async getSandbox() {
+      throw new Error("Sandbox access is outside this focused test.");
+    },
+    getSkill() {
+      throw new Error("Skill access is outside this focused test.");
+    },
+    session: {
+      auth: { current: null, initiator: null },
+      id: sessionId,
+      turn: { id: turnId, sequence: 0 },
+    },
+  } satisfies HookContext;
   await handler(
     {
       data: { message, sequence: 0, turnId },
       meta: { at: "2026-08-27T20:00:00.000Z", id: `received-${turnId}` },
       type: "message.received",
     },
-    {
-      agent: { name: "root" },
-      channel: { kind: "linq" },
-      session: { id: sessionId },
-    } as Parameters<typeof handler>[1]
+    context
   );
 }

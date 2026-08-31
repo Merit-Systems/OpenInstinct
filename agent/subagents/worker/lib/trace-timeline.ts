@@ -1,4 +1,5 @@
 import type { HookEvent } from "eve/hooks";
+import { z } from "zod";
 
 export interface TraceTimelineRow {
   readonly at: string;
@@ -10,12 +11,15 @@ export interface TraceTimelineRow {
 
 const detailCharacterLimit = 600;
 
-function compactJson(value: unknown) {
-  const serialized = JSON.stringify(value, (_key, entry: unknown) =>
-    typeof entry === "string" && entry.length > 200
-      ? `${entry.slice(0, 200)}… [${String(entry.length)} chars]`
-      : entry
-  );
+function compactJson(value: Parameters<typeof JSON.stringify>[0]) {
+  const serialized = JSON.stringify(value, (_key, entry) => {
+    const text = z.string().safeParse(entry);
+    if (text.success && text.data.length > 200) {
+      return `${text.data.slice(0, 200)}… [${String(text.data.length)} chars]`;
+    }
+    const jsonValue = z.json().safeParse(entry);
+    return jsonValue.success ? jsonValue.data : undefined;
+  });
   return serialized.length > detailCharacterLimit
     ? `${serialized.slice(0, detailCharacterLimit)}…`
     : serialized;

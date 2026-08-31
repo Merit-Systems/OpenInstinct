@@ -1,5 +1,13 @@
 /* oxlint-disable typescript/no-unsafe-type-assertion, vitest/require-mock-type-parameters -- Eve owns the tool context and Vitest owns these hoisted provider fakes. */
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import * as WorkerAccess from "@/agent/subagents/worker/lib/access";
+import * as OwnedBrowser from "@/agent/subagents/worker/lib/owned-browser";
+import * as ScreenshotMask from "@/agent/subagents/worker/lib/vault-screenshot-mask";
+import * as BrowserImageService from "@/db/services/browser-images";
+import * as BrowserImageServer from "@/lib/browser-images/server";
+import { kernel } from "@/lib/kernel";
+import captureBrowserImage from "../agent/subagents/worker/tools/capture_browser_image";
+import { toolContextFor } from "./helpers/tool-context";
 
 const artifactId = "0d01e667-d128-4bb7-a248-1ae21db72f4f";
 const png = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
@@ -12,50 +20,23 @@ const image = {
   url: `/artifacts/${artifactId}`,
 };
 
-const mocks = vi.hoisted(() => ({
-  captureScreenshot: vi.fn(),
-  deleteFile: vi.fn(),
-  fetch: vi.fn(),
-  mask: vi.fn(),
-  persist: vi.fn(),
-  playwrightExecute: vi.fn(),
-  readBoundedResponse: vi.fn(),
-  readFile: vi.fn(),
-  reserve: vi.fn(),
-  retrieve: vi.fn(),
-  requireOwnedBrowserSession: vi.fn(),
-  requireWorkerScope: vi.fn(),
-}));
-
-vi.mock("@/agent/subagents/worker/lib/access", () => ({
-  requireWorkerScope: mocks.requireWorkerScope,
-}));
-vi.mock("@/agent/subagents/worker/lib/owned-browser", () => ({
-  requireOwnedBrowserSession: mocks.requireOwnedBrowserSession,
-}));
-vi.mock("@/agent/subagents/worker/lib/vault-screenshot-mask", () => ({
-  withVaultScreenshotMask: mocks.mask,
-}));
-vi.mock("@/db/services/browser-images", () => ({
-  reserveBrowserImageArtifact: mocks.reserve,
-}));
-vi.mock("@/lib/browser-images/server", () => ({
-  persistReservedBrowserImage: mocks.persist,
-  readBoundedResponse: mocks.readBoundedResponse,
-}));
-vi.mock("@/lib/kernel", () => ({
-  kernel: {
-    browsers: {
-      computer: { captureScreenshot: mocks.captureScreenshot },
-      fetch: mocks.fetch,
-      fs: { deleteFile: mocks.deleteFile, readFile: mocks.readFile },
-      playwright: { execute: mocks.playwrightExecute },
-      retrieve: mocks.retrieve,
-    },
-  },
-}));
-
-import captureBrowserImage from "../agent/subagents/worker/tools/capture_browser_image";
+const mocks = {
+  captureScreenshot: vi.spyOn(kernel.browsers.computer, "captureScreenshot"),
+  deleteFile: vi.spyOn(kernel.browsers.fs, "deleteFile"),
+  fetch: vi.spyOn(kernel.browsers, "fetch"),
+  mask: vi.spyOn(ScreenshotMask, "withVaultScreenshotMask"),
+  persist: vi.spyOn(BrowserImageServer, "persistReservedBrowserImage"),
+  playwrightExecute: vi.spyOn(kernel.browsers.playwright, "execute"),
+  readBoundedResponse: vi.spyOn(BrowserImageServer, "readBoundedResponse"),
+  readFile: vi.spyOn(kernel.browsers.fs, "readFile"),
+  reserve: vi.spyOn(BrowserImageService, "reserveBrowserImageArtifact"),
+  retrieve: vi.spyOn(kernel.browsers, "retrieve"),
+  requireOwnedBrowserSession: vi.spyOn(
+    OwnedBrowser,
+    "requireOwnedBrowserSession"
+  ),
+  requireWorkerScope: vi.spyOn(WorkerAccess, "requireWorkerScope"),
+};
 
 const scope = { userId: "user-1", workspaceId: "workspace-1" };
 const reservation = {
@@ -67,20 +48,31 @@ beforeEach(() => {
   vi.clearAllMocks();
   mocks.requireWorkerScope.mockResolvedValue(scope);
   mocks.requireOwnedBrowserSession.mockResolvedValue({
+    createdAt: "2026-08-31T00:00:00.000Z",
     sessionId: "browser-1",
+    workerSessionId: "worker-session-1",
   });
   mocks.reserve.mockResolvedValue({ reservation, status: "pending" });
   mocks.persist.mockResolvedValue(image);
-  mocks.mask.mockImplementation(
-    async (_sessionId: string, _signal: AbortSignal, capture: () => unknown) =>
-      capture()
+  mocks.mask.mockImplementation(async (_sessionId, _signal, capture) =>
+    capture()
   );
   mocks.captureScreenshot.mockResolvedValue(new Response(png));
   mocks.readBoundedResponse.mockResolvedValue(png);
   mocks.playwrightExecute.mockResolvedValue({ result: true, success: true });
   mocks.readFile.mockResolvedValue(new Response(png));
   mocks.deleteFile.mockResolvedValue(undefined);
-  mocks.retrieve.mockResolvedValue({ session_id: "browser-1" });
+  mocks.retrieve.mockResolvedValue({
+    cdp_ws_url: "wss://kernel.test/cdp",
+    created_at: "2026-08-31T00:00:00.000Z",
+    headless: false,
+    memory: "2GiB",
+    region: "us-east",
+    session_id: "browser-1",
+    stealth: true,
+    timeout_seconds: 900,
+    webdriver_ws_url: "wss://kernel.test/webdriver",
+  });
   mocks.fetch.mockResolvedValue(
     new Response(png, { headers: { "content-type": "image/png" } })
   );
@@ -88,6 +80,7 @@ beforeEach(() => {
 
 describe("capture_browser_image", () => {
   it("captures a masked viewport and returns only the artifact descriptor", async () => {
+    const toolContext = context();
     const result = await captureBrowserImage.execute(
       {
         label: "Product",
@@ -95,7 +88,7 @@ describe("capture_browser_image", () => {
         session_id: "browser-1",
         source: "viewport",
       },
-      context() as never
+      toolContext
     );
 
     expect(mocks.requireWorkerScope).toHaveBeenCalledOnce();
@@ -107,13 +100,13 @@ describe("capture_browser_image", () => {
     expect(mocks.captureScreenshot).toHaveBeenCalledWith(
       "browser-1",
       { region: { height: 200, width: 300, x: 10, y: 20 } },
-      { signal: undefined }
+      { signal: toolContext.abortSignal }
     );
     expect(mocks.persist).toHaveBeenCalledWith(
       scope,
       reservation,
       expect.objectContaining({ sourceKind: "viewport" }),
-      undefined
+      toolContext.abortSignal
     );
     expect(result).toEqual({ image });
     expect(JSON.stringify(result)).not.toContain("base64");
@@ -125,15 +118,16 @@ describe("capture_browser_image", () => {
   ] as const)(
     "captures a Playwright %s screenshot",
     async (source, selector, code) => {
-      await captureBrowserImage.execute(
-        {
-          label: "Product",
-          session_id: "browser-1",
-          source,
-          ...(selector ? { selector } : {}),
-        } as never,
-        context() as never
-      );
+      const input =
+        source === "element"
+          ? {
+              label: "Product",
+              selector,
+              session_id: "browser-1",
+              source,
+            }
+          : { label: "Product", session_id: "browser-1", source };
+      await captureBrowserImage.execute(input, context());
 
       expect(JSON.stringify(mocks.playwrightExecute.mock.calls)).toContain(
         code
@@ -144,6 +138,7 @@ describe("capture_browser_image", () => {
   );
 
   it("fetches an image element's original resource through the browser", async () => {
+    const toolContext = context();
     mocks.playwrightExecute.mockResolvedValue({
       result: { url: "https://images.example/product.png?private=ignored" },
       success: true,
@@ -156,13 +151,13 @@ describe("capture_browser_image", () => {
         session_id: "browser-1",
         source: "image_resource",
       },
-      context() as never
+      toolContext
     );
 
     expect(mocks.retrieve).toHaveBeenCalledWith(
       "browser-1",
       {},
-      { signal: undefined }
+      { signal: toolContext.abortSignal }
     );
     expect(mocks.fetch).toHaveBeenCalledWith(
       "browser-1",
@@ -173,7 +168,7 @@ describe("capture_browser_image", () => {
       scope,
       reservation,
       expect.objectContaining({ sourceKind: "image_resource" }),
-      undefined
+      expect.any(AbortSignal)
     );
     expect(JSON.stringify(mocks.persist.mock.calls)).not.toContain(
       "private=ignored"
@@ -181,6 +176,7 @@ describe("capture_browser_image", () => {
   });
 
   it("falls back to an element screenshot when the resource cannot be fetched", async () => {
+    const toolContext = context();
     mocks.playwrightExecute
       .mockResolvedValueOnce({
         result: { url: "https://images.example/product.avif" },
@@ -196,7 +192,7 @@ describe("capture_browser_image", () => {
         session_id: "browser-1",
         source: "image_resource",
       },
-      context() as never
+      toolContext
     );
 
     expect(mocks.readFile).toHaveBeenCalledOnce();
@@ -204,7 +200,7 @@ describe("capture_browser_image", () => {
       scope,
       reservation,
       expect.objectContaining({ sourceKind: "element" }),
-      undefined
+      toolContext.abortSignal
     );
   });
 
@@ -217,7 +213,7 @@ describe("capture_browser_image", () => {
         session_id: "browser-1",
         source: "viewport",
       },
-      context() as never
+      context()
     );
 
     expect(result).toEqual({ image });
@@ -235,7 +231,7 @@ describe("capture_browser_image", () => {
           session_id: "browser-1",
           source: "viewport",
         },
-        context() as never
+        context()
       )
     ).rejects.toThrow("Kernel failed");
     expect(mocks.persist).not.toHaveBeenCalled();
@@ -245,7 +241,7 @@ describe("capture_browser_image", () => {
     const controller = new AbortController();
     mocks.readFile.mockImplementation(() => {
       controller.abort();
-      return Promise.reject(new Error("Capture cancelled"));
+      throw new Error("Capture cancelled");
     });
 
     await expect(
@@ -255,7 +251,7 @@ describe("capture_browser_image", () => {
           session_id: "browser-1",
           source: "full_page",
         },
-        context(controller.signal) as never
+        context(controller.signal)
       )
     ).rejects.toThrow("Capture cancelled");
     expect(mocks.deleteFile).toHaveBeenCalledOnce();
@@ -267,12 +263,11 @@ describe("capture_browser_image", () => {
 });
 
 function context(abortSignal?: AbortSignal) {
-  return {
-    abortSignal,
+  return toolContextFor({
+    abortSignal: abortSignal ?? new AbortController().signal,
     callId: "call-image",
-    session: {
-      id: "worker-session",
-      parent: { rootSessionId: "root-session" },
-    },
-  };
+    parentSessionId: "root-session",
+    sessionId: "worker-session",
+    toolName: "capture_browser_image",
+  });
 }

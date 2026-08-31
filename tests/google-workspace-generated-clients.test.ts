@@ -1,4 +1,7 @@
 import { createHash } from "node:crypto";
+import * as CalendarApi from "@googleapis/calendar";
+import * as GmailApi from "@googleapis/gmail";
+import * as PeopleApi from "@googleapis/people";
 import type { ToolContext } from "eve/tools";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
@@ -12,23 +15,13 @@ interface RequestOptions {
   signal: AbortSignal;
 }
 
-const google = vi.hoisted(() => ({
-  calendar: vi.fn<(options: unknown) => unknown>(),
-  gmail: vi.fn<(options: unknown) => unknown>(),
-  people: vi.fn<(options: unknown) => unknown>(),
-  setCredentials: vi.fn<(credentials: { access_token: string }) => void>(),
-}));
-
-vi.mock("@googleapis/calendar", () => ({ calendar: google.calendar }));
-vi.mock("@googleapis/gmail", () => ({
-  auth: {
-    OAuth2: class {
-      setCredentials = google.setCredentials;
-    },
-  },
-  gmail: google.gmail,
-}));
-vi.mock("@googleapis/people", () => ({ people: google.people }));
+const calendarMock = vi.spyOn(CalendarApi, "calendar");
+const gmailMock = vi.spyOn(GmailApi, "gmail");
+const peopleMock = vi.spyOn(PeopleApi, "people");
+const setCredentialsMock = vi.spyOn(
+  GmailApi.auth.OAuth2.prototype,
+  "setCredentials"
+);
 
 afterEach(() => vi.clearAllMocks());
 
@@ -42,7 +35,7 @@ describe("generated Google Workspace clients", () => {
     );
 
     expect(ctx.getToken).toHaveBeenCalledOnce();
-    expect(google.setCredentials).toHaveBeenCalledWith({
+    expect(setCredentialsMock).toHaveBeenCalledWith({
       access_token: "google-access-token",
     });
     expect(ctx.requireAuth).toHaveBeenCalledOnce();
@@ -50,17 +43,20 @@ describe("generated Google Workspace clients", () => {
 
   it("sends typed Gmail requests with a stable retry-safe message ID", async () => {
     const ctx = toolContext();
+    const client = GmailApi.gmail({ version: "v1" });
     const send = vi
       .fn<
         (
-          request: unknown,
+          request: {
+            requestBody: { raw: string; threadId?: string };
+            userId: string;
+          },
           options: RequestOptions
         ) => Promise<{ data: { id: string; threadId: string } }>
       >()
-      .mockResolvedValue({
-        data: { id: "sent-1", threadId: "thread-1" },
-      });
-    googleClients({ gmail: { users: { messages: { send } } } });
+      .mockResolvedValue({ data: { id: "sent-1", threadId: "thread-1" } });
+    Object.defineProperty(client.users.messages, "send", { value: send });
+    googleClients({ gmail: client });
 
     await sendGmail(ctx, {
       bcc: [],
@@ -93,8 +89,18 @@ describe("generated Google Workspace clients", () => {
 
   it("recovers a duplicate Calendar insert using the stable event ID", async () => {
     const ctx = toolContext();
+    const client = CalendarApi.calendar({ version: "v3" });
     const insert = vi
-      .fn<(request: unknown, options: RequestOptions) => Promise<never>>()
+      .fn<
+        (
+          request: {
+            calendarId: string;
+            requestBody: { id?: string };
+            sendUpdates?: string;
+          },
+          options: RequestOptions
+        ) => Promise<never>
+      >()
       .mockRejectedValue(new GoogleApiError(409));
     const get = vi
       .fn<
@@ -106,7 +112,9 @@ describe("generated Google Workspace clients", () => {
       .mockResolvedValue({
         data: { id: "existing-event", summary: "Planning" },
       });
-    googleClients({ calendar: { events: { get, insert } } });
+    Object.defineProperty(client.events, "get", { value: get });
+    Object.defineProperty(client.events, "insert", { value: insert });
+    googleClients({ calendar: client });
 
     await expect(
       createCalendarEvent(ctx, {
@@ -132,10 +140,11 @@ describe("generated Google Workspace clients", () => {
 
   it("warms the People search cache before the typed contact query", async () => {
     const ctx = toolContext();
+    const client = PeopleApi.people({ version: "v1" });
     const searchContacts = vi
       .fn<
         (
-          request: unknown,
+          request: { pageSize?: number; query: string; readMask: string },
           options: RequestOptions
         ) => Promise<{
           data: { results?: { person: { resourceName: string } }[] };
@@ -145,7 +154,10 @@ describe("generated Google Workspace clients", () => {
       .mockResolvedValueOnce({
         data: { results: [{ person: { resourceName: "people/1" } }] },
       });
-    googleClients({ people: { people: { searchContacts } } });
+    Object.defineProperty(client.people, "searchContacts", {
+      value: searchContacts,
+    });
+    googleClients({ people: client });
 
     await expect(searchGoogleContacts(ctx, "Person", 10)).resolves.toEqual({
       contacts: [{ person: { resourceName: "people/1" } }],
@@ -176,27 +188,34 @@ function toolContext() {
     .fn<ToolContext["getToken"]>()
     .mockResolvedValue({ token: "google-access-token" });
   const requireAuth = vi.fn<ToolContext["requireAuth"]>();
-  // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- The fixture supplies exactly the ToolContext fields exercised by these helpers.
   return {
+    async getSandbox() {
+      throw new Error("Sandbox access is outside this focused test.");
+    },
+    getSkill() {
+      throw new Error("Skill access is outside this focused test.");
+    },
     abortSignal: new AbortController().signal,
     callId: "call-1",
     getToken,
     requireAuth,
-    session: { id: "session-1" },
-  } as unknown as ToolContext & {
-    getToken: typeof getToken;
-    requireAuth: typeof requireAuth;
-  };
+    session: {
+      auth: { current: null, initiator: null },
+      id: "session-1",
+      turn: { id: "turn-1", sequence: 0 },
+    },
+    toolName: "google-workspace-test",
+  } satisfies ToolContext;
 }
 
 function googleClients(clients: {
-  calendar?: unknown;
-  gmail?: unknown;
-  people?: unknown;
+  calendar?: ReturnType<typeof CalendarApi.calendar>;
+  gmail?: ReturnType<typeof GmailApi.gmail>;
+  people?: ReturnType<typeof PeopleApi.people>;
 }) {
-  google.calendar.mockReturnValue(clients.calendar ?? {});
-  google.gmail.mockReturnValue(clients.gmail ?? {});
-  google.people.mockReturnValue(clients.people ?? {});
+  if (clients.calendar) calendarMock.mockReturnValue(clients.calendar);
+  if (clients.gmail) gmailMock.mockReturnValue(clients.gmail);
+  if (clients.people) peopleMock.mockReturnValue(clients.people);
 }
 
 class GoogleApiError extends Error {

@@ -27,6 +27,7 @@ const ShimmerComponent = ({
   duration = 2,
   spread = 2,
 }: TextShimmerProps) => {
+  // SAFETY: The public `as` prop is constrained to React element types accepted by motion.create.
   const MotionComponent = m.create(Component as keyof JSX.IntrinsicElements);
 
   const dynamicSpread = useMemo(
@@ -45,6 +46,7 @@ const ShimmerComponent = ({
         )}
         initial={{ backgroundPosition: "100% center" }}
         style={
+          // SAFETY: CSSProperties omits repository-owned custom properties even though React passes them through.
           {
             "--spread": `${dynamicSpread}px`,
             backgroundImage:

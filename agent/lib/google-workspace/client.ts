@@ -1,6 +1,7 @@
 import { auth } from "@googleapis/gmail";
 import { connect, type EveAuthorizationOptions } from "@vercel/connect/eve";
 import type { ToolContext } from "eve/tools";
+import { z } from "zod";
 import { env } from "@/lib/env";
 import {
   googleWorkspaceSubject,
@@ -41,11 +42,11 @@ export async function withGoogleAuth<T>(
   }
 }
 
-export function googleApiErrorStatus(error: unknown) {
-  if (!error || typeof error !== "object" || !("response" in error)) return;
-  const { response } = error;
-  if (!response || typeof response !== "object" || !("status" in response)) {
-    return;
-  }
-  return typeof response.status === "number" ? response.status : undefined;
+const googleApiErrorSchema = z.object({
+  response: z.object({ status: z.number() }),
+});
+
+export function googleApiErrorStatus(cause: unknown) {
+  const result = googleApiErrorSchema.safeParse(cause);
+  return result.success ? result.data.response.status : undefined;
 }

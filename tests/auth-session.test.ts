@@ -1,22 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-
-const mocks = vi.hoisted(() => ({
-  getSession: vi.fn<
-    (_input: { headers: Headers }) => Promise<{
-      user: {
-        id: string;
-        phoneNumber?: string | null;
-        phoneNumberVerified?: boolean | null;
-      };
-    } | null>
-  >(),
-}));
-
-vi.mock("@/auth", () => ({
-  auth: { api: { getSession: mocks.getSession } },
-}));
-
+import { auth } from "@/auth";
 import { getAuthSession } from "@/auth/session";
+import { authSessionFor } from "./helpers/auth-session";
+
+const getSessionMock = vi.spyOn(auth.api, "getSession");
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -24,25 +11,23 @@ beforeEach(() => {
 
 describe("auth session", () => {
   it("returns only sessions backed by a verified phone number", async () => {
-    const verified = {
-      user: {
-        id: "user-1",
-        phoneNumber: "+12025550123",
-        phoneNumberVerified: true,
-      },
-    };
-    mocks.getSession
+    const verified = authSessionFor({
+      id: "user-1",
+      phoneNumber: "+12025550123",
+      phoneNumberVerified: true,
+    });
+    getSessionMock
       .mockResolvedValueOnce(verified)
-      .mockResolvedValueOnce({
-        user: {
+      .mockResolvedValueOnce(
+        authSessionFor({
           id: "user-2",
           phoneNumber: "+12025550124",
           phoneNumberVerified: false,
-        },
-      })
-      .mockResolvedValueOnce({
-        user: { id: "user-3", phoneNumberVerified: true },
-      });
+        })
+      )
+      .mockResolvedValueOnce(
+        authSessionFor({ id: "user-3", phoneNumberVerified: true })
+      );
 
     const headers = new Headers();
     await expect(getAuthSession(headers)).resolves.toBe(verified);

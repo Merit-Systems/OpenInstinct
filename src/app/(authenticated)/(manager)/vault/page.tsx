@@ -5,6 +5,7 @@ import {
   parseManagerSetupSearchParams,
 } from "@/lib/manager";
 import { readManagerSnapshot } from "@/lib/manager/server/store";
+import { z } from "zod";
 
 export default async function Page({ searchParams }: PageProps<"/vault">) {
   const query = await searchParams;
@@ -28,5 +29,6 @@ export default async function Page({ searchParams }: PageProps<"/vault">) {
 }
 
 function firstQueryValue(value: string | readonly string[] | undefined) {
-  return typeof value === "string" ? value : value?.[0];
+  const scalar = z.string().safeParse(value);
+  return scalar.success ? scalar.data : value?.[0];
 }
