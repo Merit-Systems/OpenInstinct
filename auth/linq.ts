@@ -4,6 +4,12 @@ import { z } from "zod";
 const LINQ_MESSAGES_URL = "https://api.linqapp.com/api/partner/v3/messages";
 const linqErrorResponseSchema = z.object({
   code: z.number().int().optional(),
+  error: z
+    .object({
+      code: z.number().int().optional(),
+      message: z.string().min(1).optional(),
+    })
+    .optional(),
   message: z.string().min(1).optional(),
   trace_id: z.string().min(1).optional(),
 });
@@ -44,12 +50,25 @@ export class LinqDeliveryError extends Error {
 }
 
 export function linqOtpFailure(error: LinqDeliveryError) {
+  if (
+    error.status === 409 &&
+    /no eligible (?:sending )?(?:line|phone number)/i.test(
+      error.linqMessage ?? ""
+    )
+  ) {
+    return {
+      code: "LINQ_SENDING_LINE_NOT_VERIFIED",
+      message:
+        "This deployment's Linq phone number still needs its one-time verification. In Vercel Connect → Settings, follow the Phone Numbers verification instruction, then try again.",
+    };
+  }
+
   switch (error.code) {
-    case 2015:
+    case 2008:
       return {
-        code: "LINQ_CONTACT_NOT_ALLOWED",
+        code: "LINQ_RECIPIENT_NOT_VERIFIED",
         message:
-          "This phone number is not in this deployment's Linq Messaging Contacts. Add it in Vercel Connect, then try again.",
+          "This phone number must message your deployment's Linq phone number once before it can receive a sign-in code. Find the Linq phone number in Vercel Connect → Settings, send it any message from this phone, then try again.",
       };
     case 2024:
       return {
@@ -103,9 +122,10 @@ export async function sendLinqText({
   const body: unknown = await response.json().catch(() => undefined);
   const linqError = linqErrorResponseSchema.safeParse(body).data;
   throw new LinqDeliveryError({
-    code: linqError?.code,
-    linqMessage: linqError?.message,
+    code: linqError?.error?.code ?? linqError?.code,
+    linqMessage: linqError?.error?.message ?? linqError?.message,
     status: response.status,
-    traceId: linqError?.trace_id,
+    traceId:
+      linqError?.trace_id ?? response.headers.get("x-trace-id") ?? undefined,
   });
 }
