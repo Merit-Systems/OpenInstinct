@@ -5,12 +5,12 @@ import {
   completeBrowserTrace,
   recordBrowserTraceEvents,
 } from "@/db/services/browser-traces";
-import { traceTimelineRows } from "@/agent/subagents/worker/lib/trace-timeline";
+import { traceTimelineRows } from "@/agent/subagents/worker/lib/trace/timeline";
 import { listWorkerBrowserSessions } from "@/db/services/browsers";
 import type { AccessScope } from "@/lib/access-scope";
 import { scopeFromPrincipal } from "@/lib/access-scope";
 import { taskCompletionOutputSchema } from "@/lib/worker-completion";
-import { harvestBrowserTraceDomains } from "@/agent/subagents/worker/lib/trace-domains";
+import { harvestBrowserTraceDomains } from "@/agent/subagents/worker/lib/trace/domains";
 
 export const traceTelemetryDependencies = {
   beginBrowserTrace,
