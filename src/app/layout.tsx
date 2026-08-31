@@ -2,12 +2,12 @@ import type { Metadata } from "next";
 import { headers } from "next/headers";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { accessScopeForUser } from "@/lib/access-scope";
+import { applicationOrigin } from "@/lib/application-origin";
 import { getAuthSession } from "@/auth/session";
-import { env } from "@/lib/env";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  metadataBase: new URL(env.BETTER_AUTH_URL),
+  metadataBase: new URL(applicationOrigin()),
   title: "OpenInstinct",
   description:
     "A self-hosted personal agent with private credentials and Kernel-powered browser execution.",

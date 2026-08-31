@@ -1,9 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { auth } from "@/auth";
-import { getAuthSession } from "@/auth/session";
+import { authSessionDependencies, getAuthSession } from "@/auth/session";
 import { authSessionFor } from "./helpers/auth-session";
 
-const getSessionMock = vi.spyOn(auth.api, "getSession");
+const getSessionMock = vi.spyOn(authSessionDependencies, "getSession");
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -27,10 +26,18 @@ describe("auth session", () => {
       )
       .mockResolvedValueOnce(
         authSessionFor({ id: "user-3", phoneNumberVerified: true })
+      )
+      .mockResolvedValueOnce(
+        authSessionFor({
+          id: "user-4",
+          phoneNumber: "",
+          phoneNumberVerified: true,
+        })
       );
 
     const headers = new Headers();
-    await expect(getAuthSession(headers)).resolves.toBe(verified);
+    await expect(getAuthSession(headers)).resolves.toEqual(verified);
+    await expect(getAuthSession(headers)).resolves.toBeNull();
     await expect(getAuthSession(headers)).resolves.toBeNull();
     await expect(getAuthSession(headers)).resolves.toBeNull();
   });

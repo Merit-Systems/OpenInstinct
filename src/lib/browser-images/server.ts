@@ -10,6 +10,7 @@ import {
   maximumBrowserImageBytes,
   sniffBrowserImageMediaType,
 } from "@/lib/browser-images";
+import { blobAuthentication as resolveBlobAuthentication } from "@/lib/blob-authentication";
 import { env } from "@/lib/env";
 
 const blobOptions = { access: "private" as const };
@@ -26,9 +27,8 @@ export function browserImageBlobAuthentication(input: {
   readonly readWriteToken?: string;
   readonly storeId?: string;
 }) {
-  if (input.storeId) return { storeId: input.storeId };
-  if (input.readWriteToken) return { token: input.readWriteToken };
-  throw new Error(
+  return resolveBlobAuthentication(
+    input,
     "Browser image storage is not configured. Connect a private Vercel Blob store or set BLOB_READ_WRITE_TOKEN."
   );
 }

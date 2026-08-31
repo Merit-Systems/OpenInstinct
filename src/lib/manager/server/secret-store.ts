@@ -4,8 +4,15 @@ import {
   readEncryptedSecret,
   writeEncryptedSecret,
 } from "@/db/services/secrets";
+import { getInstallationSecrets } from "@/lib/installation-secrets";
 import type { AccessScope } from "../../access-scope";
-import { env } from "@/lib/env";
+
+export const secretStoreDependencies = {
+  deleteEncryptedSecret,
+  getInstallationSecrets,
+  readEncryptedSecret,
+  writeEncryptedSecret,
+};
 
 export function secretStoreStatus() {
   return {
@@ -26,7 +33,11 @@ export async function writeSecret({
   readonly scope: AccessScope;
   readonly value: string;
 }) {
-  await writeEncryptedSecret(scope, id, encryptSecret(scope, id, value));
+  await secretStoreDependencies.writeEncryptedSecret(
+    scope,
+    id,
+    await encryptSecret(scope, id, value)
+  );
 }
 
 export async function readSecret({
@@ -37,8 +48,11 @@ export async function readSecret({
   readonly namespace: "vault";
   readonly scope: AccessScope;
 }) {
-  const encrypted = await readEncryptedSecret(scope, id);
-  return encrypted ? decryptSecret(scope, id, encrypted) : undefined;
+  const encrypted = await secretStoreDependencies.readEncryptedSecret(
+    scope,
+    id
+  );
+  return encrypted ? await decryptSecret(scope, id, encrypted) : undefined;
 }
 
 export async function hasSecret({
@@ -49,7 +63,9 @@ export async function hasSecret({
   readonly namespace: "vault";
   readonly scope: AccessScope;
 }) {
-  return (await readEncryptedSecret(scope, id)) !== undefined;
+  return (
+    (await secretStoreDependencies.readEncryptedSecret(scope, id)) !== undefined
+  );
 }
 
 export async function deleteSecret({
@@ -60,14 +76,16 @@ export async function deleteSecret({
   readonly namespace: "vault";
   readonly scope: AccessScope;
 }) {
-  await deleteEncryptedSecret(scope, id);
+  await secretStoreDependencies.deleteEncryptedSecret(scope, id);
 }
 
-function encryptSecret(scope: AccessScope, id: string, value: string) {
+async function encryptSecret(scope: AccessScope, id: string, value: string) {
+  const { secretEncryptionKey } =
+    await secretStoreDependencies.getInstallationSecrets();
   const iv = randomBytes(12);
   const cipher = createCipheriv(
     "aes-256-gcm",
-    Buffer.from(env.SECRET_ENCRYPTION_KEY, "base64"),
+    Buffer.from(secretEncryptionKey, "base64"),
     iv
   );
   cipher.setAAD(secretAad(scope, id));
@@ -83,7 +101,9 @@ function encryptSecret(scope: AccessScope, id: string, value: string) {
   ].join(".");
 }
 
-function decryptSecret(scope: AccessScope, id: string, value: string) {
+async function decryptSecret(scope: AccessScope, id: string, value: string) {
+  const { secretEncryptionKey } =
+    await secretStoreDependencies.getInstallationSecrets();
   const [version, encodedIv, encodedTag, encodedCiphertext] = value.split(".");
   if (version !== "v1" || !encodedIv || !encodedTag || !encodedCiphertext) {
     throw new Error("The stored secret uses an unsupported format.");
@@ -91,7 +111,7 @@ function decryptSecret(scope: AccessScope, id: string, value: string) {
 
   const decipher = createDecipheriv(
     "aes-256-gcm",
-    Buffer.from(env.SECRET_ENCRYPTION_KEY, "base64"),
+    Buffer.from(secretEncryptionKey, "base64"),
     Buffer.from(encodedIv, "base64url")
   );
   decipher.setAAD(secretAad(scope, id));
