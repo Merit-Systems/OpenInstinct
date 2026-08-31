@@ -9,6 +9,10 @@ import {
   terminalBrowserMessage,
 } from "@/lib/browser/benchmark";
 import type { BrowserBenchmark } from "@/evals/browser/benchmark-schema";
+import {
+  type BrowserBenchmarkLiveStatus,
+  updateBrowserBenchmarkLiveStatus,
+} from "@/evals/browser/live-status";
 
 const tableWidths = [34, 8, 10, 12, 64] as const;
 const taskNames = new Map<string, string>();
@@ -18,7 +22,7 @@ const completedTasks = new Map<
 >();
 
 export const browserBenchmarkReporter: EvalReporter = {
-  onRunStart(evaluations) {
+  async onRunStart(evaluations) {
     taskNames.clear();
     completedTasks.clear();
 
@@ -32,16 +36,58 @@ export const browserBenchmarkReporter: EvalReporter = {
       tableRow(["TASK", "RESULT", "TIME", "LLM COST", "TERMINAL MESSAGE"])
     );
     console.log(tableBorder());
+
+    await updateLiveVariant((current) => ({
+      ...current,
+      completedAt: null,
+      error: null,
+      startedAt: new Date().toISOString(),
+      status: "running",
+      tasks: evaluations.map((evaluation) => ({
+        completedAt: null,
+        costComplete: false,
+        costUsd: null,
+        durationMs: null,
+        error: null,
+        id: evaluation.id,
+        name: evaluation.description ?? evaluation.id,
+        sessions: [],
+        startedAt: null,
+        status: "pending",
+        success: null,
+        terminalMessage: null,
+        toolCalls: {},
+        verdict: null,
+      })),
+    }));
   },
-  onEvalStart(event) {
+  async onEvalStart(event) {
     console.log(`START ${event.evaluation.description ?? event.evaluation.id}`);
+    await updateLiveTask(event.evaluation.id, (task) => ({
+      ...task,
+      startedAt: event.startedAt,
+      status: "running",
+    }));
   },
-  onSessionStart(event) {
+  async onSessionStart(event) {
     console.log(
       `SESSION ${event.primary ? "root" : "worker"} ${event.sessionId} · ${event.evaluation.description ?? event.evaluation.id}`
     );
+    await updateLiveTask(event.evaluation.id, (task) => ({
+      ...task,
+      sessions: task.sessions.some((session) => session.id === event.sessionId)
+        ? task.sessions
+        : [
+            ...task.sessions,
+            {
+              id: event.sessionId,
+              role: event.primary ? "root" : "worker",
+              traceId: event.traceContext.traceId,
+            },
+          ],
+    }));
   },
-  onEvalComplete(result) {
+  async onEvalComplete(result) {
     const task = summarizeTaskResult(
       result,
       taskNames.get(result.id) ?? result.id
@@ -56,6 +102,19 @@ export const browserBenchmarkReporter: EvalReporter = {
         task.terminalMessage,
       ])
     );
+    await updateLiveTask(result.id, (current) => ({
+      ...current,
+      completedAt: result.completedAt,
+      costComplete: task.costComplete,
+      costUsd: task.costUsd,
+      durationMs: task.durationMs,
+      error: task.error,
+      status: task.success ? "passed" : failedTaskStatus(task.verdict),
+      success: task.success,
+      terminalMessage: task.terminalMessage,
+      toolCalls: task.toolCalls,
+      verdict: task.verdict,
+    }));
   },
   async onRunComplete(summary) {
     console.log(tableBorder());
@@ -67,6 +126,11 @@ export const browserBenchmarkReporter: EvalReporter = {
     );
     console.log(`Benchmark saved to ${artifactPath}`);
     console.log("");
+    await updateLiveVariant((current) => ({
+      ...current,
+      completedAt: summary.completedAt,
+      status: "completed",
+    }));
   },
 };
 
@@ -80,10 +144,13 @@ function summarizeTaskResult(result: EveEvalResult, name: string) {
     result.error ??
     result.skipReason ??
     "No reply";
-  const completion = readTaskCompletion(result.result.events);
+  const workerEvents = result.result.sessions?.find(
+    (session) => !session.primary
+  )?.events;
+  const completion = readTaskCompletion(workerEvents ?? result.result.events);
   const terminalMessage = terminalBrowserMessage(
     fallbackMessage,
-    result.result.events
+    workerEvents ?? result.result.events
   );
   const workerFacts =
     result.result.sessions
@@ -297,4 +364,49 @@ function tableRow(values: readonly string[]) {
     return ` ${clipped.padEnd(width)} `;
   });
   return `|${cells.join("|")}|`;
+}
+
+type LiveVariant = BrowserBenchmarkLiveStatus["variants"]["baseline"];
+type LiveTask = LiveVariant["tasks"][number];
+
+async function updateLiveVariant(
+  update: (variant: LiveVariant) => LiveVariant
+) {
+  const config = liveStatusConfig();
+  if (!config) return;
+  await updateBrowserBenchmarkLiveStatus(
+    config.path,
+    config.runId,
+    (status) => ({
+      ...status,
+      status: status.status === "preparing" ? "running" : status.status,
+      variants: {
+        ...status.variants,
+        [config.variant]: update(status.variants[config.variant]),
+      },
+    })
+  );
+}
+
+async function updateLiveTask(
+  id: string,
+  update: (task: LiveTask) => LiveTask
+) {
+  await updateLiveVariant((variant) => ({
+    ...variant,
+    tasks: variant.tasks.map((task) => (task.id === id ? update(task) : task)),
+  }));
+}
+
+function liveStatusConfig() {
+  const path = browserBenchmarkEnv.BROWSER_BENCH_STATUS_PATH?.trim();
+  const runId = browserBenchmarkEnv.BROWSER_BENCH_RUN_ID?.trim();
+  const variant = browserBenchmarkEnv.BROWSER_BENCH_VARIANT;
+  return path && runId && variant ? { path, runId, variant } : null;
+}
+
+function failedTaskStatus(
+  verdict: BrowserBenchmark["tasks"][number]["verdict"]
+) {
+  return verdict === "skipped" || verdict === "scored" ? verdict : "failed";
 }

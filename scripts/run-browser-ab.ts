@@ -14,6 +14,11 @@ import { fileURLToPath } from "node:url";
 import nextEnvironment from "@next/env";
 import { z } from "zod";
 import { browserBenchmarkEnv } from "../evals/browser/env.ts";
+import {
+  type BrowserBenchmarkLiveStatus,
+  updateBrowserBenchmarkLiveStatus,
+  writeBrowserBenchmarkLiveStatus,
+} from "../evals/browser/live-status.ts";
 
 const { loadEnvConfig } = nextEnvironment;
 
@@ -23,10 +28,12 @@ let inheritedEnvironment = { ...process.env };
 const options = parseArguments(process.argv.slice(2));
 const timestamp = new Date().toISOString().replaceAll(":", "-");
 const outputDirectory = join(repositoryRoot, ".eve", "browser-ab", timestamp);
+const liveStatusPath = join(repositoryRoot, ".eve", "browser-ab", "live.json");
 const temporaryRoot = await mkdtemp(join(tmpdir(), "eve-browser-ab-"));
 const processes: ChildProcess[] = [];
 const composeProjects: { cwd: string; name: string }[] = [];
 let keepResources = options.keep;
+let liveStatusInitialized = false;
 
 for (const signal of ["SIGINT", "SIGTERM"] as const) {
   process.once(signal, () => {
@@ -46,11 +53,20 @@ try {
     variant("baseline", baselineSha),
     variant("candidate", candidateSha),
   ] as const;
+  await writeBrowserBenchmarkLiveStatus(
+    liveStatusPath,
+    initialLiveStatus(variants)
+  );
+  liveStatusInitialized = true;
 
   console.log(
     `Preparing browser A/B: ${shortSha(baselineSha)} → ${shortSha(candidateSha)}`
   );
   for (const current of variants) {
+    await updateVariant(current.kind, (status) => ({
+      ...status,
+      status: "preparing",
+    }));
     await run(
       "git",
       ["worktree", "add", "--detach", current.path, current.sha],
@@ -79,12 +95,24 @@ try {
     await startAgent(current);
   }
 
+  await updateLiveStatus((status) => ({ ...status, status: "running" }));
+
   const artifacts: Record<"baseline" | "candidate", string> = {
     baseline: "",
     candidate: "",
   };
   for (const current of variants) {
-    artifacts[current.kind] = await runBenchmark(current);
+    try {
+      artifacts[current.kind] = await runBenchmark(current);
+    } catch (error) {
+      await updateVariant(current.kind, (status) => ({
+        ...status,
+        completedAt: new Date().toISOString(),
+        error: formatError(error),
+        status: "failed",
+      }));
+      throw error;
+    }
   }
 
   const manifest = {
@@ -113,11 +141,31 @@ try {
     { cwd: repositoryRoot }
   );
 
+  await updateLiveStatus((status) => ({
+    ...status,
+    completedAt: new Date().toISOString(),
+    status: "completed",
+  }));
+  await copyFile(liveStatusPath, join(outputDirectory, "status.json"));
+
   console.log(`A/B artifacts: ${outputDirectory}`);
   if (options.keep) {
     console.log(`Baseline: ${variants[0].url}`);
     console.log(`Candidate: ${variants[1].url}`);
   }
+} catch (error) {
+  if (liveStatusInitialized) {
+    await updateLiveStatus((status) => ({
+      ...status,
+      completedAt: new Date().toISOString(),
+      error: formatError(error),
+      status: "failed",
+    })).catch(() => undefined);
+    await copyFile(liveStatusPath, join(outputDirectory, "status.json")).catch(
+      () => undefined
+    );
+  }
+  throw error;
 } finally {
   await cleanup();
 }
@@ -251,8 +299,11 @@ async function runBenchmark(current: ReturnType<typeof variant>) {
       cwd: repositoryRoot,
       env: {
         BROWSER_BENCH_LABEL: label,
+        BROWSER_BENCH_RUN_ID: timestamp,
         BROWSER_BENCH_REPETITIONS: String(options.repetitions),
+        BROWSER_BENCH_STATUS_PATH: liveStatusPath,
         BROWSER_BENCH_SUITE: options.suite,
+        BROWSER_BENCH_VARIANT: current.kind,
         NODE_EXTRA_CA_CERTS:
           inheritedEnvironment.NODE_EXTRA_CA_CERTS ??
           join(homedir(), ".portless", "ca.pem"),
@@ -271,6 +322,68 @@ async function runBenchmark(current: ReturnType<typeof variant>) {
   const artifact = join(outputDirectory, `${current.kind}.json`);
   await copyFile(latest, artifact);
   return artifact;
+}
+
+function initialLiveStatus(
+  variants: readonly ReturnType<typeof variant>[]
+): BrowserBenchmarkLiveStatus {
+  const startedAt = new Date().toISOString();
+  const baseline = variants.find((current) => current.kind === "baseline");
+  const candidate = variants.find((current) => current.kind === "candidate");
+  if (!baseline || !candidate) throw new Error("A/B variants are incomplete.");
+
+  const liveVariant = (current: ReturnType<typeof variant>) => ({
+    completedAt: null,
+    error: null,
+    kind: current.kind,
+    ref:
+      current.kind === "baseline" ? options.baselineRef : options.candidateRef,
+    sha: current.sha,
+    startedAt: null,
+    status: "pending" as const,
+    tasks: [],
+    url: current.url,
+  });
+
+  return {
+    completedAt: null,
+    error: null,
+    maxConcurrency: options.maxConcurrency,
+    outputDirectory,
+    repetitions: options.repetitions,
+    runId: timestamp,
+    startedAt,
+    status: "preparing",
+    suite: options.suite,
+    taskTimeoutMs: options.taskTimeoutMs,
+    updatedAt: startedAt,
+    variants: {
+      baseline: liveVariant(baseline),
+      candidate: liveVariant(candidate),
+    },
+    version: 1,
+  };
+}
+
+async function updateLiveStatus(
+  update: (status: BrowserBenchmarkLiveStatus) => BrowserBenchmarkLiveStatus
+) {
+  await updateBrowserBenchmarkLiveStatus(liveStatusPath, timestamp, update);
+}
+
+async function updateVariant(
+  kind: "baseline" | "candidate",
+  update: (
+    status: BrowserBenchmarkLiveStatus["variants"][typeof kind]
+  ) => BrowserBenchmarkLiveStatus["variants"][typeof kind]
+) {
+  await updateLiveStatus((status) => ({
+    ...status,
+    variants: {
+      ...status.variants,
+      [kind]: update(status.variants[kind]),
+    },
+  }));
 }
 
 async function waitForUrl(url: string, child: ChildProcess) {
@@ -484,4 +597,8 @@ function errorCode(error: unknown) {
     return undefined;
   }
   return typeof error.code === "string" ? error.code : undefined;
+}
+
+function formatError(error: unknown) {
+  return error instanceof Error ? error.message : String(error);
 }

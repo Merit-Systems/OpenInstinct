@@ -75,6 +75,7 @@
     "bench:ab": "node --env-file-if-exists=.env.local --experimental-strip-types scripts/run-browser-ab.ts",
     "bench:browser": "eve eval browser",
     "bench:compare": "node --experimental-strip-types scripts/compare-browser-benchmarks.ts",
+    "bench:dashboard": "portless --name eve-browser-bench next dev evals/browser/dashboard",
     "boundaries": "turbo boundaries",
     "build": "turbo run build:app",
     "build:app": "next build",

@@ -11,8 +11,10 @@ export default {
     "db/drizzle.config.ts",
     "evals/**/*.eval.ts",
     "evals/evals.config.ts",
+    "evals/browser/dashboard/{next.config.ts,app/**/*.{ts,tsx}}",
     "taze.config.ts",
   ],
+  ignoreBinaries: ["portless"],
   ignoreDependencies: [
     // Imported through the owning Tailwind stylesheet rather than TypeScript.
     "shadcn",

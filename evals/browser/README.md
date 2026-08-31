@@ -65,6 +65,17 @@ step did not report cost.
 
 ## Two-revision A/B
 
+Start the standalone local dashboard in its own terminal. It only reads the
+latest status artifact and never starts, stops, or times out benchmark runs:
+
+```sh
+pnpm bench:dashboard
+```
+
+Open `https://eve-browser-bench.localhost`, then run an A/B suite from another
+terminal. The dashboard updates as Eve schedules tasks, discovers root and
+worker sessions, and records judged results, cost, duration, and tool counts.
+
 The A/B runner checks out two revisions into temporary worktrees, starts an
 isolated database and Portless Eve server for each, runs the same task array
 against both, compares the artifacts, then cleans up:
