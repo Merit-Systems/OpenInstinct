@@ -15,6 +15,7 @@ const liveBenchmarkTaskSchema = z.object({
   activityDurationsMs: z
     .partialRecord(z.enum(browserActivityKinds), z.number().int().nonnegative())
     .default({}),
+  browserLiveViewUrl: z.url().nullable().default(null),
   completedAt: nullableDateTime,
   costComplete: z.boolean(),
   costUsd: z.number().nonnegative().nullable(),

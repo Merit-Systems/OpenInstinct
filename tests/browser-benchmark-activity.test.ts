@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   browserBenchmarkActivity,
   browserBenchmarkActivityDurations,
+  browserBenchmarkLiveViewUrl,
 } from "../evals/browser/benchmark-activity";
 
 describe("browser benchmark live activity", () => {
@@ -128,5 +129,33 @@ describe("browser benchmark live activity", () => {
         Date.parse("2026-08-31T17:00:10.000Z")
       )
     ).toEqual({ model: 4_000, playwright: 3_000, semantic: 3_000 });
+  });
+
+  it("finds the Kernel live browser stream from session creation", () => {
+    const event = {
+      data: {
+        result: {
+          callId: "call_browser",
+          kind: "tool-result",
+          output: {
+            browser: {
+              browser_live_view_url:
+                "https://live.kernel.test/browser/session-1",
+            },
+          },
+          toolName: "manage_browsers",
+        },
+        sequence: 0,
+        status: "completed",
+        stepIndex: 0,
+        turnId: "turn_1",
+      },
+      meta: { at: "2026-08-31T17:00:00.000Z", id: "evt_browser" },
+      type: "action.result",
+    } satisfies MessageStreamEvent;
+
+    expect(browserBenchmarkLiveViewUrl([event])).toBe(
+      "https://live.kernel.test/browser/session-1"
+    );
   });
 });

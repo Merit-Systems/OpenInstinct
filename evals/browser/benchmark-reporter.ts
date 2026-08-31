@@ -8,6 +8,7 @@ import { traceTimelineRows } from "@/agent/subagents/worker/lib/trace-timeline";
 import {
   browserBenchmarkActivity,
   browserBenchmarkActivityDurations,
+  browserBenchmarkLiveViewUrl,
 } from "@/evals/browser/benchmark-activity";
 import { browserBenchmarkEnv } from "@/evals/browser/env";
 import {
@@ -28,6 +29,7 @@ const completedTasks = new Map<
 >();
 const liveActivities = new Map<string, string>();
 const liveActivityDurations = new Map<string, string>();
+const liveViewUrls = new Map<string, string>();
 
 export const browserBenchmarkReporter: EvalReporter = {
   async onRunStart(evaluations) {
@@ -35,6 +37,7 @@ export const browserBenchmarkReporter: EvalReporter = {
     completedTasks.clear();
     liveActivities.clear();
     liveActivityDurations.clear();
+    liveViewUrls.clear();
 
     for (const evaluation of evaluations) {
       taskNames.set(evaluation.id, evaluation.description ?? evaluation.id);
@@ -56,6 +59,7 @@ export const browserBenchmarkReporter: EvalReporter = {
       tasks: evaluations.map((evaluation) => ({
         activity: null,
         activityDurationsMs: {},
+        browserLiveViewUrl: null,
         completedAt: null,
         costComplete: false,
         costUsd: null,
@@ -157,15 +161,22 @@ export async function reportBrowserBenchmarkActivity(
 ) {
   const activity = browserBenchmarkActivity(events);
   const activityDurationsMs = browserBenchmarkActivityDurations(events);
+  const browserLiveViewUrl = browserBenchmarkLiveViewUrl(events);
   const durationSignature = JSON.stringify(activityDurationsMs);
   const activityChanged =
     activity !== null && liveActivities.get(taskName) !== activity;
   const durationsChanged =
     liveActivityDurations.get(taskName) !== durationSignature;
+  const liveViewChanged =
+    browserLiveViewUrl !== null &&
+    liveViewUrls.get(taskName) !== browserLiveViewUrl;
   await writeLiveTrace(taskName, sessionId, events);
-  if (!activityChanged && !durationsChanged) return;
+  if (!activityChanged && !durationsChanged && !liveViewChanged) return;
   if (activity !== null) liveActivities.set(taskName, activity);
   liveActivityDurations.set(taskName, durationSignature);
+  if (browserLiveViewUrl !== null) {
+    liveViewUrls.set(taskName, browserLiveViewUrl);
+  }
   await updateLiveVariant((variant) => ({
     ...variant,
     tasks: variant.tasks.map((task) =>
@@ -174,6 +185,7 @@ export async function reportBrowserBenchmarkActivity(
             ...task,
             ...(activity === null ? {} : { activity }),
             activityDurationsMs,
+            ...(browserLiveViewUrl === null ? {} : { browserLiveViewUrl }),
           }
         : task
     ),

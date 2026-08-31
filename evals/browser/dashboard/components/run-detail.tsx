@@ -260,16 +260,28 @@ function TaskTraceCell({
   }
   return (
     <TableCell className="border-l border-border align-top whitespace-normal">
-      {taskTraceHref ? (
-        <a
-          className="type-caption text-information hover:underline"
-          href={taskTraceHref}
-          rel="noreferrer"
-          target="_blank"
-        >
-          Trace ↗
-        </a>
-      ) : null}
+      <div className="flex flex-wrap gap-x-3 gap-y-1">
+        {taskTraceHref ? (
+          <a
+            className="type-caption text-information hover:underline"
+            href={taskTraceHref}
+            rel="noreferrer"
+            target="_blank"
+          >
+            Trace ↗
+          </a>
+        ) : null}
+        {task.browserLiveViewUrl ? (
+          <a
+            className="type-caption text-information hover:underline"
+            href={task.browserLiveViewUrl}
+            rel="noreferrer"
+            target="_blank"
+          >
+            Live browser ↗
+          </a>
+        ) : null}
+      </div>
       <div className="mt-2">
         <ActivityDurationBreakdown durations={task.activityDurationsMs} />
       </div>

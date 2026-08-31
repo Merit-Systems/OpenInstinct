@@ -67,6 +67,33 @@ export function browserBenchmarkActivityDurations(
   );
 }
 
+export function browserBenchmarkLiveViewUrl(
+  events: readonly MessageStreamEvent[]
+) {
+  for (const event of events.toReversed()) {
+    if (event.type !== "action.result") continue;
+    const result = event.data.result;
+    if (
+      result.kind !== "tool-result" ||
+      result.toolName !== "manage_browsers"
+    ) {
+      continue;
+    }
+    const browser = property(result.output, "browser");
+    const value = property(browser, "browser_live_view_url");
+    if (typeof value !== "string") continue;
+    try {
+      const url = new URL(value);
+      if (url.protocol === "https:" || url.protocol === "http:") {
+        return url.toString();
+      }
+    } catch {
+      continue;
+    }
+  }
+  return null;
+}
+
 function activityKindForEvent(
   event: MessageStreamEvent
 ): BrowserActivityKind | null {
@@ -102,4 +129,10 @@ function activityLine(value: string) {
   const line = value.replaceAll(/\s+/gu, " ").trim();
   if (!line) return null;
   return line.length > 180 ? `${line.slice(0, 179).trimEnd()}…` : line;
+}
+
+function property(value: unknown, key: string): unknown {
+  return typeof value === "object" && value !== null
+    ? Reflect.get(value, key)
+    : undefined;
 }
