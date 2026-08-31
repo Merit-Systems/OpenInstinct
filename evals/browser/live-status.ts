@@ -4,9 +4,9 @@ import { dirname } from "node:path";
 import {
   browserBenchmarkLiveStatusSchema,
   type BrowserBenchmarkLiveStatus,
-} from "./live-status-schema";
+} from "./live-status-schema.ts";
 
-export type { BrowserBenchmarkLiveStatus } from "./live-status-schema";
+export type { BrowserBenchmarkLiveStatus } from "./live-status-schema.ts";
 
 const writes = new Map<string, Promise<void>>();
 
