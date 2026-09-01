@@ -1,12 +1,13 @@
 import { readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { NextResponse } from "next/server";
+import { z } from "zod";
 import { browserBenchmarkLiveStatusSchema } from "../../../../live-status-schema";
-import { nodeErrorCode } from "../../../../node-error";
 import { dashboardEnv } from "../../../env";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
+const nodeErrorSchema = z.object({ code: z.string() });
 
 export async function GET() {
   const root = join(
@@ -34,7 +35,8 @@ export async function GET() {
       ),
     });
   } catch (error) {
-    if (nodeErrorCode(error) === "ENOENT") {
+    const parsed = nodeErrorSchema.safeParse(error);
+    if (parsed.success && parsed.data.code === "ENOENT") {
       return NextResponse.json({ runs: [] });
     }
     console.error("Unable to list browser benchmark runs", error);
@@ -51,7 +53,8 @@ async function readStatus(path: string) {
       JSON.parse(await readFile(/* turbopackIgnore: true */ path, "utf8"))
     );
   } catch (error) {
-    if (nodeErrorCode(error) === "ENOENT") return null;
+    const parsed = nodeErrorSchema.safeParse(error);
+    if (parsed.success && parsed.data.code === "ENOENT") return null;
     throw error;
   }
 }

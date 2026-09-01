@@ -13,11 +13,9 @@ import {
 } from "@/components/ui/table";
 import { ActivityDurationBreakdown } from "@/components/browser/activity-duration-breakdown";
 import { browserBenchmarkLiveStatusSchema } from "../../../../../../live-status-schema";
-import { nodeErrorCode } from "../../../../../../node-error";
 import { dashboardEnv } from "../../../../../env";
 
 const identifier = /^[A-Za-z0-9._:-]+$/u;
-const jsonValueSchema = z.json();
 const traceArtifactSchema = z.object({
   events: z.array(
     z.object({
@@ -33,18 +31,19 @@ const traceArtifactSchema = z.object({
   updatedAt: z.string(),
   version: z.literal(1),
 });
+const nodeErrorSchema = z.object({ code: z.string() });
+const routeParametersSchema = z.object({
+  runId: z.string(),
+  sessionId: z.string(),
+});
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
-/* oxlint-disable local-next/require-generated-route-props -- This standalone nested dashboard has its own Next.js root, outside the repository root's generated route map. */
 export default async function BenchmarkTracePage({
   params,
-}: {
-  params: Promise<{ runId: string; sessionId: string }>;
-}) {
-  /* oxlint-enable local-next/require-generated-route-props */
-  const { runId, sessionId } = await params;
+}: PageProps<"/runs/[runId]/traces/[sessionId]">) {
+  const { runId, sessionId } = routeParametersSchema.parse(await params);
   if (!identifier.test(runId) || !identifier.test(sessionId)) notFound();
 
   const browserAbRoot = join(
@@ -142,28 +141,37 @@ export default async function BenchmarkTracePage({
 }
 
 async function readRunStatus(root: string, runId: string) {
-  const archived = await readJson(join(root, runId, "status.json"));
-  if (archived) return browserBenchmarkLiveStatusSchema.parse(archived);
-  const live = await readJson(join(root, "live.json"));
+  const archived = await readParsedFile(
+    join(root, runId, "status.json"),
+    browserBenchmarkLiveStatusSchema
+  );
+  if (archived) return archived;
+  const live = await readParsedFile(
+    join(root, "live.json"),
+    browserBenchmarkLiveStatusSchema
+  );
   if (!live) return null;
-  const status = browserBenchmarkLiveStatusSchema.parse(live);
-  return status.runId === runId ? status : null;
+  return live.runId === runId ? live : null;
 }
 
 async function readTrace(root: string, runId: string, sessionId: string) {
-  const value = await readJson(
-    join(root, runId, "traces", `${sessionId}.json`)
+  return readParsedFile(
+    join(root, runId, "traces", `${sessionId}.json`),
+    traceArtifactSchema
   );
-  return value ? traceArtifactSchema.parse(value) : null;
 }
 
-async function readJson(path: string) {
+async function readParsedFile<TSchema extends z.ZodType>(
+  path: string,
+  schema: TSchema
+) {
   try {
-    return jsonValueSchema.parse(
+    return schema.parse(
       JSON.parse(await readFile(/* turbopackIgnore: true */ path, "utf8"))
     );
   } catch (error) {
-    if (nodeErrorCode(error) === "ENOENT") return null;
+    const parsed = nodeErrorSchema.safeParse(error);
+    if (parsed.success && parsed.data.code === "ENOENT") return null;
     throw error;
   }
 }

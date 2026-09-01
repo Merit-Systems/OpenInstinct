@@ -1,5 +1,9 @@
 import { eveChannel } from "eve/channels/eve";
-import { ForbiddenError, localDev } from "eve/channels/auth";
+import {
+  ForbiddenError,
+  localDev,
+  UnauthenticatedError,
+} from "eve/channels/auth";
 import { z } from "zod";
 import { isSessionOwned } from "@/db/services/sessions";
 import { accessScopeForUser, type AccessScope } from "@/lib/access-scope";
@@ -46,6 +50,12 @@ export default eveChannel({
         principalId: scope.userId,
         principalType: "user" as const,
       };
+    },
+    () => {
+      throw new UnauthenticatedError({
+        code: "authentication_required",
+        message: "Sign in to continue.",
+      });
     },
   ],
 });

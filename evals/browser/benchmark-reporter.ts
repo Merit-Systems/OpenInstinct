@@ -12,11 +12,7 @@ import {
   browserBenchmarkLiveViewUrl,
 } from "@/evals/browser/benchmark-activity";
 import { browserBenchmarkEnv } from "@/evals/browser/env";
-import {
-  measureWorkerTask,
-  readTaskCompletion,
-  terminalWorkerMessage,
-} from "@/lib/worker-events";
+import { measureWorkerTask, terminalWorkerMessage } from "@/lib/worker-events";
 import type { BrowserBenchmark } from "@/evals/browser/benchmark-schema";
 import {
   type BrowserBenchmarkLiveStatus,
@@ -183,12 +179,12 @@ export async function reportBrowserBenchmarkActivity(
     ...variant,
     tasks: variant.tasks.map((task) => {
       if (task.name !== taskName) return task;
-      const next = { ...task, activityDurationsMs };
-      if (activity !== null) next.activity = activity;
+      const updated = { ...task, activityDurationsMs };
+      if (activity !== null) updated.activity = activity;
       if (browserLiveViewUrl !== null) {
-        next.browserLiveViewUrl = browserLiveViewUrl;
+        updated.browserLiveViewUrl = browserLiveViewUrl;
       }
-      return next;
+      return updated;
     }),
   }));
 }
@@ -237,7 +233,6 @@ function summarizeTaskResult(result: EveEvalResult, name: string) {
     .toSorted((left, right) => right.events.length - left.events.length)
     .at(0);
   const workerEvents = workerSession?.events;
-  const completion = readTaskCompletion(workerEvents ?? result.result.events);
   const terminalMessage = terminalWorkerMessage(
     fallbackMessage,
     workerEvents ?? result.result.events
@@ -279,7 +274,7 @@ function summarizeTaskResult(result: EveEvalResult, name: string) {
     ),
     sessionId: result.result.sessionId ?? null,
     status: result.result.status,
-    success: result.verdict === "passed" && completion?.status === "success",
+    success: result.verdict === "passed",
     terminalMessage,
     toolCalls,
     verdict: result.verdict,

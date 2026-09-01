@@ -1,17 +1,19 @@
 import type { replaceUserProfile as replaceUserProfileType } from "../db/services/user-profile";
 import { saveVaultItem } from "../db/services/vault";
-import { nodeErrorCode } from "../evals/browser/node-error";
 import { accessScopeForUser } from "../src/lib/access-scope";
 import { serializePaymentCard } from "../src/lib/vault";
+import { z } from "zod";
 
 const scope = accessScopeForUser("better-auth:browser-benchmark");
+const nodeErrorSchema = z.object({ code: z.string() });
 
 await seedStructuredProfileWhenSupported();
 
-await seedVaultItem(
-  "payment",
-  "Benchmark test card",
-  serializePaymentCard({
+await saveVaultItem(scope, {
+  account: "Visa · •••• 4242",
+  kind: "payment",
+  label: "Benchmark test card",
+  secret: serializePaymentCard({
     billingPostalCode: "11201",
     cardholderName: "John Smith",
     expirationMonth: 12,
@@ -20,28 +22,16 @@ await seedVaultItem(
     number: "4242424242424242",
     securityCode: "123",
     version: 1,
-  })
-);
-
-async function seedVaultItem(
-  kind: Parameters<typeof saveVaultItem>[1]["kind"],
-  label: string,
-  secret: string
-) {
-  await saveVaultItem(scope, {
-    account: "",
-    kind,
-    label,
-    secret,
-  });
-}
+  }),
+});
 
 async function seedStructuredProfileWhenSupported() {
   let replaceUserProfile: typeof replaceUserProfileType;
   try {
     ({ replaceUserProfile } = await import("../db/services/user-profile"));
   } catch (error) {
-    if (nodeErrorCode(error) === "ERR_MODULE_NOT_FOUND") {
+    const parsed = nodeErrorSchema.safeParse(error);
+    if (parsed.success && parsed.data.code === "ERR_MODULE_NOT_FOUND") {
       console.warn(
         "Skipping structured benchmark profile for a revision that predates profile storage."
       );

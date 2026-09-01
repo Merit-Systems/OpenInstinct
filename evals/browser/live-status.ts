@@ -1,15 +1,16 @@
 import { randomUUID } from "node:crypto";
 import { mkdir, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
+import { z } from "zod";
 import {
   browserBenchmarkLiveStatusSchema,
   type BrowserBenchmarkLiveStatus,
 } from "./live-status-schema.ts";
-import { nodeErrorCode } from "./node-error.ts";
 
 export type { BrowserBenchmarkLiveStatus } from "./live-status-schema.ts";
 
 const writes = new Map<string, Promise<void>>();
+const nodeErrorSchema = z.object({ code: z.string() });
 
 export async function readBrowserBenchmarkLiveStatus(path: string) {
   try {
@@ -17,7 +18,8 @@ export async function readBrowserBenchmarkLiveStatus(path: string) {
       JSON.parse(await readFile(path, "utf8"))
     );
   } catch (error) {
-    if (nodeErrorCode(error) === "ENOENT") return null;
+    const parsed = nodeErrorSchema.safeParse(error);
+    if (parsed.success && parsed.data.code === "ENOENT") return null;
     throw error;
   }
 }
@@ -65,21 +67,26 @@ export async function updateBrowserBenchmarkLiveStatus(
 async function withFileLock(path: string, action: () => Promise<void>) {
   const lockPath = `${path}.lock`;
   await mkdir(dirname(path), { recursive: true });
-  /* oxlint-disable eslint/no-await-in-loop -- Lock acquisition must retry sequentially against one filesystem path. */
   for (let attempt = 0; ; attempt += 1) {
     try {
+      // oxlint-disable-next-line eslint/no-await-in-loop -- lock creation is the sequential acquisition attempt itself
       await mkdir(lockPath);
       break;
     } catch (error) {
-      if (nodeErrorCode(error) !== "EEXIST" || attempt >= 600) throw error;
+      const parsed = nodeErrorSchema.safeParse(error);
+      if (!parsed.success || parsed.data.code !== "EEXIST" || attempt >= 600) {
+        throw error;
+      }
+      // oxlint-disable-next-line eslint/no-await-in-loop -- lock acquisition retries must inspect the current lock before the next sequential attempt
       if (attempt % 100 === 99 && (await lockIsStale(lockPath))) {
+        // oxlint-disable-next-line eslint/no-await-in-loop -- stale lock cleanup must finish before retrying acquisition
         await rm(lockPath, { force: true, recursive: true });
       } else {
+        // oxlint-disable-next-line eslint/no-await-in-loop -- bounded backoff intentionally serializes lock acquisition attempts
         await delay(50);
       }
     }
   }
-  /* oxlint-enable eslint/no-await-in-loop */
   try {
     await action();
   } finally {
@@ -91,7 +98,8 @@ async function lockIsStale(path: string) {
   try {
     return Date.now() - (await stat(path)).mtimeMs > 30_000;
   } catch (error) {
-    if (nodeErrorCode(error) === "ENOENT") return false;
+    const parsed = nodeErrorSchema.safeParse(error);
+    if (parsed.success && parsed.data.code === "ENOENT") return false;
     throw error;
   }
 }

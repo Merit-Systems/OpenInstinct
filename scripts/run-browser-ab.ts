@@ -19,10 +19,13 @@ import {
   updateBrowserBenchmarkLiveStatus,
   writeBrowserBenchmarkLiveStatus,
 } from "../evals/browser/live-status.ts";
-import { nodeErrorCode } from "../evals/browser/node-error.ts";
 
 const { loadEnvConfig } = nextEnvironment;
-const errorSchema = z.instanceof(Error);
+const nodeErrorSchema = z.object({ code: z.string() });
+const errorMessageSchema = z.preprocess(
+  (value) => (value instanceof Error ? value.message : String(value)),
+  z.string()
+);
 
 const repositoryRoot = fileURLToPath(new URL("..", import.meta.url));
 // oxlint-disable-next-line eslint/no-restricted-properties -- the benchmark supervisor must forward credentials and provider configuration to isolated child revisions
@@ -65,12 +68,13 @@ try {
   console.log(
     `Preparing browser A/B: ${shortSha(baselineSha)} → ${shortSha(candidateSha)}`
   );
-  /* oxlint-disable eslint/no-await-in-loop -- Each worktree must finish setup before dependency installation begins. */
   for (const current of variants) {
+    // oxlint-disable-next-line eslint/no-await-in-loop -- each worktree is prepared sequentially to keep setup output and status transitions deterministic
     await updateVariant(current.kind, (status) => ({
       ...status,
       status: "preparing",
     }));
+    // oxlint-disable-next-line eslint/no-await-in-loop -- git worktree mutations share repository metadata and must be serialized
     await run(
       "git",
       ["worktree", "add", "--detach", current.path, current.sha],
@@ -78,9 +82,9 @@ try {
         cwd: repositoryRoot,
       }
     );
+    // oxlint-disable-next-line eslint/no-await-in-loop -- benchmark context must be installed only after its worktree exists
     await installBenchmarkContext(current.path);
   }
-  /* oxlint-enable eslint/no-await-in-loop */
 
   await Promise.all(
     variants.map((current) =>
@@ -122,7 +126,7 @@ try {
         await updateVariant(current.kind, (status) => ({
           ...status,
           completedAt: new Date().toISOString(),
-          error: formatError(error),
+          error: errorMessageSchema.parse(error),
           status: "failed",
         }));
         throw error;
@@ -132,7 +136,7 @@ try {
   const failureMessages: string[] = [];
   for (const result of results) {
     if (result.status === "rejected") {
-      failureMessages.push(formatError(result.reason));
+      failureMessages.push(errorMessageSchema.parse(result.reason));
     }
   }
   if (failureMessages.length > 0) {
@@ -185,7 +189,7 @@ try {
     await updateLiveStatus((status) => ({
       ...status,
       completedAt: new Date().toISOString(),
-      error: formatError(error),
+      error: errorMessageSchema.parse(error),
       status: "failed",
     })).catch(() => undefined);
     await copyFile(liveStatusPath, join(outputDirectory, "status.json")).catch(
@@ -425,7 +429,6 @@ async function updateVariant(
 }
 
 async function waitForUrl(url: string, child: ChildProcess) {
-  /* oxlint-disable eslint/no-await-in-loop -- Readiness probes must retry sequentially until the child server accepts traffic. */
   for (let attempt = 0; attempt < 120; attempt += 1) {
     if (child.exitCode !== null) {
       throw new Error(
@@ -433,15 +436,16 @@ async function waitForUrl(url: string, child: ChildProcess) {
       );
     }
     try {
+      // oxlint-disable-next-line eslint/no-await-in-loop -- readiness retries must wait for the current probe to finish before backoff
       await run("curl", ["--fail", "--silent", "--show-error", url], {
         cwd: repositoryRoot,
       });
       return;
     } catch {
+      // oxlint-disable-next-line eslint/no-await-in-loop -- bounded backoff intentionally serializes readiness probes
       await delay(1_000);
     }
   }
-  /* oxlint-enable eslint/no-await-in-loop */
   throw new Error(`Timed out waiting for ${url}.`);
 }
 
@@ -456,12 +460,12 @@ function databaseEnvironment(databaseUrl: string) {
 function start(
   command: string,
   args: string[],
-  spawnOptions: { cwd: string; env?: NodeJS.ProcessEnv }
+  execution: { cwd: string; env?: NodeJS.ProcessEnv }
 ) {
   const child = spawn(command, args, {
-    cwd: spawnOptions.cwd,
+    cwd: execution.cwd,
     detached: true,
-    env: { ...inheritedEnvironment, ...spawnOptions.env },
+    env: { ...inheritedEnvironment, ...execution.env },
     stdio: "inherit",
   });
   child.unref();
@@ -471,22 +475,22 @@ function start(
 async function run(
   command: string,
   args: string[],
-  runOptions: {
+  execution: {
     cwd: string;
     env?: NodeJS.ProcessEnv;
     validExitCodes?: number[];
   }
 ) {
   const child = spawn(command, args, {
-    cwd: runOptions.cwd,
-    env: { ...inheritedEnvironment, ...runOptions.env },
+    cwd: execution.cwd,
+    env: { ...inheritedEnvironment, ...execution.env },
     stdio: "inherit",
   });
   const code = await new Promise<number | null>((resolveExit, reject) => {
     child.once("error", reject);
     child.once("exit", resolveExit);
   });
-  if (!(runOptions.validExitCodes ?? [0]).includes(code ?? -1)) {
+  if (!(execution.validExitCodes ?? [0]).includes(code ?? -1)) {
     throw new Error(
       `${command} ${args.join(" ")} exited with ${String(code)}.`
     );
@@ -496,10 +500,10 @@ async function run(
 async function output(
   command: string,
   args: string[],
-  outputOptions: { cwd: string }
+  execution: { cwd: string }
 ) {
   const child = spawn(command, args, {
-    cwd: outputOptions.cwd,
+    cwd: execution.cwd,
     env: inheritedEnvironment,
     stdio: ["ignore", "pipe", "inherit"],
   });
@@ -531,12 +535,13 @@ async function cleanup() {
       try {
         process.kill(-child.pid, "SIGTERM");
       } catch (error) {
-        if (nodeErrorCode(error) !== "ESRCH") throw error;
+        const parsed = nodeErrorSchema.safeParse(error);
+        if (!parsed.success || parsed.data.code !== "ESRCH") throw error;
       }
     }
   }
-  /* oxlint-disable eslint/no-await-in-loop -- Cleanup is intentionally ordered so external resources are torn down before their worktrees. */
   for (const project of composeProjects.toReversed()) {
+    // oxlint-disable-next-line eslint/no-await-in-loop -- teardown is deliberately ordered to avoid interleaved Docker cleanup
     await run(
       "docker",
       ["compose", "--project-name", project.name, "down", "--volumes"],
@@ -545,11 +550,11 @@ async function cleanup() {
   }
   for (const name of ["candidate", "baseline"]) {
     const path = join(temporaryRoot, name);
+    // oxlint-disable-next-line eslint/no-await-in-loop -- git worktree removals share repository metadata and must be serialized
     await run("git", ["worktree", "remove", "--force", path], {
       cwd: repositoryRoot,
     }).catch(() => undefined);
   }
-  /* oxlint-enable eslint/no-await-in-loop */
   await rm(temporaryRoot, { force: true, recursive: true });
 }
 
@@ -635,9 +640,4 @@ function hash(value: string) {
 
 function delay(milliseconds: number) {
   return new Promise((resolveDelay) => setTimeout(resolveDelay, milliseconds));
-}
-
-function formatError(error: Parameters<typeof errorSchema.safeParse>[0]) {
-  const parsed = errorSchema.safeParse(error);
-  return parsed.success ? parsed.data.message : String(error);
 }

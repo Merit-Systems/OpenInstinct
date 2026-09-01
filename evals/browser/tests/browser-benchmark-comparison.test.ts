@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   averageBenchmarkImprovement,
   compareBenchmarkTasks,
-} from "../evals/browser/dashboard/lib/benchmark-comparison";
+} from "../dashboard/lib/benchmark-comparison";
 
 describe("browser benchmark comparison", () => {
   it("reports positive improvement when the candidate is faster and cheaper", () => {

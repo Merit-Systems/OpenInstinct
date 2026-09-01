@@ -161,16 +161,11 @@ describe("Kernel browser contract", () => {
     });
     const lifecycle = z
       .object({ next_actions: z.array(z.string()) })
-      .safeParse(result);
-    if (!lifecycle.success) {
-      throw new Error("create must return browser lifecycle guidance");
-    }
-    expect(lifecycle.data.next_actions.join(" ")).toContain("browser_snapshot");
-    expect(lifecycle.data.next_actions.join(" ")).toContain("browser_act");
-    expect(lifecycle.data.next_actions.join(" ")).toContain(
-      "playwright_execute"
-    );
-    expect(lifecycle.data.next_actions.join(" ")).toContain("relaxed fallback");
+      .parse(result);
+    expect(lifecycle.next_actions.join(" ")).toContain("browser_snapshot");
+    expect(lifecycle.next_actions.join(" ")).toContain("browser_act");
+    expect(lifecycle.next_actions.join(" ")).toContain("playwright_execute");
+    expect(lifecycle.next_actions.join(" ")).toContain("relaxed fallback");
     expect(JSON.stringify(result)).not.toContain("execute_playwright_code");
     expect(mocks.createBrowser).toHaveBeenCalledExactlyOnceWith(
       {

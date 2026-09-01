@@ -17,7 +17,7 @@ import {
   readBrowserTrace,
 } from "@/db/services/browser-traces";
 import { requireRequestScope } from "@/lib/request-scope";
-import { browserTraceActivityDurations } from "@/components/browser/activity-timing";
+import { browserTraceActivityDurations } from "@/lib/browser-activity";
 import { RefreshButton } from "./_components/refresh-button";
 import { z } from "zod";
 

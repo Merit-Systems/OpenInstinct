@@ -2,7 +2,7 @@ import {
   browserActivityKinds,
   type BrowserActivityDurations,
   type BrowserActivityKind,
-} from "@/components/browser/activity-timing";
+} from "@/lib/browser-activity";
 
 const activityPresentation: Record<
   BrowserActivityKind,

@@ -1,17 +1,16 @@
 import { defineEval, type EveEvalLiveTurn, type EveEvalTurn } from "eve/evals";
 import { satisfies } from "eve/evals/expect";
-import { z } from "zod";
 import { reportBrowserBenchmarkActivity } from "@/evals/browser/benchmark-reporter";
 import {
   didCompleteWorker,
   didFinishWorker,
   readTaskCompletion,
 } from "@/lib/worker-events";
-import { browserBenchmarkEnv } from "@/evals/browser/env";
 import {
   browserBenchmarkFixtureContext,
   browserBenchmarkTasks,
 } from "@/evals/browser/tasks";
+import { browserBenchmarkEnv } from "@/evals/browser/env";
 
 const repetitions = browserBenchmarkEnv.BROWSER_BENCH_REPETITIONS;
 const tasks = browserBenchmarkTasks(browserBenchmarkEnv.BROWSER_BENCH_SUITE);
@@ -35,7 +34,7 @@ export default tasks.flatMap((task) =>
         let completed: EveEvalTurn | null = null;
         const workerEvents: EveEvalTurn["events"][number][] = [];
 
-        /* oxlint-disable eslint/no-await-in-loop -- Each watch resumes from the stream index produced by the previous turn. */
+        /* oxlint-disable eslint/no-await-in-loop -- Each watch resumes from the stream index produced by the previous worker turn. */
         for (let attempt = 0; attempt < 60; attempt += 1) {
           try {
             const turn = await resultWithLiveActivity(
@@ -53,10 +52,7 @@ export default tasks.flatMap((task) =>
             }
             turnStartIndex = requireStreamIndex(child.session);
           } catch (error) {
-            const parsed = z.instanceof(Error).safeParse(error);
-            if (!parsed.success || !isIdleStreamClosure(parsed.data)) {
-              throw error;
-            }
+            if (!isIdleStreamClosure(error)) throw error;
           }
           if (completed === null) {
             child = t.target.watchTurn(childSessionId, {
@@ -166,8 +162,11 @@ function requireStreamIndex(session: {
   return streamIndex;
 }
 
-function isIdleStreamClosure(error: Error) {
-  return error.message.includes("closed before a turn boundary");
+function isIdleStreamClosure(cause: unknown) {
+  return (
+    cause instanceof Error &&
+    cause.message.includes("closed before a turn boundary")
+  );
 }
 
 function requireWorkerSessionId(turn: EveEvalTurn) {

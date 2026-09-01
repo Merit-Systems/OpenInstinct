@@ -7,7 +7,7 @@ import {
   readBrowserBenchmarkLiveStatus,
   updateBrowserBenchmarkLiveStatus,
   writeBrowserBenchmarkLiveStatus,
-} from "../evals/browser/live-status";
+} from "../live-status";
 
 const directories: string[] = [];
 
@@ -43,6 +43,20 @@ describe("browser benchmark live status", () => {
   });
 });
 
+function variant(kind: "baseline" | "candidate") {
+  return {
+    completedAt: null,
+    error: null,
+    kind,
+    ref: "main",
+    sha: "a".repeat(40),
+    startedAt: null,
+    status: "pending" as const,
+    tasks: [],
+    url: `https://${kind}.localhost`,
+  };
+}
+
 function exampleStatus(): BrowserBenchmarkLiveStatus {
   const now = new Date().toISOString();
   return {
@@ -62,19 +76,5 @@ function exampleStatus(): BrowserBenchmarkLiveStatus {
       candidate: variant("candidate"),
     },
     version: 1,
-  };
-}
-
-function variant(kind: "baseline" | "candidate") {
-  return {
-    completedAt: null,
-    error: null,
-    kind,
-    ref: "main",
-    sha: "a".repeat(40),
-    startedAt: null,
-    status: "pending" as const,
-    tasks: [],
-    url: `https://${kind}.localhost`,
   };
 }

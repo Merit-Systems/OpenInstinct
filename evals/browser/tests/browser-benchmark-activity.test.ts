@@ -4,7 +4,7 @@ import {
   browserBenchmarkActivity,
   browserBenchmarkActivityDurations,
   browserBenchmarkLiveViewUrl,
-} from "../evals/browser/benchmark-activity";
+} from "../benchmark-activity";
 
 describe("browser benchmark live activity", () => {
   it("shows the current tool in plain language", () => {

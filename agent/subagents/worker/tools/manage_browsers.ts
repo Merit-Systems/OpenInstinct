@@ -16,7 +16,7 @@ import {
 import { recordBrowserTraceDomains } from "@/db/services/browser-traces";
 import { kernel } from "@/lib/kernel";
 import { requireWorkerScope } from "@/agent/subagents/worker/lib/access";
-import { disposeBrowserLoopSession } from "@/agent/subagents/worker/lib/browser/semantic-loop";
+import { disposeBrowserLoopSession } from "../lib/semantic-loop";
 import { requireOwnedBrowserSession } from "@/agent/subagents/worker/lib/owned-browser";
 import {
   domainFromUrl,

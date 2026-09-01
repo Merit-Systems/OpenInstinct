@@ -4,9 +4,9 @@ import {
   browserActivityKindForTool,
   type BrowserActivityKind,
   sumBrowserActivityDurations,
-} from "@/components/browser/activity-timing";
+} from "@/lib/browser-activity";
 
-const toolActivity = new Map([
+const toolActivity = new Map<string, string>([
   ["browser_act", "Acting in the browser"],
   ["browser_find", "Finding page controls"],
   ["browser_snapshot", "Inspecting the page"],
@@ -21,6 +21,7 @@ const toolActivity = new Map([
   ["web_fetch", "Reading a public source"],
   ["web_search", "Searching for live options"],
 ]);
+
 const managedBrowserOutputSchema = z.object({
   browser: z.object({ browser_live_view_url: z.url() }),
 });
@@ -39,9 +40,8 @@ export function browserBenchmarkActivity(
     }
     if (event.type === "actions.requested") {
       const activities = event.data.actions.map((action) => {
-        if (action.kind === "load-skill") {
-          return toolActivity.get("load_skill") ?? "Loading browser setup";
-        }
+        if (action.kind === "load-skill")
+          return "Loading the browser procedure";
         if (action.kind === "tool-call")
           return activityForTool(action.toolName);
         return "Coordinating browser work";
@@ -85,10 +85,10 @@ export function browserBenchmarkLiveViewUrl(
     ) {
       continue;
     }
-    const output = managedBrowserOutputSchema.safeParse(result.output);
-    if (!output.success) continue;
+    const parsed = managedBrowserOutputSchema.safeParse(result.output);
+    if (!parsed.success) continue;
     try {
-      const url = new URL(output.data.browser.browser_live_view_url);
+      const url = new URL(parsed.data.browser.browser_live_view_url);
       if (url.protocol === "https:" || url.protocol === "http:") {
         return url.toString();
       }
