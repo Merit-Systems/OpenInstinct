@@ -1,32 +1,40 @@
 "use client";
 
 import { LogOutIcon, UserIcon } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import { authClient } from "@/app/_lib/auth-client";
+import {
+  SidebarMenu,
+  SidebarMenuAction,
+  SidebarMenuButton,
+  SidebarMenuItem,
+} from "@/components/ui/sidebar";
 
 export function AuthenticatedAccountControl() {
   const { data: session } = authClient.useSession();
   if (!session?.user) return null;
 
+  const accountLabel = session.user.phoneNumber ?? "Signed in";
+
   return (
-    <div className="flex items-center gap-2 border-t border-sidebar-border p-3">
-      <UserIcon className="size-4 shrink-0 text-muted-foreground" />
-      <span className="min-w-0 flex-1 truncate type-label text-muted-foreground">
-        {session.user.phoneNumber ?? "Signed in"}
-      </span>
-      <Button
-        aria-label="Sign out"
-        onClick={() => {
-          void authClient.signOut().finally(() => {
-            window.location.assign("/sign-in");
-          });
-        }}
-        size="icon-sm"
-        type="button"
-        variant="ghost"
-      >
-        <LogOutIcon />
-      </Button>
-    </div>
+    <SidebarMenu>
+      <SidebarMenuItem>
+        <SidebarMenuButton render={<div />} tooltip={accountLabel}>
+          <UserIcon />
+          <span>{accountLabel}</span>
+        </SidebarMenuButton>
+        <SidebarMenuAction
+          aria-label="Sign out"
+          onClick={() => {
+            void authClient.signOut().finally(() => {
+              window.location.assign("/sign-in");
+            });
+          }}
+          title="Sign out"
+          type="button"
+        >
+          <LogOutIcon />
+        </SidebarMenuAction>
+      </SidebarMenuItem>
+    </SidebarMenu>
   );
 }
