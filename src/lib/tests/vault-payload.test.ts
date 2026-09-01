@@ -89,6 +89,7 @@ describe("versioned vault payloads", () => {
       version: 1,
     });
     const contact = serializeContactVaultPayload({
+      dateOfBirth: "1815-12-10",
       email: "ada@example.com",
       fullName: "Ada Lovelace",
       kind: "contact",
@@ -103,7 +104,12 @@ describe("versioned vault payloads", () => {
       true
     );
     expect(parseAddressVaultPayload(address)?.countryCode).toBe("GB");
-    expect(parseContactVaultPayload(contact)?.email).toBe("ada@example.com");
+    expect(parseContactVaultPayload(contact)).toEqual(
+      expect.objectContaining({
+        dateOfBirth: "1815-12-10",
+        email: "ada@example.com",
+      })
+    );
   });
 
   it("creates only a masked login metadata hint", () => {

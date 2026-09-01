@@ -3,6 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { ActivityDurationBreakdown } from "@/components/browser/activity-duration-breakdown";
 import {
   Table,
   TableBody,
@@ -16,6 +17,7 @@ import {
   readBrowserTrace,
 } from "@/db/services/browser-traces";
 import { requireRequestScope } from "@/lib/request-scope";
+import { browserTraceActivityDurations } from "@/lib/browser-activity";
 import { RefreshButton } from "./_components/refresh-button";
 import { z } from "zod";
 
@@ -46,6 +48,11 @@ export default async function TraceDetailPage({
     ? statusText[traceStatus.data]
     : { label: trace.status, variant: "secondary" as const };
   const events = await listBrowserTraceEvents(scope, trace.sessionId);
+  const activityEnd = trace.completedAt ?? events.at(-1)?.at ?? trace.startedAt;
+  const activityDurations = browserTraceActivityDurations(
+    events,
+    new Date(activityEnd).getTime()
+  );
 
   return (
     <div className="flex w-full flex-col gap-6 px-4 py-6 sm:p-8">
@@ -83,6 +90,9 @@ export default async function TraceDetailPage({
               {trace.resultMessage}
             </p>
           ) : null}
+          <div className="mt-4 max-w-4xl">
+            <ActivityDurationBreakdown durations={activityDurations} />
+          </div>
         </div>
       </header>
 

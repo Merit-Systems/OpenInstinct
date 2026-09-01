@@ -43,6 +43,13 @@
       "when": 1788192764428,
       "tag": "0005_brave_kang",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1788198215119,
+      "tag": "0006_illegal_tattoo",
+      "breakpoints": true
     }
   ]
 }

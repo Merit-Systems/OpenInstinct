@@ -1,20 +1,21 @@
 import { eveChannel } from "eve/channels/eve";
-import { ForbiddenError, UnauthenticatedError } from "eve/channels/auth";
+import {
+  ForbiddenError,
+  localDev,
+  UnauthenticatedError,
+} from "eve/channels/auth";
 import { z } from "zod";
 import { isSessionOwned } from "@/db/services/sessions";
 import { accessScopeForUser, type AccessScope } from "@/lib/access-scope";
 import { getAuthSession } from "@/auth/session";
 
+const authenticateLocalDev = localDev();
+
 export default eveChannel({
   auth: [
     async (request) => {
       const identity = await requestIdentityFromRequest(request);
-      if (!identity) {
-        throw new UnauthenticatedError({
-          code: "authentication_required",
-          message: "Sign in to continue.",
-        });
-      }
+      if (!identity) return null;
       const { phoneNumber, scope } = identity;
 
       const sessionId = sessionIdFromPath(new URL(request.url).pathname);
@@ -28,6 +29,33 @@ export default eveChannel({
         principalId: scope.userId,
         principalType: "user",
       };
+    },
+    async (request) => {
+      const local = await authenticateLocalDev(request);
+      if (!local) return null;
+
+      const scope = accessScopeForUser("better-auth:browser-benchmark");
+      const sessionId = sessionIdFromPath(new URL(request.url).pathname);
+      if (sessionId && !(await waitForSessionOwnership(scope, sessionId))) {
+        throw new ForbiddenError({ message: "Session not found." });
+      }
+
+      return {
+        ...local,
+        attributes: {
+          ...local.attributes,
+          phoneNumber: "+15555550100",
+          workspaceId: scope.workspaceId,
+        },
+        principalId: scope.userId,
+        principalType: "user" as const,
+      };
+    },
+    () => {
+      throw new UnauthenticatedError({
+        code: "authentication_required",
+        message: "Sign in to continue.",
+      });
     },
   ],
 });
@@ -56,9 +84,9 @@ async function requestIdentityFromRequest(request: Request) {
 
 async function waitForSessionOwnership(scope: AccessScope, sessionId: string) {
   /* oxlint-disable eslint/no-await-in-loop -- Ownership visibility is checked by a bounded sequential retry loop. */
-  for (let attempt = 0; attempt < 5; attempt += 1) {
+  for (let attempt = 0; attempt < 50; attempt += 1) {
     if (await isSessionOwned(scope, sessionId)) return true;
-    await new Promise((resolve) => setTimeout(resolve, 50));
+    await new Promise((resolve) => setTimeout(resolve, 100));
   }
   /* oxlint-enable eslint/no-await-in-loop */
   return false;

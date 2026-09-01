@@ -3,6 +3,7 @@ import { revokeToken, startAuthorization } from "@vercel/connect";
 import { z } from "zod";
 import { listBrowserTraces } from "@/db/services/browser-traces";
 import { saveChat } from "@/db/services/chats";
+import { replaceUserProfile } from "@/db/services/user-profile";
 import { selectGatewayModel } from "@/db/services/settings";
 import { deleteVaultItem, saveVaultItem } from "@/db/services/vault";
 import type { AccessScope } from "@/lib/access-scope";
@@ -12,6 +13,7 @@ import {
   googleWorkspaceSubject,
   googleWorkspaceTokenParams,
 } from "@/lib/google-workspace";
+import { userProfileSchema } from "@/lib/user-profile";
 import { vaultCreateItemSchema, vaultImportItemsSchema } from "@/lib/vault";
 import { createTRPCRouter, protectedProcedure } from "./init";
 
@@ -48,6 +50,12 @@ export const appRouter = createTRPCRouter({
       .mutation(({ ctx, input }) =>
         selectGatewayModel(ctx.scope, input.modelId)
       ),
+  },
+  userProfile: {
+    update: protectedProcedure
+      .input(userProfileSchema)
+      .output(userProfileSchema)
+      .mutation(({ ctx, input }) => replaceUserProfile(ctx.scope, input)),
   },
   traces: {
     list: protectedProcedure

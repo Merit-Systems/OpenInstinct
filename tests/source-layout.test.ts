@@ -25,6 +25,7 @@ const disallowedLibDirectories = [
 const expectedLibFiles = [
   "access-scope.ts",
   "application-origin.ts",
+  "browser-activity.ts",
   "browser-artifact.ts",
   "chat.ts",
   "google-workspace.ts",
@@ -32,6 +33,7 @@ const expectedLibFiles = [
   "kernel.ts",
   "request-scope.ts",
   "same-origin.ts",
+  "user-profile.ts",
   "utils.ts",
   "vault.ts",
   "worker-completion.ts",
