@@ -1312,16 +1312,48 @@ export type PromptInputFooterProps = Omit<
   "align"
 >;
 
-const MotionInputGroupAddon = m.create(
-  ({
-    addonProps,
-    ...props
-  }: ComponentProps<"div"> & {
-    addonProps: ComponentProps<typeof InputGroupAddon>;
-  }) => (
-    <InputGroupAddon data-prompt-input-footer="" {...addonProps} {...props} />
-  )
-);
+const MotionInputGroupAddon = m.create(MotionInputGroupAddonAdapter);
+
+function MotionInputGroupAddonAdapter({
+  addonProps,
+  ...motionProps
+}: ComponentProps<"div"> & {
+  addonProps: ComponentProps<typeof InputGroupAddon>;
+}) {
+  const {
+    children,
+    ref: addonRef,
+    style: addonStyle,
+    ...restAddonProps
+  } = addonProps;
+  const {
+    ref: motionRef,
+    style: motionStyle,
+    ...restMotionProps
+  } = motionProps;
+  const ref = useRef<HTMLDivElement>(null);
+  const getInputGroupAddon = useCallback(() => {
+    const inputGroupAddon = ref.current;
+    if (!inputGroupAddon) {
+      throw new Error("Prompt input footer ref initialized before mount");
+    }
+    return inputGroupAddon;
+  }, []);
+  useImperativeHandle(addonRef, getInputGroupAddon, [getInputGroupAddon]);
+  useImperativeHandle(motionRef, getInputGroupAddon, [getInputGroupAddon]);
+
+  return (
+    <InputGroupAddon
+      data-prompt-input-footer=""
+      {...restAddonProps}
+      {...restMotionProps}
+      ref={ref}
+      style={{ ...addonStyle, ...motionStyle }}
+    >
+      {children}
+    </InputGroupAddon>
+  );
+}
 
 export const PromptInputFooter = ({
   className,
