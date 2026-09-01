@@ -52,6 +52,18 @@ vi.mock(
   })
 );
 
+vi.mock("eve/context", () => ({
+  defineState: <T>(_name: string, initial: () => T) => {
+    let value = initial();
+    return {
+      get: () => value,
+      update: (update: (current: T) => T) => {
+        value = update(value);
+      },
+    };
+  },
+}));
+
 const mocks = {
   createBrowser: vi.spyOn(kernel.browsers, "create"),
   createBrowserSession: serviceMocks.createBrowserSession,
@@ -147,6 +159,14 @@ describe("Kernel browser contract", () => {
         browser_live_view_url: "https://live.kernel.test/browser-1",
       },
     });
+    const lifecycle = z
+      .object({ next_actions: z.array(z.string()) })
+      .parse(result);
+    expect(lifecycle.next_actions.join(" ")).toContain("browser_snapshot");
+    expect(lifecycle.next_actions.join(" ")).toContain("browser_act");
+    expect(lifecycle.next_actions.join(" ")).toContain("playwright_execute");
+    expect(lifecycle.next_actions.join(" ")).toContain("relaxed fallback");
+    expect(JSON.stringify(result)).not.toContain("execute_playwright_code");
     expect(mocks.createBrowser).toHaveBeenCalledExactlyOnceWith(
       {
         profile: { id: "profile-1", save_changes: false },
@@ -156,7 +176,7 @@ describe("Kernel browser contract", () => {
         timeout_seconds: 900,
         viewport: undefined,
       },
-      { signal: workerContext.abortSignal }
+      { maxRetries: 8, signal: workerContext.abortSignal }
     );
     expect(mocks.createBrowserSession).toHaveBeenCalledExactlyOnceWith(
       { userId: "user-1", workspaceId: "workspace-1" },

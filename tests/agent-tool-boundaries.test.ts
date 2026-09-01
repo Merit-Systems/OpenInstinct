@@ -21,6 +21,7 @@ describe("root and worker capability boundaries", () => {
       "google_workspace_write.ts",
       "request_vault_import.ts",
       "request_vault_setup.ts",
+      "update_user_profile.ts",
       "web_research.ts",
     ]);
     expect(existsSync(`${rootTools}/sendMessage.ts`)).toBe(false);
@@ -54,12 +55,19 @@ describe("root and worker capability boundaries", () => {
   it("gives worker the browser and opaque-vault tools without messaging", () => {
     expect(toolFiles(workerTools)).toEqual([
       "ask_question.ts",
+      "bash.ts",
       "capture_browser_image.ts",
       "computer_action.ts",
-      "execute_playwright_code.ts",
       "fill_from_vault.ts",
       "list_vault.ts",
+      "load_skill.ts",
       "manage_browsers.ts",
+      "read_file.ts",
+      "semantic_browser.ts",
+      "todo.ts",
+      "web_fetch.ts",
+      "web_search.ts",
+      "write_file.ts",
     ]);
     expect(existsSync(`${workerRoot}/tools/sendMessage.ts`)).toBe(false);
     expect(existsSync(`${workerRoot}/tools/request_vault_setup.ts`)).toBe(
@@ -68,6 +76,19 @@ describe("root and worker capability boundaries", () => {
     expect(readFileSync(`${workerTools}/ask_question.ts`, "utf8")).toContain(
       "disableTool()"
     );
+    for (const tool of [
+      "bash",
+      "load_skill",
+      "read_file",
+      "todo",
+      "web_fetch",
+      "web_search",
+      "write_file",
+    ]) {
+      expect(readFileSync(`${workerTools}/${tool}.ts`, "utf8")).toContain(
+        "disableTool()"
+      );
+    }
     expect(existsSync(`${workerRoot}/extensions/kernel/extension.ts`)).toBe(
       false
     );
@@ -77,7 +98,6 @@ describe("root and worker capability boundaries", () => {
     for (const tool of [
       "capture_browser_image",
       "computer_action",
-      "execute_playwright_code",
       "manage_browsers",
     ]) {
       const source = readFileSync(`${workerTools}/${tool}.ts`, "utf8");
@@ -87,16 +107,34 @@ describe("root and worker capability boundaries", () => {
     }
     expect(existsSync(`${workerRoot}/hooks/session-owner.ts`)).toBe(true);
     expect(existsSync(`${workerRoot}/skills/browser-execution/SKILL.md`)).toBe(
-      true
+      false
     );
-    expect(readFileSync(`${workerRoot}/instructions.md`, "utf8")).not.toContain(
-      "`inspect_autofill`"
+    const semanticBrowser = readFileSync(
+      `${workerTools}/semantic_browser.ts`,
+      "utf8"
     );
-    expect(readFileSync(`${workerRoot}/instructions.md`, "utf8")).toContain(
+    expect(semanticBrowser).toContain("defineDynamic(");
+    expect(semanticBrowser).toContain("requireWorkerScope(context)");
+    expect(semanticBrowser).toContain('from "@onkernel/browser-loop"');
+    const workerInstructions = readFileSync(
+      `${workerRoot}/instructions.md`,
+      "utf8"
+    );
+    expect(workerInstructions).not.toContain("`inspect_autofill`");
+    expect(workerInstructions).toContain(
       "native `final_output` tool exactly once"
     );
-    expect(readFileSync(`${workerRoot}/instructions.md`, "utf8")).toContain(
+    expect(workerInstructions).toContain(
       "Never use the browser for general web search"
+    );
+    expect(workerInstructions).toContain(
+      "Use `playwright_execute` as the primary browser execution surface"
+    );
+    expect(workerInstructions).toContain(
+      "Prefer one bounded program per page state"
+    );
+    expect(workerInstructions).toContain(
+      "`browser_act` dispatches actions and returns the successor state"
     );
     expect(existsSync(`${workerRoot}/lib/browser-contract.ts`)).toBe(false);
     expect(existsSync(`${workerRoot}/lib/browser-runtime.ts`)).toBe(false);
@@ -106,7 +144,6 @@ describe("root and worker capability boundaries", () => {
     for (const tool of [
       "capture_browser_image",
       "computer_action",
-      "execute_playwright_code",
       "manage_browsers",
     ]) {
       const source = readFileSync(`${workerTools}/${tool}.ts`, "utf8");

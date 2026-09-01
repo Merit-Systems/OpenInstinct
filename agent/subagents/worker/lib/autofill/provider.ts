@@ -132,11 +132,19 @@ const codecs: readonly VaultAutofillCodec[] = [
       if (contact.fullName) values.set("name", contact.fullName);
       if (contact.email) values.set("email", contact.email);
       if (contact.phone) values.set("tel", contact.phone);
+      if (contact.dateOfBirth) {
+        const [year, month, day] = contact.dateOfBirth.split("-");
+        if (year && month && day) {
+          values.set("bday-day", day);
+          values.set("bday-month", month);
+          values.set("bday-year", year);
+        }
+      }
       return values;
     },
     matchReason: "Saved contact",
     surfaceKinds: ["contact", "identity"],
-    tokens: ["name", "email", "tel"],
+    tokens: ["name", "email", "tel", "bday-day", "bday-month", "bday-year"],
     vaultKind: "contact",
   },
   {

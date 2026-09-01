@@ -1,6 +1,8 @@
+import type { SessionContext } from "eve/context";
 import type { MemoryScopeContext } from "eve/memory";
 import { z } from "zod";
 import type { env } from "@/env";
+import { scopeFromPrincipal, type AccessScope } from "@/lib/access-scope";
 
 export function resolveProfileMemoryBackend(
   environment: Pick<
@@ -25,4 +27,22 @@ export function resolveProfileMemoryScope(context: MemoryScopeContext) {
   return caller?.principalType === "user" && workspaceId.success
     ? workspaceId.data
     : null;
+}
+
+export function resolvePersonalInfoMemoryScope(context: MemoryScopeContext) {
+  return resolvePersonalInfoAccessScope(context)?.workspaceId ?? null;
+}
+
+export function resolvePersonalInfoAccessScope(
+  context: Pick<MemoryScopeContext | SessionContext, "session">
+): AccessScope | null {
+  const caller = [
+    context.session.auth.current,
+    context.session.auth.initiator,
+  ].find((principal) => {
+    if (principal?.principalType !== "user") return false;
+    return z.string().safeParse(principal.attributes.workspaceId).success;
+  });
+
+  return caller ? scopeFromPrincipal(caller) : null;
 }

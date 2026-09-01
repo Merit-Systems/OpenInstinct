@@ -1,10 +1,24 @@
-import { createElement } from "react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { createElement, type ReactElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+import { LocalPhoneAuthForm } from "@/app/sign-in/_components/local-form";
 import {
-  PhoneAuthForm,
+  PhoneOtpAuthForm,
   phoneOtpErrorMessage,
-} from "@/app/sign-in/phone-auth-form";
+} from "@/app/sign-in/_components/otp-form";
+
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({
+    refresh: vi.fn<() => void>(),
+    replace: vi.fn<(href: string) => void>(),
+  }),
+}));
+
+const renderForm = (form: ReactElement) =>
+  renderToStaticMarkup(
+    createElement(QueryClientProvider, { client: new QueryClient() }, form)
+  );
 
 describe("phone OTP errors", () => {
   it("shows actionable Linq errors", () => {
@@ -25,27 +39,11 @@ describe("phone OTP errors", () => {
     ).toBe("Unable to send a code. Please try again.");
   });
 
-  it("explains setup instead of offering a broken production sign-in form", () => {
-    const html = renderToStaticMarkup(
-      createElement(PhoneAuthForm, {
-        callbackUrl: "/",
-        linqConfigured: false,
-        skipOtp: false,
-      })
-    );
-
-    expect(html).toContain("iMessage sign-in is not configured");
-    expect(html).toContain("Vercel Connect");
-    expect(html).not.toContain('type="tel"');
-  });
-
   it("explains and links the required first-time Messages flow", () => {
-    const html = renderToStaticMarkup(
-      createElement(PhoneAuthForm, {
+    const html = renderForm(
+      createElement(PhoneOtpAuthForm, {
         callbackUrl: "/",
-        linqConfigured: true,
         linqPhoneNumber: "+12025550123",
-        skipOtp: false,
       })
     );
 
@@ -58,12 +56,10 @@ describe("phone OTP errors", () => {
   });
 
   it("keeps the required flow visible when the number cannot be resolved", () => {
-    const html = renderToStaticMarkup(
-      createElement(PhoneAuthForm, {
+    const html = renderForm(
+      createElement(PhoneOtpAuthForm, {
         callbackUrl: "/",
-        linqConfigured: true,
         linqPhoneNumber: undefined,
-        skipOtp: false,
       })
     );
 
@@ -80,16 +76,11 @@ describe("phone OTP errors", () => {
   });
 
   it("does not show Linq setup during local sign-in", () => {
-    const html = renderToStaticMarkup(
-      createElement(PhoneAuthForm, {
-        callbackUrl: "/",
-        linqConfigured: false,
-        linqPhoneNumber: undefined,
-        skipOtp: true,
-      })
+    const html = renderForm(
+      createElement(LocalPhoneAuthForm, { callbackUrl: "/" })
     );
 
     expect(html).not.toContain("First time signing in?");
-    expect(html).toContain("Continue locally");
+    expect(html).toContain("Continue");
   });
 });

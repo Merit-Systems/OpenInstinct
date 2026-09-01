@@ -70,6 +70,25 @@ function completedWorkerResult(
 }
 
 describe("browser benchmark event detection", () => {
+  it("reads the structured result from an attached worker session", () => {
+    const completion = {
+      data: {
+        result: {
+          images: [],
+          message: "Browser assignment completed.",
+          status: "success",
+        },
+        sequence: 0,
+        stepIndex: 0,
+        turnId: "turn_0",
+      },
+      meta: { at: "2026-08-27T18:00:00.000Z", id: "evt_result" },
+      type: "result.completed",
+    } satisfies MessageStreamEvent;
+
+    expect(didCompleteWorker([completion])).toBe(true);
+  });
+
   it("recognizes a successful inline subagent result", () => {
     expect(
       didCompleteWorker([
