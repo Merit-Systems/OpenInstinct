@@ -1312,49 +1312,6 @@ export type PromptInputFooterProps = Omit<
   "align"
 >;
 
-const MotionInputGroupAddon = m.create(MotionInputGroupAddonAdapter);
-
-function MotionInputGroupAddonAdapter({
-  addonProps,
-  ...motionProps
-}: ComponentProps<"div"> & {
-  addonProps: ComponentProps<typeof InputGroupAddon>;
-}) {
-  const {
-    children,
-    ref: addonRef,
-    style: addonStyle,
-    ...restAddonProps
-  } = addonProps;
-  const {
-    ref: motionRef,
-    style: motionStyle,
-    ...restMotionProps
-  } = motionProps;
-  const ref = useRef<HTMLDivElement>(null);
-  const getInputGroupAddon = useCallback(() => {
-    const inputGroupAddon = ref.current;
-    if (!inputGroupAddon) {
-      throw new Error("Prompt input footer ref initialized before mount");
-    }
-    return inputGroupAddon;
-  }, []);
-  useImperativeHandle(addonRef, getInputGroupAddon, [getInputGroupAddon]);
-  useImperativeHandle(motionRef, getInputGroupAddon, [getInputGroupAddon]);
-
-  return (
-    <InputGroupAddon
-      data-prompt-input-footer=""
-      {...restAddonProps}
-      {...restMotionProps}
-      ref={ref}
-      style={{ ...addonStyle, ...motionStyle }}
-    >
-      {children}
-    </InputGroupAddon>
-  );
-}
-
 export const PromptInputFooter = ({
   className,
   ...props
@@ -1362,21 +1319,18 @@ export const PromptInputFooter = ({
   const layout = useContext(PromptInputLayoutContext);
 
   return (
-    <MotionInputGroupAddon
-      addonProps={{
-        align: "block-end",
-        className: cn(
-          "justify-between gap-1",
-          layout?.compact && "px-1.5!",
-          layout?.compact &&
-            !layout.expanded &&
-            "col-start-2 row-start-1 w-auto! justify-end pb-1.5!",
-          className
-        ),
-        ...props,
-      }}
-      layout={layout?.animateLayout ? "position" : false}
-      transition={{ layout: promptInputLayoutTransition }}
+    <InputGroupAddon
+      align="block-end"
+      className={cn(
+        "justify-between gap-1",
+        layout?.compact && "px-1.5!",
+        layout?.compact &&
+          !layout.expanded &&
+          "col-start-2 row-start-1 w-auto! justify-end pb-1.5!",
+        className
+      )}
+      data-prompt-input-footer=""
+      {...props}
     />
   );
 };
@@ -1517,6 +1471,7 @@ export const PromptInputSubmit = ({
   children,
   ...props
 }: PromptInputSubmitProps) => {
+  const layout = useContext(PromptInputLayoutContext);
   const isGenerating = status === "submitted" || status === "streaming";
 
   let Icon = <CornerDownLeftIcon className="size-4" />;
@@ -1543,10 +1498,13 @@ export const PromptInputSubmit = ({
     [isGenerating, onStop, onClick]
   );
 
-  return (
+  const button = (
     <InputGroupButton
       aria-label={isGenerating ? "Stop" : "Submit"}
-      className={cn(className)}
+      className={cn(
+        layout?.compact && "absolute right-1.5 bottom-1.5",
+        className
+      )}
       onClick={handleClick}
       size={size}
       type={isGenerating && onStop ? "button" : "submit"}
@@ -1556,6 +1514,12 @@ export const PromptInputSubmit = ({
       {children ?? Icon}
     </InputGroupButton>
   );
+
+  if (!layout?.compact) {
+    return button;
+  }
+
+  return <span className="size-8 shrink-0">{button}</span>;
 };
 
 export type PromptInputSelectProps = ComponentProps<typeof Select>;
