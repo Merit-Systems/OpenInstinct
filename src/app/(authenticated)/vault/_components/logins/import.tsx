@@ -109,7 +109,6 @@ export function ChromeImportPanel({ onDone }: { readonly onDone: () => void }) {
               passwords.
             </p>
             <Button
-              className="w-fit"
               nativeButton={false}
               render={
                 <a

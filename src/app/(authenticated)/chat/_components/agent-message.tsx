@@ -44,7 +44,10 @@ import {
   ToolInput,
   ToolOutput,
 } from "@/components/ai-elements/tool";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 
 export interface AgentInputResponse {
@@ -318,7 +321,7 @@ function QuestionRequest({
               <span>
                 <span className="block">{option.label}</span>
                 {option.description ? (
-                  <span className="block text-xs font-normal opacity-70">
+                  <span className="block type-caption opacity-70">
                     {option.description}
                   </span>
                 ) : null}
@@ -350,11 +353,11 @@ function AttachmentPart({ part }: { readonly part: EveFilePart }) {
   const label = part.filename ?? "Attachment";
   const detail = [part.mediaType, formatBytes(part.size)]
     .filter(Boolean)
-    .join(" - ");
+    .join(" · ");
   const isImage = part.mediaType.startsWith("image/") && part.url !== undefined;
   const Icon = isImage ? ImageIcon : FileIcon;
-  const body = (
-    <span className="flex max-w-sm items-center gap-3 rounded-md border bg-background/60 p-2 text-sm">
+  const content = (
+    <>
       {isImage ? (
         // Browser artifacts use runtime URLs that cannot be declared in Next Image configuration.
         // oxlint-disable-next-line nextjs/no-img-element -- runtime browser artifact URL
@@ -369,7 +372,7 @@ function AttachmentPart({ part }: { readonly part: EveFilePart }) {
         </span>
       )}
       <span className="min-w-0 flex-1">
-        <span className="block truncate font-medium">{label}</span>
+        <span className="block truncate type-label">{label}</span>
         {detail ? (
           <span className="block truncate text-muted-foreground">{detail}</span>
         ) : null}
@@ -377,15 +380,29 @@ function AttachmentPart({ part }: { readonly part: EveFilePart }) {
       {part.url ? (
         <ExternalLinkIcon className="size-4 shrink-0 text-muted-foreground" />
       ) : null}
-    </span>
+    </>
   );
 
   return part.url ? (
-    <a href={part.url} rel="noreferrer" target="_blank">
-      {body}
-    </a>
+    <Button
+      className="max-w-sm"
+      nativeButton={false}
+      render={
+        <a
+          aria-label={`Open ${label}`}
+          href={part.url}
+          rel="noreferrer"
+          target="_blank"
+        />
+      }
+      variant="surface"
+    >
+      {content}
+    </Button>
   ) : (
-    body
+    <Card className="max-w-sm" size="sm">
+      <CardContent className="flex items-center gap-3">{content}</CardContent>
+    </Card>
   );
 }
 
@@ -405,66 +422,47 @@ function AuthorizationPrompt({
   const instructions = part.authorization?.instructions;
   const shouldShowInstructions =
     instructions !== undefined && instructions !== part.description;
+  const alertVariant = isAuthorized
+    ? "success"
+    : isCompleted
+      ? "destructive"
+      : "information";
 
   return (
-    <div
-      className={cn(
-        "space-y-3 rounded-md border p-3",
-        isAuthorized
-          ? "border-emerald-500/30 bg-emerald-500/5"
-          : isCompleted
-            ? "border-destructive/30 bg-destructive/5"
-            : "border-blue-500/30 bg-blue-500/5"
-      )}
-    >
-      <div className="flex items-start gap-3">
-        <span
-          className={cn(
-            "mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-full",
-            isAuthorized
-              ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
-              : isCompleted
-                ? "bg-destructive/10 text-destructive"
-                : "bg-blue-500/10 text-blue-700 dark:text-blue-300"
-          )}
-        >
-          <Icon className="size-4" />
-        </span>
-        <div className="min-w-0 flex-1 space-y-2">
-          <p className="text-sm font-medium">{authorizationTitle(part)}</p>
-          <p className="text-sm text-muted-foreground">
-            {authorizationDescription(part)}
-          </p>
-          {shouldShowInstructions ? (
-            <p className="text-sm text-muted-foreground">{instructions}</p>
-          ) : null}
-          {part.state === "required" && part.authorization?.userCode ? (
-            <div className="flex flex-wrap items-center gap-2 text-sm">
-              <span className="text-muted-foreground">Code</span>
-              <code className="rounded-md bg-background px-2 py-1 font-mono">
+    <Alert variant={alertVariant}>
+      <Icon />
+      <AlertTitle>{authorizationTitle(part)}</AlertTitle>
+      <AlertDescription>
+        <p>{authorizationDescription(part)}</p>
+        {shouldShowInstructions ? <p>{instructions}</p> : null}
+        {part.state === "required" && part.authorization?.userCode ? (
+          <div className="flex flex-wrap items-center gap-2">
+            <span>Code</span>
+            <Badge variant="outline">
+              <code className="type-compact-code">
                 {part.authorization.userCode}
               </code>
-            </div>
-          ) : null}
-          {part.state === "required" && part.authorization?.url ? (
-            <Button
-              render={
-                <a
-                  aria-label={`Sign in with ${part.displayName}`}
-                  href={part.authorization.url}
-                  rel="noreferrer"
-                  target="_blank"
-                />
-              }
-              size="sm"
-            >
-              <ExternalLinkIcon className="size-4" />
-              Sign in with {part.displayName}
-            </Button>
-          ) : null}
-        </div>
-      </div>
-    </div>
+            </Badge>
+          </div>
+        ) : null}
+        {part.state === "required" && part.authorization?.url ? (
+          <Button
+            render={
+              <a
+                aria-label={`Sign in with ${part.displayName}`}
+                href={part.authorization.url}
+                rel="noreferrer"
+                target="_blank"
+              />
+            }
+            size="sm"
+          >
+            <ExternalLinkIcon />
+            Sign in with {part.displayName}
+          </Button>
+        ) : null}
+      </AlertDescription>
+    </Alert>
   );
 }
 
@@ -540,39 +538,41 @@ function InputRequestActions({
   );
 
   return (
-    <div className="space-y-3 rounded-md border border-yellow-500/30 bg-yellow-500/5 p-3">
-      <p className="text-sm text-muted-foreground">{inputRequest.prompt}</p>
-      {inputResponse ? (
-        <p className="text-sm font-medium">
-          Responded:{" "}
-          {selectedOption?.label ??
-            inputResponse.text ??
-            inputResponse.optionId}
-        </p>
-      ) : (
-        <div className="flex flex-wrap gap-2">
-          {inputRequest.options?.map((option) => (
-            <Button
-              disabled={!canRespond}
-              key={option.id}
-              onClick={() => {
-                void onInputResponses([
-                  {
-                    optionId: option.id,
-                    requestId: inputRequest.requestId,
-                  },
-                ]);
-              }}
-              size="sm"
-              type="button"
-              variant={option.style === "danger" ? "destructive" : "default"}
-            >
-              {option.label}
-            </Button>
-          ))}
-        </div>
-      )}
-    </div>
+    <Alert variant="warning">
+      <AlertTitle>{inputRequest.prompt}</AlertTitle>
+      <AlertDescription>
+        {inputResponse ? (
+          <p>
+            Responded:{" "}
+            {selectedOption?.label ??
+              inputResponse.text ??
+              inputResponse.optionId}
+          </p>
+        ) : (
+          <div className="flex flex-wrap gap-2">
+            {inputRequest.options?.map((option) => (
+              <Button
+                disabled={!canRespond}
+                key={option.id}
+                onClick={() => {
+                  void onInputResponses([
+                    {
+                      optionId: option.id,
+                      requestId: inputRequest.requestId,
+                    },
+                  ]);
+                }}
+                size="sm"
+                type="button"
+                variant={option.style === "danger" ? "destructive" : "default"}
+              >
+                {option.label}
+              </Button>
+            ))}
+          </div>
+        )}
+      </AlertDescription>
+    </Alert>
   );
 }
 

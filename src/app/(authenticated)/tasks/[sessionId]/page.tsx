@@ -1,6 +1,7 @@
 import { ArrowLeftIcon } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   Table,
@@ -19,11 +20,11 @@ import { RefreshButton } from "./_components/refresh-button";
 import { z } from "zod";
 
 const statusText = {
-  cancelled: "Cancelled",
-  error: "Error",
-  failure: "Failed",
-  running: "Running",
-  success: "Succeeded",
+  cancelled: { label: "Cancelled", variant: "secondary" },
+  error: { label: "Error", variant: "destructive" },
+  failure: { label: "Failed", variant: "warning" },
+  running: { label: "Running", variant: "information" },
+  success: { label: "Succeeded", variant: "success" },
 } as const;
 const traceStatusSchema = z.enum([
   "cancelled",
@@ -41,6 +42,9 @@ export default async function TraceDetailPage({
   const trace = await readBrowserTrace(scope, sessionId);
   if (!trace) notFound();
   const traceStatus = traceStatusSchema.safeParse(trace.status);
+  const status = traceStatus.success
+    ? statusText[traceStatus.data]
+    : { label: trace.status, variant: "secondary" as const };
   const events = await listBrowserTraceEvents(scope, trace.sessionId);
 
   return (
@@ -58,15 +62,17 @@ export default async function TraceDetailPage({
           </Button>
         </div>
         <div className="max-w-4xl">
-          <h1 className="truncate type-card-title" title={trace.task}>
-            {trace.task}
-          </h1>
+          <div className="flex min-w-0 items-center gap-2">
+            <h1 className="truncate type-card-title" title={trace.task}>
+              {trace.task}
+            </h1>
+            <Badge variant={status.variant}>{status.label}</Badge>
+          </div>
           <p className="type-supporting-body mt-2 truncate text-muted-foreground">
-            {traceStatus.success ? statusText[traceStatus.data] : trace.status}
             {trace.durationMs === null
-              ? ""
-              : ` · ${String(Math.round(trace.durationMs / 1000))}s`}
-            {` · started ${trace.startedAt}`}
+              ? "Duration unavailable"
+              : `${String(Math.round(trace.durationMs / 1000))}s`}
+            {` · Started ${trace.startedAt}`}
             {trace.domains.length > 0 ? ` · ${trace.domains.join(", ")}` : ""}
           </p>
           {trace.resultMessage ? (

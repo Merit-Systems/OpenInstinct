@@ -25,6 +25,7 @@ import {
 import { Shimmer } from "@/components/ai-elements/shimmer";
 import { summarizeChatUsage } from "@/app/(authenticated)/chat/_lib/chat-usage";
 import { getLatestTurnFailure } from "@/app/(authenticated)/chat/_lib/turn-failure";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import type { ChatUsage } from "@/lib/chat";
 import { cn } from "@/lib/utils";
 import { AgentMessage } from "./agent-message";
@@ -334,9 +335,7 @@ export function AgentChat({
         >
           {showConversationLayout ? null : (
             <div className="flex flex-col items-start gap-3">
-              <h1 className="text-5xl font-medium tracking-tighter">
-                {AGENT_NAME}
-              </h1>
+              <h1 className="type-product-title">{AGENT_NAME}</h1>
             </div>
           )}
           <div className="w-full">{composer}</div>
@@ -477,16 +476,11 @@ function ErrorMessage({ message }: { readonly message: string }) {
   return (
     <Message className="max-w-full" from="assistant">
       <MessageContent>
-        <div
-          className="flex w-full items-start gap-3 rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2.5 text-sm"
-          role="alert"
-        >
-          <AlertCircleIcon className="mt-0.5 size-4 shrink-0 text-destructive" />
-          <div>
-            <p className="font-medium">Request failed</p>
-            <p className="mt-0.5 text-muted-foreground">{message}</p>
-          </div>
-        </div>
+        <Alert variant="destructive">
+          <AlertCircleIcon />
+          <AlertTitle>Request failed</AlertTitle>
+          <AlertDescription>{message}</AlertDescription>
+        </Alert>
       </MessageContent>
     </Message>
   );
@@ -496,7 +490,7 @@ function PendingThinking() {
   return (
     <Message aria-live="polite" from="assistant">
       <MessageContent>
-        <div className="mb-4 flex w-full items-center gap-2 text-sm text-muted-foreground">
+        <div className="type-supporting-body mb-4 flex w-full items-center gap-2 text-muted-foreground">
           <BrainIcon className="size-4" />
           <Shimmer duration={1}>Thinking</Shimmer>
         </div>

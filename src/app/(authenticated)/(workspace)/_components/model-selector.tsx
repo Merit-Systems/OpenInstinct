@@ -84,7 +84,7 @@ export function ModelSelector({ modelId }: { readonly modelId: string }) {
       </ModelSelectorTrigger>
       <ModelSelectorContent
         className="sm:max-w-xl"
-        showCloseButton
+        showCloseButton={false}
         title="Choose a model"
       >
         <ModelSelectorInput placeholder="Search models…" />

@@ -4,6 +4,7 @@ import { type SubmitEvent, useState } from "react";
 import { useRouter } from "next/navigation";
 import { z } from "zod";
 import { Button } from "@/components/ui/button";
+import { DialogFooter } from "@/components/ui/dialog";
 import { FieldGroup } from "@/components/ui/field";
 import { serializeAddressVaultPayload } from "@/lib/vault";
 import { api } from "@/trpc/client";
@@ -73,7 +74,7 @@ export function AddressForm({
 
   return (
     <form noValidate onSubmit={submit}>
-      <FieldGroup className="gap-3">
+      <FieldGroup>
         <div className="grid gap-3 sm:grid-cols-2">
           <FormField
             error={errors.nickname?.[0]}
@@ -162,11 +163,11 @@ export function AddressForm({
           />
         </div>
       </FieldGroup>
-      <div className="mt-5 flex justify-end">
+      <DialogFooter>
         <Button disabled={create.isPending} type="submit">
           Save address
         </Button>
-      </div>
+      </DialogFooter>
     </form>
   );
 }

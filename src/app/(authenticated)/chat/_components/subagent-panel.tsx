@@ -3,14 +3,15 @@
 import { Client, type MessageStreamEvent } from "eve/client";
 import {
   ChevronRightIcon,
-  CircleDotIcon,
   ListTreeIcon,
   SparklesIcon,
   XIcon,
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type RefObject } from "react";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
+import { Field, FieldLabel } from "@/components/ui/field";
 import { Switch } from "@/components/ui/switch";
 import {
   Sheet,
@@ -319,14 +320,9 @@ function ActivityCard({
   return (
     <Card className="max-h-full w-full gap-0 overflow-hidden">
       <CardContent className="min-h-0 overflow-y-auto pr-6">
-        <p className="type-section-title text-muted-foreground">Activity</p>
-        <label
-          className="mt-4 flex cursor-pointer items-center gap-3 rounded-lg p-2 hover:bg-muted"
-          htmlFor="show-full-trace"
-        >
-          <span className="type-supporting-body min-w-0 flex-1">
-            Show full trace
-          </span>
+        <p className="type-card-title text-muted-foreground">Activity</p>
+        <Field className="mt-4" orientation="horizontal">
+          <FieldLabel htmlFor="show-full-trace">Show full trace</FieldLabel>
           <Switch
             checked={traceView === "trace"}
             id="show-full-trace"
@@ -334,7 +330,7 @@ function ActivityCard({
               onTraceViewChange(checked ? "trace" : "imessage");
             }}
           />
-        </label>
+        </Field>
         <div className="type-supporting-body flex items-center p-2 text-muted-foreground">
           <span>Usage</span>
           <span className="ml-auto">{formatChatUsage(usage)}</span>
@@ -349,11 +345,10 @@ function ActivityCard({
           ) : (
             <>
               <div className="mt-3 flex items-center gap-2 pb-2">
-                <CircleDotIcon className="size-4 text-amber-500" />
-                <span className="type-label">{workingCount} working</span>
-                <span className="ml-auto type-label text-muted-foreground">
+                <Badge variant="information">{workingCount} working</Badge>
+                <Badge className="ml-auto" variant="secondary">
                   {doneCount} done
-                </span>
+                </Badge>
               </div>
               <div>
                 {sessions.map((session) => {
@@ -363,15 +358,15 @@ function ActivityCard({
                     eventsBySession.get(session.childSessionId) ?? []
                   );
                   return (
-                    <button
+                    <Button
                       aria-label={`${agentLabel(session.name)} task, ${status}`}
-                      className="group flex w-full items-center gap-3 rounded-md px-2 py-3 text-left"
                       data-task-session={session.childSessionId}
                       key={session.childSessionId}
                       onClick={() => {
                         onSelect(session.childSessionId);
                       }}
                       type="button"
+                      variant="surface"
                     >
                       <span className="min-w-0 flex-1">
                         <span className="block truncate type-label">
@@ -382,8 +377,8 @@ function ActivityCard({
                         </span>
                       </span>
                       <StatusIndicator status={status} />
-                      <ChevronRightIcon className="size-4 text-muted-foreground transition-transform group-hover:translate-x-0.5" />
-                    </button>
+                      <ChevronRightIcon className="text-muted-foreground" />
+                    </Button>
                   );
                 })}
               </div>
@@ -450,19 +445,14 @@ function agentLabel(name: string) {
 }
 
 function StatusIndicator({ status }: { readonly status: SubagentStatus }) {
-  return (
-    <span
-      aria-hidden
-      className={cn(
-        "size-2.5 shrink-0 rounded-full",
-        status === "working" || status === "starting"
-          ? "animate-pulse bg-amber-400"
-          : status === "failed"
-            ? "bg-destructive"
-            : status === "cancelled"
-              ? "bg-muted-foreground"
-              : "bg-emerald-500"
-      )}
-    />
-  );
+  const variant =
+    status === "working" || status === "starting"
+      ? "information"
+      : status === "failed"
+        ? "destructive"
+        : status === "cancelled"
+          ? "secondary"
+          : "success";
+
+  return <Badge variant={variant}>{status}</Badge>;
 }

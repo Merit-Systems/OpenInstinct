@@ -4,6 +4,7 @@ import {
   combineChatUsage,
   formatChatUsage,
 } from "@/app/(authenticated)/chat/_lib/chat-usage";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { listChats } from "@/db/services/chats";
 import { requireRequestScope } from "@/lib/request-scope";
@@ -31,18 +32,21 @@ export default async function AllChatsPage() {
         </Button>
       </header>
 
-      <section aria-label="Chat history" className="border-t border-border">
+      <section aria-label="Chat history" className="grid gap-2">
         {chats.length === 0 ? (
-          <div className="flex min-h-40 items-center gap-3 border-b border-border py-8 text-muted-foreground">
-            <MessageSquareIcon className="size-5" />
-            <p>No chats yet.</p>
-          </div>
+          <Alert>
+            <MessageSquareIcon />
+            <AlertDescription>No chats yet.</AlertDescription>
+          </Alert>
         ) : (
           chats.map((chat) => (
-            <Link
-              className="flex items-center gap-4 border-b border-border py-4 transition-colors hover:bg-muted/40"
-              href={`/chat/${encodeURIComponent(chat.sessionId)}`}
+            <Button
               key={chat.sessionId}
+              nativeButton={false}
+              render={
+                <Link href={`/chat/${encodeURIComponent(chat.sessionId)}`} />
+              }
+              variant="surface"
             >
               <MessageSquareIcon className="size-4 shrink-0 text-muted-foreground" />
               <span className="min-w-0 flex-1 truncate">{chat.title}</span>
@@ -55,7 +59,7 @@ export default async function AllChatsPage() {
               >
                 {formatChatDate(chat.updatedAt)}
               </time>
-            </Link>
+            </Button>
           ))
         )}
       </section>

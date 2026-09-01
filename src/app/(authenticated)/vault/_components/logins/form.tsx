@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { z } from "zod";
 import { Button } from "@/components/ui/button";
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
+import { DialogFooter } from "@/components/ui/dialog";
 import {
   Select,
   SelectContent,
@@ -115,7 +116,7 @@ export function LoginForm({
 
   return (
     <form noValidate onSubmit={submit}>
-      <FieldGroup className="gap-3">
+      <FieldGroup>
         {initialLabel ? null : (
           <FormField
             error={errors.nickname?.[0]}
@@ -190,10 +191,12 @@ export function LoginForm({
           />
         </div>
         <FormField
-          aria-describedby={
-            passwordOptional ? "vault-login-password-description" : undefined
-          }
           autoComplete="new-password"
+          description={
+            passwordOptional
+              ? "Leave blank if you sign in with a one-time code."
+              : undefined
+          }
           error={errors.password?.[0]}
           id="vault-login-password"
           label={passwordOptional ? "Password (optional)" : "Password"}
@@ -203,20 +206,12 @@ export function LoginForm({
           type="password"
           value={form.password}
         />
-        {passwordOptional ? (
-          <p
-            className="-mt-1 type-caption text-muted-foreground"
-            id="vault-login-password-description"
-          >
-            Leave blank if you sign in with a one-time code.
-          </p>
-        ) : null}
       </FieldGroup>
-      <div className="mt-5 flex justify-end">
+      <DialogFooter>
         <Button disabled={create.isPending} type="submit">
           Save login
         </Button>
-      </div>
+      </DialogFooter>
     </form>
   );
 }

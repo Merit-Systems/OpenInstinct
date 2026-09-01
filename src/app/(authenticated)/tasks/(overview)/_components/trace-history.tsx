@@ -1,9 +1,11 @@
 "use client";
 
 import { RefreshCwIcon } from "lucide-react";
-import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { useMemo } from "react";
 import { z } from "zod";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   Table,
@@ -14,15 +16,14 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import type { BrowserTracePage } from "@/db/services/browser-traces";
-import { cn } from "@/lib/utils";
 import { api } from "@/trpc/client";
 
 const statusLabels = {
-  cancelled: { className: "text-muted-foreground", label: "Cancelled" },
-  error: { className: "text-destructive", label: "Error" },
-  failure: { className: "text-warning", label: "Failed" },
-  running: { className: "text-information", label: "Running" },
-  success: { className: "text-success", label: "Succeeded" },
+  cancelled: { label: "Cancelled", variant: "secondary" },
+  error: { label: "Error", variant: "destructive" },
+  failure: { label: "Failed", variant: "warning" },
+  running: { label: "Running", variant: "information" },
+  success: { label: "Succeeded", variant: "success" },
 } as const;
 const traceStatusSchema = z.enum([
   "cancelled",
@@ -36,7 +37,7 @@ function statusLabel(status: string) {
   const parsed = traceStatusSchema.safeParse(status);
   return parsed.success
     ? statusLabels[parsed.data]
-    : { className: "text-muted-foreground", label: status };
+    : { label: status, variant: "secondary" as const };
 }
 
 function formatDuration(durationMs: number | null) {
@@ -56,7 +57,6 @@ export function TraceHistory({
   readonly initialError?: string;
   readonly initialPage?: BrowserTracePage;
 }) {
-  const router = useRouter();
   const queryOptions = {
     getNextPageParam: (page: BrowserTracePage) => page.nextCursor ?? undefined,
     initialCursor: null,
@@ -94,7 +94,7 @@ export function TraceHistory({
         {traces.length > 0 ? (
           <>
             <span>{String(traces.length)} loaded</span>
-            <span className="text-success">{String(succeeded)} succeeded</span>
+            <Badge variant="success">{String(succeeded)} succeeded</Badge>
           </>
         ) : null}
         <Button
@@ -112,9 +112,9 @@ export function TraceHistory({
       </div>
 
       {historyError ? (
-        <p className="type-supporting-body text-destructive" role="alert">
-          {historyError}
-        </p>
+        <Alert variant="destructive">
+          <AlertDescription>{historyError}</AlertDescription>
+        </Alert>
       ) : null}
 
       <Table className="table-fixed">
@@ -141,18 +141,19 @@ export function TraceHistory({
             traces.map((trace) => {
               const status = statusLabel(trace.status);
               return (
-                <TableRow
-                  className="cursor-pointer hover:bg-muted/50"
-                  key={trace.sessionId}
-                  onClick={() => {
-                    router.push(`/tasks/${trace.sessionId}`);
-                  }}
-                >
+                <TableRow key={trace.sessionId}>
                   <TableCell className="truncate" title={trace.task}>
-                    {trace.task}
+                    <Button
+                      nativeButton={false}
+                      render={<Link href={`/tasks/${trace.sessionId}`} />}
+                      size="none"
+                      variant="link"
+                    >
+                      {trace.task}
+                    </Button>
                   </TableCell>
-                  <TableCell className={cn("truncate", status.className)}>
-                    {status.label}
+                  <TableCell>
+                    <Badge variant={status.variant}>{status.label}</Badge>
                   </TableCell>
                   <TableCell className="truncate">
                     {formatDuration(trace.durationMs)}

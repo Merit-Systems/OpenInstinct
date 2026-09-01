@@ -12,10 +12,7 @@ export function VaultOtherItems({
 
   return (
     <section aria-labelledby="other-vault-heading" className="space-y-3">
-      <h2
-        className="type-caption text-muted-foreground uppercase"
-        id="other-vault-heading"
-      >
+      <h2 className="type-section-title" id="other-vault-heading">
         Other
       </h2>
       <div className="border-y border-border/50">

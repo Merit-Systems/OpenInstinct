@@ -11,14 +11,16 @@ import { useRouter } from "next/navigation";
 import { type ReactNode, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogTrigger } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
+import {
+  InputGroup,
+  InputGroupAddon,
+  InputGroupInput,
+} from "@/components/ui/input-group";
 import { Label } from "@/components/ui/label";
 import type { VaultItem } from "@/lib/vault";
 import { api } from "@/trpc/client";
 
 const VAULT_DIALOG_PAGE_SIZE = 50;
-const dialogContentClass =
-  "top-auto bottom-0 max-h-[min(32rem,calc(100dvh-0.5rem))] translate-y-0 overscroll-contain rounded-b-none pb-[max(1rem,env(safe-area-inset-bottom))] sm:top-1/2 sm:bottom-auto sm:max-h-[min(32rem,calc(100dvh-2rem))] sm:max-w-2xl sm:-translate-y-1/2 sm:rounded-xl sm:pb-4 [&_[data-slot=dialog-close]]:top-3 [&_[data-slot=dialog-close]]:right-3 [&_[data-slot=dialog-close]]:size-10 sm:[&_[data-slot=dialog-close]]:top-2 sm:[&_[data-slot=dialog-close]]:right-2 sm:[&_[data-slot=dialog-close]]:size-7 [&_[data-slot=input]]:h-12 sm:[&_[data-slot=input]]:h-8 [&_[data-slot=select-trigger]]:h-12 sm:[&_[data-slot=select-trigger]]:h-8 [&_button[type=submit]]:h-12 [&_button[type=submit]]:w-full sm:[&_button[type=submit]]:h-8 sm:[&_button[type=submit]]:w-auto";
 
 type VaultSectionView = "add" | "import" | "list";
 
@@ -62,18 +64,10 @@ export function VaultSectionTrigger({
   readonly title: string;
 }) {
   return (
-    <DialogTrigger
-      render={
-        <Button
-          className="h-14 w-full justify-between px-4 text-left"
-          type="button"
-          variant="outline"
-        />
-      }
-    >
-      <span className="min-w-0">
+    <DialogTrigger render={<Button type="button" variant="surface" />}>
+      <span className="min-w-0 flex-1">
         <span className="block type-label">{title}</span>
-        <span className="type-supporting-body block font-normal text-muted-foreground">
+        <span className="type-supporting-body block text-muted-foreground">
           {items.length > 0
             ? `${items.length.toLocaleString()} saved`
             : `No saved ${title.toLocaleLowerCase()}`}
@@ -96,9 +90,10 @@ export function VaultSectionContent({
       animated={false}
       className={
         view === "list"
-          ? `${dialogContentClass} grid-rows-[auto_auto_minmax(0,1fr)_auto] overflow-hidden`
-          : `${dialogContentClass} no-scrollbar overflow-y-auto`
+          ? "grid-rows-[auto_auto_minmax(0,1fr)_auto] overflow-hidden"
+          : "no-scrollbar overflow-y-auto"
       }
+      variant="responsive"
     >
       {children}
     </DialogContent>
@@ -113,13 +108,7 @@ export function VaultSectionBackButton({
   readonly title: string;
 }) {
   return (
-    <Button
-      className="w-fit transition-none active:translate-y-0"
-      onClick={onClick}
-      size="sm"
-      type="button"
-      variant="plain"
-    >
+    <Button onClick={onClick} size="sm" type="button" variant="plain">
       <ArrowLeftIcon />
       {title}
     </Button>
@@ -150,22 +139,25 @@ export function VaultItemBrowser({
   return (
     <>
       {items.length > 0 ? (
-        <div className="relative">
-          <SearchIcon className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
+        <div>
           <Label className="sr-only" htmlFor={searchId}>
             Search {title.toLocaleLowerCase()}
           </Label>
-          <Input
-            className="pl-8"
-            id={searchId}
-            onChange={(event) => {
-              setQuery(event.target.value);
-              setVisibleCount(VAULT_DIALOG_PAGE_SIZE);
-            }}
-            placeholder="Search by name or account"
-            type="search"
-            value={query}
-          />
+          <InputGroup>
+            <InputGroupAddon>
+              <SearchIcon />
+            </InputGroupAddon>
+            <InputGroupInput
+              id={searchId}
+              onChange={(event) => {
+                setQuery(event.target.value);
+                setVisibleCount(VAULT_DIALOG_PAGE_SIZE);
+              }}
+              placeholder="Search by name or account"
+              type="search"
+              value={query}
+            />
+          </InputGroup>
         </div>
       ) : (
         <div />

@@ -4,6 +4,7 @@ import { type SubmitEvent, useState } from "react";
 import { useRouter } from "next/navigation";
 import { z } from "zod";
 import { Button } from "@/components/ui/button";
+import { DialogFooter } from "@/components/ui/dialog";
 import { FieldGroup } from "@/components/ui/field";
 import { serializeContactVaultPayload } from "@/lib/vault";
 import { api } from "@/trpc/client";
@@ -87,7 +88,7 @@ export function ContactForm({
 
   return (
     <form noValidate onSubmit={submit}>
-      <FieldGroup className="gap-3">
+      <FieldGroup>
         <FormField
           error={errors.nickname?.[0]}
           id="vault-contact-label"
@@ -131,11 +132,11 @@ export function ContactForm({
           value={form.phone}
         />
       </FieldGroup>
-      <div className="mt-5 flex justify-end">
+      <DialogFooter>
         <Button disabled={create.isPending} type="submit">
           Save contact
         </Button>
-      </div>
+      </DialogFooter>
     </form>
   );
 }

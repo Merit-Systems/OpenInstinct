@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { formValue, verifyPhoneNumber } from "@/app/sign-in/_lib/phone-auth";
 import { normalizeAuthPhoneNumber } from "@/auth/phone-number";
 import { Button } from "@/components/ui/button";
+import { FieldError, FieldGroup } from "@/components/ui/field";
 import { PhoneNumberField } from "./phone-field";
 
 export function LocalPhoneAuthForm({
@@ -32,26 +33,24 @@ export function LocalPhoneAuthForm({
 
   return (
     <form
-      className="mt-6 space-y-6"
+      className="mt-6"
       onSubmit={(event) => {
         event.preventDefault();
         signIn.mutate(formValue(event.currentTarget, "phone-number"));
       }}
     >
-      <PhoneNumberField />
-      {signIn.error ? (
-        <p className="type-supporting-body text-destructive">
-          {signIn.error.message}
-        </p>
-      ) : null}
-      <Button
-        className="w-full"
-        disabled={signIn.isPending}
-        type="submit"
-        size="lg"
-      >
-        {signIn.isPending ? "Signing in…" : "Continue"}
-      </Button>
+      <FieldGroup>
+        <PhoneNumberField />
+        <FieldError errors={signIn.error ? [signIn.error] : undefined} />
+        <Button
+          className="w-full"
+          disabled={signIn.isPending}
+          size="lg"
+          type="submit"
+        >
+          {signIn.isPending ? "Signing in…" : "Continue"}
+        </Button>
+      </FieldGroup>
     </form>
   );
 }

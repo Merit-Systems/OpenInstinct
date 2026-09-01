@@ -1,5 +1,6 @@
 "use client";
 
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { api } from "@/trpc/client";
 
@@ -18,12 +19,10 @@ export function GoogleWorkspaceAction({
   });
 
   if (!state) {
-    return <span className="type-caption text-muted-foreground">Loading…</span>;
+    return <Badge variant="secondary">Loading…</Badge>;
   }
   if (state === "unavailable") {
-    return (
-      <span className="type-caption text-muted-foreground">Setup required</span>
-    );
+    return <Badge variant="secondary">Setup required</Badge>;
   }
 
   const action = state === "connected" ? "disconnect" : "connect";

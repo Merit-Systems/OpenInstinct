@@ -14,6 +14,7 @@ import {
 } from "@vercel/connect";
 import { z } from "zod";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { getGatewayModel } from "@/db/services/settings";
 import { env } from "@/env";
@@ -58,20 +59,16 @@ export default async function Page({ searchParams }: PageProps<"/">) {
       <WorkspaceSection headingId="connectors-heading" title="Infrastructure">
         <div className="divide-y divide-border/50 border-y border-border/50">
           <ConnectorRow
-            action={
-              <span className="type-caption text-muted-foreground">
-                Connected
-              </span>
-            }
+            action={<Badge variant="success">Connected</Badge>}
             description="Run isolated browsers in your Kernel account."
             icon={<CloudIcon />}
             label="Kernel browser"
           />
           <ConnectorRow
             action={
-              <span className="type-caption text-muted-foreground">
-                {imageStorageReady ? "Connected" : "Unavailable"}
-              </span>
+              <Badge variant={imageStorageReady ? "success" : "secondary"}>
+                {imageStorageReady ? "Connected" : "Setup required"}
+              </Badge>
             }
             description={
               imageStorageReady
@@ -167,34 +164,32 @@ export function ChannelsSection({
       <div className="grid gap-2 sm:grid-cols-2">
         {browserReady ? (
           <Button
-            className="h-11 justify-start"
             nativeButton={false}
             render={<Link href="/chat" />}
-            variant="outline"
+            variant="surface"
           >
             <MessageSquareIcon />
             WebChat
           </Button>
         ) : (
-          <Button className="h-11 justify-start" disabled variant="outline">
+          <Button disabled variant="surface">
             <MessageSquareIcon />
             WebChat
           </Button>
         )}
         {linqConfigured && linqPhoneNumber ? (
           <Button
-            className="h-11 justify-start"
             nativeButton={false}
             render={
               <a aria-label="Open iMessage" href={`sms:${linqPhoneNumber}`} />
             }
-            variant="outline"
+            variant="surface"
           >
             <MailIcon />
             iMessage
           </Button>
         ) : (
-          <Button className="h-11 justify-start" disabled variant="outline">
+          <Button disabled variant="surface">
             <MailIcon />
             iMessage
           </Button>

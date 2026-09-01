@@ -1,17 +1,19 @@
+import { Field, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 
 export function PhoneNumberField() {
   return (
-    <div className="space-y-2">
+    <Field>
+      <FieldLabel htmlFor="phone-number">Phone Number</FieldLabel>
       <Input
         autoComplete="tel"
-        size="xl"
         id="phone-number"
         name="phone-number"
         placeholder="(202) 555-0123"
         required
+        size="xl"
         type="tel"
       />
-    </div>
+    </Field>
   );
 }

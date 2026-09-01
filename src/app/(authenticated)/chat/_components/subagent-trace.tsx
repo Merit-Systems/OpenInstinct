@@ -8,6 +8,12 @@ import {
 import { BotIcon } from "lucide-react";
 import { useMemo } from "react";
 import { Shimmer } from "@/components/ai-elements/shimmer";
+import {
+  Alert,
+  AlertAction,
+  AlertDescription,
+  AlertTitle,
+} from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { getLatestTurnFailure } from "../_lib/turn-failure";
 import type { SubagentStatus } from "@/app/_lib/subagent-sessions";
@@ -58,16 +64,21 @@ export function SubagentTrace({
     : isRunning
       ? "information"
       : "secondary";
+  const alertVariant = error
+    ? "destructive"
+    : isRunning
+      ? "information"
+      : "default";
 
   return (
     <section className="py-4">
-      <header className="flex items-center gap-2 rounded-lg bg-muted/50 px-3 py-2">
-        <BotIcon className="size-4 text-muted-foreground" />
-        <span className="min-w-0 flex-1 truncate type-label">
-          {target.name} trace
-        </span>
-        <Badge variant={badgeVariant}>{statusLabel}</Badge>
-      </header>
+      <Alert variant={alertVariant}>
+        <BotIcon />
+        <AlertTitle>{target.name} trace</AlertTitle>
+        <AlertAction>
+          <Badge variant={badgeVariant}>{statusLabel}</Badge>
+        </AlertAction>
+      </Alert>
       <div className="space-y-5 py-5">
         {data.messages.map((message, index) => (
           <AgentMessage
@@ -85,9 +96,9 @@ export function SubagentTrace({
           </Shimmer>
         ) : null}
         {error ? (
-          <p className="type-supporting-body text-destructive" role="alert">
-            {error}
-          </p>
+          <Alert variant="destructive">
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
         ) : null}
       </div>
     </section>

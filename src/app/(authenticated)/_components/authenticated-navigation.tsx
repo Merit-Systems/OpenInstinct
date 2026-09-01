@@ -11,6 +11,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   SidebarGroup,
+  SidebarGroupContent,
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
@@ -34,26 +35,28 @@ export function AuthenticatedNavigation() {
   const active = activeRoute(usePathname());
 
   return (
-    <nav aria-label="Primary">
-      <SidebarGroup>
-        <SidebarMenu>
-          {navigation.map((item) => {
-            const Icon = item.icon;
-            return (
-              <SidebarMenuItem key={item.id}>
-                <SidebarMenuButton
-                  isActive={active === item.id}
-                  render={<Link href={item.href} />}
-                >
-                  <Icon />
-                  <span>{item.label}</span>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-            );
-          })}
-        </SidebarMenu>
-      </SidebarGroup>
-    </nav>
+    <SidebarGroup>
+      <SidebarGroupContent>
+        <nav aria-label="Primary">
+          <SidebarMenu>
+            {navigation.map((item) => {
+              const Icon = item.icon;
+              return (
+                <SidebarMenuItem key={item.id}>
+                  <SidebarMenuButton
+                    isActive={active === item.id}
+                    render={<Link href={item.href} />}
+                  >
+                    <Icon />
+                    <span>{item.label}</span>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              );
+            })}
+          </SidebarMenu>
+        </nav>
+      </SidebarGroupContent>
+    </SidebarGroup>
   );
 }
 

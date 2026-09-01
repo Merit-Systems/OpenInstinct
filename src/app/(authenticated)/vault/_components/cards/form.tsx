@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { z } from "zod";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { DialogFooter } from "@/components/ui/dialog";
 import {
   Field,
   FieldError,
@@ -97,7 +98,7 @@ export function CardForm({
 
   return (
     <form noValidate onSubmit={submit}>
-      <FieldGroup className="gap-3">
+      <FieldGroup>
         <div className="grid gap-3 sm:grid-cols-2">
           <CardField
             autoComplete="cc-name"
@@ -194,11 +195,11 @@ export function CardForm({
         </div>
       </FieldGroup>
 
-      <div className="mt-5 flex justify-end">
+      <DialogFooter>
         <Button disabled={create.isPending} type="submit">
           Save card
         </Button>
-      </div>
+      </DialogFooter>
     </form>
   );
 }

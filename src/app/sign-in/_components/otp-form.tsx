@@ -7,9 +7,15 @@ import type { SubmitEvent } from "react";
 import { authClient } from "@/app/_lib/auth-client";
 import { formValue, verifyPhoneNumber } from "@/app/sign-in/_lib/phone-auth";
 import { normalizeAuthPhoneNumber } from "@/auth/phone-number";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
+import {
+  Field,
+  FieldError,
+  FieldGroup,
+  FieldLabel,
+} from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { PhoneNumberField } from "./phone-field";
 
 export function PhoneOtpAuthForm({
@@ -53,20 +59,18 @@ export function PhoneOtpAuthForm({
     <>
       <FirstTimeLinqSetup phoneNumber={linqPhoneNumber} />
       <form
-        className="mt-4 space-y-4"
+        className="mt-4"
         onSubmit={(event) => {
           submit(event);
         }}
       >
-        <PhoneNumberField />
-        {sendOtp.error ? (
-          <p className="type-supporting-body text-destructive">
-            {sendOtp.error.message}
-          </p>
-        ) : null}
-        <Button className="w-full" disabled={sendOtp.isPending} type="submit">
-          {sendOtp.isPending ? "Sending…" : "Send code"}
-        </Button>
+        <FieldGroup>
+          <PhoneNumberField />
+          <FieldError errors={sendOtp.error ? [sendOtp.error] : undefined} />
+          <Button className="w-full" disabled={sendOtp.isPending} type="submit">
+            {sendOtp.isPending ? "Sending…" : "Send code"}
+          </Button>
+        </FieldGroup>
       </form>
     </>
   );
@@ -108,40 +112,44 @@ function VerificationCodeForm({
 
   return (
     <form
-      className="mt-6 space-y-4"
+      className="mt-6"
       onSubmit={(event) => {
         submit(event);
       }}
     >
-      <div className="space-y-2">
-        <Label htmlFor="code">Verification code</Label>
-        <Input
-          autoComplete="one-time-code"
-          id="code"
-          inputMode="numeric"
-          maxLength={6}
-          name="code"
-          pattern="[0-9]{6}"
-          required
+      <FieldGroup>
+        <Field>
+          <FieldLabel htmlFor="code">Verification Code</FieldLabel>
+          <Input
+            autoComplete="one-time-code"
+            id="code"
+            inputMode="numeric"
+            maxLength={6}
+            name="code"
+            pattern="[0-9]{6}"
+            required
+          />
+        </Field>
+        <FieldError
+          errors={verifyCode.error ? [verifyCode.error] : undefined}
         />
-      </div>
-      {verifyCode.error ? (
-        <p className="type-supporting-body text-destructive">
-          {verifyCode.error.message}
-        </p>
-      ) : null}
-      <Button className="w-full" disabled={verifyCode.isPending} type="submit">
-        {verifyCode.isPending ? "Verifying…" : "Verify code"}
-      </Button>
-      <Button
-        className="w-full"
-        disabled={verifyCode.isPending}
-        onClick={onUseDifferentNumber}
-        type="button"
-        variant="ghost"
-      >
-        Use a different number
-      </Button>
+        <Button
+          className="w-full"
+          disabled={verifyCode.isPending}
+          type="submit"
+        >
+          {verifyCode.isPending ? "Verifying…" : "Verify code"}
+        </Button>
+        <Button
+          className="w-full"
+          disabled={verifyCode.isPending}
+          onClick={onUseDifferentNumber}
+          type="button"
+          variant="ghost"
+        >
+          Use a different number
+        </Button>
+      </FieldGroup>
     </form>
   );
 }
@@ -152,40 +160,41 @@ function FirstTimeLinqSetup({
   readonly phoneNumber?: string;
 }) {
   return (
-    <section className="mt-6 space-y-3 rounded-lg border border-border/60 bg-muted/30 p-4">
-      <div className="space-y-1">
-        <h2 className="type-supporting-body font-medium">
-          First time signing in?
-        </h2>
-        <p className="type-caption text-muted-foreground">
+    <Alert className="mt-6" variant="information">
+      <MessageSquareIcon />
+      <AlertTitle>First time signing in?</AlertTitle>
+      <AlertDescription>
+        <p>
           Linq requires one message from your phone before it can send a sign-in
           code.
         </p>
-      </div>
-      <ol className="list-decimal space-y-1 pl-4 type-caption text-muted-foreground">
-        <li>Open Messages to the Linq number.</li>
-        <li>Send any message from the phone number you will enter below.</li>
-        <li>Return here and select Send code.</li>
-      </ol>
-      {phoneNumber ? (
-        <Button
-          className="w-full"
-          nativeButton={false}
-          render={
-            <a aria-label="Text Linq in Messages" href={`sms:${phoneNumber}`} />
-          }
-          variant="outline"
-        >
-          <MessageSquareIcon />
-          Text Linq in Messages
-        </Button>
-      ) : (
-        <p className="type-caption text-muted-foreground">
-          Find the Linq number in Vercel Connect or the Linq dashboard, text it
-          once, then return here.
-        </p>
-      )}
-    </section>
+        <ol className="mt-2 list-decimal space-y-1 pl-4">
+          <li>Open Messages to the Linq number.</li>
+          <li>Send any message from the phone number you will enter below.</li>
+          <li>Return here and select Send code.</li>
+        </ol>
+        {phoneNumber ? (
+          <Button
+            className="mt-3 w-full"
+            nativeButton={false}
+            render={
+              <a
+                aria-label="Text Linq in Messages"
+                href={`sms:${phoneNumber}`}
+              />
+            }
+            variant="outline"
+          >
+            Text Linq in Messages
+          </Button>
+        ) : (
+          <p className="mt-2">
+            Find the Linq number in Vercel Connect or the Linq dashboard, text
+            it once, then return here.
+          </p>
+        )}
+      </AlertDescription>
+    </Alert>
   );
 }
 
