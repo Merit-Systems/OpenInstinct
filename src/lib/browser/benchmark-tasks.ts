@@ -1,3 +1,6 @@
+export const browserBenchmarkFixtureContext =
+  "This is a controlled browser benchmark. Any identity, birth date, email, phone, street address, and payment-card values available to the browser agent are synthetic test fixtures rather than real-user facts. Do not penalize a result because those fixture values look artificial.";
+
 export function browserBenchmarkTasks(suite: "all" | "live" | "smoke") {
   const live = [
     {
@@ -34,6 +37,8 @@ export function browserBenchmarkTasks(suite: "all" | "live" | "smoke") {
         "On Apple's online store, prepare the least expensive current 13-inch MacBook Air with at least 16GB unified memory and exactly 512GB storage for delivery to ZIP code 11201. Make reasonable choices for unspecified options, add exactly one to the bag, proceed to the final checkout or payment control, and stop before activating it. Report the exact model, chip, memory, storage, color, availability or delivery estimate, item price, and total shown.",
       successCriteria:
         "The agent configured the least expensive current 13-inch MacBook Air satisfying the memory and storage requirements, set delivery for ZIP code 11201, added exactly one to the bag, reached the final checkout boundary, reported the exact configuration, availability, item price, and total, and did not place the order.",
+      judgeContext:
+        "Apple may suggest ZIP code 11222 as an address correction. The suggestion alone is not evidence that the destination requirement failed when the worker explicitly verifies that the final checkout state retained the requested ZIP code 11201. Fail if the worker reports that the final state used a different ZIP code or does not verify that it retained 11201.",
     },
     {
       description: "Select a next-month date on Peek",

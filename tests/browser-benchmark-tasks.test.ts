@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { browserBenchmarkTasks } from "@/lib/browser/benchmark-tasks";
+import {
+  browserBenchmarkFixtureContext,
+  browserBenchmarkTasks,
+} from "@/lib/browser/benchmark-tasks";
 
 describe("browser benchmark tasks", () => {
   it("includes the focused Peek next-month calendar regression", () => {
@@ -15,5 +18,24 @@ describe("browser benchmark tasks", () => {
 
   it("keeps the smoke suite bounded to its existing two tasks", () => {
     expect(browserBenchmarkTasks("smoke")).toHaveLength(2);
+  });
+
+  it("tells the judge that personal and payment values are fixtures", () => {
+    expect(browserBenchmarkFixtureContext).toContain("synthetic test fixtures");
+    expect(browserBenchmarkFixtureContext).toContain("payment-card");
+  });
+
+  it("scopes Apple's address-correction rule to the Apple task", () => {
+    const tasks = browserBenchmarkTasks("all");
+    const appleTask = tasks.find((task) => task.prompt.includes("Apple's"));
+
+    expect(appleTask).toHaveProperty("judgeContext");
+    if (!appleTask || !("judgeContext" in appleTask)) {
+      throw new Error("Apple benchmark task has no judge context.");
+    }
+    expect(appleTask.judgeContext).toContain("11222");
+    expect(
+      tasks.filter((task) => "judgeContext" in task && task.judgeContext)
+    ).toHaveLength(1);
   });
 });

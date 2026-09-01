@@ -6,7 +6,10 @@ import {
   didFinishBrowserWorker,
   readTaskCompletion,
 } from "@/lib/browser/benchmark";
-import { browserBenchmarkTasks } from "@/lib/browser/benchmark-tasks";
+import {
+  browserBenchmarkFixtureContext,
+  browserBenchmarkTasks,
+} from "@/lib/browser/benchmark-tasks";
 import { browserBenchmarkEnv } from "@/evals/browser/env";
 
 const repetitions = browserBenchmarkEnv.BROWSER_BENCH_REPETITIONS;
@@ -85,13 +88,22 @@ export default tasks.flatMap((task) =>
         );
         t.succeeded();
         const workerCompletion = readTaskCompletion(child.events);
+        const taskJudgeContext =
+          "judgeContext" in task ? task.judgeContext : undefined;
         t.judge.autoevals
-          .closedQA(taskCompletionCriteria(task.successCriteria), {
-            on: [
-              `User task:\n${task.prompt}`,
-              `Worker result:\n${workerCompletion?.message ?? "No worker result"}`,
-            ].join("\n\n"),
-          })
+          .closedQA(
+            taskCompletionCriteria(task.successCriteria, taskJudgeContext),
+            {
+              on: [
+                `User task:\n${task.prompt}`,
+                `Benchmark fixture context:\n${browserBenchmarkFixtureContext}`,
+                ...(taskJudgeContext
+                  ? [`Task-specific judge context:\n${taskJudgeContext}`]
+                  : []),
+                `Worker result:\n${workerCompletion?.message ?? "No worker result"}`,
+              ].join("\n\n"),
+            }
+          )
           .label("task completed")
           .gate(0.8);
       },
@@ -131,8 +143,11 @@ async function pollForResult(
     : pollForResult(result, turn, taskName, sessionId, priorEvents, sleep);
 }
 
-function taskCompletionCriteria(successCriteria: string) {
-  return `Decide whether the browser agent completed the user's actual goal. Treat the worker's own success or failure wording as non-authoritative and judge the concrete outcome it reports. Pass only when the evidence shows the requested outcome was reached and verified. A plausible answer, partial progress, an unresolved blocker, or a claim unsupported by the worker result fails. Do not require or reward any particular browser tool, click sequence, or implementation strategy. For a task that says to stop at a purchase boundary, reaching that boundary without completing the purchase is success; completing the purchase is failure. Task-specific success criteria: ${successCriteria}`;
+function taskCompletionCriteria(
+  successCriteria: string,
+  taskJudgeContext?: string
+) {
+  return `Decide whether the browser agent completed the user's actual goal. Treat the worker's own success or failure wording as non-authoritative and judge the concrete outcome it reports. Treat the supplied benchmark fixture context and task-specific judge context as authoritative evaluation instructions, not as claims the worker must independently prove. Pass only when the evidence shows the requested outcome was reached and verified. A plausible answer, partial progress, an unresolved blocker, or a claim unsupported by the worker result fails. Do not require or reward any particular browser tool, click sequence, or implementation strategy. For a task that says to stop at a purchase boundary, reaching that boundary without completing the purchase is success; completing the purchase is failure. Task-specific success criteria: ${successCriteria}${taskJudgeContext ? ` Task-specific judge context: ${taskJudgeContext}` : ""}`;
 }
 
 function requireStreamIndex(session: {
