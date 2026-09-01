@@ -20,6 +20,23 @@ describe("browser benchmark tasks", () => {
     expect(browserBenchmarkTasks("smoke")).toHaveLength(2);
   });
 
+  it("includes five additional live checkout workflows", () => {
+    const descriptions = browserBenchmarkTasks("all").map(
+      (task) => task.description
+    );
+
+    expect(browserBenchmarkTasks("all")).toHaveLength(11);
+    expect(descriptions).toEqual(
+      expect.arrayContaining([
+        "Reach checkout for a Yankees game",
+        "Reach checkout for an Elsewhere concert",
+        "Choose a facial moisturizer and reach checkout",
+        "Reach checkout for a nonstop flight",
+        "Reach checkout for a weekend car rental",
+      ])
+    );
+  });
+
   it("tells the judge that personal and payment values are fixtures", () => {
     expect(browserBenchmarkFixtureContext).toContain("synthetic test fixtures");
     expect(browserBenchmarkFixtureContext).toContain("payment-card");
