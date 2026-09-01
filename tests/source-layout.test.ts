@@ -25,6 +25,8 @@ const disallowedLibDirectories = [
 const expectedLibFiles = [
   "access-scope.ts",
   "application-origin.ts",
+  "automation-auth.ts",
+  "automation.ts",
   "browser-artifact.ts",
   "chat.ts",
   "google-workspace.ts",

@@ -326,3 +326,125 @@ export const encryptedSecrets = pgTable(
     ),
   ]
 );
+
+export const automations = pgTable(
+  "automations",
+  {
+    id: text("id").primaryKey(),
+    workspaceId: text("workspace_id").notNull(),
+    createdByUserId: text("created_by_user_id").notNull(),
+    sessionId: text("session_id").notNull(),
+    phoneNumber: text("phone_number").notNull(),
+    title: text("title").notNull(),
+    task: text("task").notNull(),
+    trigger: text("trigger").notNull(),
+    timezone: text("timezone").notNull(),
+    status: text("status").notNull().default("active"),
+    revision: integer("revision").notNull().default(1),
+    nextRunAt: text("next_run_at"),
+    lastRunAt: text("last_run_at"),
+    idempotencyKey: text("idempotency_key").notNull(),
+    createdAt: text("created_at").notNull(),
+    updatedAt: text("updated_at").notNull(),
+  },
+  (table) => [
+    foreignKey({
+      name: "automations_membership_fkey",
+      columns: [table.workspaceId, table.createdByUserId],
+      foreignColumns: [
+        workspaceMemberships.workspaceId,
+        workspaceMemberships.userId,
+      ],
+    }).onDelete("cascade"),
+    foreignKey({
+      name: "automations_session_id_fkey",
+      columns: [table.sessionId],
+      foreignColumns: [agentSessions.sessionId],
+    }).onDelete("cascade"),
+    check(
+      "automations_status_check",
+      sql`${table.status} IN ('active', 'paused', 'completed', 'deleted')`
+    ),
+    check("automations_revision_check", sql`${table.revision} > 0`),
+    uniqueIndex("automations_workspace_idempotency_uidx").on(
+      table.workspaceId,
+      table.idempotencyKey
+    ),
+    index("automations_workspace_status_idx").on(
+      table.workspaceId,
+      table.status,
+      table.nextRunAt
+    ),
+  ]
+);
+
+export const automationRuns = pgTable(
+  "automation_runs",
+  {
+    id: text("id").primaryKey(),
+    automationId: text("automation_id").notNull(),
+    revision: integer("revision").notNull(),
+    triggerKey: text("trigger_key").notNull(),
+    status: text("status").notNull().default("running"),
+    eveSessionId: text("eve_session_id"),
+    result: text("result"),
+    error: text("error"),
+    startedAt: text("started_at").notNull(),
+    completedAt: text("completed_at"),
+  },
+  (table) => [
+    foreignKey({
+      name: "automation_runs_automation_id_fkey",
+      columns: [table.automationId],
+      foreignColumns: [automations.id],
+    }).onDelete("cascade"),
+    check(
+      "automation_runs_status_check",
+      sql`${table.status} IN ('running', 'completed', 'failed', 'suppressed')`
+    ),
+    uniqueIndex("automation_runs_trigger_uidx").on(
+      table.automationId,
+      table.triggerKey
+    ),
+    index("automation_runs_automation_started_idx").on(
+      table.automationId,
+      table.startedAt.desc().nullsFirst()
+    ),
+  ]
+);
+
+export const gmailWatches = pgTable(
+  "gmail_watches",
+  {
+    workspaceId: text("workspace_id").notNull(),
+    userId: text("user_id").notNull(),
+    emailAddress: text("email_address"),
+    historyId: text("history_id"),
+    expirationAt: text("expiration_at"),
+    generation: integer("generation").notNull().default(1),
+    status: text("status").notNull().default("arming"),
+    workflowRunId: text("workflow_run_id"),
+    createdAt: text("created_at").notNull(),
+    updatedAt: text("updated_at").notNull(),
+  },
+  (table) => [
+    primaryKey({
+      columns: [table.workspaceId, table.userId],
+      name: "gmail_watches_pkey",
+    }),
+    foreignKey({
+      name: "gmail_watches_membership_fkey",
+      columns: [table.workspaceId, table.userId],
+      foreignColumns: [
+        workspaceMemberships.workspaceId,
+        workspaceMemberships.userId,
+      ],
+    }).onDelete("cascade"),
+    check(
+      "gmail_watches_status_check",
+      sql`${table.status} IN ('arming', 'active', 'paused', 'failed')`
+    ),
+    check("gmail_watches_generation_check", sql`${table.generation} > 0`),
+    uniqueIndex("gmail_watches_email_uidx").on(table.emailAddress),
+  ]
+);

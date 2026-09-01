@@ -1,13 +1,21 @@
 import { eveChannel } from "eve/channels/eve";
 import { ForbiddenError, UnauthenticatedError } from "eve/channels/auth";
 import { z } from "zod";
+import {
+  readAutomationById,
+  readAutomationRunById,
+} from "@/db/services/automations";
 import { isSessionOwned } from "@/db/services/sessions";
 import { accessScopeForUser, type AccessScope } from "@/lib/access-scope";
+import { verifyAutomationRequest } from "@/lib/automation-auth";
 import { getAuthSession } from "@/auth/session";
 
 export default eveChannel({
   auth: [
     async (request) => {
+      const automationIdentity = await automationIdentityFromRequest(request);
+      if (automationIdentity) return automationIdentity;
+
       const identity = await requestIdentityFromRequest(request);
       if (!identity) {
         throw new UnauthenticatedError({
@@ -31,6 +39,37 @@ export default eveChannel({
     },
   ],
 });
+
+async function automationIdentityFromRequest(request: Request) {
+  const signed = await verifyAutomationRequest(request.headers, "execute");
+  if (!signed?.runId) return undefined;
+  const [automation, run] = await Promise.all([
+    readAutomationById(signed.automationId),
+    readAutomationRunById(signed.runId),
+  ]);
+  const requestedSessionId = sessionIdFromPath(new URL(request.url).pathname);
+  if (
+    automation?.status !== "active" ||
+    automation.revision !== signed.revision ||
+    run?.automationId !== automation.id ||
+    run.revision !== signed.revision ||
+    run.status !== "running" ||
+    (requestedSessionId !== undefined &&
+      requestedSessionId !== run.eveSessionId)
+  ) {
+    throw new ForbiddenError({ message: "Automation is no longer active." });
+  }
+  return {
+    attributes: {
+      automationId: automation.id,
+      phoneNumber: automation.phoneNumber,
+      workspaceId: automation.workspaceId,
+    },
+    authenticator: "automation",
+    principalId: automation.createdByUserId,
+    principalType: "user" as const,
+  };
+}
 
 function sessionIdFromPath(pathname: string) {
   const match = /^\/eve\/v1\/session\/([^/]+)/.exec(pathname);

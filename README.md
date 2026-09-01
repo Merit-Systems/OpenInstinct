@@ -141,6 +141,38 @@ access deliberately uses `gmail.modify`, not the permanent-delete
 4. Set `GOOGLE_CONNECTOR_UID` to the returned UID and redeploy. The default is
    `google/open-instinct`.
 
+### Gmail push automations
+
+Gmail-triggered automations use Gmail `users.watch` and an authenticated Google
+Cloud Pub/Sub push subscription. They do not poll the inbox. Timer automations
+use Vercel Workflow durable sleeps and likewise do not need a cron dispatcher.
+
+1. In the same Google Cloud project as the OAuth credentials, create a Pub/Sub
+   topic and grant `gmail-api-push@system.gserviceaccount.com` the Pub/Sub
+   Publisher role on that topic.
+2. Create a dedicated service account for Pub/Sub push authentication. Create a
+   push subscription whose endpoint is
+   `https://<deployment>/api/automations/gmail`, enable OIDC authentication with
+   that service account, and set the token audience to that exact endpoint URL.
+3. Configure and redeploy:
+
+   ```bash
+   GMAIL_PUBSUB_TOPIC=projects/<google-cloud-project>/topics/<topic>
+   GMAIL_PUBSUB_AUDIENCE=https://<deployment>/api/automations/gmail
+   GMAIL_PUBSUB_SERVICE_ACCOUNT=<push-service-account>@<google-cloud-project>.iam.gserviceaccount.com
+   ```
+
+OpenInstinct creates a watch only after a signed-in user creates a Gmail
+automation, stores Gmail's history cursor, renews the watch before expiration,
+and deduplicates each matching message before running the saved task. Gmail
+push configuration is intentionally explicit: if any value is absent, Gmail
+automations fail at creation instead of silently falling back to polling.
+Automation executions use a fresh, replay-stable Eve session. The session stays
+resumable until its run binding and result are durable, then OpenInstinct retires
+it. If a task requests a later approval, question response, or OAuth sign-in,
+the run records a visible failure and retires the pending session instead of
+duplicating the request.
+
 Gotchas:
 
 - Attach the connector separately to every Vercel environment that should use
