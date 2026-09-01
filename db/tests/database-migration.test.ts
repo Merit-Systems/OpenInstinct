@@ -26,6 +26,7 @@ describe("database migrations", () => {
     await applyMigration(database, "0011_amused_triathlon.sql");
     await applyMigration(database, "0012_bright_killmonger.sql");
     await applyMigration(database, "0013_browser_trace_telemetry.sql");
+    await applyMigration(database, "0014_personal_info.sql");
     await applyMigration(database, "0000_fluffy_the_spike.sql");
     await applyMigration(database, "0001_better-auth.sql");
 
@@ -51,6 +52,7 @@ describe("database migrations", () => {
            'workspace_memberships',
            'vault_items',
            'settings',
+           'user_profiles',
            'agent_sessions',
            'browser_image_artifacts',
            'browser_sessions',
@@ -67,7 +69,7 @@ describe("database migrations", () => {
     );
     const pendingConstraints = await pendingConstraintCount(database);
 
-    expect(tables.rows[0]?.count).toBe(16);
+    expect(tables.rows[0]?.count).toBe(17);
     expect(pendingConstraints).toBe(0);
     await expect(
       database.query("SELECT id FROM vault_items WHERE id = 'contact-1'")

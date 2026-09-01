@@ -127,6 +127,36 @@ export const workspaces = pgTable(
   ]
 );
 
+export const userProfiles = pgTable(
+  "user_profiles",
+  {
+    workspaceId: text("workspace_id").primaryKey(),
+    firstName: text("first_name"),
+    lastName: text("last_name"),
+    email: text("email"),
+    phone: text("phone"),
+    dateOfBirth: text("date_of_birth"),
+    addressLine1: text("address_line_1"),
+    addressLine2: text("address_line_2"),
+    city: text("city"),
+    region: text("region"),
+    postalCode: text("postal_code"),
+    countryCode: text("country_code"),
+    updatedAt: text("updated_at").notNull(),
+  },
+  (table) => [
+    foreignKey({
+      name: "user_profiles_workspace_id_fkey",
+      columns: [table.workspaceId],
+      foreignColumns: [workspaces.id],
+    }).onDelete("cascade"),
+    check(
+      "user_profiles_country_code_check",
+      sql`${table.countryCode} IS NULL OR char_length(${table.countryCode}) = 2`
+    ),
+  ]
+);
+
 export const workspaceMemberships = pgTable(
   "workspace_memberships",
   {
