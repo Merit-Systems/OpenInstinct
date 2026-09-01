@@ -23,8 +23,8 @@ import {
   PromptInputTools,
 } from "@/components/ai-elements/prompt-input";
 import { Shimmer } from "@/components/ai-elements/shimmer";
-import { summarizeChatUsage } from "@/app/(authenticated)/(manager)/_lib/chat-usage";
-import { getLatestTurnFailure } from "@/app/(authenticated)/(manager)/chat/_lib/turn-failure";
+import { summarizeChatUsage } from "@/app/(authenticated)/chat/_lib/chat-usage";
+import { getLatestTurnFailure } from "@/app/(authenticated)/chat/_lib/turn-failure";
 import type { ChatUsage } from "@/lib/chat";
 import { cn } from "@/lib/utils";
 import { AgentMessage } from "./agent-message";

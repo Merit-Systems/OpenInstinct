@@ -26,7 +26,7 @@ import {
   type SubagentSession,
   type SubagentStatus,
 } from "@/app/_lib/subagent-sessions";
-import { formatChatUsage } from "@/app/(authenticated)/(manager)/_lib/chat-usage";
+import { formatChatUsage } from "@/app/(authenticated)/chat/_lib/chat-usage";
 import type { ChatUsage } from "@/lib/chat";
 import { cn } from "@/lib/utils";
 import { SubagentTrace } from "./subagent-trace";

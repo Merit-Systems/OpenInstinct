@@ -3,7 +3,7 @@ import Link from "next/link";
 import {
   combineChatUsage,
   formatChatUsage,
-} from "@/app/(authenticated)/(manager)/_lib/chat-usage";
+} from "@/app/(authenticated)/chat/_lib/chat-usage";
 import { Button } from "@/components/ui/button";
 import { listChats } from "@/db/services/chats";
 import { requireRequestScope } from "@/lib/request-scope";

@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { headers } from "next/headers";
+import { QueryProvider } from "@/app/_providers/query-provider";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { accessScopeForUser } from "@/lib/access-scope";
 import { applicationOrigin } from "@/lib/application-origin";
@@ -22,7 +23,9 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html lang="en">
       <body data-workspace-id={workspaceId}>
-        <TooltipProvider>{children}</TooltipProvider>
+        <QueryProvider>
+          <TooltipProvider>{children}</TooltipProvider>
+        </QueryProvider>
       </body>
     </html>
   );
