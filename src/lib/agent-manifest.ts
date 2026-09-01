@@ -15,6 +15,23 @@ export const agentManifestSchema = z
   .strict();
 
 export type AgentManifest = z.infer<typeof agentManifestSchema>;
+declare const canonicalJsonArrayBrand: unique symbol;
+declare const canonicalJsonObjectBrand: unique symbol;
+interface CanonicalJsonArray extends ReadonlyArray<CanonicalJsonValue> {
+  readonly [canonicalJsonArrayBrand]?: never;
+}
+interface CanonicalJsonObject extends Readonly<
+  Record<string, CanonicalJsonValue>
+> {
+  readonly [canonicalJsonObjectBrand]?: never;
+}
+type CanonicalJsonValue =
+  | boolean
+  | null
+  | number
+  | string
+  | CanonicalJsonArray
+  | CanonicalJsonObject;
 
 export function canonicalAgentManifest(manifest: AgentManifest): AgentManifest {
   return agentManifestSchema.parse(JSON.parse(JSON.stringify(manifest)));
@@ -26,17 +43,23 @@ export function agentManifestContentDigest(manifest: AgentManifest) {
     .digest("hex");
 }
 
-function canonicalJson(value: unknown): string {
+function canonicalJson(value: CanonicalJsonValue): string {
   if (Array.isArray(value)) return `[${value.map(canonicalJson).join(",")}]`;
-  if (isRecord(value)) {
+  if (isCanonicalJsonRecord(value)) {
     return `{${Object.keys(value)
       .sort()
-      .map((key) => `${JSON.stringify(key)}:${canonicalJson(value[key])}`)
+      .map((key) => {
+        const child = value[key];
+        if (child === undefined) throw new Error("Invalid canonical JSON.");
+        return `${JSON.stringify(key)}:${canonicalJson(child)}`;
+      })
       .join(",")}}`;
   }
   return JSON.stringify(value);
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return value !== null && typeof value === "object" && !Array.isArray(value);
+function isCanonicalJsonRecord(
+  value: CanonicalJsonValue
+): value is Readonly<Record<string, CanonicalJsonValue>> {
+  return value instanceof Object && !Array.isArray(value);
 }

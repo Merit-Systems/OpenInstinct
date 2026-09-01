@@ -36,6 +36,9 @@ export async function POST(
       auth.context.requestId
     );
   } catch (error) {
-    return apiErrorFor(error, auth.context.requestId);
+    return apiErrorFor(
+      error instanceof Error ? error : new Error(),
+      auth.context.requestId
+    );
   }
 }

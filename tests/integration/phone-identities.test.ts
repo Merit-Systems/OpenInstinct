@@ -3,17 +3,24 @@ import { readFile, readdir } from "node:fs/promises";
 import { PGlite } from "@electric-sql/pglite";
 import { drizzle } from "drizzle-orm/pglite";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { db } from "@/db";
+import {
+  resetDatabaseForIntegrationTest,
+  setDatabaseForIntegrationTest,
+} from "@/db";
+import { phoneIdentityDependencies } from "@/db/services/phone-identities";
 import * as schema from "../../db/schema";
 
 const databases: PGlite[] = [];
 const phoneNumber = "+12025550123";
 const normalizedPhoneNumber = "+12025550123";
 const testSecretEncryptionKey = "AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE=";
+const originalRecordVerifiedPhoneIdentityTransaction =
+  phoneIdentityDependencies.recordVerifiedPhoneIdentityTransaction;
 
 afterEach(async () => {
-  vi.doUnmock("@/db");
-  vi.resetModules();
+  resetDatabaseForIntegrationTest();
+  phoneIdentityDependencies.recordVerifiedPhoneIdentityTransaction =
+    originalRecordVerifiedPhoneIdentityTransaction;
   await Promise.all(databases.splice(0).map((database) => database.close()));
 });
 
@@ -138,12 +145,25 @@ describe("phone identities", () => {
     const conflict = Object.assign(new Error("unique conflict"), {
       cause: { code: "23505" },
     });
-    const retriedIdentity = { id: "retried-identity" };
+    const retriedIdentity = {
+      createdAt: "2026-01-01T00:00:00.000Z",
+      encryptedPhoneNumber: "encrypted",
+      id: "retried-identity",
+      phoneLookupHash: "lookup",
+      revokedAt: null,
+      status: "verified",
+      updatedAt: "2026-01-01T00:00:00.000Z",
+      userId: "alice",
+      verifiedAt: "2026-01-01T00:00:00.000Z",
+    };
     const transaction = vi
-      .fn<(operation: () => Promise<unknown>) => Promise<unknown>>()
+      .fn<
+        typeof phoneIdentityDependencies.recordVerifiedPhoneIdentityTransaction
+      >()
       .mockRejectedValueOnce(conflict)
       .mockResolvedValueOnce(retriedIdentity);
-    vi.doMock("@/db", () => ({ db: { transaction }, phoneIdentities: {} }));
+    phoneIdentityDependencies.recordVerifiedPhoneIdentityTransaction =
+      transaction;
     const service = await import("@/db/services/phone-identities");
 
     await expect(
@@ -173,10 +193,8 @@ async function loadPhoneIdentityService() {
       ('alice', 'Alice', 'alice@example.test'),
       ('bob', 'Bob', 'bob@example.test')
   `);
-  const pgliteDatabase = drizzle(client, { schema });
-  // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- adapter-compatible integration test double
-  const database = pgliteDatabase as unknown as typeof db;
-  vi.doMock("@/db", () => ({ ...schema, db: database }));
+  const database = drizzle(client, { schema });
+  setDatabaseForIntegrationTest(database);
   const service = await import("@/db/services/phone-identities");
   return {
     client,

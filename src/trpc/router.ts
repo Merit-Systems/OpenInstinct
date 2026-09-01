@@ -3,7 +3,10 @@ import { and, desc, eq, gte, lt, or, sql } from "drizzle-orm";
 import { adminTransitionWorkspaceLifecycle } from "@/db/services/workspace-lifecycle";
 import { recordAuditEvent } from "@/db/services/audit";
 import { ensureScope } from "@/db/services/scope";
-import { drainWebhookDeliveries } from "@/db/services/webhooks";
+import {
+  drainWebhookDeliveries,
+  webhookEventTypes,
+} from "@/db/services/webhooks";
 import {
   agents,
   apiCredentials,
@@ -70,6 +73,15 @@ function startOfCurrentUtcMonth() {
 function groupedCounts(rows: readonly { key: string; count: number }[]) {
   return Object.fromEntries(rows.map((row) => [row.key, row.count]));
 }
+
+export const routerDependencies = {
+  applyManagerMutation,
+  disconnectGoogleWorkspace,
+  listBrowserTraces,
+  readModelCatalog,
+  saveChat,
+  startGoogleWorkspaceAuthorization,
+};
 
 export const appRouter = createTRPCRouter({
   admin: {
@@ -409,7 +421,7 @@ export const appRouter = createTRPCRouter({
       .input(
         z.object({
           url: z.string(),
-          subscribedEvents: z.array(z.string()).min(1),
+          subscribedEvents: z.array(z.enum(webhookEventTypes)).min(1),
         })
       )
       .mutation(({ ctx, input }) => registerWebhookEndpoint(ctx.scope, input)),
@@ -427,24 +439,27 @@ export const appRouter = createTRPCRouter({
   chats: {
     save: protectedProcedure
       .input(saveChatSchema)
-      .mutation(({ ctx, input }) => saveChat(ctx.scope, input)),
+      .mutation(({ ctx, input }) =>
+        routerDependencies.saveChat(ctx.scope, input)
+      ),
   },
   googleWorkspace: {
     update: protectedProcedure
       .input(googleWorkspaceActionSchema)
       .mutation(async ({ ctx, input }) => {
         if (input === "disconnect") {
-          await disconnectGoogleWorkspace(ctx.scope);
+          await routerDependencies.disconnectGoogleWorkspace(ctx.scope);
           return { redirectTo: "/?google=disconnected" };
         }
 
         const callbackUrl = new URL("/", ctx.origin);
         callbackUrl.searchParams.set("google", "connected");
         return {
-          redirectTo: await startGoogleWorkspaceAuthorization(
-            ctx.scope,
-            callbackUrl.toString()
-          ),
+          redirectTo:
+            await routerDependencies.startGoogleWorkspaceAuthorization(
+              ctx.scope,
+              callbackUrl.toString()
+            ),
         };
       }),
   },
@@ -452,16 +467,21 @@ export const appRouter = createTRPCRouter({
     mutate: protectedProcedure
       .input(managerMutationSchema)
       .output(managerSnapshotSchema)
-      .mutation(({ ctx, input }) => applyManagerMutation(ctx.scope, input)),
+      .mutation(({ ctx, input }) =>
+        routerDependencies.applyManagerMutation(ctx.scope, input)
+      ),
   },
   models: {
-    list: protectedProcedure.query(readModelCatalog),
+    list: protectedProcedure.query(routerDependencies.readModelCatalog),
   },
   traces: {
     list: protectedProcedure
       .input(z.object({ cursor: z.string().nullish() }))
       .query(({ ctx, input }) =>
-        listBrowserTraces(ctx.scope, input.cursor ?? undefined)
+        routerDependencies.listBrowserTraces(
+          ctx.scope,
+          input.cursor ?? undefined
+        )
       ),
   },
 });

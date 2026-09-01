@@ -1,39 +1,17 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { AccessScope } from "@/lib/access-scope";
+import { appRouter, routerDependencies } from "./router";
 
-const mocks = vi.hoisted(() => ({
-  applyManagerMutation:
-    vi.fn<(scope: AccessScope, input: unknown) => Promise<unknown>>(),
-  disconnectGoogleWorkspace: vi.fn<(scope: AccessScope) => Promise<void>>(),
-  readModelCatalog: vi.fn<() => Promise<unknown[]>>(),
-  listBrowserTraces:
-    vi.fn<
-      (
-        scope: AccessScope,
-        cursor?: string
-      ) => Promise<{ nextCursor: string | null; traces: never[] }>
-    >(),
-  saveChat: vi.fn<(scope: AccessScope, input: unknown) => Promise<void>>(),
-  startGoogleWorkspaceAuthorization:
-    vi.fn<(scope: AccessScope, callbackUrl: string) => Promise<string>>(),
-}));
-
-vi.mock("@/lib/model-catalog/server", () => ({
-  readModelCatalog: mocks.readModelCatalog,
-}));
-vi.mock("@/db/services/browser-traces", () => ({
-  listBrowserTraces: mocks.listBrowserTraces,
-}));
-vi.mock("@/db/services/chats", () => ({ saveChat: mocks.saveChat }));
-vi.mock("@/lib/google-workspace/server", () => ({
-  disconnectGoogleWorkspace: mocks.disconnectGoogleWorkspace,
-  startGoogleWorkspaceAuthorization: mocks.startGoogleWorkspaceAuthorization,
-}));
-vi.mock("@/lib/manager/server/store", () => ({
-  applyManagerMutation: mocks.applyManagerMutation,
-}));
-
-import { appRouter } from "./router";
+const disconnectGoogleWorkspaceMock = vi.spyOn(
+  routerDependencies,
+  "disconnectGoogleWorkspace"
+);
+const listBrowserTracesMock = vi.spyOn(routerDependencies, "listBrowserTraces");
+const saveChatMock = vi.spyOn(routerDependencies, "saveChat");
+const startGoogleWorkspaceAuthorizationMock = vi.spyOn(
+  routerDependencies,
+  "startGoogleWorkspaceAuthorization"
+);
 
 const scope = {
   userId: "user-1",
@@ -44,7 +22,7 @@ describe("appRouter", () => {
   beforeEach(() => vi.clearAllMocks());
 
   it("passes the authenticated scope and cursor to the trace history", async () => {
-    mocks.listBrowserTraces.mockResolvedValue({
+    listBrowserTracesMock.mockResolvedValue({
       nextCursor: null,
       traces: [],
     });
@@ -53,7 +31,7 @@ describe("appRouter", () => {
       .createCaller({ origin: "https://example.com", scope })
       .traces.list({ cursor: "next-page" });
 
-    expect(mocks.listBrowserTraces).toHaveBeenCalledWith(scope, "next-page");
+    expect(listBrowserTracesMock).toHaveBeenCalledWith(scope, "next-page");
   });
 
   it("rejects invalid chat writes before persistence", async () => {
@@ -62,11 +40,11 @@ describe("appRouter", () => {
         .createCaller({ origin: "https://example.com", scope })
         .chats.save({ sessionId: "" })
     ).rejects.toThrow("Too small");
-    expect(mocks.saveChat).not.toHaveBeenCalled();
+    expect(saveChatMock).not.toHaveBeenCalled();
   });
 
   it("returns a typed Google authorization redirect", async () => {
-    mocks.startGoogleWorkspaceAuthorization.mockResolvedValue(
+    startGoogleWorkspaceAuthorizationMock.mockResolvedValue(
       "https://accounts.google.com/authorize"
     );
 
@@ -74,7 +52,7 @@ describe("appRouter", () => {
       .createCaller({ origin: "https://example.com", scope })
       .googleWorkspace.update("connect");
 
-    expect(mocks.startGoogleWorkspaceAuthorization).toHaveBeenCalledWith(
+    expect(startGoogleWorkspaceAuthorizationMock).toHaveBeenCalledWith(
       scope,
       "https://example.com/?google=connected"
     );
@@ -84,7 +62,7 @@ describe("appRouter", () => {
   });
 
   it("surfaces Google connector failures", async () => {
-    mocks.disconnectGoogleWorkspace.mockRejectedValue(
+    disconnectGoogleWorkspaceMock.mockRejectedValue(
       new Error("connector unavailable")
     );
 

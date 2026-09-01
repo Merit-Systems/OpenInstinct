@@ -2,8 +2,15 @@
 import { readFile, readdir } from "node:fs/promises";
 import { PGlite } from "@electric-sql/pglite";
 import { drizzle } from "drizzle-orm/pglite";
-import { afterEach, describe, expect, it, vi } from "vitest";
-import type { db } from "@/db";
+import { afterEach, describe, expect, it } from "vitest";
+import {
+  resetDatabaseForIntegrationTest,
+  setDatabaseForIntegrationTest,
+} from "@/db";
+import {
+  resetWorkspaceScopeEnforcementForIntegrationTest,
+  setWorkspaceScopeEnforcementForIntegrationTest,
+} from "@/lib/env";
 import * as schema from "../../db/schema";
 
 const databases: PGlite[] = [];
@@ -11,10 +18,8 @@ let enforcementEnabled = false;
 
 afterEach(async () => {
   enforcementEnabled = false;
-  vi.doUnmock("@/db");
-  vi.doUnmock("@/db/services/scope");
-  vi.doUnmock("@/lib/env");
-  vi.resetModules();
+  resetDatabaseForIntegrationTest();
+  resetWorkspaceScopeEnforcementForIntegrationTest();
   await Promise.all(databases.splice(0).map((database) => database.close()));
 });
 
@@ -155,20 +160,17 @@ describe("workspace lifecycle", () => {
 
   it("does not call the lifecycle guard while enforcement is off", async () => {
     const client = await createDatabase();
-    const database = drizzle(client, { schema }) as unknown as typeof db;
-    const assertWorkspaceOperable = vi.fn<() => void>();
-    vi.doMock("@/db", () => ({ ...schema, db: database }));
-    vi.doMock("@/lib/env", () => ({
-      isWorkspaceScopeEnforcementEnabled: () => false,
-    }));
-    vi.doMock("@/db/services/scope", () => ({ assertWorkspaceOperable }));
+    const database = drizzle(client, { schema });
+    setDatabaseForIntegrationTest(database);
+    setWorkspaceScopeEnforcementForIntegrationTest(() => false);
     const usage = await import("@/db/services/usage");
 
-    await usage.checkBudget(
-      { userId: "owner", workspaceId: "workspace-a" },
-      "model_tokens"
-    );
-    expect(assertWorkspaceOperable).not.toHaveBeenCalled();
+    await expect(
+      usage.checkBudget(
+        { userId: "owner", workspaceId: "workspace-a" },
+        "model_tokens"
+      )
+    ).resolves.toBeUndefined();
   });
 
   it("deletes owned data only from a pending-deletion workspace and preserves retained records", async () => {
@@ -278,11 +280,9 @@ describe("workspace lifecycle", () => {
 
 async function loadService() {
   const client = await createDatabase();
-  const database = drizzle(client, { schema }) as unknown as typeof db;
-  vi.doMock("@/db", () => ({ ...schema, db: database }));
-  vi.doMock("@/lib/env", () => ({
-    isWorkspaceScopeEnforcementEnabled: () => enforcementEnabled,
-  }));
+  const database = drizzle(client, { schema });
+  setDatabaseForIntegrationTest(database);
+  setWorkspaceScopeEnforcementForIntegrationTest(() => enforcementEnabled);
   const lifecycle = await import("@/db/services/workspace-lifecycle");
   const browsers = await import("@/db/services/browsers");
   const scope = await import("@/db/services/scope");

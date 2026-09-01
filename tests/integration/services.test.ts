@@ -3,7 +3,7 @@ import { PGlite } from "@electric-sql/pglite";
 import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { db } from "@/db";
+import * as Database from "@/db";
 import * as schema from "../../db/schema";
 import {
   browserTraceDomains as browserTraceDomainsTable,
@@ -13,7 +13,7 @@ import {
 const databases: PGlite[] = [];
 
 afterEach(async () => {
-  vi.doUnmock("@/db");
+  vi.restoreAllMocks();
   vi.resetModules();
   await Promise.all(databases.splice(0).map((database) => database.close()));
 });
@@ -28,11 +28,10 @@ describe("database services", () => {
     await applyBrowserTraceTelemetryMigration(client);
 
     const pgliteDatabase = drizzle(client, { schema });
-    // PGlite exposes the PostgreSQL query builders and transaction behavior
-    // used by the production node-postgres adapter.
-    // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- adapter-compatible integration test double
-    const database = pgliteDatabase as unknown as typeof db;
-    vi.doMock("@/db", () => ({ ...schema, db: database }));
+    // SAFETY: PGlite implements the query-builder surface exercised by these services despite using a different Drizzle driver.
+    // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- This test swaps only the driver while retaining the shared Drizzle schema and query-builder contract.
+    const database = pgliteDatabase as never;
+    vi.spyOn(Database, "db", "get").mockReturnValue(database);
 
     const [
       browserImages,
@@ -245,7 +244,7 @@ describe("database services", () => {
       resultMessage: "Ordered.",
       status: "success",
     });
-    const [trace] = await database
+    const [trace] = await pgliteDatabase
       .select()
       .from(browserTracesTable)
       .where(eq(browserTracesTable.sessionId, "worker-alice"));
@@ -255,7 +254,9 @@ describe("database services", () => {
       status: "success",
       task: "Order the blue mug",
     });
-    const traceDomains = await database.select().from(browserTraceDomainsTable);
+    const traceDomains = await pgliteDatabase
+      .select()
+      .from(browserTraceDomainsTable);
     expect(traceDomains).toHaveLength(1);
     expect(traceDomains[0]).toMatchObject({
       domain: "shop.example.com",

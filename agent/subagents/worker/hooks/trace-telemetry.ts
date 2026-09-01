@@ -9,23 +9,38 @@ import { traceTimelineRows } from "@/agent/subagents/worker/lib/trace-timeline";
 import { listWorkerBrowserSessions } from "@/db/services/browsers";
 import type { AccessScope } from "@/lib/access-scope";
 import { scopeFromPrincipal } from "@/lib/access-scope";
-import { parseTaskCompletionOutput } from "@/lib/task-completion";
+import { taskCompletionOutputSchema } from "@/lib/task-completion";
 import { harvestBrowserTraceDomains } from "@/agent/subagents/worker/lib/trace-domains";
+
+export const traceTelemetryDependencies = {
+  beginBrowserTrace,
+  completeBrowserTrace,
+  harvestBrowserTraceDomains,
+  listWorkerBrowserSessions,
+  recordBrowserTraceEvents,
+};
 
 function traceScope(ctx: HookContext) {
   const initiator = ctx.session.auth.initiator;
   return initiator ? scopeFromPrincipal(initiator) : undefined;
 }
 
-function logTraceFailure(sessionId: string, error: unknown) {
-  console.warn("[browser-trace] telemetry write failed", { error, sessionId });
+function logTraceFailure(sessionId: string, cause: unknown) {
+  console.warn("[browser-trace] telemetry write failed", { cause, sessionId });
 }
 
 async function sweepLiveBrowserDomains(scope: AccessScope, sessionId: string) {
-  const browsers = await listWorkerBrowserSessions(scope, sessionId);
+  const browsers = await traceTelemetryDependencies.listWorkerBrowserSessions(
+    scope,
+    sessionId
+  );
   await Promise.all(
     browsers.map((browser) =>
-      harvestBrowserTraceDomains(scope, sessionId, browser)
+      traceTelemetryDependencies.harvestBrowserTraceDomains(
+        scope,
+        sessionId,
+        browser
+      )
     )
   );
 }
@@ -40,7 +55,7 @@ async function finishTrace(
 ) {
   const scope = traceScope(ctx);
   if (!scope) return;
-  await completeBrowserTrace(scope, ctx.session.id, {
+  await traceTelemetryDependencies.completeBrowserTrace(scope, ctx.session.id, {
     completedAt: emittedAt,
     resultMessage: outcome.resultMessage,
     status: outcome.status,
@@ -54,7 +69,7 @@ export default defineHook({
       try {
         const scope = traceScope(ctx);
         if (!scope) return;
-        await recordBrowserTraceEvents(
+        await traceTelemetryDependencies.recordBrowserTraceEvents(
           scope,
           ctx.session.id,
           traceTimelineRows(event)
@@ -67,7 +82,7 @@ export default defineHook({
       try {
         const scope = traceScope(ctx);
         if (!scope) return;
-        await beginBrowserTrace(scope, {
+        await traceTelemetryDependencies.beginBrowserTrace(scope, {
           sessionId: ctx.session.id,
           startedAt: event.meta.at,
           task: event.data.message,
@@ -78,11 +93,13 @@ export default defineHook({
     },
     async "result.completed"(event, ctx) {
       try {
-        const completion = parseTaskCompletionOutput(event.data.result);
-        if (!completion) return;
+        const completion = taskCompletionOutputSchema.safeParse(
+          event.data.result
+        );
+        if (!completion.success) return;
         await finishTrace(ctx, event.meta.at, {
-          resultMessage: completion.message,
-          status: completion.status,
+          resultMessage: completion.data.message,
+          status: completion.data.status,
         });
       } catch (error) {
         logTraceFailure(ctx.session.id, error);

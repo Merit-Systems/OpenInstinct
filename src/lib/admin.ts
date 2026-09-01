@@ -5,6 +5,10 @@ import { env } from "@/lib/env";
 import { requireRequestScope } from "@/lib/request-scope";
 import type { AccessScope } from "./access-scope";
 
+export const adminDependencies = {
+  adminPhoneNumbers: () => env.ADMIN_PHONE_NUMBERS,
+};
+
 /** A deliberately opaque error: admin routes should look absent to non-admins. */
 export class AdminNotFoundError extends Error {
   constructor() {
@@ -29,7 +33,9 @@ function isAdminPhoneNumber(phoneNumber: string | null | undefined) {
       : normalizeAuthPhoneNumber(phoneNumber);
   return (
     normalized !== undefined &&
-    parseAdminPhoneNumbers(env.ADMIN_PHONE_NUMBERS).has(normalized)
+    parseAdminPhoneNumbers(adminDependencies.adminPhoneNumbers()).has(
+      normalized
+    )
   );
 }
 

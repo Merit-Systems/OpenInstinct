@@ -1,27 +1,34 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { getAuthSession } from "@/auth/session";
 
-export async function proxy(request: NextRequest) {
-  const pathname = request.nextUrl.pathname;
-  if (
-    pathname === "/sign-in" ||
-    pathname.startsWith("/api/auth/") ||
-    pathname.startsWith("/api/cron/") ||
-    pathname.startsWith("/v1/") ||
-    pathname === "/eve/v1/health"
-  ) {
-    return NextResponse.next();
-  }
+export const proxyDependencies = { getAuthSession };
 
-  if (await getAuthSession(request.headers)) return NextResponse.next();
+export function createProxy(dependencies = proxyDependencies) {
+  return async function proxy(request: NextRequest) {
+    const pathname = request.nextUrl.pathname;
+    if (
+      pathname === "/sign-in" ||
+      pathname.startsWith("/api/auth/") ||
+      pathname.startsWith("/api/cron/") ||
+      pathname.startsWith("/v1/") ||
+      pathname === "/eve/v1/health"
+    ) {
+      return NextResponse.next();
+    }
 
-  const signInUrl = new URL("/sign-in", request.url);
-  signInUrl.searchParams.set(
-    "callbackUrl",
-    `${request.nextUrl.pathname}${request.nextUrl.search}`
-  );
-  return NextResponse.redirect(signInUrl);
+    if (await dependencies.getAuthSession(request.headers))
+      return NextResponse.next();
+
+    const signInUrl = new URL("/sign-in", request.url);
+    signInUrl.searchParams.set(
+      "callbackUrl",
+      `${request.nextUrl.pathname}${request.nextUrl.search}`
+    );
+    return NextResponse.redirect(signInUrl);
+  };
 }
+
+export const proxy = createProxy();
 
 export const config = {
   matcher: ["/((?!_next/static|_next/image|favicon.ico).*)"],

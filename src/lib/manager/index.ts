@@ -162,5 +162,6 @@ export function createManagerImportUrl(baseUrl: string) {
 }
 
 function firstQueryValue(value: string | readonly string[] | undefined) {
-  return typeof value === "string" ? value : value?.[0];
+  const scalar = z.string().safeParse(value);
+  return scalar.success ? scalar.data : value?.[0];
 }

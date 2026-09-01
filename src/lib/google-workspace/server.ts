@@ -13,6 +13,7 @@ import {
   revokeConnectionInstallation,
 } from "@/db/services/connection-installations";
 import { env, isWorkspaceScopeEnforcementEnabled } from "@/lib/env";
+import { z } from "zod";
 import {
   GOOGLE_WORKSPACE_SCOPES,
   googleWorkspaceSubject,
@@ -28,12 +29,16 @@ function googleInstallation(scope: AccessScope) {
 }
 
 async function googleWorkspaceInstallationIsRevoked(scope: AccessScope) {
-  if (!isWorkspaceScopeEnforcementEnabled()) return;
+  if (
+    !googleWorkspaceInstallationDependencies.isWorkspaceScopeEnforcementEnabled()
+  )
+    return;
   try {
-    const installation = await findConnectionInstallation(
-      scope,
-      googleInstallation(scope)
-    );
+    const installation =
+      await googleWorkspaceInstallationDependencies.findConnectionInstallation(
+        scope,
+        googleInstallation(scope)
+      );
     // First-use is allowed so legacy Connect grants can bootstrap their tenant record.
     return installation?.status === "revoked";
   } catch {
@@ -42,34 +47,50 @@ async function googleWorkspaceInstallationIsRevoked(scope: AccessScope) {
   }
 }
 
+export const googleWorkspaceServerDependencies = {
+  getTokenResponse,
+  revokeToken,
+  startAuthorization,
+};
+
+export const googleWorkspaceInstallationDependencies = {
+  deleteRevokedConnectionInstallation,
+  findConnectionInstallation,
+  isWorkspaceScopeEnforcementEnabled,
+  recordConnectionInstallation,
+  revokeConnectionInstallation,
+};
+
 export async function getGoogleWorkspaceConnection(scope: AccessScope) {
   try {
     if (await googleWorkspaceInstallationIsRevoked(scope)) {
       return { accountLabel: null, state: "disconnected" as const };
     }
-    const response = await getTokenResponse(
+    const response = await googleWorkspaceServerDependencies.getTokenResponse(
       env.GOOGLE_CONNECTOR_UID,
       googleWorkspaceTokenParams(scope.userId),
       { forceRefresh: true }
     );
-    if (isWorkspaceScopeEnforcementEnabled()) {
+    if (
+      googleWorkspaceInstallationDependencies.isWorkspaceScopeEnforcementEnabled()
+    ) {
       try {
-        await recordConnectionInstallation(scope, {
-          ...googleInstallation(scope),
-          scopes: GOOGLE_WORKSPACE_SCOPES,
-        });
+        await googleWorkspaceInstallationDependencies.recordConnectionInstallation(
+          scope,
+          {
+            ...googleInstallation(scope),
+            scopes: GOOGLE_WORKSPACE_SCOPES,
+          }
+        );
       } catch {
         console.warn(
           "[google-workspace] connection installation recording failed"
         );
       }
     }
+    const email = z.string().safeParse(response.claims?.email);
     return {
-      accountLabel:
-        response.name ??
-        (typeof response.claims?.email === "string"
-          ? response.claims.email
-          : null),
+      accountLabel: response.name ?? (email.success ? email.data : null),
       state: "connected" as const,
     };
   } catch (error) {
@@ -87,24 +108,38 @@ export async function startGoogleWorkspaceAuthorization(
   scope: AccessScope,
   callbackUrl: string
 ) {
-  if (isWorkspaceScopeEnforcementEnabled()) {
-    await deleteRevokedConnectionInstallation(scope, googleInstallation(scope));
+  if (
+    googleWorkspaceInstallationDependencies.isWorkspaceScopeEnforcementEnabled()
+  ) {
+    await googleWorkspaceInstallationDependencies.deleteRevokedConnectionInstallation(
+      scope,
+      googleInstallation(scope)
+    );
   }
-  const authorization = await startAuthorization(
-    env.GOOGLE_CONNECTOR_UID,
-    googleWorkspaceTokenParams(scope.userId),
-    { callbackUrl, expiresInMs: 10 * 60_000 }
-  );
+  const authorization =
+    await googleWorkspaceServerDependencies.startAuthorization(
+      env.GOOGLE_CONNECTOR_UID,
+      googleWorkspaceTokenParams(scope.userId),
+      { callbackUrl, expiresInMs: 10 * 60_000 }
+    );
   return authorization.url;
 }
 
 export async function disconnectGoogleWorkspace(scope: AccessScope) {
-  await revokeToken(env.GOOGLE_CONNECTOR_UID, {
-    subject: googleWorkspaceSubject(scope.userId),
-  });
-  if (isWorkspaceScopeEnforcementEnabled()) {
+  await googleWorkspaceServerDependencies.revokeToken(
+    env.GOOGLE_CONNECTOR_UID,
+    {
+      subject: googleWorkspaceSubject(scope.userId),
+    }
+  );
+  if (
+    googleWorkspaceInstallationDependencies.isWorkspaceScopeEnforcementEnabled()
+  ) {
     try {
-      await revokeConnectionInstallation(scope, googleInstallation(scope));
+      await googleWorkspaceInstallationDependencies.revokeConnectionInstallation(
+        scope,
+        googleInstallation(scope)
+      );
     } catch {
       console.warn(
         "[google-workspace] connection installation revocation failed"

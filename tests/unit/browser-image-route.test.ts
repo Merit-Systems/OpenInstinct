@@ -1,44 +1,97 @@
 /* oxlint-disable vitest/require-mock-type-parameters -- Hoisted auth and storage fakes are configured per test. */
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import * as AuthSession from "@/auth/session";
+import { GET } from "@/app/artifacts/[artifactId]/route";
+import * as ScopeService from "@/db/services/scope";
+import * as BrowserImageServer from "@/lib/browser-images/server";
+import * as Environment from "@/lib/env";
+import { authSessionFor } from "../helpers/auth-session";
 
 const artifactId = "0d01e667-d128-4bb7-a248-1ae21db72f4f";
 const png = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
-const mocks = vi.hoisted(() => ({
-  getAuthSession: vi.fn(),
-  getBlob: vi.fn(),
-  scopeEnforcementEnabled: vi.fn<() => boolean>(),
-  verifyScopeAccess: vi.fn<() => Promise<unknown>>(),
-}));
+const getAuthSessionMock = vi.spyOn(AuthSession, "getAuthSession");
+const getBlobMock = vi.spyOn(BrowserImageServer, "getBrowserImageBlob");
+const scopeEnforcementEnabledMock = vi.spyOn(
+  Environment,
+  "isWorkspaceScopeEnforcementEnabled"
+);
+const verifyScopeAccessMock = vi.spyOn(ScopeService, "verifyScopeAccess");
+type OpenedBrowserImage = NonNullable<
+  Awaited<ReturnType<typeof BrowserImageServer.getBrowserImageBlob>>
+>;
+const verifiedScope: NonNullable<
+  Awaited<ReturnType<typeof ScopeService.verifyScopeAccess>>
+> = {
+  membershipStatus: "active",
+  role: "owner",
+  userId: "better-auth:user-1",
+  workspaceId: "workspace-1",
+};
 
-vi.mock("@/auth/session", () => ({ getAuthSession: mocks.getAuthSession }));
-vi.mock("@/lib/browser-images/server", () => ({
-  getBrowserImageBlob: mocks.getBlob,
-}));
-vi.mock("@/db/services/scope", () => ({
-  verifyScopeAccess: mocks.verifyScopeAccess,
-}));
-vi.mock("@/lib/env", () => ({
-  isWorkspaceScopeEnforcementEnabled: mocks.scopeEnforcementEnabled,
-}));
-
-import { GET } from "@/app/artifacts/[artifactId]/route";
+function openedBrowserImage(statusCode: 200 | 304): OpenedBrowserImage {
+  const stream = statusCode === 200 ? new Response(png).body : null;
+  const artifact = {
+    browserSessionId: "browser-1",
+    byteSize: png.byteLength,
+    contentHash: "content-hash",
+    createdAt: "2026-08-31T00:00:00.000Z",
+    createdByUserId: "user-1",
+    filename: "Product image.png",
+    id: artifactId,
+    idempotencyKey: "image-call-1",
+    label: "Product image",
+    mediaType: "image/png",
+    rootSessionId: "root-session",
+    sourceKind: "viewport",
+    status: "ready",
+    storagePathname: `browser-images/workspace/${artifactId}`,
+    workerSessionId: "worker-1",
+    workspaceId: "workspace-1",
+  };
+  const blob = {
+    cacheControl: "private, max-age=3600",
+    contentDisposition: 'inline; filename="Product image.png"',
+    downloadUrl: "https://blob.example/download",
+    etag: '"etag"',
+    pathname: `browser-images/workspace/${artifactId}`,
+    uploadedAt: new Date("2026-08-31T00:00:00.000Z"),
+    url: "https://blob.example/image",
+  };
+  if (statusCode === 304) {
+    return {
+      artifact,
+      result: {
+        blob: { ...blob, contentType: null, size: null },
+        headers: new Headers(),
+        statusCode,
+        stream: null,
+      },
+    };
+  }
+  if (!stream) throw new Error("The test Response did not expose a body.");
+  return {
+    artifact,
+    result: {
+      blob: { ...blob, contentType: "image/png", size: png.byteLength },
+      headers: new Headers(),
+      statusCode,
+      stream,
+    },
+  };
+}
 
 beforeEach(() => {
   vi.clearAllMocks();
-  mocks.getAuthSession.mockResolvedValue({ user: { id: "user-1" } });
-  mocks.scopeEnforcementEnabled.mockReturnValue(false);
-  mocks.getBlob.mockResolvedValue({
-    artifact: {
-      byteSize: png.byteLength,
-      filename: "Product image.png",
-      mediaType: "image/png",
-    },
-    result: {
-      blob: { etag: '"etag"' },
-      statusCode: 200,
-      stream: new Response(png).body,
-    },
-  });
+  getAuthSessionMock.mockResolvedValue(
+    authSessionFor({
+      id: "user-1",
+      phoneNumber: "+12025550123",
+      phoneNumberVerified: true,
+    })
+  );
+  getBlobMock.mockResolvedValue(openedBrowserImage(200));
+  scopeEnforcementEnabledMock.mockReturnValue(false);
+  verifyScopeAccessMock.mockResolvedValue(verifiedScope);
 });
 
 describe("browser image route", () => {
@@ -59,14 +112,7 @@ describe("browser image route", () => {
   });
 
   it("passes conditional ETags through to private Blob", async () => {
-    mocks.getBlob.mockResolvedValue({
-      artifact: {},
-      result: {
-        blob: { etag: '"etag"' },
-        statusCode: 304,
-        stream: null,
-      },
-    });
+    getBlobMock.mockResolvedValue(openedBrowserImage(304));
 
     const response = await GET(
       request({ "if-none-match": '"etag"' }),
@@ -74,7 +120,7 @@ describe("browser image route", () => {
     );
 
     expect(response.status).toBe(304);
-    expect(mocks.getBlob).toHaveBeenCalledWith(
+    expect(getBlobMock).toHaveBeenCalledWith(
       expect.objectContaining({ userId: "better-auth:user-1" }),
       artifactId,
       expect.objectContaining({ ifNoneMatch: '"etag"' })
@@ -83,22 +129,30 @@ describe("browser image route", () => {
 
   it.each([
     ["unauthenticated", null, artifactId],
-    ["invalid id", { user: { id: "user-1" } }, "not-an-id"],
+    [
+      "invalid id",
+      authSessionFor({
+        id: "user-1",
+        phoneNumber: "+12025550123",
+        phoneNumberVerified: true,
+      }),
+      "not-an-id",
+    ],
   ])(
     "returns the same not-found response for %s requests",
     async (_name, session, id) => {
-      mocks.getAuthSession.mockResolvedValue(session);
+      getAuthSessionMock.mockResolvedValue(session);
 
       const response = await GET(request(), context(id));
 
       expect(response.status).toBe(404);
       expect(await response.text()).toBe("Not found");
-      expect(mocks.getBlob).not.toHaveBeenCalled();
+      expect(getBlobMock).not.toHaveBeenCalled();
     }
   );
 
   it("does not reveal an unavailable or cross-workspace artifact", async () => {
-    mocks.getBlob.mockResolvedValue(undefined);
+    getBlobMock.mockResolvedValue(undefined);
 
     const response = await GET(request(), context());
 
@@ -107,14 +161,14 @@ describe("browser image route", () => {
   });
 
   it("does not reveal an artifact for a denied enforced scope", async () => {
-    mocks.scopeEnforcementEnabled.mockReturnValue(true);
-    mocks.verifyScopeAccess.mockResolvedValue(undefined);
+    scopeEnforcementEnabledMock.mockReturnValue(true);
+    verifyScopeAccessMock.mockResolvedValue(undefined);
 
     const response = await GET(request(), context());
 
     expect(response.status).toBe(404);
     expect(await response.text()).toBe("Not found");
-    expect(mocks.getBlob).not.toHaveBeenCalled();
+    expect(getBlobMock).not.toHaveBeenCalled();
   });
 });
 

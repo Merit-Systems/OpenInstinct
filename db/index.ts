@@ -7,4 +7,22 @@ export * from "./schema";
 
 const pool = new Pool({ connectionString: env.DATABASE_URL });
 
-export const db = drizzle({ client: pool, schema });
+const defaultDb = drizzle({ client: pool, schema });
+
+export const db = defaultDb;
+
+interface IntegrationDatabase {
+  readonly _: unknown;
+}
+
+/**
+ * Replaces the database boundary for an in-process integration harness.
+ * Production code keeps the pool-backed default established above.
+ */
+export function setDatabaseForIntegrationTest(database: IntegrationDatabase) {
+  Object.assign(db, database);
+}
+
+export function resetDatabaseForIntegrationTest() {
+  Object.assign(db, defaultDb);
+}

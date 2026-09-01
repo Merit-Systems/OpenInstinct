@@ -84,7 +84,11 @@ export async function authorizeApiRequest(
   return { context: { scope, requestId } satisfies ApiRequestContext };
 }
 
-export function apiJson(body: unknown, status: number, requestId: string) {
+export function apiJson(
+  body: z.output<z.ZodType>,
+  status: number,
+  requestId: string
+) {
   return Response.json(body, {
     status,
     headers: { "x-request-id": requestId },
@@ -100,7 +104,15 @@ export function apiError(
   return apiJson({ error: { code, message } }, status, requestId);
 }
 
-export async function parseJson(request: Request, schema: z.ZodType) {
+type JsonParseResult<T> = { readonly data: T } | { readonly error: string };
+type RequiredIdempotencyKeyResult =
+  | { readonly key: string }
+  | { readonly response: Response };
+
+export async function parseJson<T>(
+  request: Request,
+  schema: z.ZodType<T>
+): Promise<JsonParseResult<T>> {
   try {
     return { data: schema.parse(await request.json()) };
   } catch {
@@ -108,7 +120,10 @@ export async function parseJson(request: Request, schema: z.ZodType) {
   }
 }
 
-export function requiredIdempotencyKey(request: Request, requestId: string) {
+export function requiredIdempotencyKey(
+  request: Request,
+  requestId: string
+): RequiredIdempotencyKeyResult {
   const key = request.headers.get("idempotency-key")?.trim();
   return key
     ? { key }
@@ -204,7 +219,7 @@ export async function releaseIdempotencyReservation(
     );
 }
 
-export function apiErrorFor(error: unknown, requestId: string) {
+export function apiErrorFor(error: Error | z.ZodError, requestId: string) {
   if (error instanceof z.ZodError)
     return apiError(
       400,
@@ -239,10 +254,9 @@ export function apiErrorFor(error: unknown, requestId: string) {
   );
 }
 
-function errorMessage(error: unknown): string {
-  if (typeof error !== "object" || error === null) return "";
-  const candidate = error as { cause?: unknown; message?: unknown };
-  const message =
-    typeof candidate.message === "string" ? candidate.message : "";
-  return `${message} ${errorMessage(candidate.cause)}`;
+function errorMessage(error: Error): string {
+  const cause = error.cause;
+  return cause instanceof Error
+    ? `${error.message} ${errorMessage(cause)}`
+    : error.message;
 }

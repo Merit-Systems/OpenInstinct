@@ -115,7 +115,7 @@ function OutcomeBadge({ outcome }: { readonly outcome: string }) {
   return <Badge variant={variant}>{outcome}</Badge>;
 }
 
-function formatSummary(summary: Record<string, unknown>) {
+function formatSummary(summary: Record<string, number>) {
   return Object.entries(summary)
     .map(([key, value]) => `${key}: ${String(value)}`)
     .join(" · ");

@@ -16,6 +16,7 @@ import {
 } from "@/db/services/browser-traces";
 import { requireRequestScope } from "@/lib/request-scope";
 import { RefreshButton } from "./_components/refresh-button";
+import { z } from "zod";
 
 const statusText = {
   cancelled: "Cancelled",
@@ -24,6 +25,13 @@ const statusText = {
   running: "Running",
   success: "Succeeded",
 } as const;
+const traceStatusSchema = z.enum([
+  "cancelled",
+  "error",
+  "failure",
+  "running",
+  "success",
+]);
 
 export default async function TraceDetailPage({
   params,
@@ -32,6 +40,7 @@ export default async function TraceDetailPage({
   const { sessionId } = await params;
   const trace = await readBrowserTrace(scope, sessionId);
   if (!trace) notFound();
+  const traceStatus = traceStatusSchema.safeParse(trace.status);
   const events = await listBrowserTraceEvents(scope, trace.sessionId);
 
   return (
@@ -53,9 +62,7 @@ export default async function TraceDetailPage({
             {trace.task}
           </h1>
           <p className="type-supporting-body mt-2 truncate text-muted-foreground">
-            {trace.status in statusText
-              ? statusText[trace.status as keyof typeof statusText]
-              : trace.status}
+            {traceStatus.success ? statusText[traceStatus.data] : trace.status}
             {trace.durationMs === null
               ? ""
               : ` · ${String(Math.round(trace.durationMs / 1000))}s`}

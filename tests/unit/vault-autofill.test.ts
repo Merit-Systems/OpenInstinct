@@ -1,4 +1,6 @@
+import { runInNewContext } from "node:vm";
 import { describe, expect, it } from "vitest";
+import { z } from "zod";
 import type { AccessScope } from "@/lib/access-scope";
 import type { VaultItemKind } from "@/lib/manager";
 import { serializePaymentCard } from "@/lib/manager/payment-card";
@@ -434,14 +436,14 @@ describe("vault browser autofill", () => {
       const form = { querySelectorAll: () => controls };
       for (const control of controls) control.form = form;
       const document = { querySelectorAll: () => controls };
-      // oxlint-disable-next-line typescript/no-implied-eval, typescript/no-unsafe-type-assertion -- execute the exact isolated-world expression against the DOM test double
-      const evaluate = Function(
-        "document",
-        "HTMLInputElement",
-        `return ${nativeAutofillSecretMarkingExpression(0)};`
-      ) as (documentValue: unknown, inputClass: unknown) => number;
+      const markedCount = z.number().parse(
+        runInNewContext(nativeAutofillSecretMarkingExpression(0), {
+          document,
+          HTMLInputElement: FakeInput,
+        })
+      );
 
-      expect(evaluate(document, FakeInput)).toBe(3);
+      expect(markedCount).toBe(3);
       expect(controls.map(({ dataset }) => dataset.vaultSecret)).toEqual([
         "true",
         "true",

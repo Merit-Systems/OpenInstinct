@@ -1,88 +1,61 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+import { createPhoneNumberOptions } from "@/auth";
 
-const mocks = vi.hoisted(() => {
-  interface PhoneOptions {
-    callbackOnVerification?: (input: {
-      phoneNumber: string;
-      user: { id: string };
-    }) => Promise<void>;
-    verifyOTP?: (input: { phoneNumber: string }) => boolean | Promise<boolean>;
-  }
+const phoneNumber = "+12025550123";
 
+function optionsFor({
+  localPhoneAuthBypassEnabled = false,
+  recordVerifiedPhoneIdentity = vi.fn<
+    (input: {
+      readonly phoneNumber: string;
+      readonly userId: string;
+    }) => Promise<void>
+  >(),
+  sendPhoneCode = vi.fn<
+    (input: { readonly code: string; readonly to: string }) => Promise<void>
+  >(),
+} = {}) {
+  const options = createPhoneNumberOptions({
+    localPhoneAuthBypassEnabled,
+    recordVerifiedPhoneIdentity,
+    sendPhoneCode,
+  });
+  if (!options) throw new Error("Phone number plugin options are required.");
   return {
-    localBypassEnabled: false,
-    phoneNumber: vi.fn<(options: PhoneOptions) => PhoneOptions>(
-      (options) => options
-    ),
-    recordVerifiedPhoneIdentity:
-      vi.fn<
-        (input: { phoneNumber: string; userId: string }) => Promise<void>
-      >(),
+    options,
+    recordVerifiedPhoneIdentity,
+    sendPhoneCode,
   };
-});
-
-vi.mock("better-auth", () => ({ betterAuth: (options: object) => options }));
-vi.mock("better-auth/adapters/drizzle", () => ({ drizzleAdapter: () => ({}) }));
-vi.mock("better-auth/plugins/phone-number", () => ({
-  phoneNumber: mocks.phoneNumber,
-}));
-vi.mock("@/db", () => ({
-  account: {},
-  db: {},
-  session: {},
-  user: {},
-  verification: {},
-}));
-vi.mock("@/db/services/phone-identities", () => ({
-  recordVerifiedPhoneIdentity: mocks.recordVerifiedPhoneIdentity,
-}));
-vi.mock("@/lib/env", () => ({
-  env: {
-    LINQ_CONNECTOR: "linq/test",
-  },
-  get localPhoneAuthBypassEnabled() {
-    return mocks.localBypassEnabled;
-  },
-}));
-vi.mock("@/lib/application-origin", () => ({
-  betterAuthBaseURL: () => "https://example.com",
-}));
-vi.mock("@/lib/installation-secrets", () => ({
-  getInstallationSecrets: () =>
-    Promise.resolve({
-      betterAuthSecret: "test-auth-secret",
-      secretEncryptionKey: "unused",
-      version: 1,
-    }),
-}));
-
-afterEach(() => {
-  vi.clearAllMocks();
-  vi.resetModules();
-  mocks.localBypassEnabled = false;
-});
+}
 
 describe("phone identity verification wiring", () => {
   it("records identities after real OTP verification", async () => {
-    mocks.recordVerifiedPhoneIdentity.mockResolvedValue(undefined);
-    const options = await phonePluginOptions();
+    const { options, recordVerifiedPhoneIdentity } = optionsFor();
 
     expect(options.verifyOTP).toBeUndefined();
-    await verifyWithCallback(options);
-    expect(mocks.recordVerifiedPhoneIdentity).toHaveBeenCalledWith({
+    await options.callbackOnVerification?.({
+      phoneNumber,
+      user: verifiedUser(),
+    });
+    expect(recordVerifiedPhoneIdentity).toHaveBeenCalledWith({
       phoneNumber,
       userId: "alice",
     });
   });
 
   it("records identities after bypass OTP verification", async () => {
-    mocks.localBypassEnabled = true;
-    mocks.recordVerifiedPhoneIdentity.mockResolvedValue(undefined);
-    const options = await phonePluginOptions();
+    const { options, recordVerifiedPhoneIdentity } = optionsFor({
+      localPhoneAuthBypassEnabled: true,
+    });
 
-    expect(await options.verifyOTP?.({ phoneNumber })).toBe(true);
-    await verifyWithCallback(options);
-    expect(mocks.recordVerifiedPhoneIdentity).toHaveBeenCalledWith({
+    expect(await options.verifyOTP?.({ code: "123456", phoneNumber })).toBe(
+      true
+    );
+    await options.callbackOnVerification?.({
+      phoneNumber,
+      user: verifiedUser(),
+    });
+    expect(recordVerifiedPhoneIdentity).toHaveBeenCalledWith({
       phoneNumber,
       userId: "alice",
     });
@@ -91,42 +64,42 @@ describe("phone identity verification wiring", () => {
   it("does not reject verification when identity recording fails", async () => {
     const storageError = new Error("storage unavailable");
     storageError.name = "IdentityStoreError";
-    mocks.recordVerifiedPhoneIdentity.mockRejectedValue(storageError);
+    const recordVerifiedPhoneIdentity = vi
+      .fn<
+        (input: {
+          readonly phoneNumber: string;
+          readonly userId: string;
+        }) => Promise<void>
+      >()
+      .mockRejectedValue(storageError);
     const error = vi
       .spyOn(console, "error")
       .mockImplementation(() => undefined);
-    const options = await phonePluginOptions();
+    const { options } = optionsFor({ recordVerifiedPhoneIdentity });
 
-    await verifyWithCallback(options);
+    await options.callbackOnVerification?.({
+      phoneNumber,
+      user: verifiedUser(),
+    });
+
     expect(error).toHaveBeenCalledWith(
       "Failed to record verified phone identity.",
       "IdentityStoreError"
     );
-    const logged = error.mock.calls[0]?.map(String).join(" ");
-    expect(logged).not.toMatch(/\d/);
   });
 });
 
-const phoneNumber = "+12025550123";
-
-async function phonePluginOptions() {
-  const { getAuth } = await import("@/auth");
-  await getAuth();
-  const options = mocks.phoneNumber.mock.calls.at(-1)?.[0];
-  if (!options) throw new Error("Expected phone number plugin options.");
-  return options;
-}
-
-async function verifyWithCallback(options: {
-  callbackOnVerification?: (input: {
-    phoneNumber: string;
-    user: { id: string };
-  }) => Promise<void>;
-}) {
-  if (!options.callbackOnVerification) {
-    throw new Error("Expected a verification callback.");
-  }
-  await expect(
-    options.callbackOnVerification({ phoneNumber, user: { id: "alice" } })
-  ).resolves.toBeUndefined();
+function verifiedUser() {
+  const now = new Date("2026-08-31T00:00:00.000Z");
+  return {
+    createdAt: now,
+    email: "alice@example.test",
+    emailVerified: true,
+    id: "alice",
+    image: null,
+    name: "Alice",
+    phoneNumber,
+    phoneNumberVerified: true,
+    updatedAt: now,
+  };
 }

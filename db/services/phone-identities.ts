@@ -7,6 +7,7 @@ import {
   randomUUID,
 } from "node:crypto";
 import { and, eq } from "drizzle-orm";
+import { z } from "zod";
 import { normalizeAuthPhoneNumber } from "@/auth/phone-number";
 import { db, phoneIdentities } from "@/db";
 import { accessScopeForUser } from "@/lib/access-scope";
@@ -32,19 +33,26 @@ export async function recordVerifiedPhoneIdentity({
 
   for (let attempt = 0; attempt < 2; attempt += 1) {
     try {
-      return await recordVerifiedPhoneIdentityTransaction({
-        normalizedPhoneNumber,
-        phoneLookupHash,
-        secretEncryptionKey,
-        userId,
-      });
+      return await phoneIdentityDependencies.recordVerifiedPhoneIdentityTransaction(
+        {
+          normalizedPhoneNumber,
+          phoneLookupHash,
+          secretEncryptionKey,
+          userId,
+        }
+      );
     } catch (error) {
-      if (attempt === 0 && isUniqueViolation(error)) continue;
+      if (attempt === 0 && error instanceof Error && isUniqueViolation(error))
+        continue;
       throw error;
     }
   }
   throw new Error("Failed to record phone identity.");
 }
+
+export const phoneIdentityDependencies = {
+  recordVerifiedPhoneIdentityTransaction,
+};
 
 async function recordVerifiedPhoneIdentityTransaction({
   normalizedPhoneNumber,
@@ -243,14 +251,10 @@ function phoneIdentityAad(id: string) {
   return Buffer.from(`phone-identity\u0000${id}`);
 }
 
-function isUniqueViolation(error: unknown) {
-  return (
-    typeof error === "object" &&
-    error !== null &&
-    "cause" in error &&
-    typeof error.cause === "object" &&
-    error.cause !== null &&
-    "code" in error.cause &&
-    error.cause.code === "23505"
-  );
+const uniqueViolationSchema = z.object({
+  cause: z.object({ code: z.literal("23505") }),
+});
+
+function isUniqueViolation(error: Error) {
+  return uniqueViolationSchema.safeParse(error).success;
 }

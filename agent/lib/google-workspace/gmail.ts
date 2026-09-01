@@ -133,12 +133,12 @@ export async function sendGmail(
     "utf8"
   ).toString("base64url");
   return withGmail(ctx, async (client) => {
+    const requestBody = payload.threadId
+      ? { raw, threadId: payload.threadId }
+      : { raw };
     const { data } = await client.users.messages.send(
       {
-        requestBody: {
-          raw,
-          ...(payload.threadId ? { threadId: payload.threadId } : {}),
-        },
+        requestBody,
         userId: "me",
       },
       { signal: ctx.abortSignal }

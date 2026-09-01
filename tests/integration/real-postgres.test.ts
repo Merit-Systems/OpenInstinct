@@ -1,11 +1,18 @@
 import { drizzle } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
-import { afterAll, describe, expect, it, vi } from "vitest";
-import type * as envModule from "@/lib/env";
+import { afterAll, describe, expect, it } from "vitest";
+import {
+  resetDatabaseForIntegrationTest,
+  setDatabaseForIntegrationTest,
+} from "@/db";
+import { adminDependencies } from "@/lib/admin";
+import { routerDependencies } from "@/trpc/router";
 import * as schema from "../../db/schema";
 import { createRealPostgres } from "../harness/real-postgres";
 
 const realPostgres = await createRealPostgres();
+const originalAdminPhoneNumbers = adminDependencies.adminPhoneNumbers;
+const originalRouterDependencies = { ...routerDependencies };
 
 afterAll(async () => {
   await realPostgres?.close();
@@ -20,29 +27,15 @@ describe.skipIf(realPostgres === undefined)(
         connectionString: realPostgres.connectionString,
       });
       const database = drizzle({ client: pool, schema });
-      vi.doMock("@/db", () => ({ ...schema, db: database }));
-      vi.doMock("@/lib/env", async (importOriginal) => {
-        const original = await importOriginal<typeof envModule>();
-        return {
-          ...original,
-          env: { ...original.env, ADMIN_PHONE_NUMBERS: "+12025550123" },
-          isWorkspaceScopeEnforcementEnabled: () => false,
-        };
-      });
-      vi.doMock("@/lib/model-catalog/server", () => ({
-        readModelCatalog: () => undefined,
-      }));
-      vi.doMock("@/lib/task-history/server", () => ({
-        readTaskHistoryPage: () => undefined,
-      }));
-      vi.doMock("@/db/services/chats", () => ({ saveChat: () => undefined }));
-      vi.doMock("@/lib/google-workspace/server", () => ({
-        disconnectGoogleWorkspace: () => undefined,
-        startGoogleWorkspaceAuthorization: () => undefined,
-      }));
-      vi.doMock("@/lib/manager/server/store", () => ({
+      setDatabaseForIntegrationTest(database);
+      adminDependencies.adminPhoneNumbers = () => "+12025550123";
+      Object.assign(routerDependencies, {
         applyManagerMutation: () => undefined,
-      }));
+        disconnectGoogleWorkspace: () => undefined,
+        readModelCatalog: () => undefined,
+        saveChat: () => undefined,
+        startGoogleWorkspaceAuthorization: () => undefined,
+      });
 
       try {
         const now = new Date().toISOString();
@@ -117,14 +110,9 @@ describe.skipIf(realPostgres === undefined)(
           expect(value).toBeTypeOf("number");
         }
       } finally {
-        vi.doUnmock("@/db");
-        vi.doUnmock("@/lib/env");
-        vi.doUnmock("@/lib/model-catalog/server");
-        vi.doUnmock("@/lib/task-history/server");
-        vi.doUnmock("@/db/services/chats");
-        vi.doUnmock("@/lib/google-workspace/server");
-        vi.doUnmock("@/lib/manager/server/store");
-        vi.resetModules();
+        resetDatabaseForIntegrationTest();
+        adminDependencies.adminPhoneNumbers = originalAdminPhoneNumbers;
+        Object.assign(routerDependencies, originalRouterDependencies);
         await pool.end();
       }
     });
@@ -135,7 +123,7 @@ describe.skipIf(realPostgres === undefined)(
         connectionString: realPostgres.connectionString,
       });
       const database = drizzle({ client: pool, schema });
-      vi.doMock("@/db", () => ({ ...schema, db: database }));
+      setDatabaseForIntegrationTest(database);
 
       try {
         const agents = await import("@/db/services/agents");
@@ -180,8 +168,7 @@ describe.skipIf(realPostgres === undefined)(
         );
         expect(rows).toHaveLength(1);
       } finally {
-        vi.doUnmock("@/db");
-        vi.resetModules();
+        resetDatabaseForIntegrationTest();
         await pool.end();
       }
     });
@@ -191,6 +178,6 @@ describe.skipIf(realPostgres === undefined)(
 const manifest = {
   capabilities: ["calendar.read"],
   instructions: "Be helpful.",
-  modelPolicy: { tier: "standard" },
-  version: 1,
+  modelPolicy: { tier: "standard" as const },
+  version: 1 as const,
 };

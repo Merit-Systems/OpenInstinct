@@ -28,9 +28,9 @@ export async function POST(
       auth.context.requestId
     );
   const idempotency = requiredIdempotencyKey(request, auth.context.requestId);
-  if (idempotency.response) return idempotency.response;
+  if (!("key" in idempotency)) return idempotency.response;
   const body = await parseJson(request, agentManifestSchema);
-  if (body.error)
+  if ("error" in body)
     return apiError(400, "invalid_request", body.error, auth.context.requestId);
   const route = `/v1/agents/${agentId}/revisions`;
   const reservation = await reserveIdempotencyKey(
@@ -71,7 +71,10 @@ export async function POST(
       route,
       idempotency.key
     );
-    return apiErrorFor(error, auth.context.requestId);
+    return apiErrorFor(
+      error instanceof Error ? error : new Error(),
+      auth.context.requestId
+    );
   }
   try {
     await finalizeIdempotencyKey(
@@ -83,6 +86,9 @@ export async function POST(
     );
     return apiJson({ data: revision }, 201, auth.context.requestId);
   } catch (error) {
-    return apiErrorFor(error, auth.context.requestId);
+    return apiErrorFor(
+      error instanceof Error ? error : new Error(),
+      auth.context.requestId
+    );
   }
 }

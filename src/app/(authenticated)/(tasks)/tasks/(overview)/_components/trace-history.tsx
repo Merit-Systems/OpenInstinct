@@ -3,6 +3,7 @@
 import { RefreshCwIcon } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useMemo } from "react";
+import { z } from "zod";
 import { Button } from "@/components/ui/button";
 import {
   Table,
@@ -23,11 +24,19 @@ const statusLabels = {
   running: { className: "text-information", label: "Running" },
   success: { className: "text-success", label: "Succeeded" },
 } as const;
+const traceStatusSchema = z.enum([
+  "cancelled",
+  "error",
+  "failure",
+  "running",
+  "success",
+]);
 
 function statusLabel(status: string) {
-  return status in statusLabels
-    ? statusLabels[status as keyof typeof statusLabels]
-    : ({ className: "text-muted-foreground", label: status } as const);
+  const parsed = traceStatusSchema.safeParse(status);
+  return parsed.success
+    ? statusLabels[parsed.data]
+    : { className: "text-muted-foreground", label: status };
 }
 
 function formatDuration(durationMs: number | null) {

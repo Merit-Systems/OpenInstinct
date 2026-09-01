@@ -3,25 +3,24 @@ import { readFile, readdir } from "node:fs/promises";
 import { PGlite } from "@electric-sql/pglite";
 import type { TRPCError } from "@trpc/server";
 import { drizzle } from "drizzle-orm/pglite";
-import { afterEach, describe, expect, it, vi } from "vitest";
-import type { db } from "@/db";
-import type { AccessScope } from "@/lib/access-scope";
+import { afterEach, describe, expect, it } from "vitest";
+import {
+  resetDatabaseForIntegrationTest,
+  setDatabaseForIntegrationTest,
+} from "@/db";
+import { AdminNotFoundError } from "@/lib/admin";
+import { adminProcedureDependencies } from "@/trpc/init";
+import { routerDependencies } from "@/trpc/router";
 import * as schema from "../../db/schema";
 
 const databases: PGlite[] = [];
-const mocks = vi.hoisted(() => {
-  class AdminNotFoundError extends Error {}
-  return {
-    AdminNotFoundError,
-    requireAdminScopeFor: vi.fn<(scope: AccessScope) => Promise<AccessScope>>(),
-  };
-});
+const originalAdminScopeFor = adminProcedureDependencies.requireAdminScopeFor;
+const originalRouterDependencies = { ...routerDependencies };
 
 afterEach(async () => {
-  vi.doUnmock("@/db");
-  vi.doUnmock("@/lib/admin");
-  vi.resetModules();
-  vi.clearAllMocks();
+  resetDatabaseForIntegrationTest();
+  adminProcedureDependencies.requireAdminScopeFor = originalAdminScopeFor;
+  Object.assign(routerDependencies, originalRouterDependencies);
   await Promise.all(databases.splice(0).map((database) => database.close()));
 });
 
@@ -128,30 +127,19 @@ describe("admin router", () => {
 
 async function loadRouter(allowed: boolean) {
   const client = await createDatabase();
-  const database = drizzle(client, { schema }) as unknown as typeof db;
-  vi.doMock("@/db", () => ({ ...schema, db: database }));
-  vi.doMock("@/lib/admin", () => ({
-    AdminNotFoundError: mocks.AdminNotFoundError,
-    requireAdminScopeFor: mocks.requireAdminScopeFor,
-  }));
-  vi.doMock("@/lib/model-catalog/server", () => ({
-    readModelCatalog: () => undefined,
-  }));
-  vi.doMock("@/lib/task-history/server", () => ({
-    readTaskHistoryPage: () => undefined,
-  }));
-  vi.doMock("@/db/services/chats", () => ({ saveChat: () => undefined }));
-  vi.doMock("@/lib/google-workspace/server", () => ({
-    disconnectGoogleWorkspace: () => undefined,
-    startGoogleWorkspaceAuthorization: () => undefined,
-  }));
-  vi.doMock("@/lib/manager/server/store", () => ({
+  const database = drizzle(client, { schema });
+  setDatabaseForIntegrationTest(database);
+  Object.assign(routerDependencies, {
     applyManagerMutation: () => undefined,
-  }));
-  mocks.requireAdminScopeFor.mockImplementation(async (scope) => {
-    if (!allowed) throw new mocks.AdminNotFoundError();
-    return scope;
+    disconnectGoogleWorkspace: () => undefined,
+    readModelCatalog: () => undefined,
+    saveChat: () => undefined,
+    startGoogleWorkspaceAuthorization: () => undefined,
   });
+  adminProcedureDependencies.requireAdminScopeFor = async (scope) => {
+    if (!allowed) throw new AdminNotFoundError();
+    return scope;
+  };
   const { appRouter } = await import("@/trpc/router");
   const scope = { userId: "admin", workspaceId: "admin-workspace" };
   return {

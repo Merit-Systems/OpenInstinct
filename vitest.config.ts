@@ -5,6 +5,12 @@ const sharedProjectConfig = {
   resolve: {
     alias: [
       {
+        find: "server-only",
+        replacement: fileURLToPath(
+          new URL("tests/helpers/server-only.ts", import.meta.url)
+        ),
+      },
+      {
         find: /^@\/(app|auth|components|hooks|lib|proxy|trpc)(\/.*)?$/,
         replacement: fileURLToPath(new URL("src/$1$2", import.meta.url)),
       },

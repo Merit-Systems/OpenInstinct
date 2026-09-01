@@ -1,8 +1,11 @@
 import { readFile, readdir } from "node:fs/promises";
 import { PGlite } from "@electric-sql/pglite";
 import { drizzle } from "drizzle-orm/pglite";
-import { afterEach, describe, expect, it, vi } from "vitest";
-import type { db } from "@/db";
+import { afterEach, describe, expect, it } from "vitest";
+import {
+  resetDatabaseForIntegrationTest,
+  setDatabaseForIntegrationTest,
+} from "@/db";
 import { accessScopeForUser } from "@/lib/access-scope";
 import * as schema from "../../db/schema";
 
@@ -14,8 +17,7 @@ const key = {
 };
 
 afterEach(async () => {
-  vi.doUnmock("@/db");
-  vi.resetModules();
+  resetDatabaseForIntegrationTest();
   await Promise.all(databases.splice(0).map((database) => database.close()));
 });
 
@@ -92,7 +94,7 @@ describe("connection installations", () => {
       key
     );
     expect(installation?.status).toBe("revoked");
-    expect(typeof installation?.revokedAt).toBe("string");
+    expect(installation?.revokedAt).toEqual(expect.any(String));
   });
 
   it("allows a reconnect to replace a revoked installation with an active row", async () => {
@@ -120,9 +122,8 @@ async function loadService() {
   const client = new PGlite();
   databases.push(client);
   await applyAllMigrations(client);
-  // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- adapter-compatible integration test double
-  const database = drizzle(client, { schema }) as unknown as typeof db;
-  vi.doMock("@/db", () => ({ ...schema, db: database }));
+  const database = drizzle(client, { schema });
+  setDatabaseForIntegrationTest(database);
   const installations = await import("@/db/services/connection-installations");
   const scope = await import("@/db/services/scope");
   const alice = accessScopeForUser("better-auth:alice");

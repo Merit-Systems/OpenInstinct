@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { z } from "zod";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -26,6 +27,7 @@ const nextLifecycleState = {
   active: "suspended",
   suspended: "active",
 } as const;
+const transitionableLifecycleStateSchema = z.enum(["active", "suspended"]);
 
 export function WorkspaceTable() {
   const [cursor, setCursor] = useState<string | undefined>();
@@ -73,12 +75,12 @@ export function WorkspaceTable() {
             </TableRow>
           ) : null}
           {workspaces.data?.workspaces.map((workspace) => {
-            const target =
-              workspace.lifecycleState in nextLifecycleState
-                ? nextLifecycleState[
-                    workspace.lifecycleState as keyof typeof nextLifecycleState
-                  ]
-                : undefined;
+            const lifecycleState = transitionableLifecycleStateSchema.safeParse(
+              workspace.lifecycleState
+            );
+            const target = lifecycleState.success
+              ? nextLifecycleState[lifecycleState.data]
+              : undefined;
             return (
               <TableRow key={workspace.id}>
                 <TableCell>

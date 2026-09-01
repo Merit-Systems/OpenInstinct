@@ -26,7 +26,10 @@ function withoutHash({
   return credential;
 }
 
-export async function mintApiCredential(scope: AccessScope, input: unknown) {
+export async function mintApiCredential(
+  scope: AccessScope,
+  input: z.input<typeof mintInputSchema>
+) {
   const parsed = mintInputSchema.parse(input);
   await ensureScope(scope);
   const secret = `oi_${randomBytes(32).toString("base64url")}`;

@@ -1,10 +1,11 @@
 /* oxlint-disable typescript/no-unsafe-assignment, typescript/no-unsafe-call, typescript/no-unsafe-member-access -- Eve's Linq adapter exposes the thread through a transitive Chat SDK type; TypeScript still checks this contextual handler. */
 import { connectLinqCredentials } from "@vercel/connect/eve";
 import {
-  defaultLinqAuth,
   linqChannel,
+  type defaultLinqAuth,
   type LinqChannelConfig,
   type LinqChannelCredentials,
+  type LinqInboundResult,
 } from "eve/channels/linq";
 import { z } from "zod";
 import { getAuth } from "@/auth";
@@ -52,6 +53,40 @@ const workerCancellationsSchema = z.array(
 );
 const markdownListItemPattern = /^\s*(?:[-+*]|\d+[.)])\s+/u;
 
+export const linqChannelDependencies = {
+  checkBudget,
+  createConversationBinding,
+  findVerifiedAuthUserIdByPhoneNumber,
+  findVerifiedUserByPhoneNumber,
+  getAuth,
+  isWorkspaceScopeEnforcementEnabled,
+  recordConnectionInstallation,
+  recordUsageEvent,
+  resolveConversationBinding,
+  verifyScopeAccess,
+  linqConfiguration() {
+    return {
+      connector: env.LINQ_CONNECTOR,
+      phoneNumber: env.LINQ_PHONE_NUMBER,
+    };
+  },
+};
+
+const linqInboundContextSchema = z.object({
+  thread: z.object({ id: z.string() }).optional(),
+});
+const linqInboundMessageSchema = z.object({
+  author: z.object({
+    isBot: z.boolean(),
+    userId: z.string(),
+    userName: z.string().optional(),
+  }),
+});
+
+export type LinqInboundContext = z.infer<typeof linqInboundContextSchema>;
+export type LinqInboundMessage = z.infer<typeof linqInboundMessageSchema>;
+type LinqInboundAttributes = Record<string, readonly string[] | string>;
+
 function splitLinqReply(message: string) {
   return message
     .trim()
@@ -78,7 +113,7 @@ async function postLinqReply(
 ) {
   if (scope) {
     try {
-      await checkBudget(scope, "provider_message");
+      await linqChannelDependencies.checkBudget(scope, "provider_message");
     } catch (error) {
       if (
         error instanceof BudgetExceededError ||
@@ -97,10 +132,11 @@ async function postLinqReply(
     return;
   }
   for (const [index, bubble] of bubbles.entries()) {
-    await thread.post({
-      markdown: bubble,
-      ...(index === bubbles.length - 1 && files.length > 0 ? { files } : {}),
-    });
+    if (index === bubbles.length - 1 && files.length > 0) {
+      await thread.post({ files, markdown: bubble });
+    } else {
+      await thread.post({ markdown: bubble });
+    }
   }
   recordLinqUsage(scope);
 }
@@ -109,13 +145,15 @@ function recordLinqUsage(
   scope: ReturnType<typeof scopeFromPrincipal> | undefined
 ) {
   if (!scope) return;
-  void recordUsageEvent(scope, {
-    kind: "provider_message",
-    quantity: 1,
-    unit: "messages",
-  }).catch(() => {
-    console.warn("[usage] usage event recording failed");
-  });
+  void linqChannelDependencies
+    .recordUsageEvent(scope, {
+      kind: "provider_message",
+      quantity: 1,
+      unit: "messages",
+    })
+    .catch(() => {
+      console.warn("[usage] usage event recording failed");
+    });
 }
 
 const credentials: LinqChannelCredentials = env.LINQ_CONNECTOR
@@ -128,7 +166,7 @@ const credentials: LinqChannelCredentials = env.LINQ_CONNECTOR
       },
     };
 
-export default linqChannel({
+export const linqChannelConfig = {
   credentials,
   events: {
     "action.result"(event, context) {
@@ -261,55 +299,72 @@ export default linqChannel({
       }
     },
   },
-  async onMessage(context, message) {
+  onMessage(context, message) {
+    const inboundContext = linqInboundContextSchema.safeParse(context);
+    const inboundMessage = linqInboundMessageSchema.safeParse(message);
+    if (!inboundContext.success || !inboundMessage.success) return null;
+    return createLinqOnMessage()(inboundContext.data, inboundMessage.data);
+  },
+} satisfies LinqChannelConfig;
+
+export function createLinqOnMessage() {
+  return async function onMessage(
+    context: LinqInboundContext,
+    message: LinqInboundMessage
+  ): Promise<LinqInboundResult> {
     if (message.author.isBot) return null;
 
-    const auth = defaultLinqAuth(message);
-    const authorUserName: unknown = message.author.userName;
-    const phoneNumber =
-      typeof authorUserName === "string"
-        ? normalizeAuthPhoneNumber(authorUserName)
-        : undefined;
+    const auth = defaultInboundLinqAuth(message);
+    const authorUserName = z.string().safeParse(message.author.userName);
+    const phoneNumber = authorUserName.success
+      ? normalizeAuthPhoneNumber(authorUserName.data)
+      : undefined;
     const verifiedUserId = phoneNumber
-      ? await findVerifiedAuthUserIdByPhoneNumber(phoneNumber)
+      ? await linqChannelDependencies.findVerifiedAuthUserIdByPhoneNumber(
+          phoneNumber
+        )
       : undefined;
     const principalId = verifiedUserId
       ? `better-auth:${verifiedUserId}`
       : auth.principalId;
     const scope = accessScopeForUser(principalId);
-    if (!isWorkspaceScopeEnforcementEnabled()) {
+    const attributes =
+      verifiedUserId && phoneNumber
+        ? { ...auth.attributes, phoneNumber, workspaceId: scope.workspaceId }
+        : { ...auth.attributes, workspaceId: scope.workspaceId };
+    if (!linqChannelDependencies.isWorkspaceScopeEnforcementEnabled()) {
       return {
         auth: {
           ...auth,
-          attributes: {
-            ...auth.attributes,
-            ...(verifiedUserId && phoneNumber ? { phoneNumber } : {}),
-            workspaceId: scope.workspaceId,
-          },
+          attributes,
           principalId,
         },
       };
     }
-    if (!(await verifyScopeAccess(scope))) {
+    if (!(await linqChannelDependencies.verifyScopeAccess(scope))) {
       return null;
     }
 
     if (verifiedUserId && phoneNumber) {
-      const identity = await findVerifiedUserByPhoneNumber(phoneNumber);
+      const identity =
+        await linqChannelDependencies.findVerifiedUserByPhoneNumber(
+          phoneNumber
+        );
       if (identity?.userId === verifiedUserId) {
         const provider = "linq";
-        const providerAccountId = env.LINQ_CONNECTOR;
-        const providerLineId = env.LINQ_PHONE_NUMBER;
-        const providerConversationId = context.thread.id;
+        const { connector: providerAccountId, phoneNumber: providerLineId } =
+          linqChannelDependencies.linqConfiguration();
+        const providerConversationId = context.thread?.id;
         if (providerAccountId && providerLineId && providerConversationId) {
-          let binding = await resolveConversationBinding({
-            provider,
-            providerAccountId,
-            providerConversationId,
-          });
+          let binding =
+            await linqChannelDependencies.resolveConversationBinding({
+              provider,
+              providerAccountId,
+              providerConversationId,
+            });
           let bindingCreated = false;
           if (!binding) {
-            binding = await createConversationBinding({
+            binding = await linqChannelDependencies.createConversationBinding({
               phoneIdentityId: identity.phoneIdentityId,
               platformLine: {
                 connectorId: providerAccountId,
@@ -325,11 +380,14 @@ export default linqChannel({
           if (binding && binding.workspaceId !== scope.workspaceId) return null;
           if (binding && bindingCreated) {
             try {
-              await recordConnectionInstallation(scope, {
-                authorizationSubject: providerLineId,
-                connectorId: providerAccountId,
-                provider: "linq",
-              });
+              await linqChannelDependencies.recordConnectionInstallation(
+                scope,
+                {
+                  authorizationSubject: providerLineId,
+                  connectorId: providerAccountId,
+                  provider: "linq",
+                }
+              );
             } catch {
               console.warn("[linq] connection installation recording failed");
             }
@@ -342,19 +400,34 @@ export default linqChannel({
     return {
       auth: {
         ...auth,
-        attributes: {
-          ...auth.attributes,
-          ...(verifiedUserId && phoneNumber ? { phoneNumber } : {}),
-          workspaceId: scope.workspaceId,
-        },
+        attributes,
         principalId,
       },
     };
-  },
-});
+  };
+}
+
+export default linqChannel(linqChannelConfig);
+
+function defaultInboundLinqAuth(
+  message: LinqInboundMessage
+): ReturnType<typeof defaultLinqAuth> {
+  const attributes: LinqInboundAttributes = {};
+  if (message.author.userName !== undefined) {
+    attributes.user_name = message.author.userName;
+  }
+  return {
+    attributes,
+    authenticator: "linq-message",
+    issuer: "linq",
+    principalId: `linq:${message.author.userId}`,
+    principalType: message.author.isBot ? "service" : "user",
+    subject: message.author.userId,
+  };
+}
 
 async function findVerifiedAuthUserIdByPhoneNumber(phoneNumber: string) {
-  const auth = await getAuth();
+  const auth = await linqChannelDependencies.getAuth();
   const context = await auth.$context;
   const user = await context.adapter.findOne({
     model: "user",

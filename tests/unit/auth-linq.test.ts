@@ -1,10 +1,10 @@
-import { getToken } from "@vercel/connect";
 import { APIError } from "better-auth/api";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 import { phoneOtpErrorMessage } from "@/app/sign-in/phone-auth-form";
+import { linqDeliveryDependencies } from "@/auth/linq";
 
-vi.mock("@vercel/connect", () => ({ getToken: vi.fn<typeof getToken>() }));
+const getTokenMock = vi.spyOn(linqDeliveryDependencies, "getToken");
 
 const linqApiErrorSchema = z.object({
   code: z.string(),
@@ -19,7 +19,7 @@ const linqApiErrorSchema = z.object({
 
 describe("Linq phone authentication", () => {
   afterEach(() => {
-    vi.restoreAllMocks();
+    vi.clearAllMocks();
     vi.unstubAllEnvs();
     vi.unstubAllGlobals();
   });
@@ -30,7 +30,7 @@ describe("Linq phone authentication", () => {
       "0123456789abcdefghijklmnopqrstuvwxyzABCD"
     );
     vi.stubEnv("LINQ_CONNECTOR", "linq/open-instinct");
-    vi.mocked(getToken).mockResolvedValue("test-token");
+    getTokenMock.mockResolvedValue("test-token");
     vi.stubGlobal(
       "fetch",
       vi.fn<typeof fetch>().mockResolvedValue(
@@ -53,7 +53,7 @@ describe("Linq phone authentication", () => {
     const error: unknown = await sendPhoneCode({
       code: "123456",
       to: "+12025550123",
-    }).catch((caught: unknown) => caught);
+    }).catch((cause: unknown) => cause);
 
     expect(error).toBeInstanceOf(APIError);
     if (!(error instanceof APIError)) throw new TypeError("Expected APIError");

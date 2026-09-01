@@ -1,8 +1,11 @@
 import { readFile, readdir } from "node:fs/promises";
 import { PGlite } from "@electric-sql/pglite";
 import { drizzle } from "drizzle-orm/pglite";
-import { afterEach, describe, expect, it, vi } from "vitest";
-import type { db } from "@/db";
+import { afterEach, describe, expect, it } from "vitest";
+import {
+  resetDatabaseForIntegrationTest,
+  setDatabaseForIntegrationTest,
+} from "@/db";
 import { accessScopeForUser } from "@/lib/access-scope";
 import * as schema from "../../db/schema";
 
@@ -10,8 +13,8 @@ const databases: PGlite[] = [];
 const manifest = {
   capabilities: ["calendar.read"],
   instructions: "Be helpful.",
-  modelPolicy: { tier: "standard" },
-  version: 1,
+  modelPolicy: { tier: "standard" as const },
+  version: 1 as const,
 };
 const bindingInput = {
   phoneIdentityId: "identity-alice",
@@ -23,8 +26,7 @@ const bindingInput = {
 };
 
 afterEach(async () => {
-  vi.doUnmock("@/db");
-  vi.resetModules();
+  resetDatabaseForIntegrationTest();
   await Promise.all(databases.splice(0).map((database) => database.close()));
 });
 
@@ -209,10 +211,8 @@ async function loadService() {
       ('identity-revoked', 'alice', 'v1.test.test.test', 'revoked-phone', '2026-01-01T00:00:00.000Z');
     UPDATE phone_identities SET status = 'revoked' WHERE id = 'identity-revoked';
   `);
-  const pgliteDatabase = drizzle(client, { schema });
-  // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- adapter-compatible integration test double
-  const database = pgliteDatabase as unknown as typeof db;
-  vi.doMock("@/db", () => ({ ...schema, db: database }));
+  const database = drizzle(client, { schema });
+  setDatabaseForIntegrationTest(database);
   const agents = await import("@/db/services/agents");
   const conversations = await import("@/db/services/channel-conversations");
   const scope = await import("@/db/services/scope");

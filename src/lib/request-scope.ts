@@ -5,16 +5,31 @@ import { accessScopeForUser, type AccessScope } from "@/lib/access-scope";
 import { verifyScopeAccess } from "@/db/services/scope";
 import { isWorkspaceScopeEnforcementEnabled } from "@/lib/env";
 
-export const requireRequestScope = cache(async (): Promise<AccessScope> => {
-  const session = await getAuthSession(await headers());
-  if (!session) throw new UnauthenticatedError();
-  const scope = accessScopeForUser(`better-auth:${session.user.id}`);
-  if (!isWorkspaceScopeEnforcementEnabled()) return scope;
+export const requestScopeDependencies = {
+  getAuthSession,
+  headers,
+  isWorkspaceScopeEnforcementEnabled,
+  verifyScopeAccess,
+};
 
-  const verifiedScope = await verifyScopeAccess(scope);
-  if (!verifiedScope) throw new UnauthenticatedError();
-  return verifiedScope;
-});
+export function createRequireRequestScope(
+  dependencies = requestScopeDependencies
+) {
+  return cache(async (): Promise<AccessScope> => {
+    const session = await dependencies.getAuthSession(
+      await dependencies.headers()
+    );
+    if (!session) throw new UnauthenticatedError();
+    const scope = accessScopeForUser(`better-auth:${session.user.id}`);
+    if (!dependencies.isWorkspaceScopeEnforcementEnabled()) return scope;
+
+    const verifiedScope = await dependencies.verifyScopeAccess(scope);
+    if (!verifiedScope) throw new UnauthenticatedError();
+    return verifiedScope;
+  });
+}
+
+export const requireRequestScope = createRequireRequestScope();
 
 export class UnauthenticatedError extends Error {
   constructor() {

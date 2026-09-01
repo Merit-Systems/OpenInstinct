@@ -1,16 +1,21 @@
 import { readFile, readdir } from "node:fs/promises";
 import { PGlite } from "@electric-sql/pglite";
 import { drizzle } from "drizzle-orm/pglite";
-import { afterEach, describe, expect, it, vi } from "vitest";
-import type { db } from "@/db";
-import { agentManifestContentDigest } from "@/lib/agent-manifest";
+import { afterEach, describe, expect, it } from "vitest";
+import {
+  resetDatabaseForIntegrationTest,
+  setDatabaseForIntegrationTest,
+} from "@/db";
+import {
+  agentManifestContentDigest,
+  agentManifestSchema,
+} from "@/lib/agent-manifest";
 import * as schema from "../../db/schema";
 
 const databases: PGlite[] = [];
 
 afterEach(async () => {
-  vi.doUnmock("@/db");
-  vi.resetModules();
+  resetDatabaseForIntegrationTest();
   await Promise.all(databases.splice(0).map((database) => database.close()));
 });
 
@@ -108,12 +113,13 @@ describe("workspace-owned agents", () => {
     const { agents, alice } = await loadAgentsService();
     const agent = await agents.createAgent(alice, { slug: "assistant" });
 
-    await expect(
-      agents.createRevision(alice, agent.id, {
-        ...manifest,
-        capabilities: [42],
-      })
-    ).rejects.toThrow(/expected string/i);
+    const invalidManifest = agentManifestSchema.safeParse({
+      capabilities: [42],
+      instructions: "Be helpful.",
+      modelPolicy: { tier: "standard" },
+      version: 1,
+    });
+    expect(invalidManifest.success).toBe(false);
     await expect(
       agents.createRevision(alice, agent.id, { ...manifest, instructions: "" })
     ).rejects.toThrow(/too small/i);
@@ -163,18 +169,16 @@ describe("workspace-owned agents", () => {
 const manifest = {
   capabilities: ["calendar.read"],
   instructions: "Be helpful.",
-  modelPolicy: { tier: "standard" },
-  version: 1,
+  modelPolicy: { tier: "standard" as const },
+  version: 1 as const,
 };
 
 async function loadAgentsService() {
   const client = new PGlite();
   databases.push(client);
   await applyAllMigrations(client);
-  const pgliteDatabase = drizzle(client, { schema });
-  // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- adapter-compatible integration test double
-  const database = pgliteDatabase as unknown as typeof db;
-  vi.doMock("@/db", () => ({ ...schema, db: database }));
+  const database = drizzle(client, { schema });
+  setDatabaseForIntegrationTest(database);
   const agents = await import("@/db/services/agents");
   const scope = await import("@/db/services/scope");
   const alice = { userId: "alice", workspaceId: "workspace:alice" };

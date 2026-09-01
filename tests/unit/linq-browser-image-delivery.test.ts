@@ -1,21 +1,17 @@
 /* oxlint-disable vitest/require-mock-type-parameters -- The hoisted storage fake is configured per test. */
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import * as BrowserImageServer from "@/lib/browser-images/server";
+import { prepareLinqBrowserImageDelivery } from "../../agent/lib/linq-browser-image-delivery";
 
 const firstId = "0d01e667-d128-4bb7-a248-1ae21db72f4f";
 const secondId = "206c3a7e-c0b8-4317-9e34-552cff646673";
-const mocks = vi.hoisted(() => ({ readImage: vi.fn() }));
-
-vi.mock("@/lib/browser-images/server", () => ({
-  readBrowserImageBytes: mocks.readImage,
-}));
-
-import { prepareLinqBrowserImageDelivery } from "../../agent/lib/linq-browser-image-delivery";
+const readImageMock = vi.spyOn(BrowserImageServer, "readBrowserImageBytes");
 
 const scope = { userId: "user-1", workspaceId: "workspace-1" };
 
 beforeEach(() => {
   vi.clearAllMocks();
-  mocks.readImage.mockImplementation(async (_scope: unknown, id: string) =>
+  readImageMock.mockImplementation(async (_scope, id) =>
     id === firstId
       ? {
           bytes: new Uint8Array([1, 2, 3]),
@@ -40,7 +36,7 @@ describe("Linq browser image delivery", () => {
       scope,
     });
 
-    expect(mocks.readImage).toHaveBeenCalledExactlyOnceWith(scope, firstId, {
+    expect(readImageMock).toHaveBeenCalledExactlyOnceWith(scope, firstId, {
       rootSessionId: "root-session",
       signal: undefined,
     });
@@ -82,6 +78,6 @@ describe("Linq browser image delivery", () => {
       files: [],
       markdown,
     });
-    expect(mocks.readImage).not.toHaveBeenCalled();
+    expect(readImageMock).not.toHaveBeenCalled();
   });
 });

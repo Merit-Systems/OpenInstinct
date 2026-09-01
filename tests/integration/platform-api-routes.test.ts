@@ -2,15 +2,35 @@
 import { readFile, readdir } from "node:fs/promises";
 import { PGlite } from "@electric-sql/pglite";
 import { drizzle } from "drizzle-orm/pglite";
-import { afterEach, describe, expect, it, vi } from "vitest";
-import type { db } from "@/db";
+import { afterEach, describe, expect, it } from "vitest";
+import { z } from "zod";
+import {
+  resetDatabaseForIntegrationTest,
+  setDatabaseForIntegrationTest,
+} from "@/db";
+import {
+  resetScopeEnforcementForIntegrationTest,
+  setScopeEnforcementForIntegrationTest,
+} from "@/db/services/scope";
+import {
+  resetWorkspaceScopeEnforcementForIntegrationTest,
+  setWorkspaceScopeEnforcementForIntegrationTest,
+} from "@/lib/env";
 import * as schema from "../../db/schema";
 
 const databases: PGlite[] = [];
+const agentResponseSchema = z.object({ data: z.object({ id: z.string() }) });
+type JsonValue =
+  | boolean
+  | null
+  | number
+  | string
+  | readonly JsonValue[]
+  | { readonly [key: string]: JsonValue };
 afterEach(async () => {
-  vi.doUnmock("@/db");
-  vi.doUnmock("@/lib/env");
-  vi.resetModules();
+  resetDatabaseForIntegrationTest();
+  resetScopeEnforcementForIntegrationTest();
+  resetWorkspaceScopeEnforcementForIntegrationTest();
   await Promise.all(databases.splice(0).map((database) => database.close()));
 });
 
@@ -85,10 +105,9 @@ describe("/v1 platform API", () => {
       }),
       context
     );
-    const revisionId = ((await first.json()) as { data: { id: string } }).data
-      .id;
+    const revisionId = agentResponseSchema.parse(await first.json()).data.id;
     expect(first.status).toBe(201);
-    expect(((await replay.json()) as { data: { id: string } }).data.id).toBe(
+    expect(agentResponseSchema.parse(await replay.json()).data.id).toBe(
       revisionId
     );
     expect(
@@ -196,8 +215,7 @@ describe("/v1 platform API", () => {
       }),
       { params: Promise.resolve({ agentId: id }) }
     );
-    const revisionId = ((await revision.json()) as { data: { id: string } })
-      .data.id;
+    const revisionId = agentResponseSchema.parse(await revision.json()).data.id;
     const agentsService = await import("@/db/services/agents");
     await agentsService.archiveAgent(api.alice, id);
     expect(
@@ -262,8 +280,8 @@ describe("/v1 platform API", () => {
     );
     expect(first.status).toBe(201);
     expect(replay.status).toBe(201);
-    const firstBody = (await first.json()) as { data: { id: string } };
-    const replayBody = (await replay.json()) as { data: { id: string } };
+    const firstBody = agentResponseSchema.parse(await first.json());
+    const replayBody = agentResponseSchema.parse(await replay.json());
     expect(replayBody.data.id).toBe(firstBody.data.id);
     expect(
       (await api.agents.GET(request("/v1/agents", api.agentKey))).status
@@ -307,16 +325,19 @@ describe("/v1 platform API", () => {
 function request(
   path: string,
   key?: string,
-  body?: unknown,
-  headers: Record<string, string> = {}
+  body?: JsonValue,
+  headers: Readonly<Record<string, string>> = {}
 ) {
+  const requestHeaders = new Headers();
+  if (key) requestHeaders.set("authorization", `Bearer ${key}`);
+  if (body !== undefined)
+    requestHeaders.set("content-type", "application/json");
+  for (const [name, value] of Object.entries(headers)) {
+    requestHeaders.set(name, value);
+  }
   return new Request(`http://test${path}`, {
     method: body === undefined ? "GET" : "POST",
-    headers: {
-      ...(key ? { authorization: `Bearer ${key}` } : {}),
-      ...(body === undefined ? {} : { "content-type": "application/json" }),
-      ...headers,
-    },
+    headers: requestHeaders,
     body: body === undefined ? undefined : JSON.stringify(body),
   });
 }
@@ -341,18 +362,17 @@ async function createAgent(
       { "idempotency-key": idempotencyKey }
     )
   );
-  return ((await response.json()) as { data: { id: string } }).data.id;
+  return agentResponseSchema.parse(await response.json()).data.id;
 }
 
 async function loadApi(enforcementEnabled = false) {
   const client = new PGlite();
   databases.push(client);
   await applyAllMigrations(client);
-  const database = drizzle(client, { schema }) as unknown as typeof db;
-  vi.doMock("@/db", () => ({ ...schema, db: database }));
-  vi.doMock("@/lib/env", () => ({
-    isWorkspaceScopeEnforcementEnabled: () => enforcementEnabled,
-  }));
+  const database = drizzle(client, { schema });
+  setDatabaseForIntegrationTest(database);
+  setScopeEnforcementForIntegrationTest(() => enforcementEnabled);
+  setWorkspaceScopeEnforcementForIntegrationTest(() => enforcementEnabled);
   const scope = await import("@/db/services/scope");
   const credentials = await import("@/db/services/api-credentials");
   const alice = { userId: "alice", workspaceId: "workspace:alice" };

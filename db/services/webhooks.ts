@@ -34,11 +34,12 @@ const endpointInputSchema = z.object({
   url: z.string().trim().min(1).max(2048),
 });
 type Executor = typeof db | Parameters<Parameters<typeof db.transaction>[0]>[0];
+type WebhookEndpointInput = z.input<typeof endpointInputSchema>;
 class WebhookUrlRejectedError extends Error {}
 
 export async function registerWebhookEndpoint(
   scope: AccessScope,
-  input: unknown
+  input: WebhookEndpointInput
 ) {
   const parsed = endpointInputSchema.parse(input);
   const url = requirePublicHttpsUrl(parsed.url);
@@ -277,9 +278,14 @@ async function fanOutWebhookEvents() {
               eq(webhookEndpoints.status, "active")
             )
           )
-      ).filter((endpoint) =>
-        subscribedTo(endpoint.subscribedEvents, event.type)
-      );
+      ).filter((endpoint) => {
+        const subscribedEvents = z
+          .array(z.string())
+          .safeParse(endpoint.subscribedEvents);
+        return subscribedEvents.success
+          ? subscribedTo(subscribedEvents.data, event.type)
+          : false;
+      });
       if (endpoints.length > 0) {
         await transaction.insert(webhookDeliveries).values(
           endpoints.map((endpoint) => ({
@@ -397,16 +403,13 @@ function fetchWithTimeout(
   });
 }
 
-function subscribedTo(value: unknown, type: string) {
-  return Array.isArray(value) && value.some((event) => event === type);
+function subscribedTo(value: readonly string[], type: string) {
+  return value.some((event) => event === type);
 }
 
 function assertSafePayload(payload: Record<string, string>) {
-  for (const [key, value] of Object.entries(payload)) {
-    if (
-      typeof value !== "string" ||
-      /secret|phone|password|token|credential/i.test(key)
-    )
+  for (const key of Object.keys(payload)) {
+    if (/secret|phone|password|token|credential/i.test(key))
       throw new Error(
         "Webhook payloads may only contain identifier and type fields."
       );

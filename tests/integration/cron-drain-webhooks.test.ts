@@ -1,13 +1,11 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { drainWebhookDeliveries as DrainWebhookDeliveries } from "@/db/services/webhooks";
+import { createDrainWebhooksRoute } from "@/app/api/cron/drain-webhooks/route";
 
 const drainWebhookDeliveries = vi.fn<typeof DrainWebhookDeliveries>();
 
 afterEach(() => {
   vi.clearAllMocks();
-  vi.doUnmock("@/db/services/webhooks");
-  vi.resetModules();
-  vi.stubEnv("CRON_SECRET", undefined);
 });
 
 describe("GET /api/cron/drain-webhooks", () => {
@@ -87,7 +85,11 @@ describe("GET /api/cron/drain-webhooks", () => {
 });
 
 async function loadRoute(secret?: string) {
-  vi.stubEnv("CRON_SECRET", secret);
-  vi.doMock("@/db/services/webhooks", () => ({ drainWebhookDeliveries }));
-  return import("@/app/api/cron/drain-webhooks/route");
+  return {
+    GET: createDrainWebhooksRoute({
+      cronSecret: secret,
+      drain: drainWebhookDeliveries,
+    }),
+    maxDuration: 300,
+  };
 }

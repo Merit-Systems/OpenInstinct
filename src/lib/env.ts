@@ -108,8 +108,22 @@ export const localPhoneAuthBypassEnabled =
     authHostname === "127.0.0.1" ||
     authHostname === "[::1]");
 
+let workspaceScopeEnforcementEnabled = () =>
+  env.WORKSPACE_SCOPE_ENFORCEMENT === "enforce";
+
 export function isWorkspaceScopeEnforcementEnabled() {
-  return env.WORKSPACE_SCOPE_ENFORCEMENT === "enforce";
+  return workspaceScopeEnforcementEnabled();
+}
+
+export function setWorkspaceScopeEnforcementForIntegrationTest(
+  isEnabled: typeof isWorkspaceScopeEnforcementEnabled
+) {
+  workspaceScopeEnforcementEnabled = isEnabled;
+}
+
+export function resetWorkspaceScopeEnforcementForIntegrationTest() {
+  workspaceScopeEnforcementEnabled = () =>
+    env.WORKSPACE_SCOPE_ENFORCEMENT === "enforce";
 }
 
 function hasValue(value: string | undefined) {

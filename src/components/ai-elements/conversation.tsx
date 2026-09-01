@@ -12,10 +12,20 @@ import {
   useSyncExternalStore,
 } from "react";
 import { StickToBottom, useStickToBottomContext } from "use-stick-to-bottom";
+import { z } from "zod";
 
 export type ConversationProps = ComponentProps<typeof StickToBottom> & {
   scrollRestorationKey?: string;
 };
+type ConversationRenderChild = Extract<
+  NonNullable<ConversationProps["children"]>,
+  (...args: never[]) => React.ReactNode
+>;
+
+const scrollPositionSchema = z.object({
+  atBottom: z.boolean(),
+  scrollTop: z.number(),
+});
 
 export const Conversation = ({
   children,
@@ -23,33 +33,44 @@ export const Conversation = ({
   initial,
   scrollRestorationKey,
   ...props
-}: ConversationProps) => (
-  <StickToBottom
-    className={cn("relative flex-1 overflow-y-hidden", className)}
-    initial={initial ?? (scrollRestorationKey === undefined ? "smooth" : false)}
-    resize="smooth"
-    role="log"
-    {...props}
-  >
-    {typeof children === "function" ? (
-      (context) => (
+}: ConversationProps) => {
+  const parsedRenderer = z.function().safeParse(children);
+  // SAFETY: z.function established that this branch contains the render-child member of the children union.
+  const renderChild = parsedRenderer.success
+    ? (parsedRenderer.data as ConversationRenderChild)
+    : undefined;
+  return (
+    <StickToBottom
+      className={cn("relative flex-1 overflow-y-hidden", className)}
+      initial={
+        initial ?? (scrollRestorationKey === undefined ? "smooth" : false)
+      }
+      resize="smooth"
+      role="log"
+      {...props}
+    >
+      {renderChild ? (
+        (context) => (
+          <>
+            {renderChild(context)}
+            {scrollRestorationKey === undefined ? null : (
+              <ConversationScrollRestoration
+                storageKey={scrollRestorationKey}
+              />
+            )}
+          </>
+        )
+      ) : (
         <>
-          {children(context)}
+          {children}
           {scrollRestorationKey === undefined ? null : (
             <ConversationScrollRestoration storageKey={scrollRestorationKey} />
           )}
         </>
-      )
-    ) : (
-      <>
-        {children}
-        {scrollRestorationKey === undefined ? null : (
-          <ConversationScrollRestoration storageKey={scrollRestorationKey} />
-        )}
-      </>
-    )}
-  </StickToBottom>
-);
+      )}
+    </StickToBottom>
+  );
+};
 
 function ConversationScrollRestoration({
   storageKey,
@@ -115,14 +136,8 @@ function readScrollPosition(value: string | null):
   | undefined {
   if (value === null) return undefined;
   try {
-    const parsed = JSON.parse(value) as {
-      atBottom?: unknown;
-      scrollTop?: unknown;
-    };
-    return typeof parsed.atBottom === "boolean" &&
-      typeof parsed.scrollTop === "number"
-      ? { atBottom: parsed.atBottom, scrollTop: parsed.scrollTop }
-      : undefined;
+    const parsed = scrollPositionSchema.safeParse(JSON.parse(value));
+    return parsed.success ? parsed.data : undefined;
   } catch {
     return undefined;
   }

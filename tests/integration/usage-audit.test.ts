@@ -1,8 +1,15 @@
 import { readFile, readdir } from "node:fs/promises";
 import { PGlite } from "@electric-sql/pglite";
 import { drizzle } from "drizzle-orm/pglite";
-import { afterEach, describe, expect, it, vi } from "vitest";
-import type { db } from "@/db";
+import { afterEach, describe, expect, it } from "vitest";
+import {
+  resetDatabaseForIntegrationTest,
+  setDatabaseForIntegrationTest,
+} from "@/db";
+import {
+  resetWorkspaceScopeEnforcementForIntegrationTest,
+  setWorkspaceScopeEnforcementForIntegrationTest,
+} from "@/lib/env";
 import * as schema from "../../db/schema";
 
 const databases: PGlite[] = [];
@@ -10,9 +17,8 @@ let enforcementEnabled = false;
 
 afterEach(async () => {
   enforcementEnabled = false;
-  vi.doUnmock("@/db");
-  vi.doUnmock("@/lib/env");
-  vi.resetModules();
+  resetDatabaseForIntegrationTest();
+  resetWorkspaceScopeEnforcementForIntegrationTest();
   await Promise.all(databases.splice(0).map((database) => database.close()));
 });
 
@@ -150,13 +156,9 @@ async function loadServices() {
   const client = new PGlite();
   databases.push(client);
   await applyAllMigrations(client);
-  const pgliteDatabase = drizzle(client, { schema });
-  // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- PGlite is adapter-compatible.
-  const database = pgliteDatabase as unknown as typeof db;
-  vi.doMock("@/db", () => ({ ...schema, db: database }));
-  vi.doMock("@/lib/env", () => ({
-    isWorkspaceScopeEnforcementEnabled: () => enforcementEnabled,
-  }));
+  const database = drizzle(client, { schema });
+  setDatabaseForIntegrationTest(database);
+  setWorkspaceScopeEnforcementForIntegrationTest(() => enforcementEnabled);
   const scope = await import("@/db/services/scope");
   const usage = await import("@/db/services/usage");
   const audit = await import("@/db/services/audit");

@@ -14,6 +14,10 @@ interface ConnectionInstallationKey {
   readonly connectorId: string;
   readonly provider: ConnectionInstallationProvider;
 }
+interface ConnectionInstallationUpdate {
+  scopes?: string[];
+  updatedAt: string;
+}
 
 function installationConditions(
   scope: AccessScope,
@@ -33,6 +37,8 @@ export async function recordConnectionInstallation(
 ) {
   await ensureScope(scope);
   const now = new Date().toISOString();
+  const update: ConnectionInstallationUpdate = { updatedAt: now };
+  if (input.scopes) update.scopes = [...input.scopes];
   const [installation] = await db
     .insert(connectionInstallations)
     .values({
@@ -43,10 +49,7 @@ export async function recordConnectionInstallation(
       workspaceId: scope.workspaceId,
     })
     .onConflictDoUpdate({
-      set: {
-        ...(input.scopes ? { scopes: [...input.scopes] } : {}),
-        updatedAt: now,
-      },
+      set: update,
       target: [
         connectionInstallations.workspaceId,
         connectionInstallations.provider,

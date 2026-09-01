@@ -6,9 +6,10 @@ const t = initTRPC.context<TRPCContext>().create();
 
 export const createTRPCRouter = t.router;
 export const protectedProcedure = t.procedure;
+export const adminProcedureDependencies = { requireAdminScopeFor };
 export const adminProcedure = t.procedure.use(async ({ ctx, next }) => {
   try {
-    await requireAdminScopeFor(ctx.scope);
+    await adminProcedureDependencies.requireAdminScopeFor(ctx.scope);
   } catch (error) {
     if (error instanceof AdminNotFoundError) {
       throw new TRPCError({ code: "NOT_FOUND" });

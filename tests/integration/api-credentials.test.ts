@@ -2,16 +2,17 @@
 import { readFile, readdir } from "node:fs/promises";
 import { PGlite } from "@electric-sql/pglite";
 import { drizzle } from "drizzle-orm/pglite";
-import { afterEach, describe, expect, it, vi } from "vitest";
-import type { db } from "@/db";
+import { afterEach, describe, expect, it } from "vitest";
+import {
+  resetDatabaseForIntegrationTest,
+  setDatabaseForIntegrationTest,
+} from "@/db";
 import * as schema from "../../db/schema";
 
 const databases: PGlite[] = [];
 
 afterEach(async () => {
-  vi.doUnmock("@/db");
-  vi.doUnmock("@/lib/env");
-  vi.resetModules();
+  resetDatabaseForIntegrationTest();
   await Promise.all(databases.splice(0).map((database) => database.close()));
 });
 
@@ -106,11 +107,8 @@ async function loadService() {
   const client = new PGlite();
   databases.push(client);
   await applyAllMigrations(client);
-  const database = drizzle(client, { schema }) as unknown as typeof db;
-  vi.doMock("@/db", () => ({ ...schema, db: database }));
-  vi.doMock("@/lib/env", () => ({
-    isWorkspaceScopeEnforcementEnabled: () => false,
-  }));
+  const database = drizzle(client, { schema });
+  setDatabaseForIntegrationTest(database);
   const credentials = await import("@/db/services/api-credentials");
   const scope = await import("@/db/services/scope");
   const alice = { userId: "alice", workspaceId: "workspace:alice" };

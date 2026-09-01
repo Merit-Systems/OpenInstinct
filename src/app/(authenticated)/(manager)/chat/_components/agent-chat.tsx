@@ -502,12 +502,12 @@ function PendingThinking() {
   );
 }
 
-function toErrorMessage(error: unknown): string {
-  if (!(error instanceof Error)) return "Unable to complete the request.";
-  if (/<!doctype html|<html[\s>]/i.test(error.message)) {
+function toErrorMessage(cause: unknown): string {
+  if (!(cause instanceof Error)) return "Unable to complete the request.";
+  if (/<!doctype html|<html[\s>]/i.test(cause.message)) {
     return "The agent runtime is unavailable. Try again in a moment.";
   }
-  return error.message;
+  return cause.message;
 }
 
 function chatTitle(message: PromptInputMessage) {

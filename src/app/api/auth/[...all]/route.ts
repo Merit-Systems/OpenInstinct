@@ -1,16 +1,28 @@
 import { toNextJsHandler } from "better-auth/next-js";
 import { getAuth } from "@/auth";
 
-let handlersPromise: Promise<ReturnType<typeof toNextJsHandler>> | undefined;
+export const authRouteDependencies = {
+  async loadHandlers() {
+    return toNextJsHandler(await getAuth());
+  },
+};
+
+let handlersPromise:
+  | ReturnType<typeof authRouteDependencies.loadHandlers>
+  | undefined;
 
 function getHandlers() {
-  handlersPromise ??= getAuth()
-    .then((auth) => toNextJsHandler(auth))
-    .catch((error: unknown) => {
-      handlersPromise = undefined;
-      throw error;
-    });
+  handlersPromise ??= loadHandlersWithRetry();
   return handlersPromise;
+}
+
+async function loadHandlersWithRetry() {
+  try {
+    return await authRouteDependencies.loadHandlers();
+  } catch (error) {
+    handlersPromise = undefined;
+    throw error;
+  }
 }
 
 export async function GET(request: Request) {

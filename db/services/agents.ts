@@ -11,7 +11,10 @@ import { agentRevisions, agents, db } from "@/db";
 import { recordAuditEvent } from "./audit";
 import { emitWebhookEvent } from "./webhooks";
 
-export async function createAgent(scope: AccessScope, input: unknown) {
+export async function createAgent(
+  scope: AccessScope,
+  input: z.input<typeof agentInputSchema>
+) {
   const parsedInput = agentInputSchema.parse(input);
   const now = new Date().toISOString();
   const [agent] = await db
@@ -31,7 +34,7 @@ export async function createAgent(scope: AccessScope, input: unknown) {
 export async function createRevision(
   scope: AccessScope,
   agentId: string,
-  manifest: unknown
+  manifest: z.input<typeof agentManifestSchema>
 ) {
   const parsedManifest = agentManifestSchema.parse(manifest);
   const canonicalManifest = canonicalAgentManifest(parsedManifest);

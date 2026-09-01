@@ -1,10 +1,18 @@
 import { eveChannel } from "eve/channels/eve";
 import { ForbiddenError, UnauthenticatedError } from "eve/channels/auth";
+import { z } from "zod";
 import { isSessionOwned } from "@/db/services/sessions";
 import { verifyScopeAccess } from "@/db/services/scope";
 import { accessScopeForUser, type AccessScope } from "@/lib/access-scope";
 import { getAuthSession } from "@/auth/session";
 import { isWorkspaceScopeEnforcementEnabled } from "@/lib/env";
+
+export const eveChannelDependencies = {
+  getAuthSession,
+  isSessionOwned,
+  isWorkspaceScopeEnforcementEnabled,
+  verifyScopeAccess,
+};
 
 export default eveChannel({
   auth: [
@@ -44,26 +52,28 @@ function sessionIdFromPath(pathname: string) {
 }
 
 async function requestIdentityFromRequest(request: Request) {
-  const session = await getAuthSession(request.headers);
-  const phoneNumber = session?.user.phoneNumber;
-  if (!session || typeof phoneNumber !== "string") return;
+  const session = await eveChannelDependencies.getAuthSession(request.headers);
+  if (!session) return;
+  const phoneNumber = z.string().safeParse(session.user.phoneNumber);
+  if (!phoneNumber.success) return;
 
   const scope = accessScopeForUser(`better-auth:${session.user.id}`);
-  if (!isWorkspaceScopeEnforcementEnabled()) {
-    return { phoneNumber, scope };
+  if (!eveChannelDependencies.isWorkspaceScopeEnforcementEnabled()) {
+    return { phoneNumber: phoneNumber.data, scope };
   }
 
-  const verifiedScope = await verifyScopeAccess(scope);
+  const verifiedScope = await eveChannelDependencies.verifyScopeAccess(scope);
   if (!verifiedScope) return;
   return {
-    phoneNumber,
+    phoneNumber: phoneNumber.data,
     scope: verifiedScope,
   };
 }
 
 async function waitForSessionOwnership(scope: AccessScope, sessionId: string) {
   for (let attempt = 0; attempt < 5; attempt += 1) {
-    if (await isSessionOwned(scope, sessionId)) return true;
+    if (await eveChannelDependencies.isSessionOwned(scope, sessionId))
+      return true;
     await new Promise((resolve) => setTimeout(resolve, 50));
   }
   return false;

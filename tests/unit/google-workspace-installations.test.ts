@@ -1,96 +1,128 @@
-import type * as EnvModule from "@/lib/env";
-import type * as VercelConnect from "@vercel/connect";
-import { beforeEach, describe, expect, it, vi } from "vitest";
-
-const mocks = vi.hoisted(() => ({
-  deleteRevokedConnectionInstallation: vi.fn<() => Promise<unknown>>(),
-  findConnectionInstallation: vi.fn<() => Promise<unknown>>(),
-  getTokenResponse: vi.fn<() => Promise<unknown>>(),
-  recordConnectionInstallation: vi.fn<() => Promise<unknown>>(),
-  revokeConnectionInstallation: vi.fn<() => Promise<unknown>>(),
-  scopeEnforcementEnabled: vi.fn<() => boolean>(),
-}));
-
-vi.mock("@vercel/connect", async (importOriginal) => ({
-  ...(await importOriginal<typeof VercelConnect>()),
-  getTokenResponse: mocks.getTokenResponse,
-  revokeToken: vi.fn<() => Promise<void>>(),
-  startAuthorization: vi
-    .fn<() => Promise<{ url: string }>>()
-    .mockResolvedValue({ url: "https://connect.test" }),
-}));
-vi.mock("@/db/services/connection-installations", () => ({
-  deleteRevokedConnectionInstallation:
-    mocks.deleteRevokedConnectionInstallation,
-  findConnectionInstallation: mocks.findConnectionInstallation,
-  recordConnectionInstallation: mocks.recordConnectionInstallation,
-  revokeConnectionInstallation: mocks.revokeConnectionInstallation,
-}));
-vi.mock("@/lib/env", async (importOriginal) => ({
-  ...(await importOriginal<typeof EnvModule>()),
-  isWorkspaceScopeEnforcementEnabled: mocks.scopeEnforcementEnabled,
-}));
-
-const {
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import {
   disconnectGoogleWorkspace,
   getGoogleWorkspaceConnection,
+  googleWorkspaceInstallationDependencies,
+  googleWorkspaceServerDependencies,
   startGoogleWorkspaceAuthorization,
-} = await import("@/lib/google-workspace/server");
+} from "@/lib/google-workspace/server";
+
+const deleteRevokedConnectionInstallation =
+  vi.fn<
+    typeof googleWorkspaceInstallationDependencies.deleteRevokedConnectionInstallation
+  >();
+const findConnectionInstallation =
+  vi.fn<
+    typeof googleWorkspaceInstallationDependencies.findConnectionInstallation
+  >();
+const getTokenResponse =
+  vi.fn<typeof googleWorkspaceServerDependencies.getTokenResponse>();
+const recordConnectionInstallation =
+  vi.fn<
+    typeof googleWorkspaceInstallationDependencies.recordConnectionInstallation
+  >();
+const revokeConnectionInstallation =
+  vi.fn<
+    typeof googleWorkspaceInstallationDependencies.revokeConnectionInstallation
+  >();
+const revokeToken =
+  vi.fn<typeof googleWorkspaceServerDependencies.revokeToken>();
+const startAuthorization =
+  vi.fn<typeof googleWorkspaceServerDependencies.startAuthorization>();
+const isWorkspaceScopeEnforcementEnabled =
+  vi.fn<
+    typeof googleWorkspaceInstallationDependencies.isWorkspaceScopeEnforcementEnabled
+  >();
+const originalInstallationDependencies = {
+  ...googleWorkspaceInstallationDependencies,
+};
+const originalServerDependencies = { ...googleWorkspaceServerDependencies };
 const scope = { userId: "better-auth:alice", workspaceId: "workspace:alice" };
 
 beforeEach(() => {
   vi.clearAllMocks();
-  mocks.scopeEnforcementEnabled.mockReturnValue(true);
-  mocks.getTokenResponse.mockResolvedValue({
+  isWorkspaceScopeEnforcementEnabled.mockReturnValue(true);
+  getTokenResponse.mockResolvedValue({
     claims: { email: "alice@example.test" },
+    connector: { id: "connector-id", type: "oauth", uid: "google/test" },
+    expiresAt: 1_800_000_000_000,
+    token: "google-token",
   });
-  mocks.recordConnectionInstallation.mockResolvedValue({ status: "active" });
-  mocks.deleteRevokedConnectionInstallation.mockResolvedValue(false);
+  recordConnectionInstallation.mockResolvedValue(connectionInstallation());
+  deleteRevokedConnectionInstallation.mockResolvedValue(false);
+  revokeToken.mockResolvedValue(undefined);
+  startAuthorization.mockResolvedValue({
+    request: "request",
+    url: "https://connect.test",
+    verifier: "verifier",
+  });
+  Object.assign(googleWorkspaceInstallationDependencies, {
+    deleteRevokedConnectionInstallation,
+    findConnectionInstallation,
+    isWorkspaceScopeEnforcementEnabled,
+    recordConnectionInstallation,
+    revokeConnectionInstallation,
+  });
+  Object.assign(googleWorkspaceServerDependencies, {
+    getTokenResponse,
+    revokeToken,
+    startAuthorization,
+  });
+});
+
+afterEach(() => {
+  Object.assign(
+    googleWorkspaceInstallationDependencies,
+    originalInstallationDependencies
+  );
+  Object.assign(googleWorkspaceServerDependencies, originalServerDependencies);
 });
 
 describe("Google Workspace connection installations", () => {
   it("denies a revoked installation before requesting a token", async () => {
-    mocks.findConnectionInstallation.mockResolvedValue({ status: "revoked" });
+    findConnectionInstallation.mockResolvedValue(
+      connectionInstallation({ status: "revoked" })
+    );
 
     await expect(getGoogleWorkspaceConnection(scope)).resolves.toEqual({
       accountLabel: null,
       state: "disconnected",
     });
-    expect(mocks.getTokenResponse).not.toHaveBeenCalled();
+    expect(getTokenResponse).not.toHaveBeenCalled();
   });
 
   it("allows a missing record to bootstrap after a successful token lookup", async () => {
-    mocks.findConnectionInstallation.mockResolvedValue(undefined);
+    findConnectionInstallation.mockResolvedValue(undefined);
 
     await expect(getGoogleWorkspaceConnection(scope)).resolves.toMatchObject({
       state: "connected",
     });
-    expect(mocks.recordConnectionInstallation).toHaveBeenCalledWith(
+    expect(recordConnectionInstallation).toHaveBeenCalledWith(
       scope,
       expect.objectContaining({ provider: "google" })
     );
   });
 
   it("does not query installation records while enforcement is off", async () => {
-    mocks.scopeEnforcementEnabled.mockReturnValue(false);
+    isWorkspaceScopeEnforcementEnabled.mockReturnValue(false);
 
     await getGoogleWorkspaceConnection(scope);
 
-    expect(mocks.findConnectionInstallation).not.toHaveBeenCalled();
-    expect(mocks.recordConnectionInstallation).not.toHaveBeenCalled();
+    expect(findConnectionInstallation).not.toHaveBeenCalled();
+    expect(recordConnectionInstallation).not.toHaveBeenCalled();
   });
 
   it("clears a revoked installation when the user starts reconnecting", async () => {
     await startGoogleWorkspaceAuthorization(scope, "https://app.test/");
 
-    expect(mocks.deleteRevokedConnectionInstallation).toHaveBeenCalledWith(
+    expect(deleteRevokedConnectionInstallation).toHaveBeenCalledWith(
       scope,
       expect.objectContaining({ provider: "google" })
     );
   });
 
   it("supports the connect-disconnect-reconnect lifecycle", async () => {
-    mocks.findConnectionInstallation
+    findConnectionInstallation
       .mockResolvedValueOnce(undefined)
       .mockResolvedValueOnce(undefined);
 
@@ -103,14 +135,14 @@ describe("Google Workspace connection installations", () => {
       state: "connected",
     });
 
-    expect(mocks.revokeConnectionInstallation).toHaveBeenCalledOnce();
-    expect(mocks.deleteRevokedConnectionInstallation).toHaveBeenCalledOnce();
-    expect(mocks.recordConnectionInstallation).toHaveBeenCalledTimes(2);
+    expect(revokeConnectionInstallation).toHaveBeenCalledOnce();
+    expect(deleteRevokedConnectionInstallation).toHaveBeenCalledOnce();
+    expect(recordConnectionInstallation).toHaveBeenCalledTimes(2);
   });
 
   it("keeps a healthy connection usable when installation storage fails", async () => {
-    mocks.findConnectionInstallation.mockRejectedValue(new Error("database"));
-    mocks.recordConnectionInstallation.mockRejectedValue(new Error("database"));
+    findConnectionInstallation.mockRejectedValue(new Error("database"));
+    recordConnectionInstallation.mockRejectedValue(new Error("database"));
 
     await expect(getGoogleWorkspaceConnection(scope)).resolves.toMatchObject({
       state: "connected",
@@ -119,18 +151,33 @@ describe("Google Workspace connection installations", () => {
 
   it("records disconnect revocation only while enforcement is on", async () => {
     await disconnectGoogleWorkspace(scope);
-    expect(mocks.revokeConnectionInstallation).toHaveBeenCalledExactlyOnceWith(
+    expect(revokeConnectionInstallation).toHaveBeenCalledExactlyOnceWith(
       scope,
       expect.objectContaining({ provider: "google" })
     );
 
-    mocks.scopeEnforcementEnabled.mockReturnValue(false);
+    isWorkspaceScopeEnforcementEnabled.mockReturnValue(false);
     await disconnectGoogleWorkspace(scope);
   });
 
   it("does not fail a disconnect after Connect has revoked the token", async () => {
-    mocks.revokeConnectionInstallation.mockRejectedValue(new Error("database"));
+    revokeConnectionInstallation.mockRejectedValue(new Error("database"));
 
     await expect(disconnectGoogleWorkspace(scope)).resolves.toBeUndefined();
   });
 });
+
+function connectionInstallation({ status = "active" } = {}) {
+  return {
+    authorizationSubject: "google:alice",
+    connectorId: "google/test",
+    createdAt: "2026-09-01T00:00:00.000Z",
+    id: "installation-1",
+    provider: "google",
+    revokedAt: null,
+    scopes: ["https://www.googleapis.com/auth/gmail.readonly"],
+    status,
+    updatedAt: "2026-09-01T00:00:00.000Z",
+    workspaceId: "workspace:alice",
+  };
+}

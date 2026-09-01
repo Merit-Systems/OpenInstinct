@@ -15,7 +15,11 @@ let nextRouteUtilities: ReturnType<typeof loadNextRouteUtilities> | undefined;
 const getNextRouteUtilities = () =>
   (nextRouteUtilities ??= loadNextRouteUtilities());
 
-type RouteUtilityFunction = (value: string) => unknown;
+type RouteUtilityResult =
+  | boolean
+  | string
+  | { readonly interceptedRoute: string };
+type RouteUtilityFunction = (value: string) => RouteUtilityResult;
 
 const routeUtilityFunctionSchema = z.custom<RouteUtilityFunction>(
   (value) => value instanceof Function,

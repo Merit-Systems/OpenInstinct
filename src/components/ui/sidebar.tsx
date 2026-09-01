@@ -26,6 +26,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { PanelLeftIcon } from "lucide-react";
+import { z } from "zod";
 
 const SIDEBAR_COOKIE_NAME = "sidebar_state";
 const SIDEBAR_COOKIE_MAX_AGE = 60 * 60 * 24 * 7;
@@ -33,6 +34,10 @@ const SIDEBAR_WIDTH = "16rem";
 const SIDEBAR_WIDTH_MOBILE = "18rem";
 const SIDEBAR_WIDTH_ICON = "3rem";
 const SIDEBAR_KEYBOARD_SHORTCUT = "b";
+const sidebarStateUpdaterSchema = z.function({
+  input: [z.boolean()],
+  output: z.boolean(),
+});
 
 type SidebarContextProps = {
   state: "expanded" | "collapsed";
@@ -77,7 +82,10 @@ function SidebarProvider({
   const open = openProp ?? _open;
   const setOpen = React.useCallback(
     (value: boolean | ((value: boolean) => boolean)) => {
-      const openState = typeof value === "function" ? value(open) : value;
+      const booleanValue = z.boolean().safeParse(value);
+      const openState = booleanValue.success
+        ? booleanValue.data
+        : sidebarStateUpdaterSchema.parse(value)(open);
       if (setOpenProp) {
         setOpenProp(openState);
       } else {
@@ -133,6 +141,7 @@ function SidebarProvider({
       <div
         data-slot="sidebar-wrapper"
         style={
+          // SAFETY: CSSProperties omits repository-owned custom properties even though React passes them through.
           {
             "--sidebar-width": SIDEBAR_WIDTH,
             "--sidebar-width-icon": SIDEBAR_WIDTH_ICON,
@@ -191,6 +200,7 @@ function Sidebar({
           data-mobile="true"
           className="w-(--sidebar-width) bg-sidebar p-0 text-sidebar-foreground [&>button]:hidden"
           style={
+            // SAFETY: CSSProperties omits repository-owned custom properties even though React passes them through.
             {
               "--sidebar-width": SIDEBAR_WIDTH_MOBILE,
             } as React.CSSProperties
@@ -533,11 +543,11 @@ function SidebarMenuButton({
     return comp;
   }
 
-  if (typeof tooltip === "string") {
-    tooltip = {
-      children: tooltip,
-    };
-  }
+  const tooltipText = z.string().safeParse(tooltip);
+  // SAFETY: A failed string parse leaves only TooltipContent's object props in the declared union.
+  const tooltipProps = tooltipText.success
+    ? { children: tooltipText.data }
+    : (tooltip as React.ComponentProps<typeof TooltipContent>);
 
   return (
     <Tooltip>
@@ -546,7 +556,7 @@ function SidebarMenuButton({
         side="right"
         align="center"
         hidden={state !== "collapsed" || isMobile}
-        {...tooltip}
+        {...tooltipProps}
       />
     </Tooltip>
   );
@@ -628,6 +638,7 @@ function SidebarMenuSkeleton({
         className="h-4 max-w-(--skeleton-width) flex-1"
         data-sidebar="menu-skeleton-text"
         style={
+          // SAFETY: CSSProperties omits repository-owned custom properties even though React passes them through.
           {
             "--skeleton-width": width,
           } as React.CSSProperties

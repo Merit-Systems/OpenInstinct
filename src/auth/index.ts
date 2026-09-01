@@ -11,17 +11,35 @@ import { getInstallationSecrets } from "@/lib/installation-secrets";
 import { LinqDeliveryError, linqOtpFailure, sendLinqText } from "./linq";
 import { isE164PhoneNumber } from "./phone-number";
 
-let authPromise: ReturnType<typeof initializeAuth> | undefined;
+let authPromise: ReturnType<typeof createAuth> | undefined;
+
+export interface PhoneAuthDependencies {
+  readonly localPhoneAuthBypassEnabled: boolean;
+  recordVerifiedPhoneIdentity(input: {
+    readonly phoneNumber: string;
+    readonly userId: string;
+  }): Promise<void>;
+  sendPhoneCode(input: {
+    readonly code: string;
+    readonly to: string;
+  }): Promise<void>;
+}
 
 export function getAuth() {
-  authPromise ??= initializeAuth().catch((error: unknown) => {
-    authPromise = undefined;
-    throw error;
-  });
+  authPromise ??= initializeAuthWithRetry();
   return authPromise;
 }
 
-async function initializeAuth() {
+async function initializeAuthWithRetry() {
+  try {
+    return await createAuth();
+  } catch (error) {
+    authPromise = undefined;
+    throw error;
+  }
+}
+
+export async function createAuth() {
   const { betterAuthSecret } = await getInstallationSecrets();
   return betterAuth({
     appName: "Local Vault Assistant",
@@ -42,48 +60,55 @@ async function initializeAuth() {
       "/verify-email",
     ],
     plugins: [
-      phoneNumber({
-        allowedAttempts: 3,
-        expiresIn: 300,
-        phoneNumberValidator: isE164PhoneNumber,
-        requireVerification: true,
-        callbackOnVerification: async ({
-          phoneNumber: phoneNumberValue,
-          user,
-        }) => {
-          try {
-            await recordVerifiedPhoneIdentity({
-              phoneNumber: phoneNumberValue,
-              userId: user.id,
-            });
-          } catch (error) {
-            console.error(
-              "Failed to record verified phone identity.",
-              phoneIdentityErrorDiscriminator(error)
-            );
-          }
-        },
-        sendOTP: localPhoneAuthBypassEnabled
-          ? () => undefined
-          : ({ code, phoneNumber: to }) => sendPhoneCode({ code, to }),
-        signUpOnVerification: {
-          getTempEmail: (phoneNumberValue) =>
-            `phone-${createHash("sha256")
-              .update(phoneNumberValue)
-              .digest("hex")}@local-vault.invalid`,
-          getTempName: () => "Phone user",
-        },
-        verifyOTP: localPhoneAuthBypassEnabled
-          ? ({ phoneNumber: value }) => isE164PhoneNumber(value)
-          : undefined,
-      }),
+      phoneNumber(
+        createPhoneNumberOptions({
+          localPhoneAuthBypassEnabled,
+          async recordVerifiedPhoneIdentity(input) {
+            await recordVerifiedPhoneIdentity(input);
+          },
+          sendPhoneCode,
+        })
+      ),
     ],
     secret: betterAuthSecret,
   });
 }
 
-function phoneIdentityErrorDiscriminator(error: unknown) {
-  return error instanceof Error ? error.name : "UnknownError";
+export function createPhoneNumberOptions(
+  dependencies: PhoneAuthDependencies
+): Parameters<typeof phoneNumber>[0] {
+  return {
+    allowedAttempts: 3,
+    expiresIn: 300,
+    phoneNumberValidator: isE164PhoneNumber,
+    requireVerification: true,
+    callbackOnVerification: async ({ phoneNumber: phoneNumberValue, user }) => {
+      try {
+        await dependencies.recordVerifiedPhoneIdentity({
+          phoneNumber: phoneNumberValue,
+          userId: user.id,
+        });
+      } catch (error) {
+        console.error(
+          "Failed to record verified phone identity.",
+          error instanceof Error ? error.name : "UnknownError"
+        );
+      }
+    },
+    sendOTP: dependencies.localPhoneAuthBypassEnabled
+      ? () => undefined
+      : ({ code, phoneNumber: to }) => dependencies.sendPhoneCode({ code, to }),
+    signUpOnVerification: {
+      getTempEmail: (phoneNumberValue) =>
+        `phone-${createHash("sha256")
+          .update(phoneNumberValue)
+          .digest("hex")}@local-vault.invalid`,
+      getTempName: () => "Phone user",
+    },
+    verifyOTP: dependencies.localPhoneAuthBypassEnabled
+      ? ({ phoneNumber: value }) => isE164PhoneNumber(value)
+      : undefined,
+  };
 }
 
 export async function sendPhoneCode({
