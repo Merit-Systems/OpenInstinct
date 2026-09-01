@@ -5,6 +5,7 @@ import {
   browserBenchmarkLiveStatusSchema,
   type BrowserBenchmarkLiveStatus,
 } from "./live-status-schema.ts";
+import { nodeErrorCode } from "./node-error.ts";
 
 export type { BrowserBenchmarkLiveStatus } from "./live-status-schema.ts";
 
@@ -16,7 +17,7 @@ export async function readBrowserBenchmarkLiveStatus(path: string) {
       JSON.parse(await readFile(path, "utf8"))
     );
   } catch (error) {
-    if (errorCode(error) === "ENOENT") return null;
+    if (nodeErrorCode(error) === "ENOENT") return null;
     throw error;
   }
 }
@@ -64,12 +65,13 @@ export async function updateBrowserBenchmarkLiveStatus(
 async function withFileLock(path: string, action: () => Promise<void>) {
   const lockPath = `${path}.lock`;
   await mkdir(dirname(path), { recursive: true });
+  /* oxlint-disable eslint/no-await-in-loop -- Lock acquisition must retry sequentially against one filesystem path. */
   for (let attempt = 0; ; attempt += 1) {
     try {
       await mkdir(lockPath);
       break;
     } catch (error) {
-      if (errorCode(error) !== "EEXIST" || attempt >= 600) throw error;
+      if (nodeErrorCode(error) !== "EEXIST" || attempt >= 600) throw error;
       if (attempt % 100 === 99 && (await lockIsStale(lockPath))) {
         await rm(lockPath, { force: true, recursive: true });
       } else {
@@ -77,6 +79,7 @@ async function withFileLock(path: string, action: () => Promise<void>) {
       }
     }
   }
+  /* oxlint-enable eslint/no-await-in-loop */
   try {
     await action();
   } finally {
@@ -88,18 +91,11 @@ async function lockIsStale(path: string) {
   try {
     return Date.now() - (await stat(path)).mtimeMs > 30_000;
   } catch (error) {
-    if (errorCode(error) === "ENOENT") return false;
+    if (nodeErrorCode(error) === "ENOENT") return false;
     throw error;
   }
 }
 
 function delay(milliseconds: number) {
   return new Promise((resolve) => setTimeout(resolve, milliseconds));
-}
-
-function errorCode(error: unknown) {
-  if (typeof error !== "object" || error === null || !("code" in error)) {
-    return undefined;
-  }
-  return typeof error.code === "string" ? error.code : undefined;
 }

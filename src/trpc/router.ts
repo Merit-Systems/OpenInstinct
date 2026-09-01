@@ -1,17 +1,20 @@
+import { gateway } from "ai";
+import { revokeToken, startAuthorization } from "@vercel/connect";
 import { z } from "zod";
-import { readModelCatalog } from "@/lib/model-catalog/server";
 import { listBrowserTraces } from "@/db/services/browser-traces";
 import { saveChat } from "@/db/services/chats";
 import { replaceUserProfile } from "@/db/services/user-profile";
+import { selectGatewayModel } from "@/db/services/settings";
+import { deleteVaultItem, saveVaultItem } from "@/db/services/vault";
+import type { AccessScope } from "@/lib/access-scope";
 import { saveChatSchema } from "@/lib/chat";
-import { googleWorkspaceActionSchema } from "@/lib/google-workspace/config";
+import { env } from "@/env";
 import {
-  disconnectGoogleWorkspace,
-  startGoogleWorkspaceAuthorization,
-} from "@/lib/google-workspace/server";
-import { managerMutationSchema, managerSnapshotSchema } from "@/lib/manager";
-import { applyManagerMutation } from "@/lib/manager/server/store";
+  googleWorkspaceSubject,
+  googleWorkspaceTokenParams,
+} from "@/lib/google-workspace";
 import { userProfileSchema } from "@/lib/user-profile";
+import { vaultCreateItemSchema, vaultImportItemsSchema } from "@/lib/vault";
 import { createTRPCRouter, protectedProcedure } from "./init";
 
 export const appRouter = createTRPCRouter({
@@ -22,10 +25,12 @@ export const appRouter = createTRPCRouter({
   },
   googleWorkspace: {
     update: protectedProcedure
-      .input(googleWorkspaceActionSchema)
+      .input(z.enum(["connect", "disconnect"]))
       .mutation(async ({ ctx, input }) => {
         if (input === "disconnect") {
-          await disconnectGoogleWorkspace(ctx.scope);
+          await revokeToken(env.GOOGLE_CONNECTOR_UID, {
+            subject: googleWorkspaceSubject(ctx.scope.userId),
+          });
           return { redirectTo: "/?google=disconnected" };
         }
 
@@ -39,14 +44,12 @@ export const appRouter = createTRPCRouter({
         };
       }),
   },
-  manager: {
-    mutate: protectedProcedure
-      .input(managerMutationSchema)
-      .output(managerSnapshotSchema)
-      .mutation(({ ctx, input }) => applyManagerMutation(ctx.scope, input)),
-  },
-  models: {
-    list: protectedProcedure.query(readModelCatalog),
+  settings: {
+    selectModel: protectedProcedure
+      .input(z.object({ modelId: z.string().trim().min(1).max(300) }))
+      .mutation(({ ctx, input }) =>
+        selectGatewayModel(ctx.scope, input.modelId)
+      ),
   },
   userProfile: {
     update: protectedProcedure
@@ -61,6 +64,75 @@ export const appRouter = createTRPCRouter({
         listBrowserTraces(ctx.scope, input.cursor ?? undefined)
       ),
   },
+  vault: {
+    create: protectedProcedure
+      .input(vaultCreateItemSchema)
+      .mutation(({ ctx, input }) => saveVaultItem(ctx.scope, input)),
+    import: protectedProcedure
+      .input(vaultImportItemsSchema)
+      .mutation(async ({ ctx, input }) => {
+        /* oxlint-disable eslint/no-await-in-loop -- Import preserves source order and avoids concurrent writes to the same vault scope. */
+        for (const item of input) await saveVaultItem(ctx.scope, item);
+        /* oxlint-enable eslint/no-await-in-loop */
+      }),
+    remove: protectedProcedure
+      .input(z.object({ id: z.string().min(1) }))
+      .mutation(({ ctx, input }) => deleteVaultItem(ctx.scope, input.id)),
+  },
+  models: {
+    list: protectedProcedure.query(readModelCatalog),
+  },
 });
 
 export type AppRouter = typeof appRouter;
+
+async function startGoogleWorkspaceAuthorization(
+  scope: AccessScope,
+  callbackUrl: string
+) {
+  const authorization = await startAuthorization(
+    env.GOOGLE_CONNECTOR_UID,
+    googleWorkspaceTokenParams(scope.userId),
+    { callbackUrl, expiresInMs: 10 * 60_000 }
+  );
+  return authorization.url;
+}
+
+async function readModelCatalog() {
+  const { models } = await gateway.getAvailableModels();
+
+  return z
+    .array(
+      z.object({
+        id: z.string(),
+        name: z.string(),
+        ownedBy: z.string(),
+        pricing: z
+          .object({
+            input: z.number().nonnegative().optional(),
+            output: z.number().nonnegative().optional(),
+          })
+          .optional(),
+      })
+    )
+    .parse(
+      models
+        .filter((model) => model.modelType === "language")
+        .map((model) => ({
+          id: model.id,
+          name: model.name,
+          ownedBy: model.specification.provider,
+          pricing: model.pricing
+            ? {
+                input: perMillion(model.pricing.input),
+                output: perMillion(model.pricing.output),
+              }
+            : undefined,
+        }))
+    );
+}
+
+function perMillion(value: string) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed * 1_000_000 : undefined;
+}

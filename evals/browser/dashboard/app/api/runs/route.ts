@@ -2,6 +2,7 @@ import { readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { NextResponse } from "next/server";
 import { browserBenchmarkLiveStatusSchema } from "../../../../live-status-schema";
+import { nodeErrorCode } from "../../../../node-error";
 import { dashboardEnv } from "../../../env";
 
 export const dynamic = "force-dynamic";
@@ -33,7 +34,9 @@ export async function GET() {
       ),
     });
   } catch (error) {
-    if (errorCode(error) === "ENOENT") return NextResponse.json({ runs: [] });
+    if (nodeErrorCode(error) === "ENOENT") {
+      return NextResponse.json({ runs: [] });
+    }
     console.error("Unable to list browser benchmark runs", error);
     return NextResponse.json(
       { error: "Unable to list benchmark runs." },
@@ -48,14 +51,7 @@ async function readStatus(path: string) {
       JSON.parse(await readFile(/* turbopackIgnore: true */ path, "utf8"))
     );
   } catch (error) {
-    if (errorCode(error) === "ENOENT") return null;
+    if (nodeErrorCode(error) === "ENOENT") return null;
     throw error;
   }
-}
-
-function errorCode(error: unknown) {
-  if (typeof error !== "object" || error === null || !("code" in error)) {
-    return undefined;
-  }
-  return typeof error.code === "string" ? error.code : undefined;
 }

@@ -1,11 +1,12 @@
 import { auth } from "@googleapis/gmail";
 import { connect, type EveAuthorizationOptions } from "@vercel/connect/eve";
 import type { ToolContext } from "eve/tools";
-import { env } from "@/lib/env";
+import { z } from "zod";
+import { env } from "@/env";
 import {
   googleWorkspaceSubject,
-  GOOGLE_WORKSPACE_SCOPES,
-} from "@/lib/google-workspace/config";
+  googleWorkspaceScopes,
+} from "@/lib/google-workspace";
 
 export const googleWorkspaceAuthOptions = {
   connector: env.GOOGLE_CONNECTOR_UID,
@@ -17,7 +18,7 @@ export const googleWorkspaceAuthOptions = {
     }
     return googleWorkspaceSubject(principal.id);
   },
-  tokenParams: { scopes: [...GOOGLE_WORKSPACE_SCOPES] },
+  tokenParams: { scopes: [...googleWorkspaceScopes] },
   validate: true,
 } satisfies EveAuthorizationOptions;
 
@@ -41,11 +42,11 @@ export async function withGoogleAuth<T>(
   }
 }
 
-export function googleApiErrorStatus(error: unknown) {
-  if (!error || typeof error !== "object" || !("response" in error)) return;
-  const { response } = error;
-  if (!response || typeof response !== "object" || !("status" in response)) {
-    return;
-  }
-  return typeof response.status === "number" ? response.status : undefined;
+const googleApiErrorSchema = z.object({
+  response: z.object({ status: z.number() }),
+});
+
+export function googleApiErrorStatus(cause: unknown) {
+  const result = googleApiErrorSchema.safeParse(cause);
+  return result.success ? result.data.response.status : undefined;
 }

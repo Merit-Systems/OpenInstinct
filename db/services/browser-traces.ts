@@ -87,10 +87,11 @@ export async function listBrowserTraces(scope: AccessScope, cursor?: string) {
   return {
     nextCursor:
       rows.length > page.length && last ? encodeTraceCursor(last) : null,
-    traces: page.map((row) => ({
-      ...row,
-      domains: domainsByTrace.get(row.sessionId) ?? [],
-    })),
+    traces: page.map((row) =>
+      Object.assign({}, row, {
+        domains: domainsByTrace.get(row.sessionId) ?? [],
+      })
+    ),
   };
 }
 

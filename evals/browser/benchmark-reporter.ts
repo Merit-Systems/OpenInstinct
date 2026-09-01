@@ -4,7 +4,8 @@ import { dirname, join } from "node:path";
 import type { EveEvalResult, EveEvalRunSummary } from "eve/evals";
 import type { EvalReporter } from "eve/evals/reporters";
 import type { MessageStreamEvent } from "eve/client";
-import { traceTimelineRows } from "@/agent/subagents/worker/lib/trace-timeline";
+import { z } from "zod";
+import { traceTimelineRows } from "@/agent/subagents/worker/lib/trace/timeline";
 import {
   browserBenchmarkActivity,
   browserBenchmarkActivityDurations,
@@ -12,9 +13,10 @@ import {
 } from "@/evals/browser/benchmark-activity";
 import { browserBenchmarkEnv } from "@/evals/browser/env";
 import {
-  measureBrowserTask,
-  terminalBrowserMessage,
-} from "@/lib/browser/benchmark";
+  measureWorkerTask,
+  readTaskCompletion,
+  terminalWorkerMessage,
+} from "@/lib/worker-events";
 import type { BrowserBenchmark } from "@/evals/browser/benchmark-schema";
 import {
   type BrowserBenchmarkLiveStatus,
@@ -179,16 +181,15 @@ export async function reportBrowserBenchmarkActivity(
   }
   await updateLiveVariant((variant) => ({
     ...variant,
-    tasks: variant.tasks.map((task) =>
-      task.name === taskName
-        ? {
-            ...task,
-            ...(activity === null ? {} : { activity }),
-            activityDurationsMs,
-            ...(browserLiveViewUrl === null ? {} : { browserLiveViewUrl }),
-          }
-        : task
-    ),
+    tasks: variant.tasks.map((task) => {
+      if (task.name !== taskName) return task;
+      const next = { ...task, activityDurationsMs };
+      if (activity !== null) next.activity = activity;
+      if (browserLiveViewUrl !== null) {
+        next.browserLiveViewUrl = browserLiveViewUrl;
+      }
+      return next;
+    }),
   }));
 }
 
@@ -222,7 +223,7 @@ async function writeLiveTrace(
 }
 
 function summarizeTaskResult(result: EveEvalResult, name: string) {
-  const metrics = measureBrowserTask(
+  const metrics = measureWorkerTask(
     result.result.events,
     elapsedMs(result.startedAt, result.completedAt)
   );
@@ -236,7 +237,8 @@ function summarizeTaskResult(result: EveEvalResult, name: string) {
     .toSorted((left, right) => right.events.length - left.events.length)
     .at(0);
   const workerEvents = workerSession?.events;
-  const terminalMessage = terminalBrowserMessage(
+  const completion = readTaskCompletion(workerEvents ?? result.result.events);
+  const terminalMessage = terminalWorkerMessage(
     fallbackMessage,
     workerEvents ?? result.result.events
   );
@@ -251,7 +253,7 @@ function summarizeTaskResult(result: EveEvalResult, name: string) {
     (assertion) =>
       assertion.name === "judge.autoevals.closedQA [task completed]"
   );
-  const rationale = judge?.metadata?.rationale;
+  const rationale = z.string().safeParse(judge?.metadata?.rationale);
 
   return {
     costComplete: metrics.costComplete,
@@ -262,7 +264,7 @@ function summarizeTaskResult(result: EveEvalResult, name: string) {
     failedToolCalls: calls.filter((call) => call.status === "failed").length,
     id: result.id,
     inputTokens: metrics.inputTokens,
-    judgeRationale: typeof rationale === "string" ? rationale : null,
+    judgeRationale: rationale.success ? rationale.data : null,
     judgeScore: judge?.score ?? null,
     messageCount: facts.reduce(
       (count, derived) => count + derived.messageCount,
@@ -277,7 +279,7 @@ function summarizeTaskResult(result: EveEvalResult, name: string) {
     ),
     sessionId: result.result.sessionId ?? null,
     status: result.result.status,
-    success: result.verdict === "passed",
+    success: result.verdict === "passed" && completion?.status === "success",
     terminalMessage,
     toolCalls,
     verdict: result.verdict,

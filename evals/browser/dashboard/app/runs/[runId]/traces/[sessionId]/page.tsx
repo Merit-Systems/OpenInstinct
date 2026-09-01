@@ -13,9 +13,11 @@ import {
 } from "@/components/ui/table";
 import { ActivityDurationBreakdown } from "@/components/browser/activity-duration-breakdown";
 import { browserBenchmarkLiveStatusSchema } from "../../../../../../live-status-schema";
+import { nodeErrorCode } from "../../../../../../node-error";
 import { dashboardEnv } from "../../../../../env";
 
 const identifier = /^[A-Za-z0-9._:-]+$/u;
+const jsonValueSchema = z.json();
 const traceArtifactSchema = z.object({
   events: z.array(
     z.object({
@@ -35,9 +37,13 @@ const traceArtifactSchema = z.object({
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
+/* oxlint-disable local-next/require-generated-route-props -- This standalone nested dashboard has its own Next.js root, outside the repository root's generated route map. */
 export default async function BenchmarkTracePage({
   params,
-}: PageProps<"/runs/[runId]/traces/[sessionId]">) {
+}: {
+  params: Promise<{ runId: string; sessionId: string }>;
+}) {
+  /* oxlint-enable local-next/require-generated-route-props */
   const { runId, sessionId } = await params;
   if (!identifier.test(runId) || !identifier.test(sessionId)) notFound();
 
@@ -151,13 +157,13 @@ async function readTrace(root: string, runId: string, sessionId: string) {
   return value ? traceArtifactSchema.parse(value) : null;
 }
 
-async function readJson(path: string): Promise<unknown> {
+async function readJson(path: string) {
   try {
-    return JSON.parse(
-      await readFile(/* turbopackIgnore: true */ path, "utf8")
-    ) as unknown;
+    return jsonValueSchema.parse(
+      JSON.parse(await readFile(/* turbopackIgnore: true */ path, "utf8"))
+    );
   } catch (error) {
-    if (errorCode(error) === "ENOENT") return null;
+    if (nodeErrorCode(error) === "ENOENT") return null;
     throw error;
   }
 }
@@ -173,11 +179,4 @@ function findTask(
     if (task) return { task, variant: variant.kind };
   }
   return null;
-}
-
-function errorCode(error: unknown) {
-  if (typeof error !== "object" || error === null || !("code" in error)) {
-    return undefined;
-  }
-  return typeof error.code === "string" ? error.code : undefined;
 }

@@ -1,25 +1,29 @@
 import type { MessageStreamEvent } from "eve/client";
+import { z } from "zod";
 import {
   browserActivityKindForTool,
   type BrowserActivityKind,
   sumBrowserActivityDurations,
-} from "@/lib/browser/activity-timing";
+} from "@/components/browser/activity-timing";
 
-const toolActivity: Readonly<Record<string, string>> = {
-  browser_act: "Acting in the browser",
-  browser_find: "Finding page controls",
-  browser_snapshot: "Inspecting the page",
-  browser_text: "Reading the page",
-  capture_browser_image: "Capturing browser evidence",
-  computer_action: "Using visual browser controls",
-  fill_from_vault: "Securely filling saved user information",
-  list_vault: "Checking saved user information",
-  load_skill: "Loading the browser procedure",
-  manage_browsers: "Starting the browser",
-  playwright_execute: "Interacting with the page",
-  web_fetch: "Reading a public source",
-  web_search: "Searching for live options",
-};
+const toolActivity = new Map([
+  ["browser_act", "Acting in the browser"],
+  ["browser_find", "Finding page controls"],
+  ["browser_snapshot", "Inspecting the page"],
+  ["browser_text", "Reading the page"],
+  ["capture_browser_image", "Capturing browser evidence"],
+  ["computer_action", "Using visual browser controls"],
+  ["fill_from_vault", "Securely filling saved user information"],
+  ["list_vault", "Checking saved user information"],
+  ["load_skill", "Loading the browser procedure"],
+  ["manage_browsers", "Starting the browser"],
+  ["playwright_execute", "Interacting with the page"],
+  ["web_fetch", "Reading a public source"],
+  ["web_search", "Searching for live options"],
+]);
+const managedBrowserOutputSchema = z.object({
+  browser: z.object({ browser_live_view_url: z.url() }),
+});
 
 export function browserBenchmarkActivity(
   events: readonly MessageStreamEvent[]
@@ -35,7 +39,9 @@ export function browserBenchmarkActivity(
     }
     if (event.type === "actions.requested") {
       const activities = event.data.actions.map((action) => {
-        if (action.kind === "load-skill") return toolActivity.load_skill;
+        if (action.kind === "load-skill") {
+          return toolActivity.get("load_skill") ?? "Loading browser setup";
+        }
         if (action.kind === "tool-call")
           return activityForTool(action.toolName);
         return "Coordinating browser work";
@@ -79,11 +85,10 @@ export function browserBenchmarkLiveViewUrl(
     ) {
       continue;
     }
-    const browser = property(result.output, "browser");
-    const value = property(browser, "browser_live_view_url");
-    if (typeof value !== "string") continue;
+    const output = managedBrowserOutputSchema.safeParse(result.output);
+    if (!output.success) continue;
     try {
-      const url = new URL(value);
+      const url = new URL(output.data.browser.browser_live_view_url);
       if (url.protocol === "https:" || url.protocol === "http:") {
         return url.toString();
       }
@@ -122,17 +127,11 @@ function activityKindForEvent(
 }
 
 function activityForTool(name: string) {
-  return toolActivity[name] ?? `Running ${name.replaceAll("_", " ")}`;
+  return toolActivity.get(name) ?? `Running ${name.replaceAll("_", " ")}`;
 }
 
 function activityLine(value: string) {
   const line = value.replaceAll(/\s+/gu, " ").trim();
   if (!line) return null;
   return line.length > 180 ? `${line.slice(0, 179).trimEnd()}…` : line;
-}
-
-function property(value: unknown, key: string): unknown {
-  return typeof value === "object" && value !== null
-    ? Reflect.get(value, key)
-    : undefined;
 }

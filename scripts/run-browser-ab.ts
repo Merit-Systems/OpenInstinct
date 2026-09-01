@@ -19,8 +19,10 @@ import {
   updateBrowserBenchmarkLiveStatus,
   writeBrowserBenchmarkLiveStatus,
 } from "../evals/browser/live-status.ts";
+import { nodeErrorCode } from "../evals/browser/node-error.ts";
 
 const { loadEnvConfig } = nextEnvironment;
+const errorSchema = z.instanceof(Error);
 
 const repositoryRoot = fileURLToPath(new URL("..", import.meta.url));
 // oxlint-disable-next-line eslint/no-restricted-properties -- the benchmark supervisor must forward credentials and provider configuration to isolated child revisions
@@ -63,6 +65,7 @@ try {
   console.log(
     `Preparing browser A/B: ${shortSha(baselineSha)} → ${shortSha(candidateSha)}`
   );
+  /* oxlint-disable eslint/no-await-in-loop -- Each worktree must finish setup before dependency installation begins. */
   for (const current of variants) {
     await updateVariant(current.kind, (status) => ({
       ...status,
@@ -77,6 +80,7 @@ try {
     );
     await installBenchmarkContext(current.path);
   }
+  /* oxlint-enable eslint/no-await-in-loop */
 
   await Promise.all(
     variants.map((current) =>
@@ -377,10 +381,9 @@ function initialLiveStatus(
     url: current.url,
   });
 
-  return {
+  const status: BrowserBenchmarkLiveStatus = {
     completedAt: null,
     error: null,
-    ...(options.label ? { label: options.label } : {}),
     maxConcurrency: options.maxConcurrency,
     outputDirectory,
     repetitions: options.repetitions,
@@ -396,6 +399,8 @@ function initialLiveStatus(
     },
     version: 1,
   };
+  if (options.label) status.label = options.label;
+  return status;
 }
 
 async function updateLiveStatus(
@@ -420,6 +425,7 @@ async function updateVariant(
 }
 
 async function waitForUrl(url: string, child: ChildProcess) {
+  /* oxlint-disable eslint/no-await-in-loop -- Readiness probes must retry sequentially until the child server accepts traffic. */
   for (let attempt = 0; attempt < 120; attempt += 1) {
     if (child.exitCode !== null) {
       throw new Error(
@@ -435,6 +441,7 @@ async function waitForUrl(url: string, child: ChildProcess) {
       await delay(1_000);
     }
   }
+  /* oxlint-enable eslint/no-await-in-loop */
   throw new Error(`Timed out waiting for ${url}.`);
 }
 
@@ -449,12 +456,12 @@ function databaseEnvironment(databaseUrl: string) {
 function start(
   command: string,
   args: string[],
-  options: { cwd: string; env?: NodeJS.ProcessEnv }
+  spawnOptions: { cwd: string; env?: NodeJS.ProcessEnv }
 ) {
   const child = spawn(command, args, {
-    cwd: options.cwd,
+    cwd: spawnOptions.cwd,
     detached: true,
-    env: { ...inheritedEnvironment, ...options.env },
+    env: { ...inheritedEnvironment, ...spawnOptions.env },
     stdio: "inherit",
   });
   child.unref();
@@ -464,22 +471,22 @@ function start(
 async function run(
   command: string,
   args: string[],
-  options: {
+  runOptions: {
     cwd: string;
     env?: NodeJS.ProcessEnv;
     validExitCodes?: number[];
   }
 ) {
   const child = spawn(command, args, {
-    cwd: options.cwd,
-    env: { ...inheritedEnvironment, ...options.env },
+    cwd: runOptions.cwd,
+    env: { ...inheritedEnvironment, ...runOptions.env },
     stdio: "inherit",
   });
   const code = await new Promise<number | null>((resolveExit, reject) => {
     child.once("error", reject);
     child.once("exit", resolveExit);
   });
-  if (!(options.validExitCodes ?? [0]).includes(code ?? -1)) {
+  if (!(runOptions.validExitCodes ?? [0]).includes(code ?? -1)) {
     throw new Error(
       `${command} ${args.join(" ")} exited with ${String(code)}.`
     );
@@ -489,10 +496,10 @@ async function run(
 async function output(
   command: string,
   args: string[],
-  options: { cwd: string }
+  outputOptions: { cwd: string }
 ) {
   const child = spawn(command, args, {
-    cwd: options.cwd,
+    cwd: outputOptions.cwd,
     env: inheritedEnvironment,
     stdio: ["ignore", "pipe", "inherit"],
   });
@@ -524,10 +531,11 @@ async function cleanup() {
       try {
         process.kill(-child.pid, "SIGTERM");
       } catch (error) {
-        if (errorCode(error) !== "ESRCH") throw error;
+        if (nodeErrorCode(error) !== "ESRCH") throw error;
       }
     }
   }
+  /* oxlint-disable eslint/no-await-in-loop -- Cleanup is intentionally ordered so external resources are torn down before their worktrees. */
   for (const project of composeProjects.toReversed()) {
     await run(
       "docker",
@@ -541,6 +549,7 @@ async function cleanup() {
       cwd: repositoryRoot,
     }).catch(() => undefined);
   }
+  /* oxlint-enable eslint/no-await-in-loop */
   await rm(temporaryRoot, { force: true, recursive: true });
 }
 
@@ -628,13 +637,7 @@ function delay(milliseconds: number) {
   return new Promise((resolveDelay) => setTimeout(resolveDelay, milliseconds));
 }
 
-function errorCode(error: unknown) {
-  if (typeof error !== "object" || error === null || !("code" in error)) {
-    return undefined;
-  }
-  return typeof error.code === "string" ? error.code : undefined;
-}
-
-function formatError(error: unknown) {
-  return error instanceof Error ? error.message : String(error);
+function formatError(error: Parameters<typeof errorSchema.safeParse>[0]) {
+  const parsed = errorSchema.safeParse(error);
+  return parsed.success ? parsed.data.message : String(error);
 }

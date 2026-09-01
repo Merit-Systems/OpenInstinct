@@ -45,17 +45,6 @@ describe("browser benchmark live status", () => {
 
 function exampleStatus(): BrowserBenchmarkLiveStatus {
   const now = new Date().toISOString();
-  const variant = (kind: "baseline" | "candidate") => ({
-    completedAt: null,
-    error: null,
-    kind,
-    ref: "main",
-    sha: "a".repeat(40),
-    startedAt: null,
-    status: "pending" as const,
-    tasks: [],
-    url: `https://${kind}.localhost`,
-  });
   return {
     completedAt: null,
     error: null,
@@ -73,5 +62,19 @@ function exampleStatus(): BrowserBenchmarkLiveStatus {
       candidate: variant("candidate"),
     },
     version: 1,
+  };
+}
+
+function variant(kind: "baseline" | "candidate") {
+  return {
+    completedAt: null,
+    error: null,
+    kind,
+    ref: "main",
+    sha: "a".repeat(40),
+    startedAt: null,
+    status: "pending" as const,
+    tasks: [],
+    url: `https://${kind}.localhost`,
   };
 }

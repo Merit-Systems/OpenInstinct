@@ -46,7 +46,7 @@ BROWSER_BENCH_LABEL=no-fixed-waits pnpm bench:browser
 pnpm bench:compare .eve/browser-benchmarks/baseline.json .eve/browser-benchmarks/latest.json
 ```
 
-Edit `src/lib/browser/benchmark-tasks.ts` to add a small number of stable,
+Edit `evals/browser/tasks.ts` to add a small number of stable,
 intent-level tasks. Every case declares the user's prompt and a goal-level
 success rubric. The judge sees the task, worker result, and coordinator response;
 a plausible but incomplete answer does not count. Agent time is measured from durable

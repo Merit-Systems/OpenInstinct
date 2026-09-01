@@ -27,7 +27,8 @@ import {
   useState,
 } from "react";
 import { Streamdown, type Components } from "streamdown";
-import { isBrowserImageArtifactUrl } from "@/lib/browser-image-path";
+import { z } from "zod";
+import { isBrowserImageArtifactUrl } from "@/lib/browser-artifact";
 
 export type MessageProps = HTMLAttributes<HTMLDivElement> & {
   from: UIMessage["role"];
@@ -331,19 +332,21 @@ export function ArtifactMessageImage({
   ...props
 }: ComponentProps<"img"> & { readonly node?: unknown }) {
   void _node;
-  if (typeof src !== "string" || !isBrowserImageArtifactUrl(src)) {
+  const parsedSource = z.string().safeParse(src);
+  if (!parsedSource.success || !isBrowserImageArtifactUrl(parsedSource.data)) {
     return (
       <span className="text-muted-foreground">
-        Image not displayed: {alt || "external image"}
+        Image not displayed: {alt ?? "external image"}
       </span>
     );
   }
 
   return (
-    <a href={src} rel="noreferrer" target="_blank">
+    <a href={parsedSource.data} rel="noreferrer" target="_blank">
+      {/* oxlint-disable-next-line nextjs/no-img-element -- validated runtime browser image URL */}
       <img
         {...props}
-        alt={alt || "Browser image"}
+        alt={alt ?? "Browser image"}
         className={cn(
           "my-3 max-h-[32rem] w-auto max-w-full rounded-lg border bg-muted object-contain",
           className

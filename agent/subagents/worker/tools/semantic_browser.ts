@@ -1,6 +1,5 @@
 import {
   loop,
-  type BrowserActResult,
   type LoopToolExecutionResult,
   type LoopToolSpec,
 } from "@onkernel/browser-loop";
@@ -10,9 +9,13 @@ import {
   toolOutput,
   toolOutputPart,
 } from "eve/tools";
+import { z } from "zod";
 import { requireWorkerScope } from "@/agent/subagents/worker/lib/access";
 import { requireOwnedBrowserSession } from "@/agent/subagents/worker/lib/owned-browser";
-import { executeBrowserLoopTool, modelText } from "@/lib/browser/semantic-loop";
+import {
+  executeBrowserLoopTool,
+  modelText,
+} from "@/agent/subagents/worker/lib/browser/semantic-loop";
 
 const allSpecs = [
   loop.tools.browser.snapshot(),
@@ -26,6 +29,44 @@ const specsByName = new Map(allSpecs.map((spec) => [spec.name, spec]));
 const relaxedBrowserActTimeoutMs = 8_000;
 const relaxedBrowserActSnapshotCharacters = 4_000;
 const relaxedBrowserActOutputCharacters = 6_000;
+const jsonValueSchema = z.json();
+const jsonObjectSchema = z.record(z.string(), jsonValueSchema);
+const sessionIdSchema = z.string().min(1);
+const browserActDisplayResultSchema = z.object({
+  steps: z.array(
+    z.object({
+      diagnostics: z.array(z.string()),
+      index: z.number().int(),
+      type: z.string(),
+    })
+  ),
+  stop_reason: z
+    .enum([
+      "action_failed",
+      "expectation_failed",
+      "navigation",
+      "stale_ref",
+      "dialog",
+      "control_flow",
+      "step_timeout",
+      "global_timeout",
+    ])
+    .optional(),
+  successor: z.discriminatedUnion("status", [
+    z.object({ error: z.string(), status: z.literal("unavailable") }),
+    z.object({
+      diff: z.object({ changed: z.boolean() }),
+      status: z.literal("observed"),
+      text: z.string(),
+      title: z.string(),
+      url: z.string(),
+    }),
+  ]),
+});
+const browserActReadResultSchema = z.object({
+  result: browserActDisplayResultSchema,
+  type: z.literal("browser_act"),
+});
 
 export default defineDynamic({
   events: {
@@ -35,7 +76,8 @@ export default defineDynamic({
           spec.name,
           defineTool({
             description: toolDescription(spec),
-            execute: executeSemanticTool,
+            execute: (input, context) =>
+              executeSemanticTool(jsonObjectSchema.parse(input), context),
             inputSchema: withSessionId(spec),
             toModelOutput,
           }),
@@ -46,7 +88,7 @@ export default defineDynamic({
 });
 
 async function executeSemanticTool(
-  input: Record<string, unknown>,
+  input: z.infer<typeof jsonObjectSchema>,
   context: Parameters<typeof requireWorkerScope>[0] & {
     abortSignal?: AbortSignal;
     toolName: string;
@@ -68,7 +110,10 @@ async function executeSemanticTool(
   );
 }
 
-function boundedToolInput(spec: LoopToolSpec, input: Record<string, unknown>) {
+function boundedToolInput(
+  spec: LoopToolSpec,
+  input: z.infer<typeof jsonObjectSchema>
+) {
   if (spec.name === "browser_snapshot" && input.ref === "root") {
     const freshPageInput = { ...input };
     delete freshPageInput.ref;
@@ -86,10 +131,12 @@ function boundedToolInput(spec: LoopToolSpec, input: Record<string, unknown>) {
   return input;
 }
 
-function boundedTimeout(value: unknown, maximum: number) {
-  return typeof value === "number" && Number.isFinite(value)
-    ? Math.min(Math.max(value, 1), maximum)
-    : maximum;
+function boundedTimeout(
+  value: z.infer<typeof jsonValueSchema> | undefined,
+  maximum: number
+) {
+  const parsed = z.number().safeParse(value);
+  return parsed.success ? Math.min(Math.max(parsed.data, 1), maximum) : maximum;
 }
 
 function toModelOutput(output: LoopToolExecutionResult) {
@@ -106,39 +153,34 @@ function toModelOutput(output: LoopToolExecutionResult) {
     : toolOutput.text(modelText(output));
 }
 
-function splitSessionInput(input: Record<string, unknown>) {
-  const sessionId = input.session_id;
-  if (typeof sessionId !== "string" || sessionId.length === 0) {
+function splitSessionInput(input: z.infer<typeof jsonObjectSchema>) {
+  const sessionId = sessionIdSchema.safeParse(input.session_id);
+  if (!sessionId.success) {
     throw new Error("A browser session ID is required.");
   }
   const { session_id: _sessionId, ...toolInput } = input;
-  return { sessionId, toolInput };
+  return { sessionId: sessionId.data, toolInput };
 }
 
 function withSessionId(spec: LoopToolSpec) {
-  const schema: Record<string, unknown> = {
+  const schema = jsonObjectSchema.parse({
     ...(spec.name === "browser_act"
       ? relaxedBrowserActSchema(spec.declaration.parameters)
       : spec.declaration.parameters),
+  });
+  const properties = jsonObjectSchema.safeParse(schema.properties);
+  const required = z.array(z.string()).safeParse(schema.required);
+  const inputProperties = properties.success ? properties.data : {};
+  inputProperties.session_id = {
+    description: "Owned Kernel browser session ID.",
+    minLength: 1,
+    type: "string",
   };
-  const properties = isRecord(schema.properties) ? schema.properties : {};
-  const required = Array.isArray(schema.required)
-    ? schema.required.filter(
-        (value): value is string => typeof value === "string"
-      )
-    : [];
   return {
     ...schema,
     additionalProperties: false,
-    properties: {
-      session_id: {
-        description: "Owned Kernel browser session ID.",
-        minLength: 1,
-        type: "string",
-      },
-      ...properties,
-    },
-    required: ["session_id", ...required],
+    properties: inputProperties,
+    required: ["session_id", ...(required.success ? required.data : [])],
     type: "object",
   };
 }
@@ -148,7 +190,7 @@ function toolDescription(spec: LoopToolSpec) {
   return "Run 1–8 short dependent browser actions against current refs without waiting for model-authored postconditions. The result distinguishes dispatch failures and browser boundaries, then returns a compact successor state. Use current refs from browser_snapshot or browser_find; snapshot again after navigation, a stale ref, or an unavailable successor.";
 }
 
-function relaxedBrowserActInput(input: Record<string, unknown>) {
+function relaxedBrowserActInput(input: z.infer<typeof jsonObjectSchema>) {
   const {
     expect: _expect,
     poll_ms: _pollMs,
@@ -157,50 +199,69 @@ function relaxedBrowserActInput(input: Record<string, unknown>) {
   } = input;
   const steps = Array.isArray(relaxed.steps)
     ? relaxed.steps.map((step) => {
-        if (!isRecord(step)) {
+        const parsed = jsonObjectSchema.safeParse(step);
+        if (!parsed.success) {
           throw new Error("A relaxed browser action step must be an object.");
         }
         const {
           expect: _stepExpect,
           timeout_ms: _stepTimeoutMs,
           ...action
-        } = step;
+        } = parsed.data;
         return action;
       })
     : relaxed.steps;
-  const successor = isRecord(relaxed.successor)
+  const parsedSuccessor = jsonObjectSchema.safeParse(relaxed.successor);
+  const successor = parsedSuccessor.success
     ? {
-        ...relaxed.successor,
-        depth: boundedTimeout(relaxed.successor.depth, 8),
+        ...parsedSuccessor.data,
+        depth: boundedTimeout(parsedSuccessor.data.depth, 8),
       }
     : { depth: 6, filter: "interactive" };
-  return {
+  if (steps === undefined) {
+    return jsonObjectSchema.parse({
+      ...relaxed,
+      successor,
+      timeout_ms: relaxedBrowserActTimeoutMs,
+    });
+  }
+  return jsonObjectSchema.parse({
     ...relaxed,
     steps,
     successor,
     timeout_ms: relaxedBrowserActTimeoutMs,
-  };
+  });
 }
 
-function relaxedBrowserActSchema(value: unknown): Record<string, unknown> {
-  if (!isRecord(value)) return {};
-  const schema = structuredClone(value);
-  const properties = isRecord(schema.properties) ? schema.properties : {};
+function relaxedBrowserActSchema(
+  value: LoopToolSpec["declaration"]["parameters"]
+) {
+  const parsed = jsonObjectSchema.safeParse(structuredClone(value));
+  if (!parsed.success) return {};
+  const schema = parsed.data;
+  const parsedProperties = jsonObjectSchema.safeParse(schema.properties);
+  const properties = parsedProperties.success ? parsedProperties.data : {};
   delete properties.expect;
   delete properties.poll_ms;
   delete properties.timeout_ms;
 
-  const steps = isRecord(properties.steps) ? properties.steps : undefined;
-  if (steps) {
+  const parsedSteps = jsonObjectSchema.safeParse(properties.steps);
+  if (parsedSteps.success) {
+    const steps = parsedSteps.data;
     steps.maxItems = 8;
-    const items = isRecord(steps.items) ? steps.items : undefined;
-    const variants = items && Array.isArray(items.anyOf) ? items.anyOf : [];
+    const parsedItems = jsonObjectSchema.safeParse(steps.items);
+    const variants =
+      parsedItems.success && Array.isArray(parsedItems.data.anyOf)
+        ? parsedItems.data.anyOf
+        : [];
     for (const variant of variants) {
-      if (!isRecord(variant)) continue;
-      const stepProperties = isRecord(variant.properties)
-        ? variant.properties
-        : undefined;
-      if (!stepProperties) continue;
+      const parsedVariant = jsonObjectSchema.safeParse(variant);
+      if (!parsedVariant.success) continue;
+      const parsedStepProperties = jsonObjectSchema.safeParse(
+        parsedVariant.data.properties
+      );
+      if (!parsedStepProperties.success) continue;
+      const stepProperties = parsedStepProperties.data;
       delete stepProperties.expect;
       delete stepProperties.timeout_ms;
     }
@@ -258,23 +319,13 @@ function relaxedBrowserActModelText(output: LoopToolExecutionResult) {
 
 function browserActResult(output: LoopToolExecutionResult) {
   for (const read of output.details.readResults ?? []) {
-    if (!isRecord(read) || read.type !== "browser_act") continue;
-    if (isBrowserActResult(read.result)) return read.result;
+    const parsed = browserActReadResultSchema.safeParse(read);
+    if (parsed.success) return parsed.data.result;
   }
   return undefined;
-}
-
-function isBrowserActResult(value: unknown): value is BrowserActResult {
-  return (
-    isRecord(value) && Array.isArray(value.steps) && isRecord(value.successor)
-  );
 }
 
 function truncate(value: string, limit: number) {
   if (value.length <= limit) return value;
   return `${value.slice(0, limit)}\n[truncated ${String(value.length - limit)} characters]`;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
 }

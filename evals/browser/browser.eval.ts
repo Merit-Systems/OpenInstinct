@@ -1,16 +1,17 @@
 import { defineEval, type EveEvalLiveTurn, type EveEvalTurn } from "eve/evals";
 import { satisfies } from "eve/evals/expect";
+import { z } from "zod";
 import { reportBrowserBenchmarkActivity } from "@/evals/browser/benchmark-reporter";
 import {
-  didCompleteBrowserWorker,
-  didFinishBrowserWorker,
+  didCompleteWorker,
+  didFinishWorker,
   readTaskCompletion,
-} from "@/lib/browser/benchmark";
+} from "@/lib/worker-events";
+import { browserBenchmarkEnv } from "@/evals/browser/env";
 import {
   browserBenchmarkFixtureContext,
   browserBenchmarkTasks,
-} from "@/lib/browser/benchmark-tasks";
-import { browserBenchmarkEnv } from "@/evals/browser/env";
+} from "@/evals/browser/tasks";
 
 const repetitions = browserBenchmarkEnv.BROWSER_BENCH_REPETITIONS;
 const tasks = browserBenchmarkTasks(browserBenchmarkEnv.BROWSER_BENCH_SUITE);
@@ -34,6 +35,7 @@ export default tasks.flatMap((task) =>
         let completed: EveEvalTurn | null = null;
         const workerEvents: EveEvalTurn["events"][number][] = [];
 
+        /* oxlint-disable eslint/no-await-in-loop -- Each watch resumes from the stream index produced by the previous turn. */
         for (let attempt = 0; attempt < 60; attempt += 1) {
           try {
             const turn = await resultWithLiveActivity(
@@ -45,13 +47,16 @@ export default tasks.flatMap((task) =>
             );
             turn.expectOk();
             workerEvents.push(...turn.events);
-            if (didFinishBrowserWorker(workerEvents)) {
+            if (didFinishWorker(workerEvents)) {
               completed = turn;
               break;
             }
             turnStartIndex = requireStreamIndex(child.session);
           } catch (error) {
-            if (!isIdleStreamClosure(error)) throw error;
+            const parsed = z.instanceof(Error).safeParse(error);
+            if (!parsed.success || !isIdleStreamClosure(parsed.data)) {
+              throw error;
+            }
           }
           if (completed === null) {
             child = t.target.watchTurn(childSessionId, {
@@ -59,6 +64,7 @@ export default tasks.flatMap((task) =>
             });
           }
         }
+        /* oxlint-enable eslint/no-await-in-loop */
 
         await t.require(
           completed,
@@ -68,7 +74,7 @@ export default tasks.flatMap((task) =>
           )
         );
         t.check(
-          didCompleteBrowserWorker(workerEvents),
+          didCompleteWorker(workerEvents),
           satisfies(
             (workerSucceeded) => workerSucceeded === true,
             "the worker self-reported success"
@@ -160,11 +166,8 @@ function requireStreamIndex(session: {
   return streamIndex;
 }
 
-function isIdleStreamClosure(error: unknown) {
-  return (
-    error instanceof Error &&
-    error.message.includes("closed before a turn boundary")
-  );
+function isIdleStreamClosure(error: Error) {
+  return error.message.includes("closed before a turn boundary");
 }
 
 function requireWorkerSessionId(turn: EveEvalTurn) {

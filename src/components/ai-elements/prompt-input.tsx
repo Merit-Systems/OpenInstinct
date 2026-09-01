@@ -1,7 +1,5 @@
 "use client";
 
-/* oxlint-disable eslint/no-empty-function, eslint/no-underscore-dangle, jsx-a11y/heading-has-content, typescript/no-confusing-void-expression, typescript/no-deprecated, typescript/no-misused-promises, typescript/no-unnecessary-condition, typescript/no-unnecessary-type-assertion, typescript/no-unsafe-type-assertion, typescript/return-await, unicorn/prefer-add-event-listener -- Preserve the public AI Elements browser and form API for source-compatible consumer migration. */
-
 import {
   Command,
   CommandEmpty,
@@ -52,18 +50,18 @@ import {
   XIcon,
 } from "lucide-react";
 import { nanoid } from "nanoid";
+import { z } from "zod";
 import type {
   ChangeEvent,
   ChangeEventHandler,
   ClipboardEventHandler,
   ComponentProps,
-  FormEvent,
-  FormEventHandler,
   HTMLAttributes,
   KeyboardEventHandler,
   PropsWithChildren,
   ReactNode,
   RefObject,
+  SubmitEvent,
 } from "react";
 import {
   Children,
@@ -85,11 +83,23 @@ const convertBlobUrlToDataUrl = async (url: string): Promise<string | null> => {
   try {
     const response = await fetch(url);
     const blob = await response.blob();
-    // FileReader uses callback-based API, wrapping in Promise is necessary
-    return new Promise((resolve) => {
+    return await new Promise((resolve) => {
       const reader = new FileReader();
-      reader.onloadend = () => resolve(reader.result as string);
-      reader.onerror = () => resolve(null);
+      reader.addEventListener(
+        "loadend",
+        () => {
+          const result = reader.result;
+          resolve(result instanceof ArrayBuffer ? null : result);
+        },
+        { once: true }
+      );
+      reader.addEventListener(
+        "error",
+        () => {
+          resolve(null);
+        },
+        { once: true }
+      );
       reader.readAsDataURL(blob);
     });
   } catch {
@@ -98,12 +108,16 @@ const convertBlobUrlToDataUrl = async (url: string): Promise<string | null> => {
 };
 
 const captureScreenshot = async (): Promise<File | null> => {
-  if (
-    typeof navigator === "undefined" ||
-    !navigator.mediaDevices?.getDisplayMedia
-  ) {
+  if (typeof navigator === "undefined") {
     return null;
   }
+  const mediaDevices = z
+    .custom<MediaDevices>(
+      (value) =>
+        z.object({ getDisplayMedia: z.function() }).safeParse(value).success
+    )
+    .safeParse(navigator.mediaDevices);
+  if (!mediaDevices.success) return null;
 
   let stream: MediaStream | null = null;
   const video = document.createElement("video");
@@ -111,17 +125,28 @@ const captureScreenshot = async (): Promise<File | null> => {
   video.playsInline = true;
 
   try {
-    stream = await navigator.mediaDevices.getDisplayMedia({
+    stream = await mediaDevices.data.getDisplayMedia({
       audio: false,
       video: true,
     });
 
     video.srcObject = stream;
 
-    // Video element uses callback-based API, wrapping in Promise is necessary
     await new Promise<void>((resolve, reject) => {
-      video.onloadedmetadata = () => resolve();
-      video.onerror = () => reject(new Error("Failed to load screen stream"));
+      video.addEventListener(
+        "loadedmetadata",
+        () => {
+          resolve();
+        },
+        { once: true }
+      );
+      video.addEventListener(
+        "error",
+        () => {
+          reject(new Error("Failed to load screen stream"));
+        },
+        { once: true }
+      );
     });
 
     await video.play();
@@ -170,6 +195,10 @@ const captureScreenshot = async (): Promise<File | null> => {
   }
 };
 
+const dragDataTransferSchema = z.custom<DataTransfer>(
+  (value) => value !== null && value !== undefined
+);
+
 // ============================================================================
 // Provider Context & Types
 // ============================================================================
@@ -193,7 +222,7 @@ export interface PromptInputControllerProps {
   textInput: TextInputContext;
   attachments: AttachmentsContext;
   /** INTERNAL: Allows PromptInput to register its file textInput + "open" callback */
-  __registerFileInput: (
+  registerFileInput: (
     ref: RefObject<HTMLInputElement | null>,
     open: () => void
   ) => void;
@@ -247,14 +276,16 @@ export const PromptInputProvider = ({
 }: PromptInputProviderProps) => {
   // ----- textInput state
   const [textInput, setTextInput] = useState(initialTextInput);
-  const clearInput = useCallback(() => setTextInput(""), []);
+  const clearInput = useCallback(() => {
+    setTextInput("");
+  }, []);
 
   // ----- attachments state (global when wrapped)
   const [attachmentFiles, setAttachmentFiles] = useState<
     (FileUIPart & { id: string })[]
   >([]);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
-  const openRef = useRef<() => void>(() => {});
+  const openRef = useRef<(() => void) | undefined>(undefined);
 
   const add = useCallback((files: File[] | FileList) => {
     const incoming = [...files];
@@ -330,7 +361,7 @@ export const PromptInputProvider = ({
     [attachmentFiles, add, remove, clear, openFileDialog]
   );
 
-  const __registerFileInput = useCallback(
+  const registerFileInput = useCallback(
     (ref: RefObject<HTMLInputElement | null>, open: () => void) => {
       fileInputRef.current = ref.current;
       openRef.current = open;
@@ -340,7 +371,7 @@ export const PromptInputProvider = ({
 
   const controller = useMemo<PromptInputControllerProps>(
     () => ({
-      __registerFileInput,
+      registerFileInput,
       attachments,
       textInput: {
         clear: clearInput,
@@ -348,7 +379,7 @@ export const PromptInputProvider = ({
         value: textInput,
       },
     }),
-    [textInput, clearInput, attachments, __registerFileInput]
+    [textInput, clearInput, attachments, registerFileInput]
   );
 
   return (
@@ -509,7 +540,7 @@ export type PromptInputProps = Omit<
   }) => void;
   onSubmit: (
     message: PromptInputMessage,
-    event: FormEvent<HTMLFormElement>
+    event: SubmitEvent<HTMLFormElement>
   ) => void | Promise<void>;
 };
 
@@ -600,13 +631,13 @@ export const PromptInput = ({
       }
 
       setItems((prev) => {
-        const capacity =
-          typeof maxFiles === "number"
-            ? Math.max(0, maxFiles - prev.length)
-            : undefined;
+        const maximum = z.number().safeParse(maxFiles);
+        const capacity = maximum.success
+          ? Math.max(0, maximum.data - prev.length)
+          : undefined;
         const capped =
-          typeof capacity === "number" ? sized.slice(0, capacity) : sized;
-        if (typeof capacity === "number" && sized.length > capacity) {
+          capacity === undefined ? sized : sized.slice(0, capacity);
+        if (capacity !== undefined && sized.length > capacity) {
           onError?.({
             code: "max_files",
             message: "Too many files. Some were not added.",
@@ -628,17 +659,15 @@ export const PromptInput = ({
     [matchesAccept, maxFiles, maxFileSize, onError]
   );
 
-  const removeLocal = useCallback(
-    (id: string) =>
-      setItems((prev) => {
-        const found = prev.find((file) => file.id === id);
-        if (found?.url) {
-          URL.revokeObjectURL(found.url);
-        }
-        return prev.filter((file) => file.id !== id);
-      }),
-    []
-  );
+  const removeLocal = useCallback((id: string) => {
+    setItems((prev) => {
+      const found = prev.find((file) => file.id === id);
+      if (found?.url) {
+        URL.revokeObjectURL(found.url);
+      }
+      return prev.filter((file) => file.id !== id);
+    });
+  }, []);
 
   // Wrapper that validates files before calling provider's add
   const addWithProviderValidation = useCallback(
@@ -664,13 +693,12 @@ export const PromptInput = ({
       }
 
       const currentCount = files.length;
-      const capacity =
-        typeof maxFiles === "number"
-          ? Math.max(0, maxFiles - currentCount)
-          : undefined;
-      const capped =
-        typeof capacity === "number" ? sized.slice(0, capacity) : sized;
-      if (typeof capacity === "number" && sized.length > capacity) {
+      const maximum = z.number().safeParse(maxFiles);
+      const capacity = maximum.success
+        ? Math.max(0, maximum.data - currentCount)
+        : undefined;
+      const capped = capacity === undefined ? sized : sized.slice(0, capacity);
+      if (capacity !== undefined && sized.length > capacity) {
         onError?.({
           code: "max_files",
           message: "Too many files. Some were not added.",
@@ -684,25 +712,24 @@ export const PromptInput = ({
     [matchesAccept, maxFileSize, maxFiles, onError, files.length, controller]
   );
 
-  const clearAttachments = useCallback(
-    () =>
-      usingProvider
-        ? controller?.attachments.clear()
-        : setItems((prev) => {
-            for (const file of prev) {
-              if (file.url) {
-                URL.revokeObjectURL(file.url);
-              }
-            }
-            return [];
-          }),
-    [usingProvider, controller]
-  );
+  const clearAttachments = useCallback(() => {
+    if (usingProvider) {
+      controller.attachments.clear();
+      return;
+    }
+    setItems((previousItems) => {
+      for (const file of previousItems) {
+        if (file.url) {
+          URL.revokeObjectURL(file.url);
+        }
+      }
+      return [];
+    });
+  }, [usingProvider, controller]);
 
-  const clearReferencedSources = useCallback(
-    () => setReferencedSources([]),
-    []
-  );
+  const clearReferencedSources = useCallback(() => {
+    setReferencedSources([]);
+  }, []);
 
   const add = usingProvider ? addWithProviderValidation : addLocal;
   const remove = usingProvider ? controller.attachments.remove : removeLocal;
@@ -720,7 +747,9 @@ export const PromptInput = ({
     if (!usingProvider) {
       return;
     }
-    controller.__registerFileInput(inputRef, () => inputRef.current?.click());
+    controller.registerFileInput(inputRef, () => {
+      inputRef.current?.click();
+    });
   }, [usingProvider, controller]);
 
   // Note: File input cannot be programmatically set for security reasons
@@ -735,24 +764,28 @@ export const PromptInput = ({
   useEffect(() => {
     const form = formRef.current;
     if (!form) {
-      return;
+      return undefined;
     }
     if (globalDrop) {
       // when global drop is on, let the document-level handler own drops
-      return;
+      return undefined;
     }
 
     const onDragOver = (e: DragEvent) => {
-      if (e.dataTransfer?.types?.includes("Files")) {
+      const dataTransfer = dragDataTransferSchema.safeParse(e.dataTransfer);
+      if (!dataTransfer.success) return;
+      if (dataTransfer.data.types.includes("Files")) {
         e.preventDefault();
       }
     };
     const onDrop = (e: DragEvent) => {
-      if (e.dataTransfer?.types?.includes("Files")) {
+      const dataTransfer = dragDataTransferSchema.safeParse(e.dataTransfer);
+      if (!dataTransfer.success) return;
+      if (dataTransfer.data.types.includes("Files")) {
         e.preventDefault();
       }
-      if (e.dataTransfer?.files && e.dataTransfer.files.length > 0) {
-        add(e.dataTransfer.files);
+      if (dataTransfer.data.files.length > 0) {
+        add(dataTransfer.data.files);
       }
     };
     form.addEventListener("dragover", onDragOver);
@@ -765,20 +798,24 @@ export const PromptInput = ({
 
   useEffect(() => {
     if (!globalDrop) {
-      return;
+      return undefined;
     }
 
     const onDragOver = (e: DragEvent) => {
-      if (e.dataTransfer?.types?.includes("Files")) {
+      const dataTransfer = dragDataTransferSchema.safeParse(e.dataTransfer);
+      if (!dataTransfer.success) return;
+      if (dataTransfer.data.types.includes("Files")) {
         e.preventDefault();
       }
     };
     const onDrop = (e: DragEvent) => {
-      if (e.dataTransfer?.types?.includes("Files")) {
+      const dataTransfer = dragDataTransferSchema.safeParse(e.dataTransfer);
+      if (!dataTransfer.success) return;
+      if (dataTransfer.data.types.includes("Files")) {
         e.preventDefault();
       }
-      if (e.dataTransfer?.files && e.dataTransfer.files.length > 0) {
-        add(e.dataTransfer.files);
+      if (dataTransfer.data.files.length > 0) {
+        add(dataTransfer.data.files);
       }
     };
     document.addEventListener("dragover", onDragOver);
@@ -818,7 +855,7 @@ export const PromptInput = ({
       add,
       clear: clearAttachments,
       fileInputRef: inputRef,
-      files: files.map((item) => ({ ...item, id: item.id })),
+      files,
       openFileDialog,
       remove,
     }),
@@ -831,7 +868,7 @@ export const PromptInput = ({
         const array = Array.isArray(incoming) ? incoming : [incoming];
         setReferencedSources((prev) => [
           ...prev,
-          ...array.map((s) => ({ ...s, id: nanoid() })),
+          ...array.map((source) => Object.assign({}, source, { id: nanoid() })),
         ]);
       },
       clear: clearReferencedSources,
@@ -843,8 +880,8 @@ export const PromptInput = ({
     [referencedSources, clearReferencedSources]
   );
 
-  const handleSubmit: FormEventHandler<HTMLFormElement> = useCallback(
-    async (event) => {
+  const handleSubmit = useCallback(
+    async (event: SubmitEvent<HTMLFormElement>) => {
       event.preventDefault();
 
       const form = event.currentTarget;
@@ -852,7 +889,7 @@ export const PromptInput = ({
         ? controller.textInput.value
         : (() => {
             const formData = new FormData(form);
-            return (formData.get("message") as string) || "";
+            return z.string().catch("").parse(formData.get("message"));
           })();
 
       // Reset form immediately after capturing text to avoid race condition
@@ -865,7 +902,7 @@ export const PromptInput = ({
         // Convert blob URLs to data URLs asynchronously
         const convertedFiles: FileUIPart[] = await Promise.all(
           files.map(async ({ id: _id, ...item }) => {
-            if (item.url?.startsWith("blob:")) {
+            if (item.url.startsWith("blob:")) {
               const dataUrl = await convertBlobUrlToDataUrl(item.url);
               // If conversion failed, keep the original blob URL
               return {
@@ -919,7 +956,9 @@ export const PromptInput = ({
       />
       <form
         className={cn("w-full", className)}
-        onSubmit={handleSubmit}
+        onSubmit={(event) => {
+          void handleSubmit(event);
+        }}
         ref={formRef}
         {...props}
       >
@@ -987,9 +1026,9 @@ export const PromptInputTextarea = ({
 
         // Check if the submit button is disabled before submitting
         const { form } = e.currentTarget;
-        const submitButton = form?.querySelector(
+        const submitButton = form?.querySelector<HTMLButtonElement>(
           'button[type="submit"]'
-        ) as HTMLButtonElement | null;
+        );
         if (submitButton?.disabled) {
           return;
         }
@@ -1015,11 +1054,7 @@ export const PromptInputTextarea = ({
 
   const handlePaste: ClipboardEventHandler<HTMLTextAreaElement> = useCallback(
     (event) => {
-      const items = event.clipboardData?.items;
-
-      if (!items) {
-        return;
-      }
+      const items = event.clipboardData.items;
 
       const files: File[] = [];
 
@@ -1040,8 +1075,12 @@ export const PromptInputTextarea = ({
     [attachments]
   );
 
-  const handleCompositionEnd = useCallback(() => setIsComposing(false), []);
-  const handleCompositionStart = useCallback(() => setIsComposing(true), []);
+  const handleCompositionEnd = useCallback(() => {
+    setIsComposing(false);
+  }, []);
+  const handleCompositionStart = useCallback(() => {
+    setIsComposing(true);
+  }, []);
 
   const controlledProps = controller
     ? {
@@ -1122,6 +1161,12 @@ export type PromptInputButtonTooltip =
       side?: ComponentProps<typeof TooltipContent>["side"];
     };
 
+const promptInputButtonTooltipOptionsSchema = z.object({
+  content: z.custom<ReactNode>(),
+  shortcut: z.string().optional(),
+  side: z.enum(["bottom", "left", "right", "top"]).optional(),
+});
+
 export type PromptInputButtonProps = ComponentProps<typeof InputGroupButton> & {
   tooltip?: PromptInputButtonTooltip;
 };
@@ -1150,10 +1195,15 @@ export const PromptInputButton = ({
     return button;
   }
 
-  const tooltipContent =
-    typeof tooltip === "string" ? tooltip : tooltip.content;
-  const shortcut = typeof tooltip === "string" ? undefined : tooltip.shortcut;
-  const side = typeof tooltip === "string" ? "top" : (tooltip.side ?? "top");
+  const tooltipText = z.string().safeParse(tooltip);
+  const tooltipOptions = tooltipText.success
+    ? undefined
+    : promptInputButtonTooltipOptionsSchema.parse(tooltip);
+  const tooltipContent = tooltipText.success
+    ? tooltipText.data
+    : tooltipOptions?.content;
+  const shortcut = tooltipOptions?.shortcut;
+  const side = tooltipOptions?.side ?? "top";
 
   return (
     <Tooltip>
@@ -1239,14 +1289,16 @@ export const PromptInputSubmit = ({
     Icon = <XIcon className="size-4" />;
   }
 
-  const handleClick = useCallback(
-    (e: React.MouseEvent<HTMLButtonElement>) => {
+  const handleClick = useCallback<
+    NonNullable<PromptInputSubmitProps["onClick"]>
+  >(
+    (e) => {
       if (isGenerating && onStop) {
         e.preventDefault();
         onStop();
         return;
       }
-      (onClick as React.MouseEventHandler<HTMLButtonElement> | undefined)?.(e);
+      onClick?.(e);
     },
     [isGenerating, onStop, onClick]
   );
@@ -1371,14 +1423,16 @@ export const PromptInputTab = ({
 export type PromptInputTabLabelProps = HTMLAttributes<HTMLHeadingElement>;
 
 export const PromptInputTabLabel = ({
+  children,
   className,
   ...props
 }: PromptInputTabLabelProps) => (
-  // Content provided via children in props
   <h3
     className={cn("mb-2 px-3 type-card-title text-muted-foreground", className)}
     {...props}
-  />
+  >
+    {children}
+  </h3>
 );
 
 export type PromptInputTabBodyProps = HTMLAttributes<HTMLDivElement>;

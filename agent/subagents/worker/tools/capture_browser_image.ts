@@ -1,19 +1,21 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
+import { del, put } from "@vercel/blob";
 import { defineTool, toolOutput } from "eve/tools";
 import { z } from "zod";
 import { requireWorkerScope } from "@/agent/subagents/worker/lib/access";
 import { requireOwnedBrowserSession } from "@/agent/subagents/worker/lib/owned-browser";
 import { withVaultScreenshotMask } from "@/agent/subagents/worker/lib/vault-screenshot-mask";
-import { reserveBrowserImageArtifact } from "@/db/services/browser-images";
+import {
+  finalizeBrowserImageArtifact,
+  reserveBrowserImageArtifact,
+  type BrowserImageArtifactReservation,
+} from "@/db/services/browser-images";
 import {
   browserImageArtifactReferenceSchema,
-  safeBrowserImageFilename,
+  maximumBrowserImageBytes,
   sniffBrowserImageMediaType,
-} from "@/lib/browser-images";
-import {
-  persistReservedBrowserImage,
-  readBoundedResponse,
-} from "@/lib/browser-images/server";
+} from "@/lib/browser-artifact";
+import { env } from "@/env";
 import { kernel } from "@/lib/kernel";
 
 const regionSchema = z.object({
@@ -22,27 +24,27 @@ const regionSchema = z.object({
   x: z.number().int().nonnegative(),
   y: z.number().int().nonnegative(),
 });
-const commonShape = {
+const commonFields = {
   label: z.string().trim().min(1).max(200),
   session_id: z.string().min(1),
 };
 const inputSchema = z.discriminatedUnion("source", [
   z.object({
-    ...commonShape,
+    ...commonFields,
     region: regionSchema.optional(),
     source: z.literal("viewport"),
   }),
   z.object({
-    ...commonShape,
+    ...commonFields,
     source: z.literal("full_page"),
   }),
   z.object({
-    ...commonShape,
+    ...commonFields,
     selector: z.string().trim().min(1).max(2_000),
     source: z.literal("element"),
   }),
   z.object({
-    ...commonShape,
+    ...commonFields,
     selector: z.string().trim().min(1).max(2_000),
     source: z.literal("image_resource"),
   }),
@@ -80,7 +82,7 @@ export default defineTool({
         "The captured resource is not a supported browser image."
       );
     }
-    const image = await persistReservedBrowserImage(
+    const image = await persistCapturedImage(
       scope,
       reserved.reservation,
       {
@@ -158,6 +160,7 @@ async function captureBrowserImage(
         };
       }
   }
+  throw new Error("Unsupported browser image source.");
 }
 
 async function captureImageResource(
@@ -256,4 +259,110 @@ await target.screenshot({ animations: "disabled", caret: "hide", path: ${JSON.st
         .catch(() => undefined);
     }
   });
+}
+
+function safeBrowserImageFilename(
+  label: string,
+  mediaType: NonNullable<ReturnType<typeof sniffBrowserImageMediaType>>
+) {
+  const extension = {
+    "image/gif": "gif",
+    "image/jpeg": "jpg",
+    "image/png": "png",
+    "image/webp": "webp",
+  }[mediaType];
+  const stem = label
+    .normalize("NFKD")
+    .replace(/(?:\.\.[/\\])+/gu, "")
+    .replace(/\p{Cc}+/gu, "")
+    .replace(/[^\p{L}\p{N}._() -]+/gu, "_")
+    .replace(/\s+/gu, " ")
+    .trim()
+    .replace(/^\.+|\.+$/gu, "")
+    .slice(0, 160);
+  return `${stem || "browser-image"}.${extension}`;
+}
+
+async function persistCapturedImage(
+  scope: Awaited<ReturnType<typeof requireWorkerScope>>,
+  reservation: BrowserImageArtifactReservation,
+  input: {
+    readonly bytes: Uint8Array;
+    readonly filename: string;
+    readonly sourceKind: string;
+  },
+  signal?: AbortSignal
+) {
+  const mediaType = sniffBrowserImageMediaType(input.bytes);
+  if (!mediaType)
+    throw new Error("The captured resource is not a supported browser image.");
+  const contentHash = createHash("sha256").update(input.bytes).digest("hex");
+  const storagePathname = `${reservation.storagePathname}/${contentHash}`;
+  if (!env.BLOB_STORE_ID && !env.BLOB_READ_WRITE_TOKEN) {
+    throw new Error("Browser image storage is not configured.");
+  }
+
+  await put(storagePathname, Buffer.from(input.bytes), {
+    access: "private",
+    abortSignal: signal,
+    addRandomSuffix: false,
+    allowOverwrite: true,
+    cacheControlMaxAge: 30 * 24 * 60 * 60,
+    contentType: mediaType,
+    maximumSizeInBytes: maximumBrowserImageBytes,
+  });
+  try {
+    const finalized = await finalizeBrowserImageArtifact(scope, reservation, {
+      byteSize: input.bytes.byteLength,
+      contentHash,
+      filename: input.filename,
+      mediaType,
+      sourceKind: input.sourceKind,
+      storagePathname,
+    });
+    if (finalized.storagePathname !== storagePathname) {
+      await del(storagePathname).catch(() => undefined);
+    }
+    return finalized.image;
+  } catch (error) {
+    await del(storagePathname).catch(() => undefined);
+    throw error;
+  }
+}
+
+async function readBoundedResponse(response: Response) {
+  const contentLength = Number(response.headers.get("content-length"));
+  if (
+    Number.isFinite(contentLength) &&
+    contentLength > maximumBrowserImageBytes
+  ) {
+    throw new Error("The browser image exceeds the maximum size.");
+  }
+  if (!response.body) throw new Error("The browser image response is empty.");
+  const reader = response.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  try {
+    /* oxlint-disable eslint/no-await-in-loop -- A response body is an ordered stream and must be read and cancelled sequentially. */
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      total += value.byteLength;
+      if (total > maximumBrowserImageBytes) {
+        await reader.cancel();
+        throw new Error("The browser image exceeds the maximum size.");
+      }
+      chunks.push(value);
+    }
+    /* oxlint-enable eslint/no-await-in-loop */
+  } finally {
+    reader.releaseLock();
+  }
+  const bytes = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return bytes;
 }

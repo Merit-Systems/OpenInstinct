@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { browserActivityKinds } from "../../src/lib/browser/activity-timing.ts";
+import { browserActivityKinds } from "../../src/components/browser/activity-timing.ts";
 
 const dateTime = z.iso.datetime();
 const nullableDateTime = dateTime.nullable();

@@ -37,6 +37,7 @@ export const userProfilePatchSchema = userProfileSchema
   });
 
 export type UserProfile = z.infer<typeof userProfileSchema>;
+export type UserProfilePatch = z.infer<typeof userProfilePatchSchema>;
 
 export const emptyUserProfile = {
   addressLine1: null,
@@ -56,7 +57,7 @@ export function hasUserProfileValues(profile: UserProfile) {
   return Object.values(profile).some((value) => value !== null);
 }
 
-export function parseUserProfile(input: unknown) {
+export function parseUserProfile(input: UserProfile) {
   const profile = userProfileSchema.parse(input);
   return {
     ...profile,

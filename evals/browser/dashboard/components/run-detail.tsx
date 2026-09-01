@@ -28,7 +28,7 @@ export function RunDetail({ runId }: { runId: string }) {
   const active = run?.status === "preparing" || run?.status === "running";
 
   useEffect(() => {
-    if (!active) return;
+    if (!active) return undefined;
     const timer = setInterval(() => {
       setNow(Date.now());
     }, 1_000);
