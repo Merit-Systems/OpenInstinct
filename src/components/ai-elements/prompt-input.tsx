@@ -1256,29 +1256,41 @@ export const PromptInputTextarea = ({
         value,
       };
 
+  const textarea = (
+    <InputGroupTextarea
+      className={cn("field-sizing-content max-h-48 min-h-16", className)}
+      name="message"
+      onCompositionEnd={handleCompositionEnd}
+      onCompositionStart={handleCompositionStart}
+      onKeyDown={handleKeyDown}
+      onPaste={handlePaste}
+      placeholder={placeholder}
+      ref={textareaRef}
+      {...props}
+      {...controlledProps}
+    />
+  );
+
+  if (!layout?.compact) {
+    return textarea;
+  }
+
   return (
     <>
-      <InputGroupTextarea
-        className={cn("field-sizing-content max-h-48 min-h-16", className)}
-        name="message"
-        onCompositionEnd={handleCompositionEnd}
-        onCompositionStart={handleCompositionStart}
-        onKeyDown={handleKeyDown}
-        onPaste={handlePaste}
-        placeholder={placeholder}
-        ref={textareaRef}
-        {...props}
-        {...controlledProps}
-      />
-      {layout?.compact ? (
-        <span
-          aria-hidden="true"
-          className="pointer-events-none invisible fixed top-0 left-0 w-max whitespace-pre"
-          ref={measurementRef}
-        >
-          {measurementValue}
-        </span>
-      ) : null}
+      <m.div
+        className="min-w-0"
+        layout={layout.animateLayout ? "position" : false}
+        transition={{ layout: promptInputLayoutTransition }}
+      >
+        {textarea}
+      </m.div>
+      <span
+        aria-hidden="true"
+        className="pointer-events-none invisible fixed top-0 left-0 w-max whitespace-pre"
+        ref={measurementRef}
+      >
+        {measurementValue}
+      </span>
     </>
   );
 };
