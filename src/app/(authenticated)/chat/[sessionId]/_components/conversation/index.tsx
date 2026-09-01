@@ -1,8 +1,9 @@
 import { AlertCircleIcon, BrainIcon } from "lucide-react";
-import { useMemo } from "react";
+import { Fragment, useMemo } from "react";
 import {
-  deliveredAssistantMessages,
+  imessageTimestamps,
   messageTimestamps,
+  sentMessages,
 } from "../../_lib/message-events";
 import { messagesForTraceView, type TraceView } from "../../_lib/trace-view";
 import { getLatestTurnFailure } from "../../_lib/turn-failure";
@@ -41,9 +42,9 @@ export function ChatConversation({
       ? lastMessage.id
       : undefined;
   const showPendingThinking =
+    traceView === "trace" &&
     isBusy &&
-    (traceView === "imessage" ||
-      agent.status === "submitted" ||
+    (agent.status === "submitted" ||
       lastMessage?.role !== "assistant" ||
       pendingAssistantMessageId !== undefined);
   const turnFailure =
@@ -55,11 +56,14 @@ export function ChatConversation({
     [agent.data.messages, agent.events, traceView]
   );
   const timestamps = useMemo(
-    () => messageTimestamps(agent.events),
-    [agent.events]
+    () =>
+      traceView === "imessage"
+        ? imessageTimestamps(agent.events)
+        : messageTimestamps(agent.events),
+    [agent.events, traceView]
   );
   const deliveredMessages = useMemo(
-    () => deliveredAssistantMessages(agent.events),
+    () => sentMessages(agent.events),
     [agent.events]
   );
 
@@ -75,12 +79,37 @@ export function ChatConversation({
       }
     >
       <ConversationContent className="mx-auto w-full max-w-3xl gap-6 px-4 pt-6 pb-36 sm:px-6">
-        {messages.map((message, index) =>
-          showPendingThinking &&
-          message.id === pendingAssistantMessageId ? null : (
+        {messages.map((message, index) => {
+          if (showPendingThinking && message.id === pendingAssistantMessageId) {
+            return null;
+          }
+
+          const deliveries =
+            traceView === "imessage"
+              ? deliveredMessages.get(message.id)
+              : undefined;
+          if (deliveries) {
+            return (
+              <Fragment key={message.id}>
+                {deliveries.map((delivery) => (
+                  <AgentMessage
+                    canRespond={!isBusy && agent.status !== "resuming"}
+                    isStreaming={false}
+                    key={delivery.id}
+                    message={{ ...message, id: delivery.id }}
+                    onInputResponses={(responses) => agent.respond(responses)}
+                    sentMessageParts={delivery.parts}
+                    timestamp={delivery.timestamp}
+                    userVisibleOnly
+                  />
+                ))}
+              </Fragment>
+            );
+          }
+
+          return (
             <AgentMessage
               canRespond={!isBusy && agent.status !== "resuming"}
-              deliveredAssistantMessages={deliveredMessages.get(message.id)}
               isStreaming={
                 agent.status === "streaming" && index === messages.length - 1
               }
@@ -90,10 +119,12 @@ export function ChatConversation({
               timestamp={timestamps.get(message.id)}
               userVisibleOnly={traceView === "imessage"}
             />
-          )
-        )}
+          );
+        })}
         {showPendingThinking ? <PendingThinking /> : null}
-        {errorMessage ? <ErrorMessage message={errorMessage} /> : null}
+        {traceView === "trace" && errorMessage ? (
+          <ErrorMessage message={errorMessage} />
+        ) : null}
       </ConversationContent>
       <ConversationScrollButton />
     </Conversation>

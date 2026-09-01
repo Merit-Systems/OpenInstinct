@@ -10,9 +10,9 @@ import {
   taskCompletionSchema,
 } from "@/lib/worker-completion";
 import {
-  extractBrowserImageMarkdownReferences,
-  stripBrowserImageMarkdownReferences,
-} from "@/agent/lib/linq-browser-image-markdown";
+  extractImageArtifactMarkdownReferences,
+  stripImageArtifactMarkdownReferences,
+} from "@/agent/lib/linq-image-artifact/markdown";
 
 const artifactId = "0d01e667-d128-4bb7-a248-1ae21db72f4f";
 
@@ -52,12 +52,12 @@ describe("browser image contracts", () => {
     const markdown = `![Product](${artifact.url})`;
     const message = `Here it is.\n\n${markdown}\n\n${markdown}`;
 
-    expect(extractBrowserImageMarkdownReferences(message)).toEqual([
+    expect(extractImageArtifactMarkdownReferences(message)).toEqual([
       expect.objectContaining({ id: artifactId, url: artifact.url }),
     ]);
-    expect(stripBrowserImageMarkdownReferences(message)).toBe("Here it is.");
+    expect(stripImageArtifactMarkdownReferences(message)).toBe("Here it is.");
     expect(
-      stripBrowserImageMarkdownReferences(
+      stripImageArtifactMarkdownReferences(
         "![external](https://example.com/image.png)"
       )
     ).toBe("![external](https://example.com/image.png)");
