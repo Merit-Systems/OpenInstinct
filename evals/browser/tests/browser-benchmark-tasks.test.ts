@@ -20,12 +20,12 @@ describe("browser benchmark tasks", () => {
     expect(browserBenchmarkTasks("smoke")).toHaveLength(2);
   });
 
-  it("includes five additional live checkout workflows", () => {
+  it("includes six additional live checkout workflows", () => {
     const descriptions = browserBenchmarkTasks("all").map(
       (task) => task.description
     );
 
-    expect(browserBenchmarkTasks("all")).toHaveLength(11);
+    expect(browserBenchmarkTasks("all")).toHaveLength(12);
     expect(descriptions).toEqual(
       expect.arrayContaining([
         "Reach checkout for a Yankees game",
@@ -33,8 +33,21 @@ describe("browser benchmark tasks", () => {
         "Choose a facial moisturizer and reach checkout",
         "Reach checkout for a nonstop flight",
         "Reach checkout for a weekend car rental",
+        "Reach checkout for a Home Depot purchase",
       ])
     );
+  });
+
+  it("includes a Home Depot final-order boundary task", () => {
+    const task = browserBenchmarkTasks("all").find((candidate) =>
+      candidate.prompt.includes("Home Depot's official website")
+    );
+
+    expect(task).toBeDefined();
+    expect(task?.prompt).toContain("delivery to ZIP code 11201");
+    expect(task?.prompt).toContain("continue as a guest");
+    expect(task?.prompt).toContain("final Place Order or purchase control");
+    expect(task?.successCriteria).toContain("did not place the order");
   });
 
   it("tells the judge that personal and payment values are fixtures", () => {

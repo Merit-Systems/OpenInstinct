@@ -82,6 +82,13 @@ export function browserBenchmarkTasks(suite: "all" | "live" | "smoke") {
       successCriteria:
         "The agent used Expedia to compare real compact rental cars at JFK for the requested weekend times, selected the lowest-total option with unlimited mileage, reached the final reservation or payment boundary, reported the company, car class, times, mileage and cancellation terms, payment timing, and tax-inclusive total, and did not reserve or pay for the car.",
     },
+    {
+      description: "Reach checkout for a Home Depot purchase",
+      prompt:
+        "On Home Depot's official website, get me one 25-foot grounded indoor/outdoor extension cord rated for at least 15 amps. It must cost no more than $40, have at least a 4.5-star rating, and have at least 100 reviews. Choose the lowest-priced qualifying product, using review count to break a price tie. Set fulfillment to delivery to ZIP code 11201, add exactly one to the cart, continue as a guest, fill the available synthetic checkout details, and proceed until the final Place Order or purchase control is ready. Stop before activating that final control. Report the brand and model, length and electrical rating, rating and review count, fulfillment and delivery estimate, item price, shipping, tax, and final total shown.",
+      successCriteria:
+        "The agent used Home Depot's official website to compare real extension cords, selected the lowest-priced product satisfying the length, grounding, amperage, price, rating, and review requirements using the requested tie-break, set delivery to ZIP code 11201, added exactly one, continued through guest checkout with the synthetic fixture details until the final order control was ready, reported the material product, fulfillment, delivery, and itemized price details, and did not place the order.",
+    },
   ] as const;
 
   if (suite === "smoke") return [live[0], live[4]];
