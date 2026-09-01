@@ -11,9 +11,9 @@ const applicationEnvironment = [
   "LINQ_*",
   "NODE_ENV",
   "SECRET_ENCRYPTION_KEY",
-  "VERCEL_ENV",
+  "VERCEL_*",
 ];
-const runtimeEnvironment = [...applicationEnvironment, "VERCEL_OIDC_TOKEN"];
+const runtimeEnvironment = applicationEnvironment;
 
 describe("Turbo configuration", () => {
   it("scopes application environment variables to their owning tasks", async () => {
@@ -40,28 +40,60 @@ describe("Turbo configuration", () => {
     expect(turbo.tasks["build:app"].env).toHaveLength(
       applicationEnvironment.length + 1
     );
-    expect(turbo.tasks["build:vercel"].env).toEqual(
-      expect.arrayContaining([...applicationEnvironment, "VERCEL"])
-    );
-    expect(turbo.tasks["build:vercel"].env).toHaveLength(
-      applicationEnvironment.length + 1
-    );
+    expect(turbo.tasks["build:vercel"].env).toEqual(applicationEnvironment);
     expect(turbo.tasks["dev:app"].passThroughEnv).toEqual(runtimeEnvironment);
     expect(turbo.tasks["start:app"].passThroughEnv).toEqual(runtimeEnvironment);
   });
 
-  it("provisions private Blob storage through one-click and existing-project setup", async () => {
+  it("provisions required one-click deployment configuration", async () => {
     const readme = await readFile(
       new URL("../../README.md", import.meta.url),
       "utf8"
     );
+    const deployButtons = [
+      ...readme.matchAll(
+        /\[!\[Deploy with Vercel(?: and Linq)?\]\([^)]+\)\]\((https:\/\/vercel\.com\/new\/clone\?[^)]+)\)/gu
+      ),
+    ].map((match) => new URL(z.url().parse(match[1])));
+    expect(deployButtons).toHaveLength(1);
+    const [deployButton] = deployButtons;
+    expect(deployButton).toBeDefined();
     const blobSetup = readme
       .split("### Blob storage", 2)[1]
       ?.split("### Linq iMessage setup", 1)[0];
 
-    expect(readme).toContain(
-      "stores=%5B%7B%22type%22%3A%22blob%22%2C%22access%22%3A%22private%22%7D%5D"
+    expect(deployButton?.searchParams.get("repository-url")).toBe(
+      "https://github.com/Merit-Systems/OpenInstinct"
     );
+    expect(deployButton?.searchParams.has("env")).toBe(false);
+    expect(deployButton?.searchParams.has("products")).toBe(false);
+    expect(
+      JSON.parse(deployButton?.searchParams.get("stores") ?? "null")
+    ).toEqual([
+      {
+        integrationSlug: "kernel",
+        productSlug: "kernel",
+        protocol: "other",
+        type: "integration",
+      },
+      {
+        integrationSlug: "neon",
+        productSlug: "neon",
+        protocol: "storage",
+        type: "integration",
+      },
+      { access: "private", type: "blob" },
+    ]);
+    expect(
+      JSON.parse(deployButton?.searchParams.get("connect") ?? "null")
+    ).toEqual([
+      {
+        env: "LINQ_CONNECTOR",
+        triggerPath: "/eve/v1/linq",
+        triggers: true,
+        type: "linq",
+      },
+    ]);
     expect(blobSetup).toContain(
       "vercel blob create-store open-instinct-images --access private --yes"
     );

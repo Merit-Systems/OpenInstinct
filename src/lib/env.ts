@@ -2,10 +2,28 @@ import { createEnv } from "@t3-oss/env-nextjs";
 import { z } from "zod";
 import { isE164PhoneNumber } from "../auth/phone-number";
 import { databaseUrlSchema } from "@/db/env/utils";
+import {
+  betterAuthSecretSchema,
+  secretEncryptionKeySchema,
+} from "./installation-secrets-schema";
 
 const localDevelopment =
   process.env.NODE_ENV === "development" &&
   process.env.VERCEL_ENV === undefined;
+const explicitBetterAuthSecret = hasValue(process.env.BETTER_AUTH_SECRET);
+const explicitSecretEncryptionKey = hasValue(process.env.SECRET_ENCRYPTION_KEY);
+
+if (
+  localDevelopment &&
+  explicitBetterAuthSecret !== explicitSecretEncryptionKey
+) {
+  throw new Error(
+    "Set both BETTER_AUTH_SECRET and SECRET_ENCRYPTION_KEY, or leave both unset for local defaults."
+  );
+}
+
+const useLocalInstallationDefaults =
+  localDevelopment && !explicitBetterAuthSecret && !explicitSecretEncryptionKey;
 
 const requiredValue = z
   .string()
@@ -16,16 +34,19 @@ const betterAuthUrlSchema = requiredValue.refine(
   "BETTER_AUTH_URL must be an absolute URL"
 );
 
-const secretEncryptionKeySchema = requiredValue.refine(
-  (value) => Buffer.from(value, "base64").length === 32,
-  "SECRET_ENCRYPTION_KEY must be a base64-encoded 32-byte key."
-);
-
-function requiredValueWithLocalDefault<T extends z.ZodType<string, string>>(
+function optionalValueWithLocalDefault<T extends z.ZodType<string, string>>(
   schema: T,
   localDefault: z.util.NoUndefined<z.output<T>>
 ) {
-  return localDevelopment ? schema.default(localDefault) : schema;
+  return localDevelopment ? schema.default(localDefault) : schema.optional();
+}
+
+function installationSecretWithLocalDefault<
+  T extends z.ZodType<string, string>,
+>(schema: T, localDefault: z.util.NoUndefined<z.output<T>>) {
+  return useLocalInstallationDefaults
+    ? schema.default(localDefault)
+    : schema.optional();
 }
 
 export const env = createEnv({
@@ -34,16 +55,17 @@ export const env = createEnv({
     DATABASE_URL: databaseUrlSchema,
     KERNEL_API_KEY: requiredValue,
 
-    // Required with local defaults
-    BETTER_AUTH_SECRET: requiredValueWithLocalDefault(
-      requiredValue,
+    // Optional overrides with local defaults. Vercel deployments provision
+    // installation secrets in their connected private Blob store.
+    BETTER_AUTH_SECRET: installationSecretWithLocalDefault(
+      betterAuthSecretSchema,
       "openinstinct-local-auth-development-secret"
     ),
-    BETTER_AUTH_URL: requiredValueWithLocalDefault(
+    BETTER_AUTH_URL: optionalValueWithLocalDefault(
       betterAuthUrlSchema,
       "http://localhost:3000"
     ),
-    SECRET_ENCRYPTION_KEY: requiredValueWithLocalDefault(
+    SECRET_ENCRYPTION_KEY: installationSecretWithLocalDefault(
       secretEncryptionKeySchema,
       "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
     ),
@@ -65,29 +87,31 @@ export const env = createEnv({
     NODE_ENV: z
       .enum(["development", "production", "test"])
       .default("production"),
+    VERCEL_BRANCH_URL: requiredValue.optional(),
     VERCEL_ENV: z.enum(["production", "preview", "development"]).optional(),
+    VERCEL_PROJECT_ID: requiredValue.optional(),
+    VERCEL_PROJECT_PRODUCTION_URL: requiredValue.optional(),
+    VERCEL_URL: requiredValue.optional(),
   },
   experimental__runtimeEnv: {},
   emptyStringAsUndefined: true,
 });
 
-if (
-  (env.LINQ_CONNECTOR === undefined) !==
-  (env.LINQ_PHONE_NUMBER === undefined)
-) {
-  throw new Error(
-    "LINQ_CONNECTOR and LINQ_PHONE_NUMBER must be configured together."
-  );
-}
-const authHostname = new URL(env.BETTER_AUTH_URL).hostname;
+const authHostname = env.BETTER_AUTH_URL
+  ? new URL(env.BETTER_AUTH_URL).hostname
+  : undefined;
 
 export const localPhoneAuthBypassEnabled =
   localDevelopment &&
   (authHostname === "localhost" ||
-    authHostname.endsWith(".localhost") ||
+    authHostname?.endsWith(".localhost") === true ||
     authHostname === "127.0.0.1" ||
     authHostname === "[::1]");
 
 export function isWorkspaceScopeEnforcementEnabled() {
   return env.WORKSPACE_SCOPE_ENFORCEMENT === "enforce";
+}
+
+function hasValue(value: string | undefined) {
+  return value !== undefined && value.trim().length > 0;
 }

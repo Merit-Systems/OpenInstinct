@@ -9,7 +9,7 @@ import {
 import { and, eq, gte, inArray, isNull, lte } from "drizzle-orm";
 import { z } from "zod";
 import type { AccessScope } from "@/lib/access-scope";
-import { env } from "@/lib/env";
+import { getInstallationSecrets } from "@/lib/installation-secrets";
 import {
   db,
   webhookDeliveries,
@@ -43,6 +43,7 @@ export async function registerWebhookEndpoint(
   const parsed = endpointInputSchema.parse(input);
   const url = requirePublicHttpsUrl(parsed.url);
   await ensureScope(scope);
+  const { secretEncryptionKey } = await getInstallationSecrets();
   const id = randomUUID();
   const secret = webhookSecret();
   const now = new Date().toISOString();
@@ -51,7 +52,11 @@ export async function registerWebhookEndpoint(
     const [row] = await transaction
       .insert(webhookEndpoints)
       .values({
-        encryptedSigningSecret: encryptWebhookSecret(id, secret),
+        encryptedSigningSecret: encryptWebhookSecret(
+          id,
+          secret,
+          secretEncryptionKey
+        ),
         id,
         subscribedEvents: [...new Set(parsed.subscribedEvents)],
         url,
@@ -133,6 +138,7 @@ export async function rotateWebhookSecret(
   endpointId: string
 ) {
   await ensureScope(scope);
+  const { secretEncryptionKey } = await getInstallationSecrets();
   const secret = webhookSecret();
   const now = new Date().toISOString();
   const endpoint = await db.transaction(async (transaction) => {
@@ -140,7 +146,11 @@ export async function rotateWebhookSecret(
     const [row] = await transaction
       .update(webhookEndpoints)
       .set({
-        encryptedSigningSecret: encryptWebhookSecret(endpointId, secret),
+        encryptedSigningSecret: encryptWebhookSecret(
+          endpointId,
+          secret,
+          secretEncryptionKey
+        ),
         updatedAt: now,
       })
       .where(
@@ -192,6 +202,7 @@ export async function drainWebhookDeliveries({
   limit = 50,
   fetchImpl = globalThis.fetch,
 }: { readonly limit?: number; readonly fetchImpl?: typeof fetch } = {}) {
+  const { secretEncryptionKey } = await getInstallationSecrets();
   const now = new Date().toISOString();
   await db
     .update(webhookDeliveries)
@@ -237,7 +248,8 @@ export async function drainWebhookDeliveries({
         row.delivery,
         row.endpoint,
         row.event,
-        fetchImpl
+        fetchImpl,
+        secretEncryptionKey
       );
     });
     if (!result) break;
@@ -294,7 +306,8 @@ async function deliver(
   delivery: typeof webhookDeliveries.$inferSelect,
   endpoint: typeof webhookEndpoints.$inferSelect,
   event: typeof webhookEvents.$inferSelect,
-  fetchImpl: typeof fetch
+  fetchImpl: typeof fetch,
+  secretEncryptionKey: string
 ): Promise<"dead" | "delivered" | "failed"> {
   const now = new Date().toISOString();
   let responseStatus: number | null = null;
@@ -319,7 +332,11 @@ async function deliver(
     const timestamp = now;
     const signature = createHmac(
       "sha256",
-      decryptWebhookSecret(endpoint.id, endpoint.encryptedSigningSecret)
+      decryptWebhookSecret(
+        endpoint.id,
+        endpoint.encryptedSigningSecret,
+        secretEncryptionKey
+      )
     )
       .update(`${timestamp}.${body}`, "utf8")
       .digest("hex");
@@ -436,11 +453,11 @@ async function isOwner(executor: Executor, scope: AccessScope) {
 function webhookSecret() {
   return `whsec_${randomBytes(32).toString("base64url")}`;
 }
-function derivedKey() {
+function derivedKey(secretEncryptionKey: string) {
   return Buffer.from(
     hkdfSync(
       "sha256",
-      Buffer.from(env.SECRET_ENCRYPTION_KEY, "base64"),
+      Buffer.from(secretEncryptionKey, "base64"),
       Buffer.alloc(0),
       "webhook-endpoint-aead",
       32
@@ -450,9 +467,17 @@ function derivedKey() {
 function aad(id: string) {
   return Buffer.from(`webhook-endpoint\u0000${id}`);
 }
-function encryptWebhookSecret(id: string, secret: string) {
+function encryptWebhookSecret(
+  id: string,
+  secret: string,
+  secretEncryptionKey: string
+) {
   const iv = randomBytes(12);
-  const cipher = createCipheriv("aes-256-gcm", derivedKey(), iv);
+  const cipher = createCipheriv(
+    "aes-256-gcm",
+    derivedKey(secretEncryptionKey),
+    iv
+  );
   cipher.setAAD(aad(id));
   const ciphertext = Buffer.concat([
     cipher.update(secret, "utf8"),
@@ -465,19 +490,25 @@ function encryptWebhookSecret(id: string, secret: string) {
     ciphertext.toString("base64url"),
   ].join(".");
 }
-export function encryptWebhookSecretForTest(id: string, secret: string) {
-  return encryptWebhookSecret(id, secret);
+export async function encryptWebhookSecretForTest(id: string, secret: string) {
+  const { secretEncryptionKey } = await getInstallationSecrets();
+  return encryptWebhookSecret(id, secret, secretEncryptionKey);
 }
-export function decryptWebhookSecretForTest(id: string, value: string) {
-  return decryptWebhookSecret(id, value);
+export async function decryptWebhookSecretForTest(id: string, value: string) {
+  const { secretEncryptionKey } = await getInstallationSecrets();
+  return decryptWebhookSecret(id, value, secretEncryptionKey);
 }
-function decryptWebhookSecret(id: string, value: string) {
+function decryptWebhookSecret(
+  id: string,
+  value: string,
+  secretEncryptionKey: string
+) {
   const [version, iv, tag, ciphertext] = value.split(".");
   if (version !== "v1" || !iv || !tag || !ciphertext)
     throw new Error("The stored webhook secret uses an unsupported format.");
   const decipher = createDecipheriv(
     "aes-256-gcm",
-    derivedKey(),
+    derivedKey(secretEncryptionKey),
     Buffer.from(iv, "base64url")
   );
   decipher.setAAD(aad(id));

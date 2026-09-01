@@ -30,15 +30,18 @@ describe("Linq phone authentication", () => {
       "0123456789abcdefghijklmnopqrstuvwxyzABCD"
     );
     vi.stubEnv("LINQ_CONNECTOR", "linq/open-instinct");
-    vi.stubEnv("LINQ_PHONE_NUMBER", "+12025550123");
     vi.mocked(getToken).mockResolvedValue("test-token");
     vi.stubGlobal(
       "fetch",
       vi.fn<typeof fetch>().mockResolvedValue(
         Response.json(
           {
-            code: 2015,
-            message: "no eligible sending line available",
+            error: {
+              code: 2015,
+              message: "no eligible sending line available",
+              status: 409,
+            },
+            success: false,
             trace_id: "trace-123",
           },
           { status: 409 }
@@ -57,7 +60,7 @@ describe("Linq phone authentication", () => {
 
     const body = linqApiErrorSchema.parse(error.body);
     expect(body).toMatchObject({
-      code: "LINQ_CONTACT_NOT_ALLOWED",
+      code: "LINQ_SENDING_LINE_NOT_VERIFIED",
       linqError: {
         code: 2015,
         message: "no eligible sending line available",
@@ -65,6 +68,8 @@ describe("Linq phone authentication", () => {
         trace_id: "trace-123",
       },
     });
-    expect(phoneOtpErrorMessage(body)).toContain("Messaging Contacts");
+    expect(phoneOtpErrorMessage(body)).toContain(
+      "Phone Numbers verification instruction"
+    );
   });
 });

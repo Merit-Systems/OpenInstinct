@@ -43,9 +43,15 @@ describe("webhook outbox", () => {
     );
     expect(registered.secret).toMatch(/^whsec_[A-Za-z0-9_-]{43}$/);
     expect(
-      service.webhooks.encryptWebhookSecretForTest("iv-test", "same-secret")
+      await service.webhooks.encryptWebhookSecretForTest(
+        "iv-test",
+        "same-secret"
+      )
     ).not.toBe(
-      service.webhooks.encryptWebhookSecretForTest("iv-test", "same-secret")
+      await service.webhooks.encryptWebhookSecretForTest(
+        "iv-test",
+        "same-secret"
+      )
     );
     const [stored] = (
       await service.client.query<{
@@ -56,17 +62,17 @@ describe("webhook outbox", () => {
     if (!stored) throw new Error("Expected a stored endpoint.");
     expect(stored.encrypted_signing_secret).not.toContain(registered.secret);
     expect(
-      service.webhooks.decryptWebhookSecretForTest(
+      await service.webhooks.decryptWebhookSecretForTest(
         stored.id,
         stored.encrypted_signing_secret
       )
     ).toBe(registered.secret);
-    expect(() =>
+    await expect(
       service.webhooks.decryptWebhookSecretForTest(
         "wrong",
         stored.encrypted_signing_secret
       )
-    ).toThrow("Unsupported");
+    ).rejects.toThrow("Unsupported");
     await expect(
       service.webhooks.registerWebhookEndpoint(service.member, {
         url: "https://no.example.test",
@@ -367,6 +373,14 @@ async function loadService() {
   vi.doMock("@/lib/env", () => ({
     env: { SECRET_ENCRYPTION_KEY: Buffer.alloc(32, 7).toString("base64") },
     isWorkspaceScopeEnforcementEnabled: () => false,
+  }));
+  vi.doMock("@/lib/installation-secrets", () => ({
+    getInstallationSecrets: () =>
+      Promise.resolve({
+        betterAuthSecret: "test-auth-secret",
+        secretEncryptionKey: Buffer.alloc(32, 7).toString("base64"),
+        version: 1,
+      }),
   }));
   const webhooks = await import("@/db/services/webhooks");
   const agents = await import("@/db/services/agents");

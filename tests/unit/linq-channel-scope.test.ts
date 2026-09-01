@@ -16,9 +16,10 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock("@/auth", () => ({
-  auth: {
-    $context: Promise.resolve({ adapter: { findOne: mocks.findOne } }),
-  },
+  getAuth: () =>
+    Promise.resolve({
+      $context: Promise.resolve({ adapter: { findOne: mocks.findOne } }),
+    }),
 }));
 vi.mock("@/db/services/scope", () => ({
   verifyScopeAccess: mocks.verifyScopeAccess,

@@ -13,7 +13,7 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock("@/auth", () => ({
-  auth: { api: { getSession: mocks.getSession } },
+  getAuth: () => Promise.resolve({ api: { getSession: mocks.getSession } }),
 }));
 
 import { getAuthSession } from "@/auth/session";
@@ -42,10 +42,18 @@ describe("auth session", () => {
       })
       .mockResolvedValueOnce({
         user: { id: "user-3", phoneNumberVerified: true },
+      })
+      .mockResolvedValueOnce({
+        user: {
+          id: "user-4",
+          phoneNumber: "",
+          phoneNumberVerified: true,
+        },
       });
 
     const headers = new Headers();
-    await expect(getAuthSession(headers)).resolves.toBe(verified);
+    await expect(getAuthSession(headers)).resolves.toEqual(verified);
+    await expect(getAuthSession(headers)).resolves.toBeNull();
     await expect(getAuthSession(headers)).resolves.toBeNull();
     await expect(getAuthSession(headers)).resolves.toBeNull();
   });

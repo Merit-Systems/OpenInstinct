@@ -30,18 +30,18 @@ describe("phone identities", () => {
       /^v1\.[\w-]+\.[\w-]+\.[\w-]+$/
     );
     expect(identity.phoneLookupHash).toBe(expectedLookupHash());
-    expect(
+    await expect(
       service.decryptPhoneIdentityForTest(
         identity.id,
         identity.encryptedPhoneNumber
       )
-    ).toBe(normalizedPhoneNumber);
-    expect(() =>
+    ).resolves.toBe(normalizedPhoneNumber);
+    await expect(
       service.decryptPhoneIdentityForTest(
         "different-row-id",
         identity.encryptedPhoneNumber
       )
-    ).toThrow(/authenticate/i);
+    ).rejects.toThrow(/authenticate/i);
     expect(identity.status).toBe("verified");
     expect(await service.findVerifiedUserByPhoneNumber(phoneNumber)).toEqual({
       phoneIdentityId: identity.id,

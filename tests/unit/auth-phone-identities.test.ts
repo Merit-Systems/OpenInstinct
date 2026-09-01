@@ -38,12 +38,22 @@ vi.mock("@/db/services/phone-identities", () => ({
 }));
 vi.mock("@/lib/env", () => ({
   env: {
-    BETTER_AUTH_SECRET: "test-auth-secret",
-    BETTER_AUTH_URL: "https://example.com",
+    LINQ_CONNECTOR: "linq/test",
   },
   get localPhoneAuthBypassEnabled() {
     return mocks.localBypassEnabled;
   },
+}));
+vi.mock("@/lib/application-origin", () => ({
+  betterAuthBaseURL: () => "https://example.com",
+}));
+vi.mock("@/lib/installation-secrets", () => ({
+  getInstallationSecrets: () =>
+    Promise.resolve({
+      betterAuthSecret: "test-auth-secret",
+      secretEncryptionKey: "unused",
+      version: 1,
+    }),
 }));
 
 afterEach(() => {
@@ -100,7 +110,8 @@ describe("phone identity verification wiring", () => {
 const phoneNumber = "+12025550123";
 
 async function phonePluginOptions() {
-  await import("@/auth");
+  const { getAuth } = await import("@/auth");
+  await getAuth();
   const options = mocks.phoneNumber.mock.calls.at(-1)?.[0];
   if (!options) throw new Error("Expected phone number plugin options.");
   return options;

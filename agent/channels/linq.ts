@@ -7,7 +7,7 @@ import {
   type LinqChannelCredentials,
 } from "eve/channels/linq";
 import { z } from "zod";
-import { auth } from "@/auth";
+import { getAuth } from "@/auth";
 import { normalizeAuthPhoneNumber } from "@/auth/phone-number";
 import { accessScopeForUser, scopeFromPrincipal } from "@/lib/access-scope";
 import {
@@ -354,6 +354,7 @@ export default linqChannel({
 });
 
 async function findVerifiedAuthUserIdByPhoneNumber(phoneNumber: string) {
+  const auth = await getAuth();
   const context = await auth.$context;
   const user = await context.adapter.findOne({
     model: "user",

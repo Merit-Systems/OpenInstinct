@@ -98,7 +98,7 @@ export function PhoneAuthForm({
     return (
       <p className="type-supporting-body mt-6 text-muted-foreground">
         iMessage sign-in is not configured for this deployment. Attach a Linq
-        connector, then set LINQ_CONNECTOR and LINQ_PHONE_NUMBER.
+        connector through Vercel Connect.
       </p>
     );
   }

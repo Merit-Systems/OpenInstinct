@@ -5,67 +5,82 @@ import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { phoneNumber } from "better-auth/plugins/phone-number";
 import { account, db, session, user, verification } from "@/db";
 import { recordVerifiedPhoneIdentity } from "@/db/services/phone-identities";
+import { betterAuthBaseURL } from "@/lib/application-origin";
 import { env, localPhoneAuthBypassEnabled } from "@/lib/env";
+import { getInstallationSecrets } from "@/lib/installation-secrets";
 import { LinqDeliveryError, linqOtpFailure, sendLinqText } from "./linq";
 import { isE164PhoneNumber } from "./phone-number";
 
-export const auth = betterAuth({
-  appName: "Local Vault Assistant",
-  baseURL: env.BETTER_AUTH_URL,
-  database: drizzleAdapter(db, {
-    provider: "pg",
-    schema: { account, session, user, verification },
-  }),
-  disabledPaths: [
-    "/change-email",
-    "/request-password-reset",
-    "/reset-password",
-    "/reset-password/:token",
-    "/send-verification-email",
-    "/sign-in/email",
-    "/sign-in/social",
-    "/sign-up/email",
-    "/verify-email",
-  ],
-  plugins: [
-    phoneNumber({
-      allowedAttempts: 3,
-      expiresIn: 300,
-      phoneNumberValidator: isE164PhoneNumber,
-      requireVerification: true,
-      callbackOnVerification: async ({
-        phoneNumber: phoneNumberValue,
-        user,
-      }) => {
-        try {
-          await recordVerifiedPhoneIdentity({
-            phoneNumber: phoneNumberValue,
-            userId: user.id,
-          });
-        } catch (error) {
-          console.error(
-            "Failed to record verified phone identity.",
-            phoneIdentityErrorDiscriminator(error)
-          );
-        }
-      },
-      sendOTP: localPhoneAuthBypassEnabled
-        ? () => undefined
-        : ({ code, phoneNumber: to }) => sendPhoneCode({ code, to }),
-      signUpOnVerification: {
-        getTempEmail: (phoneNumberValue) =>
-          `phone-${createHash("sha256")
-            .update(phoneNumberValue)
-            .digest("hex")}@local-vault.invalid`,
-        getTempName: () => "Phone user",
-      },
-      verifyOTP: localPhoneAuthBypassEnabled
-        ? ({ phoneNumber: value }) => isE164PhoneNumber(value)
-        : undefined,
+let authPromise: ReturnType<typeof initializeAuth> | undefined;
+
+export function getAuth() {
+  authPromise ??= initializeAuth().catch((error: unknown) => {
+    authPromise = undefined;
+    throw error;
+  });
+  return authPromise;
+}
+
+async function initializeAuth() {
+  const { betterAuthSecret } = await getInstallationSecrets();
+  return betterAuth({
+    appName: "Local Vault Assistant",
+    baseURL: betterAuthBaseURL(),
+    database: drizzleAdapter(db, {
+      provider: "pg",
+      schema: { account, session, user, verification },
     }),
-  ],
-  secret: env.BETTER_AUTH_SECRET,
-});
+    disabledPaths: [
+      "/change-email",
+      "/request-password-reset",
+      "/reset-password",
+      "/reset-password/:token",
+      "/send-verification-email",
+      "/sign-in/email",
+      "/sign-in/social",
+      "/sign-up/email",
+      "/verify-email",
+    ],
+    plugins: [
+      phoneNumber({
+        allowedAttempts: 3,
+        expiresIn: 300,
+        phoneNumberValidator: isE164PhoneNumber,
+        requireVerification: true,
+        callbackOnVerification: async ({
+          phoneNumber: phoneNumberValue,
+          user,
+        }) => {
+          try {
+            await recordVerifiedPhoneIdentity({
+              phoneNumber: phoneNumberValue,
+              userId: user.id,
+            });
+          } catch (error) {
+            console.error(
+              "Failed to record verified phone identity.",
+              phoneIdentityErrorDiscriminator(error)
+            );
+          }
+        },
+        sendOTP: localPhoneAuthBypassEnabled
+          ? () => undefined
+          : ({ code, phoneNumber: to }) => sendPhoneCode({ code, to }),
+        signUpOnVerification: {
+          getTempEmail: (phoneNumberValue) =>
+            `phone-${createHash("sha256")
+              .update(phoneNumberValue)
+              .digest("hex")}@local-vault.invalid`,
+          getTempName: () => "Phone user",
+        },
+        verifyOTP: localPhoneAuthBypassEnabled
+          ? ({ phoneNumber: value }) => isE164PhoneNumber(value)
+          : undefined,
+      }),
+    ],
+    secret: betterAuthSecret,
+  });
+}
 
 function phoneIdentityErrorDiscriminator(error: unknown) {
   return error instanceof Error ? error.name : "UnknownError";
@@ -82,7 +97,7 @@ export async function sendPhoneCode({
     throw new APIError("SERVICE_UNAVAILABLE", {
       code: "LINQ_NOT_CONFIGURED",
       message:
-        "iMessage sign-in is not configured. Attach a Linq connector and set LINQ_CONNECTOR and LINQ_PHONE_NUMBER.",
+        "iMessage sign-in is not configured. Attach a Linq connector to this deployment.",
     });
   }
 

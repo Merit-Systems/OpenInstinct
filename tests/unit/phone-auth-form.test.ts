@@ -10,10 +10,10 @@ describe("phone OTP errors", () => {
   it("shows actionable Linq errors", () => {
     expect(
       phoneOtpErrorMessage({
-        code: "LINQ_CONTACT_NOT_ALLOWED",
-        message: "Add this phone number to Messaging Contacts.",
+        code: "LINQ_RECIPIENT_NOT_VERIFIED",
+        message: "Send a message to the Linq phone number, then try again.",
       })
-    ).toBe("Add this phone number to Messaging Contacts.");
+    ).toBe("Send a message to the Linq phone number, then try again.");
   });
 
   it("does not expose unrelated server errors", () => {
@@ -35,7 +35,7 @@ describe("phone OTP errors", () => {
     );
 
     expect(html).toContain("iMessage sign-in is not configured");
-    expect(html).toContain("LINQ_CONNECTOR and LINQ_PHONE_NUMBER");
+    expect(html).toContain("Vercel Connect");
     expect(html).not.toContain('type="tel"');
   });
 });
