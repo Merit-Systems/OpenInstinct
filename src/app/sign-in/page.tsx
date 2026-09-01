@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { headers } from "next/headers";
-import { PhoneAuthForm } from "@/app/sign-in/phone-auth-form";
-import { Logo } from "@/components/ui/logo";
+import { LocalPhoneAuthForm } from "@/app/sign-in/_components/local-form";
+import { PhoneOtpAuthForm } from "@/app/sign-in/_components/otp-form";
 import { env, localPhoneAuthBypassEnabled } from "@/env";
 import { getAuthSession } from "@/auth/session";
 import { readLinqOnboardingPhoneNumber } from "@/auth/linq";
@@ -28,15 +28,26 @@ export default async function SignInPage({
 
   return (
     <main className="flex min-h-svh items-center justify-center bg-background px-4 py-8 text-foreground">
-      <section className="w-full max-w-sm">
-        <Logo className="size-9" />
-        <h1 className="type-page-title mt-6">Sign in</h1>
-        <PhoneAuthForm
-          callbackUrl={callbackUrl}
-          linqConfigured={linqConfigured}
-          linqPhoneNumber={linqPhoneNumber}
-          skipOtp={localPhoneAuthBypassEnabled}
-        />
+      <section className="w-full max-w-sm space-y-6">
+        <div className="flex flex-col gap-2">
+          <h1 className="type-page-title">Sign In</h1>
+          <p className="type-supporting-body text-muted-foreground">
+            Enter your phone number to sign in.
+          </p>
+        </div>
+        {!localPhoneAuthBypassEnabled && !linqConfigured ? (
+          <p className="type-supporting-body text-muted-foreground">
+            iMessage sign-in is not configured for this deployment. Attach a
+            Linq connector through Vercel Connect.
+          </p>
+        ) : localPhoneAuthBypassEnabled ? (
+          <LocalPhoneAuthForm callbackUrl={callbackUrl} />
+        ) : (
+          <PhoneOtpAuthForm
+            callbackUrl={callbackUrl}
+            linqPhoneNumber={linqPhoneNumber}
+          />
+        )}
       </section>
     </main>
   );

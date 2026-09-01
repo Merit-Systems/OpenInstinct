@@ -31,5 +31,5 @@ export function createProxy(dependencies = proxyDependencies) {
 export const proxy = createProxy();
 
 export const config = {
-  matcher: ["/((?!_next/static|_next/image|favicon.ico).*)"],
+  matcher: ["/((?!_next/static|_next/image|fonts|favicon.ico).*)"],
 };

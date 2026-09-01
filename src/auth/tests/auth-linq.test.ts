@@ -2,7 +2,6 @@
 import { APIError } from "better-auth/api";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
-import { phoneOtpErrorMessage } from "@/app/sign-in/phone-auth-form";
 const mocks = vi.hoisted(() => ({ getToken: vi.fn() }));
 
 vi.mock("@vercel/connect", () => ({ getToken: mocks.getToken }));
@@ -69,6 +68,6 @@ describe("Linq phone authentication", () => {
         trace_id: "trace-123",
       },
     });
-    expect(phoneOtpErrorMessage(body)).toContain("line's health");
+    expect(body.message).toContain("line's health");
   });
 });
