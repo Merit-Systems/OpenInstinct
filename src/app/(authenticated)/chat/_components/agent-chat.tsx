@@ -261,7 +261,7 @@ export function AgentChat({
   };
 
   const composer = (
-    <PromptInput onSubmit={handleSubmit}>
+    <PromptInput compact onSubmit={handleSubmit}>
       <PromptInputBody>
         <PromptInputTextarea
           disabled={isSubmitting}
