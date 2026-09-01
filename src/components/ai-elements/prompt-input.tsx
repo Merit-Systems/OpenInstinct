@@ -49,6 +49,7 @@ import {
   SquareIcon,
   XIcon,
 } from "lucide-react";
+import { LazyMotion, domMax, m, useReducedMotion } from "motion/react";
 import { nanoid } from "nanoid";
 import { z } from "zod";
 import type {
@@ -70,6 +71,8 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useImperativeHandle,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -78,6 +81,12 @@ import {
 // ============================================================================
 // Helpers
 // ============================================================================
+
+const MotionInputGroup = m.create(InputGroup);
+const promptInputLayoutTransition = {
+  duration: 0.2,
+  ease: [0.22, 1, 0.36, 1] as const,
+};
 
 const convertBlobUrlToDataUrl = async (url: string): Promise<string | null> => {
   try {
@@ -397,6 +406,13 @@ export const PromptInputProvider = ({
 
 const LocalAttachmentsContext = createContext<AttachmentsContext | null>(null);
 
+const PromptInputLayoutContext = createContext<{
+  animateLayout: boolean;
+  compact: boolean;
+  expanded: boolean;
+  setTextareaExpanded: (expanded: boolean) => void;
+} | null>(null);
+
 export const usePromptInputAttachments = () => {
   // Prefer local context (inside PromptInput) as it has validation, fall back to provider
   const provider = useOptionalProviderAttachments();
@@ -534,6 +550,8 @@ export type PromptInputProps = Omit<
   maxFiles?: number;
   // bytes
   maxFileSize?: number;
+  /** Keep a single-line draft and the footer controls on one row. */
+  compact?: boolean;
   onError?: (err: {
     code: "max_files" | "max_file_size" | "accept";
     message: string;
@@ -552,6 +570,7 @@ export const PromptInput = ({
   syncHiddenInput,
   maxFiles,
   maxFileSize,
+  compact = false,
   onError,
   onSubmit,
   children,
@@ -573,6 +592,16 @@ export const PromptInput = ({
   const [referencedSources, setReferencedSources] = useState<
     (SourceDocumentUIPart & { id: string })[]
   >([]);
+  const shouldReduceMotion = useReducedMotion();
+  const [textareaExpanded, setTextareaExpanded] = useState(false);
+  const animateLayout = compact && !shouldReduceMotion;
+  const expanded =
+    compact &&
+    (textareaExpanded || files.length > 0 || referencedSources.length > 0);
+  const layout = useMemo(
+    () => ({ animateLayout, compact, expanded, setTextareaExpanded }),
+    [animateLayout, compact, expanded]
+  );
 
   // Keep a ref to files for cleanup on unmount (avoids stale closure)
   const filesRef = useRef(files);
@@ -962,7 +991,24 @@ export const PromptInput = ({
         ref={formRef}
         {...props}
       >
-        <InputGroup className="overflow-hidden">{children}</InputGroup>
+        <LazyMotion features={domMax}>
+          <PromptInputLayoutContext.Provider value={layout}>
+            <MotionInputGroup
+              className={cn(
+                "overflow-hidden",
+                compact && "grid! items-center",
+                compact &&
+                  (expanded ? "grid-cols-1" : "grid-cols-[minmax(0,1fr)_auto]")
+              )}
+              data-compact={compact || undefined}
+              data-expanded={expanded || undefined}
+              layout={animateLayout}
+              transition={{ layout: promptInputLayoutTransition }}
+            >
+              {children}
+            </MotionInputGroup>
+          </PromptInputLayoutContext.Provider>
+        </LazyMotion>
       </form>
     </>
   );
@@ -999,11 +1045,122 @@ export const PromptInputTextarea = ({
   onKeyDown,
   className,
   placeholder = "What would you like to know?",
+  ref,
+  value,
+  defaultValue,
   ...props
 }: PromptInputTextareaProps) => {
   const controller = useOptionalPromptInputController();
   const attachments = usePromptInputAttachments();
+  const layout = useContext(PromptInputLayoutContext);
   const [isComposing, setIsComposing] = useState(false);
+  const [uncontrolledMeasurementValue, setUncontrolledMeasurementValue] =
+    useState(() =>
+      String(controller?.textInput.value ?? value ?? defaultValue ?? "")
+    );
+  const controlledValue = controller?.textInput.value ?? value;
+  const measurementValue =
+    controlledValue === undefined
+      ? uncontrolledMeasurementValue
+      : String(controlledValue);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const measurementRef = useRef<HTMLSpanElement>(null);
+  useImperativeHandle(ref, () => {
+    const textarea = textareaRef.current;
+    if (!textarea) {
+      throw new Error("Prompt input textarea ref initialized before mount");
+    }
+    return textarea;
+  });
+
+  useEffect(() => {
+    const textarea = textareaRef.current;
+    const form = textarea?.form;
+    if (!(textarea && form)) {
+      return undefined;
+    }
+
+    const handleReset = () => {
+      queueMicrotask(() => {
+        setUncontrolledMeasurementValue(textarea.value);
+      });
+    };
+    form.addEventListener("reset", handleReset);
+    return () => {
+      form.removeEventListener("reset", handleReset);
+    };
+  }, []);
+
+  useLayoutEffect(() => {
+    if (!layout?.compact) {
+      return undefined;
+    }
+
+    const textarea = textareaRef.current;
+    const measurement = measurementRef.current;
+    const inputGroup = textarea?.closest<HTMLElement>(
+      '[data-slot="input-group"]'
+    );
+    const footer = inputGroup?.querySelector<HTMLElement>(
+      "[data-prompt-input-footer]"
+    );
+    if (!(textarea && measurement && inputGroup && footer)) {
+      return undefined;
+    }
+
+    const measure = () => {
+      if (measurementValue.includes("\n")) {
+        layout.setTextareaExpanded(true);
+        return;
+      }
+
+      const textareaStyle = getComputedStyle(textarea);
+      measurement.style.fontFamily = textareaStyle.fontFamily;
+      measurement.style.fontSize = textareaStyle.fontSize;
+      measurement.style.fontStretch = textareaStyle.fontStretch;
+      measurement.style.fontStyle = textareaStyle.fontStyle;
+      measurement.style.fontWeight = textareaStyle.fontWeight;
+      measurement.style.letterSpacing = textareaStyle.letterSpacing;
+      measurement.style.textTransform = textareaStyle.textTransform;
+
+      const footerStyle = getComputedStyle(footer);
+      const footerChildren = [...footer.children].filter(
+        (child): child is HTMLElement =>
+          child instanceof HTMLElement &&
+          getComputedStyle(child).display !== "none"
+      );
+      const gap = Number.parseFloat(footerStyle.columnGap) || 0;
+      const footerWidth =
+        (Number.parseFloat(footerStyle.paddingLeft) || 0) +
+        (Number.parseFloat(footerStyle.paddingRight) || 0) +
+        footerChildren.reduce(
+          (width, child) => width + child.getBoundingClientRect().width,
+          0
+        ) +
+        Math.max(0, footerChildren.length - 1) * gap;
+      const availableWidth =
+        inputGroup.clientWidth -
+        footerWidth -
+        (Number.parseFloat(textareaStyle.paddingLeft) || 0) -
+        (Number.parseFloat(textareaStyle.paddingRight) || 0);
+
+      layout.setTextareaExpanded(
+        measurement.getBoundingClientRect().width > availableWidth
+      );
+    };
+
+    measure();
+    if (typeof ResizeObserver === "undefined") {
+      return undefined;
+    }
+
+    const observer = new ResizeObserver(measure);
+    observer.observe(inputGroup);
+    observer.observe(footer);
+    return () => {
+      observer.disconnect();
+    };
+  }, [layout, measurementValue]);
 
   const handleKeyDown: KeyboardEventHandler<HTMLTextAreaElement> = useCallback(
     (e) => {
@@ -1091,10 +1248,15 @@ export const PromptInputTextarea = ({
         value: controller.textInput.value,
       }
     : {
-        onChange,
+        onChange: (e: ChangeEvent<HTMLTextAreaElement>) => {
+          setUncontrolledMeasurementValue(e.currentTarget.value);
+          onChange?.(e);
+        },
+        defaultValue,
+        value,
       };
 
-  return (
+  const textarea = (
     <InputGroupTextarea
       className={cn("field-sizing-content max-h-48 min-h-16", className)}
       name="message"
@@ -1103,9 +1265,33 @@ export const PromptInputTextarea = ({
       onKeyDown={handleKeyDown}
       onPaste={handlePaste}
       placeholder={placeholder}
+      ref={textareaRef}
       {...props}
       {...controlledProps}
     />
+  );
+
+  if (!layout?.compact) {
+    return textarea;
+  }
+
+  return (
+    <>
+      <m.div
+        className="min-w-0"
+        layout={layout.animateLayout ? "position" : false}
+        transition={{ layout: promptInputLayoutTransition }}
+      >
+        {textarea}
+      </m.div>
+      <span
+        aria-hidden="true"
+        className="pointer-events-none invisible fixed top-0 left-0 w-max whitespace-pre"
+        ref={measurementRef}
+      >
+        {measurementValue}
+      </span>
+    </>
   );
 };
 
@@ -1117,13 +1303,21 @@ export type PromptInputHeaderProps = Omit<
 export const PromptInputHeader = ({
   className,
   ...props
-}: PromptInputHeaderProps) => (
-  <InputGroupAddon
-    align="block-end"
-    className={cn("order-first flex-wrap gap-1", className)}
-    {...props}
-  />
-);
+}: PromptInputHeaderProps) => {
+  const layout = useContext(PromptInputLayoutContext);
+
+  return (
+    <InputGroupAddon
+      align="block-end"
+      className={cn(
+        "order-first flex-wrap gap-1",
+        layout?.compact && !layout.expanded && "hidden",
+        className
+      )}
+      {...props}
+    />
+  );
+};
 
 export type PromptInputFooterProps = Omit<
   ComponentProps<typeof InputGroupAddon>,
@@ -1133,13 +1327,25 @@ export type PromptInputFooterProps = Omit<
 export const PromptInputFooter = ({
   className,
   ...props
-}: PromptInputFooterProps) => (
-  <InputGroupAddon
-    align="block-end"
-    className={cn("justify-between gap-1", className)}
-    {...props}
-  />
-);
+}: PromptInputFooterProps) => {
+  const layout = useContext(PromptInputLayoutContext);
+
+  return (
+    <InputGroupAddon
+      align="block-end"
+      className={cn(
+        "justify-between gap-1",
+        layout?.compact && "px-1.5!",
+        layout?.compact &&
+          !layout.expanded &&
+          "col-start-2 row-start-1 w-auto! justify-end pb-1.5!",
+        className
+      )}
+      data-prompt-input-footer=""
+      {...props}
+    />
+  );
+};
 
 export type PromptInputToolsProps = HTMLAttributes<HTMLDivElement>;
 
@@ -1277,6 +1483,7 @@ export const PromptInputSubmit = ({
   children,
   ...props
 }: PromptInputSubmitProps) => {
+  const layout = useContext(PromptInputLayoutContext);
   const isGenerating = status === "submitted" || status === "streaming";
 
   let Icon = <CornerDownLeftIcon className="size-4" />;
@@ -1303,7 +1510,7 @@ export const PromptInputSubmit = ({
     [isGenerating, onStop, onClick]
   );
 
-  return (
+  const button = (
     <InputGroupButton
       aria-label={isGenerating ? "Stop" : "Submit"}
       className={cn(className)}
@@ -1315,6 +1522,22 @@ export const PromptInputSubmit = ({
     >
       {children ?? Icon}
     </InputGroupButton>
+  );
+
+  if (!layout?.compact) {
+    return button;
+  }
+
+  return (
+    <span className="size-8 shrink-0">
+      <m.span
+        className="absolute right-1.5 bottom-1.5 inline-flex"
+        layout={layout.animateLayout ? "position" : false}
+        transition={{ layout: promptInputLayoutTransition }}
+      >
+        {button}
+      </m.span>
+    </span>
   );
 };
 

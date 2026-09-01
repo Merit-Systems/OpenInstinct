@@ -79,7 +79,7 @@ export function ChatInput({
 
   return (
     <div className="absolute bottom-0 left-1/2 z-20 mx-auto w-full max-w-3xl -translate-x-1/2 bg-linear-to-t from-background via-background to-transparent px-4 pt-4 pb-6 sm:px-6">
-      <PromptInput onSubmit={handleSubmit}>
+      <PromptInput compact onSubmit={handleSubmit}>
         <PromptInputBody>
           <PromptInputTextarea
             className="min-h-0"
