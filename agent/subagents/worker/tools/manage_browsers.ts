@@ -16,6 +16,7 @@ import {
 import { recordBrowserTraceDomains } from "@/db/services/browser-traces";
 import { kernel } from "@/lib/kernel";
 import { requireWorkerScope } from "@/agent/subagents/worker/lib/access";
+import { disposeBrowserLoopSession } from "../lib/semantic-loop";
 import { requireOwnedBrowserSession } from "@/agent/subagents/worker/lib/owned-browser";
 import {
   domainFromUrl,
@@ -84,7 +85,7 @@ const manageBrowsers = defineTool({
                 input.timeout_seconds ?? browserTimeoutFloorSeconds,
               viewport: browserViewport(input),
             },
-            { signal }
+            { maxRetries: 8, signal }
           );
           try {
             await createBrowserSession(scope, {
@@ -174,6 +175,7 @@ const manageBrowsers = defineTool({
           { createdAt: record.createdAt, sessionId: record.sessionId },
           signal
         );
+        await disposeBrowserLoopSession(sessionId);
         await kernel.browsers
           .deleteByID(sessionId, { signal })
           .catch((cause: unknown) => {
@@ -203,6 +205,7 @@ async function retrieveBrowser(
     return await kernel.browsers.retrieve(sessionId, {}, { signal });
   } catch (error) {
     if (!isNotFoundError(error)) throw error;
+    await disposeBrowserLoopSession(sessionId);
     await deleteBrowserSession(scope, sessionId);
     throw new Error(
       "Browser session no longer exists. Its stale record was removed; create a fresh browser instead of retrying this session ID.",
@@ -244,8 +247,10 @@ function lifecycleResult(browser: KernelBrowser) {
   return {
     browser: value,
     next_actions: [
-      `Use execute_playwright_code with session_id "${value.session_id}" for deterministic browser automation.`,
-      `Use computer_action with session_id "${value.session_id}" for visual browser control.`,
+      `Use playwright_execute with session_id "${value.session_id}" as the primary surface for deterministic inspection and interaction, including related safe actions, extraction, JavaScript, loops, and pagination.`,
+      `If Playwright is unreliable or semantic interaction is more suitable, call browser_snapshot with session_id "${value.session_id}" to mint current refs; use browser_find or browser_text to narrow large pages.`,
+      `Then use browser_act with session_id "${value.session_id}" as a relaxed fallback for short ref-based click, fill, and submit plans; inspect its successor state instead of waiting on per-action postconditions.`,
+      `Use computer_action with session_id "${value.session_id}" only when visual reasoning or coordinate control is necessary.`,
       `Use manage_browsers with action "delete" and session_id "${value.session_id}" when finished.`,
     ],
   };

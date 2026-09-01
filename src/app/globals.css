@@ -4,6 +4,7 @@
 @import "./styles/brand/typography.css";
 @import "./styles/brand/shadcn.css";
 @import "./styles/brand/motion.css";
+@source "../components/**/*.{ts,tsx}";
 @source "../node_modules/streamdown/dist/*.js";
 
 :root {

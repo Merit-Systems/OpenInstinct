@@ -146,6 +146,7 @@ export const addressVaultPayloadSchema = z.object({
 
 export const contactVaultPayloadSchema = z
   .object({
+    dateOfBirth: z.iso.date().optional(),
     email: optionalBoundedValue,
     fullName: optionalBoundedValue,
     kind: z.literal("contact"),
@@ -162,7 +163,13 @@ export const contactVaultPayloadSchema = z
     }
   })
   .refine(
-    (payload) => [payload.email, payload.fullName, payload.phone].some(Boolean),
+    (payload) =>
+      [
+        payload.dateOfBirth,
+        payload.email,
+        payload.fullName,
+        payload.phone,
+      ].some(Boolean),
     { message: "Enter at least one contact value." }
   );
 
