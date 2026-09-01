@@ -5,6 +5,10 @@ import type * as Blob from "@vercel/blob";
 import type * as EnvModule from "@/env";
 import { sendMessageOutputSchema } from "@/agent/lib/send-message";
 import type { AccessScope } from "@/lib/access-scope";
+import type {
+  finalizeScheduledReport,
+  releaseScheduledReport,
+} from "@/db/services/scheduled-agent-jobs";
 // oxlint-disable-next-line import/no-unassigned-import -- Loads the production module so the mocked channel factory can capture its configuration.
 import "@/agent/channels/linq";
 
@@ -39,6 +43,14 @@ const linqChannelCapture = vi.hoisted(() => ({
   sendNativeMessage: vi
     .fn<(chatId: string, body: NativeMessageBody) => Promise<void>>()
     .mockResolvedValue(undefined),
+}));
+const scheduleDeliveryCapture = vi.hoisted(() => ({
+  finalize: vi.fn<typeof finalizeScheduledReport>(),
+  release: vi.fn<typeof releaseScheduledReport>(),
+}));
+vi.mock("@/db/services/scheduled-agent-jobs", () => ({
+  finalizeScheduledReport: scheduleDeliveryCapture.finalize,
+  releaseScheduledReport: scheduleDeliveryCapture.release,
 }));
 vi.mock("@/env", async (importOriginal) => {
   const original = await importOriginal<typeof EnvModule>();
@@ -133,10 +145,10 @@ interface LinqTestMessage {
 }
 
 describe("Linq message delivery", () => {
-  it("does not register automatic assistant message delivery", () => {
-    expect(
-      linqChannelCapture.config?.events?.["message.completed"]
-    ).toBeUndefined();
+  it("does not register automatic assistant text posting", () => {
+    expect(linqChannelCapture.config?.events?.["message.completed"]).toBeTypeOf(
+      "function"
+    );
   });
 
   it("posts send_message output as native iMessage Markdown", async () => {
@@ -155,6 +167,22 @@ describe("Linq message delivery", () => {
     );
 
     expect(post).toHaveBeenCalledExactlyOnceWith({ markdown: message });
+  });
+
+  it("finalizes a scheduled result after send_message posts it", async () => {
+    const { context } = handlerContext();
+
+    await handleActionResult(
+      sendMessageResult({ kind: "message", markdown: "The price fell." }),
+      context,
+      sessionContext("scheduled-result")
+    );
+
+    expect(scheduleDeliveryCapture.finalize).toHaveBeenCalledWith(
+      "00000000-0000-4000-8000-000000000002",
+      "lease-report",
+      "delivered"
+    );
   });
 
   it("posts one native rich link preview per call with fresh credentials", async () => {
@@ -545,7 +573,15 @@ function handlerEventContext(value: unknown): ActionHandlerParameters[1] {
   return value as ActionHandlerParameters[1];
 }
 
-function sessionContext() {
+function sessionContext(authenticator = "test") {
+  const attributes: Record<string, string | readonly string[]> =
+    authenticator === "scheduled-result"
+      ? {
+          scheduledReportLeaseToken: "lease-report",
+          scheduledRunId: "00000000-0000-4000-8000-000000000002",
+          workspaceId: "workspace-1",
+        }
+      : { workspaceId: "workspace-1" };
   return {
     async getSandbox() {
       throw new Error("Sandbox access is outside this focused test.");
@@ -556,8 +592,8 @@ function sessionContext() {
     session: {
       auth: {
         current: {
-          attributes: { workspaceId: "workspace-1" },
-          authenticator: "test",
+          attributes,
+          authenticator,
           principalId: "user-1",
           principalType: "user",
         },

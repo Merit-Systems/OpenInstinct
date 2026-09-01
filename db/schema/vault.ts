@@ -1,0 +1,81 @@
+import { relations, sql } from "drizzle-orm";
+import {
+  check,
+  foreignKey,
+  index,
+  pgTable,
+  primaryKey,
+  text,
+} from "drizzle-orm/pg-core";
+import { workspaces } from "./workspaces";
+
+export const vaultItems = pgTable(
+  "vault_items",
+  {
+    id: text("id").primaryKey(),
+    workspaceId: text("workspace_id").notNull(),
+    kind: text("kind").notNull(),
+    label: text("label").notNull(),
+    account: text("account").notNull(),
+    createdAt: text("created_at").notNull(),
+    updatedAt: text("updated_at").notNull(),
+  },
+  (table) => [
+    foreignKey({
+      name: "vault_items_workspace_id_fkey",
+      columns: [table.workspaceId],
+      foreignColumns: [workspaces.id],
+    }).onDelete("cascade"),
+    check(
+      "vault_items_kind_check",
+      sql`${table.kind} IN ('login', 'payment', 'address', 'contact', 'phone', 'identity', 'token')`
+    ),
+    index("vault_items_workspace_updated_idx").on(
+      table.workspaceId,
+      table.updatedAt.desc().nullsFirst()
+    ),
+  ]
+);
+
+export const encryptedSecrets = pgTable(
+  "encrypted_secrets",
+  {
+    workspaceId: text("workspace_id").notNull(),
+    namespace: text("namespace").notNull(),
+    id: text("id").notNull(),
+    encryptedValue: text("encrypted_value").notNull(),
+    updatedAt: text("updated_at").notNull(),
+  },
+  (table) => [
+    primaryKey({
+      columns: [table.workspaceId, table.namespace, table.id],
+      name: "encrypted_secrets_pkey",
+    }),
+    foreignKey({
+      name: "encrypted_secrets_workspace_id_fkey",
+      columns: [table.workspaceId],
+      foreignColumns: [workspaces.id],
+    }).onDelete("cascade"),
+    check(
+      "encrypted_secrets_namespace_check",
+      sql`${table.namespace} = 'vault'`
+    ),
+  ]
+);
+
+export const vaultItemsRelations = relations(vaultItems, ({ one }) => ({
+  workspace: one(workspaces, {
+    fields: [vaultItems.workspaceId],
+    references: [workspaces.id],
+  }),
+}));
+
+export const encryptedSecretsRelations = relations(
+  encryptedSecrets,
+  ({ one }) => ({
+    workspace: one(workspaces, {
+      fields: [encryptedSecrets.workspaceId],
+      references: [workspaces.id],
+    }),
+  })
+);

@@ -1,5 +1,6 @@
 import { connectLinqCredentials } from "@vercel/connect/eve";
 import { LinqAPIV3 } from "@linqapp/sdk";
+import type { SessionContext } from "eve/context";
 import {
   defaultLinqAuth,
   linqChannel,
@@ -17,6 +18,10 @@ import {
   stripImageArtifactMarkdownReferences,
 } from "../lib/linq-image-artifact/markdown";
 import { env } from "@/env";
+import {
+  finalizeScheduledReport,
+  releaseScheduledReport,
+} from "@/db/services/scheduled-agent-jobs";
 
 const verifiedPhoneUserSchema = z.object({
   id: z.string().min(1),
@@ -64,6 +69,7 @@ export default linqChannel({
             reaction.data.output.type
           );
         }
+        await finalizeScheduledReportDelivery(session);
         return;
       }
 
@@ -91,6 +97,7 @@ export default linqChannel({
               parts: [{ type: "link", value: message.data.output.url }],
             },
           });
+          await finalizeScheduledReportDelivery(session);
           return;
         }
 
@@ -102,6 +109,7 @@ export default linqChannel({
           if (attachments?.length) {
             await thread.post({ attachments, markdown: "" });
           }
+          await finalizeScheduledReportDelivery(session);
           return;
         }
 
@@ -125,6 +133,7 @@ export default linqChannel({
           > = { markdown };
           if (attachments?.length) outgoing.attachments = attachments;
           await thread.post(outgoing);
+          await finalizeScheduledReportDelivery(session);
           return;
         }
 
@@ -157,7 +166,38 @@ export default linqChannel({
         if (attachments?.length) outgoing.attachments = attachments;
         if (delivery.files.length > 0) outgoing.files = delivery.files;
         await thread.post(outgoing);
+        await finalizeScheduledReportDelivery(session);
       }
+    },
+    async "message.completed"(event, _context, session) {
+      if (event.finishReason === "tool-calls") return;
+      const report = scheduledReportFromSession(session);
+      if (report) {
+        await finalizeScheduledReport(
+          report.runId,
+          report.leaseToken,
+          "suppressed"
+        );
+      }
+    },
+    async "session.completed"(_event, _context, session) {
+      const report = scheduledReportFromSession(session);
+      if (report) {
+        await finalizeScheduledReport(
+          report.runId,
+          report.leaseToken,
+          "suppressed"
+        );
+      }
+    },
+    async "turn.cancelled"(_event, _context, session) {
+      await releaseScheduledReportDelivery(
+        session,
+        "Scheduled result reporting was cancelled."
+      );
+    },
+    async "turn.failed"(event, _context, session) {
+      await releaseScheduledReportDelivery(session, event.message);
     },
   },
   async onMessage(context, message) {
@@ -197,6 +237,40 @@ export default linqChannel({
     };
   },
 });
+
+function scheduledReportFromSession(session: SessionContext) {
+  const caller = session.session.auth.current ?? session.session.auth.initiator;
+  if (caller?.authenticator !== "scheduled-result") return undefined;
+  const parsed = z
+    .object({
+      scheduledReportLeaseToken: z.string().min(1),
+      scheduledRunId: z.uuid(),
+    })
+    .safeParse(caller.attributes);
+  return parsed.success
+    ? {
+        leaseToken: parsed.data.scheduledReportLeaseToken,
+        runId: parsed.data.scheduledRunId,
+      }
+    : undefined;
+}
+
+async function finalizeScheduledReportDelivery(session: SessionContext) {
+  const report = scheduledReportFromSession(session);
+  if (report) {
+    await finalizeScheduledReport(report.runId, report.leaseToken, "delivered");
+  }
+}
+
+async function releaseScheduledReportDelivery(
+  session: SessionContext,
+  errorMessage: string
+) {
+  const report = scheduledReportFromSession(session);
+  if (report) {
+    await releaseScheduledReport(report.runId, report.leaseToken, errorMessage);
+  }
+}
 
 async function findVerifiedAuthUserIdByPhoneNumber(phoneNumber: string) {
   const auth = await getAuth();
