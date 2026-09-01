@@ -20,7 +20,7 @@ beforeAll(() => {
 });
 
 describe("evlog hook", () => {
-  it("emits full messages, appends turn observations, and isolates later turns", async () => {
+  it("omits message content, appends turn observations, and isolates later turns", async () => {
     const first = hookContext("turn-1", 0);
     const second = hookContext("turn-2", 1);
 
@@ -75,15 +75,17 @@ describe("evlog hook", () => {
           ],
         },
       },
-      message: {
-        received: "email mason@example.com card 4111111111111111",
-        response: "full response mason@example.com",
-      },
     });
+    // Fork policy: tenant message content never reaches logs.
+    expect(capturedEvents[0]).not.toHaveProperty("message.received");
+    expect(capturedEvents[0]).not.toHaveProperty("message.response");
+    expect(JSON.stringify(capturedEvents)).not.toContain("mason@example.com");
+    expect(JSON.stringify(capturedEvents)).not.toContain("4111111111111111");
     expect(capturedEvents[1]).toMatchObject({
       channel: { kind: "linq" },
-      message: { received: "next turn", response: "next response" },
     });
+    expect(capturedEvents[1]).not.toHaveProperty("message.received");
+    expect(capturedEvents[1]).not.toHaveProperty("message.response");
     expect(capturedEvents[1]).not.toHaveProperty("channel.linq");
   });
 });
