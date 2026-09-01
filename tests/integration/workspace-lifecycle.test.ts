@@ -137,6 +137,7 @@ describe("workspace lifecycle", () => {
       service.browsers.createBrowserSession(service.owner, {
         createdAt: "2026-01-01",
         sessionId: "suspended-browser",
+        workerSessionId: "worker-suspended-browser",
       })
     ).rejects.toBeInstanceOf(service.scope.WorkspaceNotOperableError);
     await expect(

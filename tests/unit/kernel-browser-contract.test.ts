@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
+import type * as traceDomains from "../../agent/subagents/worker/lib/trace-domains";
 
 const mocks = vi.hoisted(() => ({
   createBrowser: vi.fn<(...arguments_: unknown[]) => Promise<unknown>>(),
@@ -12,6 +13,12 @@ const mocks = vi.hoisted(() => ({
     vi.fn<() => Promise<{ createdAt: string; sessionId: string }[]>>(),
   listKernelBrowsers:
     vi.fn<(...arguments_: unknown[]) => AsyncIterable<unknown>>(),
+  harvestBrowserTraceDomains:
+    vi.fn<(...arguments_: unknown[]) => Promise<void>>(),
+  readBrowserSession:
+    vi.fn<(_scope: unknown, _sessionId: string) => Promise<unknown>>(),
+  recordBrowserTraceDomains:
+    vi.fn<(...arguments_: unknown[]) => Promise<void>>(),
   retrieveBrowser: vi.fn<(...arguments_: unknown[]) => Promise<unknown>>(),
   retrieveProfile: vi.fn<(...arguments_: unknown[]) => Promise<unknown>>(),
   requireWorkerScope: vi.fn<(_context: unknown) => Promise<unknown>>(),
@@ -25,10 +32,24 @@ vi.mock("@/agent/subagents/worker/lib/access", () => ({
   requireWorkerScope: mocks.requireWorkerScope,
 }));
 
+vi.mock("@/agent/subagents/worker/lib/trace-domains", async () => ({
+  domainFromUrl: (
+    await vi.importActual<typeof traceDomains>(
+      "@/agent/subagents/worker/lib/trace-domains"
+    )
+  ).domainFromUrl,
+  harvestBrowserTraceDomains: mocks.harvestBrowserTraceDomains,
+}));
+
+vi.mock("@/db/services/browser-traces", () => ({
+  recordBrowserTraceDomains: mocks.recordBrowserTraceDomains,
+}));
+
 vi.mock("@/db/services/browsers", () => ({
   createBrowserSession: mocks.createBrowserSession,
   deleteBrowserSession: mocks.deleteBrowserSession,
   listBrowserSessions: mocks.listBrowserSessions,
+  readBrowserSession: mocks.readBrowserSession,
   withBrowserProfileWriteLock: mocks.withBrowserProfileWriteLock,
 }));
 
@@ -72,11 +93,17 @@ beforeEach(() => {
   });
   mocks.deleteBrowser.mockResolvedValue();
   mocks.deleteBrowserSession.mockResolvedValue(true);
+  mocks.harvestBrowserTraceDomains.mockResolvedValue();
   mocks.listBrowserSessions.mockResolvedValue([]);
+  mocks.readBrowserSession.mockResolvedValue(undefined);
+  mocks.recordBrowserTraceDomains.mockResolvedValue();
   mocks.withBrowserProfileWriteLock.mockImplementation(
     async (_scope, operation) => operation()
   );
 });
+
+// oxlint-disable-next-line typescript/no-unsafe-type-assertion -- the tool context is external Eve runtime state; the tools read only the mocked authorization boundary, the session id, and the abort signal.
+const workerContext = { session: { id: "worker-session-1" } } as never;
 
 describe("Kernel browser contract", () => {
   it("keeps agent-created browsers alive for at least 15 minutes", () => {
@@ -102,8 +129,7 @@ describe("Kernel browser contract", () => {
   it("starts a read-only persistent-profile browser at the target URL", async () => {
     const result = await manageBrowsers.execute(
       { action: "create", start_url: "https://example.com/checkout" },
-      // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- the tool context is external Eve runtime state; create reads only the mocked authorization boundary and abort signal.
-      {} as never
+      workerContext
     );
 
     expect(result).toMatchObject({
@@ -116,12 +142,50 @@ describe("Kernel browser contract", () => {
         profile: { id: "profile-1", save_changes: false },
         start_url: "https://example.com/checkout",
         stealth: true,
+        telemetry: { browser: { page: { enabled: true } }, enabled: true },
         timeout_seconds: 900,
         viewport: undefined,
       },
       { signal: undefined }
     );
+    expect(mocks.createBrowserSession).toHaveBeenCalledExactlyOnceWith(
+      { userId: "user-1", workspaceId: "workspace-1" },
+      {
+        createdAt: "2026-08-27T00:00:00.000Z",
+        sessionId: "browser-1",
+        workerSessionId: "worker-session-1",
+      }
+    );
+    expect(mocks.recordBrowserTraceDomains).toHaveBeenCalledExactlyOnceWith(
+      { userId: "user-1", workspaceId: "workspace-1" },
+      "worker-session-1",
+      ["example.com"]
+    );
     expect(mocks.withBrowserProfileWriteLock).not.toHaveBeenCalled();
+  });
+
+  it("harvests visited domains from Kernel telemetry before deleting a browser", async () => {
+    mocks.readBrowserSession.mockResolvedValue({
+      createdAt: "2026-08-27T00:00:00.000Z",
+      sessionId: "browser-1",
+      workerSessionId: "worker-session-9",
+    });
+
+    const result = await manageBrowsers.execute(
+      { action: "delete", session_id: "browser-1" },
+      workerContext
+    );
+
+    expect(result).toBe("Browser session deleted successfully");
+    expect(mocks.harvestBrowserTraceDomains).toHaveBeenCalledExactlyOnceWith(
+      { userId: "user-1", workspaceId: "workspace-1" },
+      "worker-session-9",
+      { createdAt: "2026-08-27T00:00:00.000Z", sessionId: "browser-1" },
+      undefined
+    );
+    expect(
+      mocks.harvestBrowserTraceDomains.mock.invocationCallOrder[0]
+    ).toBeLessThan(mocks.deleteBrowser.mock.invocationCallOrder[0] ?? 0);
   });
 
   it("allows only one writable profile browser", async () => {

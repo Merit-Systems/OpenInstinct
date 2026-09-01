@@ -1,9 +1,14 @@
 import { readFile } from "node:fs/promises";
 import { PGlite } from "@electric-sql/pglite";
+import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { db } from "@/db";
 import * as schema from "../../db/schema";
+import {
+  browserTraceDomains as browserTraceDomainsTable,
+  browserTraces as browserTracesTable,
+} from "../../db/schema";
 
 const databases: PGlite[] = [];
 
@@ -20,6 +25,7 @@ describe("database services", () => {
     await applyInitialMigration(client);
     await applyBrowserImageMigration(client);
     await applyWorkspaceTenancyMigration(client);
+    await applyBrowserTraceTelemetryMigration(client);
 
     const pgliteDatabase = drizzle(client, { schema });
     // PGlite exposes the PostgreSQL query builders and transaction behavior
@@ -31,6 +37,7 @@ describe("database services", () => {
     const [
       browserImages,
       browsers,
+      browserTraces,
       chats,
       secrets,
       sessions,
@@ -40,6 +47,7 @@ describe("database services", () => {
     ] = await Promise.all([
       import("@/db/services/browser-images"),
       import("@/db/services/browsers"),
+      import("@/db/services/browser-traces"),
       import("@/db/services/chats"),
       import("@/db/services/secrets"),
       import("@/db/services/sessions"),
@@ -128,10 +136,6 @@ describe("database services", () => {
 
     expect(await sessions.isSessionOwned(alice, "session-alice")).toBe(true);
     expect(await sessions.isSessionOwned(bob, "session-alice")).toBe(false);
-    expect(await sessions.listOwnedSessionIds(alice)).toEqual(
-      new Set(["session-alice"])
-    );
-    expect(await sessions.listOwnedSessionIds(bob)).toEqual(new Set());
 
     await sessions.claimSession(alice, "session-imessage");
     const unindexedChats = (await chats.listChats(alice)).sort((left, right) =>
@@ -205,17 +209,98 @@ describe("database services", () => {
     await browsers.createBrowserSession(alice, {
       createdAt: new Date().toISOString(),
       sessionId: "browser-alice",
+      workerSessionId: "worker-alice",
     });
     expect(
       await browsers.readBrowserSession(alice, "browser-alice")
-    ).toBeDefined();
+    ).toMatchObject({ workerSessionId: "worker-alice" });
     expect(
       await browsers.readBrowserSession(bob, "browser-alice")
     ).toBeUndefined();
     expect(await browsers.listBrowserSessions(alice)).toHaveLength(1);
+    expect(
+      await browsers.listWorkerBrowserSessions(alice, "worker-alice")
+    ).toHaveLength(1);
+    expect(
+      await browsers.listWorkerBrowserSessions(bob, "worker-alice")
+    ).toEqual([]);
     expect(await browsers.deleteBrowserSession(bob, "browser-alice")).toBe(
       false
     );
+
+    await browserTraces.beginBrowserTrace(alice, {
+      sessionId: "worker-alice",
+      startedAt: "2026-08-31T00:00:00.000Z",
+      task: "Order the blue mug",
+    });
+    await browserTraces.recordBrowserTraceDomains(alice, "worker-alice", [
+      "shop.example.com",
+      "shop.example.com",
+    ]);
+    await browserTraces.recordBrowserTraceDomains(bob, "worker-alice", [
+      "intruder.example.com",
+    ]);
+    await browserTraces.completeBrowserTrace(alice, "worker-alice", {
+      completedAt: "2026-08-31T00:00:12.500Z",
+      resultMessage: "Ordered.",
+      status: "success",
+    });
+    const [trace] = await database
+      .select()
+      .from(browserTracesTable)
+      .where(eq(browserTracesTable.sessionId, "worker-alice"));
+    expect(trace).toMatchObject({
+      durationMs: 12_500,
+      resultMessage: "Ordered.",
+      status: "success",
+      task: "Order the blue mug",
+    });
+    const traceDomains = await database.select().from(browserTraceDomainsTable);
+    expect(traceDomains).toHaveLength(1);
+    expect(traceDomains[0]).toMatchObject({
+      domain: "shop.example.com",
+      traceSessionId: "worker-alice",
+    });
+
+    await browserTraces.recordBrowserTraceEvents(alice, "worker-alice", [
+      {
+        at: "2026-08-31T00:00:01.000Z",
+        detail: "Order the blue mug",
+        id: "evt_01",
+        label: "Task received",
+        type: "message.received",
+      },
+    ]);
+    await browserTraces.recordBrowserTraceEvents(bob, "worker-alice", [
+      {
+        at: "2026-08-31T00:00:01.000Z",
+        detail: "intrusion",
+        id: "evt_02",
+        label: "Task received",
+        type: "message.received",
+      },
+    ]);
+    const events = await browserTraces.listBrowserTraceEvents(
+      alice,
+      "worker-alice"
+    );
+    expect(events).toHaveLength(1);
+    expect(events[0]).toMatchObject({ id: "evt_01", label: "Task received" });
+    expect(
+      await browserTraces.listBrowserTraceEvents(bob, "worker-alice")
+    ).toEqual([]);
+
+    const tracePage = await browserTraces.listBrowserTraces(alice);
+    expect(tracePage.nextCursor).toBeNull();
+    expect(tracePage.traces).toHaveLength(1);
+    expect(tracePage.traces[0]).toMatchObject({
+      domains: ["shop.example.com"],
+      durationMs: 12_500,
+      sessionId: "worker-alice",
+      status: "success",
+      task: "Order the blue mug",
+    });
+    expect((await browserTraces.listBrowserTraces(bob)).traces).toEqual([]);
 
     const now = new Date().toISOString();
     await vault.createVaultItem(alice, {
@@ -281,6 +366,19 @@ async function applyBrowserImageMigration(database: PGlite) {
 async function applyWorkspaceTenancyMigration(database: PGlite) {
   const migration = await readFile(
     new URL("../../db/migrations/0004_wide_mysterio.sql", import.meta.url),
+    "utf8"
+  );
+  for (const statement of migration.split("--> statement-breakpoint")) {
+    if (statement.trim()) await database.exec(statement);
+  }
+}
+
+async function applyBrowserTraceTelemetryMigration(database: PGlite) {
+  const migration = await readFile(
+    new URL(
+      "../../db/migrations/0013_browser_trace_telemetry.sql",
+      import.meta.url
+    ),
     "utf8"
   );
   for (const statement of migration.split("--> statement-breakpoint")) {

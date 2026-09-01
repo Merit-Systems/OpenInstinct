@@ -174,9 +174,7 @@ function readWorkerTaskNotification(event: MessageStreamEvent) {
   return undefined;
 }
 
-export function readBackgroundWorkerTasks(
-  events: readonly MessageStreamEvent[]
-) {
+function readBackgroundWorkerTasks(events: readonly MessageStreamEvent[]) {
   const tasks = new Map<string, BackgroundWorkerTaskState>();
 
   for (const event of events) {

@@ -26,6 +26,7 @@ describe("usage and audit services", () => {
     await service.browsers.createBrowserSession(service.alice, {
       createdAt: new Date().toISOString(),
       sessionId: "browser-1",
+      workerSessionId: "worker-browser-1",
     });
     await service.usage.recordUsageEvent(service.alice, {
       kind: "model_tokens",
@@ -139,6 +140,7 @@ describe("usage and audit services", () => {
       service.browsers.createBrowserSession(service.alice, {
         createdAt: new Date().toISOString(),
         sessionId: "browser-no-ledger",
+        workerSessionId: "worker-browser-no-ledger",
       })
     ).resolves.toBeUndefined();
   });

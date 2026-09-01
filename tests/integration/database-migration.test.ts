@@ -16,6 +16,16 @@ describe("database migrations", () => {
     await applyMigration(database, "0001_better-auth.sql");
     await applyMigration(database, "0002_heavy_celestials.sql");
     await applyMigration(database, "0003_unusual_fabian_cortez.sql");
+    await applyMigration(database, "0004_wide_mysterio.sql");
+    await applyMigration(database, "0005_clammy_kinsey_walden.sql");
+    await applyMigration(database, "0006_sudden_iron_monger.sql");
+    await applyMigration(database, "0007_talented_hammerhead.sql");
+    await applyMigration(database, "0008_naive_doomsday.sql");
+    await applyMigration(database, "0009_dusty_star_brand.sql");
+    await applyMigration(database, "0010_clean_quasimodo.sql");
+    await applyMigration(database, "0011_amused_triathlon.sql");
+    await applyMigration(database, "0012_bright_killmonger.sql");
+    await applyMigration(database, "0013_browser_trace_telemetry.sql");
     await applyMigration(database, "0000_fluffy_the_spike.sql");
     await applyMigration(database, "0001_better-auth.sql");
 
@@ -44,6 +54,9 @@ describe("database migrations", () => {
            'agent_sessions',
            'browser_image_artifacts',
            'browser_sessions',
+           'browser_traces',
+           'browser_trace_domains',
+           'browser_trace_events',
            'chats',
            'encrypted_secrets',
            'user',
@@ -54,7 +67,7 @@ describe("database migrations", () => {
     );
     const pendingConstraints = await pendingConstraintCount(database);
 
-    expect(tables.rows[0]?.count).toBe(13);
+    expect(tables.rows[0]?.count).toBe(16);
     expect(pendingConstraints).toBe(0);
     await expect(
       database.query("SELECT id FROM vault_items WHERE id = 'contact-1'")

@@ -21,7 +21,7 @@ import {
   workspaces,
 } from "@/db";
 import { readModelCatalog } from "@/lib/model-catalog/server";
-import { readTaskHistoryPage } from "@/lib/task-history/server";
+import { listBrowserTraces } from "@/db/services/browser-traces";
 import { saveChat } from "@/db/services/chats";
 import { saveChatSchema } from "@/lib/chat";
 import { googleWorkspaceActionSchema } from "@/lib/google-workspace/config";
@@ -457,11 +457,11 @@ export const appRouter = createTRPCRouter({
   models: {
     list: protectedProcedure.query(readModelCatalog),
   },
-  tasks: {
+  traces: {
     list: protectedProcedure
       .input(z.object({ cursor: z.string().nullish() }))
       .query(({ ctx, input }) =>
-        readTaskHistoryPage(ctx.scope, input.cursor ?? undefined)
+        listBrowserTraces(ctx.scope, input.cursor ?? undefined)
       ),
   },
 });
