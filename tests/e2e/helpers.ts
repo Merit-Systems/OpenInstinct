@@ -8,10 +8,14 @@ export async function signInThroughBypass(
 ) {
   const outcomes: string[] = [];
   for (let attempt = 0; attempt < 3; attempt += 1) {
+    // oxlint-disable-next-line eslint/no-await-in-loop -- Each retry must finish navigation before the next attempt.
     await page.goto("/sign-in");
+    // oxlint-disable-next-line eslint/no-await-in-loop -- Each retry must finish navigation before the next attempt.
     await page.getByLabel("Phone number").fill(phoneNumber);
+    // oxlint-disable-next-line eslint/no-await-in-loop -- Each retry must finish navigation before the next attempt.
     await page.getByRole("button", { name: "Continue locally" }).click();
 
+    // oxlint-disable-next-line eslint/no-await-in-loop -- Each retry must finish navigation before the next attempt.
     const outcome = await page
       .waitForURL(/\/(?:$|sign-in\?$)/, { timeout: 15_000 })
       .then(() =>

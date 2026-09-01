@@ -204,7 +204,7 @@ function lifecycleWebhookEventType(
   if (to === "pending_deletion") return "workspace.deletion_started" as const;
   if (from === "suspended" && to === "active")
     return "workspace.reactivated" as const;
-  return;
+  return undefined;
 }
 
 export async function deleteWorkspaceData(scope: AccessScope) {

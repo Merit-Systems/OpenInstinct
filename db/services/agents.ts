@@ -138,7 +138,7 @@ export async function getAgent(scope: AccessScope, agentId: string) {
       and(eq(agents.id, agentId), eq(agents.workspaceId, scope.workspaceId))
     )
     .limit(1);
-  if (!row) return;
+  if (!row) return undefined;
   return { ...row.agent, activeRevision: row.activeRevision };
 }
 

@@ -138,7 +138,7 @@ describe.skipIf(realPostgres === undefined)(
         expect(
           revisions
             .map((revision) => revision.revisionNumber)
-            .sort((left, right) => left - right)
+            .toSorted((left, right) => left - right)
         ).toEqual([1, 2]);
 
         await expect(

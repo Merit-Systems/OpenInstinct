@@ -1,4 +1,3 @@
-/* oxlint-disable typescript/no-unsafe-type-assertion -- PGlite is the adapter-compatible database test double. */
 import { createHmac } from "node:crypto";
 import { readFile, readdir } from "node:fs/promises";
 import { PGlite } from "@electric-sql/pglite";
@@ -29,6 +28,7 @@ describe("webhook outbox", () => {
       "https://192.168.1.1",
       "https://0.0.0.0",
     ]) {
+      // oxlint-disable-next-line eslint/no-await-in-loop -- Each rejected attempt exercises the shared endpoint fixture serially.
       await expect(
         service.webhooks.registerWebhookEndpoint(service.alice, {
           url,
@@ -385,13 +385,17 @@ async function applyAllMigrations(database: PGlite) {
     await readdir(new URL("../../db/migrations/", import.meta.url))
   )
     .filter((name) => name.endsWith(".sql"))
-    .sort();
-  for (const name of names) {
+    .toSorted();
+  for (const migrationName of names) {
+    // oxlint-disable-next-line eslint/no-await-in-loop -- Migration files must execute in committed order.
     const migration = await readFile(
-      new URL(`../../db/migrations/${name}`, import.meta.url),
+      new URL(`../../db/migrations/${migrationName}`, import.meta.url),
       "utf8"
     );
     for (const statement of migration.split("--> statement-breakpoint"))
-      if (statement.trim()) await database.exec(statement);
+      if (statement.trim()) {
+        // oxlint-disable-next-line eslint/no-await-in-loop -- Migration statements must execute in committed order.
+        await database.exec(statement);
+      }
   }
 }

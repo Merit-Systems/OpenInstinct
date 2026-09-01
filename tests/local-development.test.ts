@@ -19,15 +19,15 @@ describe("local development", () => {
   it("owns the PostgreSQL lifecycle around the application process", async () => {
     const [compose, developmentScript, packageManifestSource] =
       await Promise.all([
-        readFile(new URL("../../compose.yaml", import.meta.url), "utf8"),
-        readFile(new URL("../../scripts/dev.mjs", import.meta.url), "utf8"),
-        readFile(new URL("../../package.json", import.meta.url), "utf8"),
+        readFile(new URL("../compose.yaml", import.meta.url), "utf8"),
+        readFile(new URL("../scripts/dev.ts", import.meta.url), "utf8"),
+        readFile(new URL("../package.json", import.meta.url), "utf8"),
       ]);
     const packageManifest = z
       .object({ scripts: z.object({ dev: z.string() }) })
       .parse(JSON.parse(packageManifestSource));
 
-    expect(packageManifest.scripts.dev).toBe("node scripts/dev.mjs");
+    expect(packageManifest.scripts.dev).toBe("node scripts/dev.ts");
     expect(compose).toContain("image: postgres:17-alpine");
     expect(compose).toContain('"127.0.0.1::5432"');
     expect(compose).toContain("postgres-data:/var/lib/postgresql/data");
@@ -160,7 +160,7 @@ printf 'pnpm %s\\n' "$*" >> "$DEV_SUPERVISOR_LOG"
 
   const supervisor = spawn(
     process.execPath,
-    [new URL("../../scripts/dev.mjs", import.meta.url).pathname],
+    [new URL("../scripts/dev.ts", import.meta.url).pathname],
     {
       env: {
         DEV_SUPERVISOR_LOG: logPath,
@@ -217,7 +217,7 @@ printf 'pnpm %s %s\n' "$*" "$DATABASE_URL" >> "$DEV_SUPERVISOR_LOG"
 
   const supervisor = spawn(
     process.execPath,
-    [new URL("../../scripts/dev.mjs", import.meta.url).pathname],
+    [new URL("../scripts/dev.ts", import.meta.url).pathname],
     {
       env: {
         DEV_SUPERVISOR_LOG: logPath,
@@ -239,6 +239,7 @@ printf 'pnpm %s %s\n' "$*" "$DATABASE_URL" >> "$DEV_SUPERVISOR_LOG"
 }
 
 async function waitForLogEntry(path: string, expected: string) {
+  /* oxlint-disable eslint/no-await-in-loop -- This bounded poll must observe each read before scheduling the next retry. */
   for (let attempt = 0; attempt < 250; attempt += 1) {
     const contents = await readFile(path, "utf8").catch(() => "");
     if (contents.includes(expected)) {
@@ -246,6 +247,7 @@ async function waitForLogEntry(path: string, expected: string) {
     }
     await new Promise((resolve) => setTimeout(resolve, 20));
   }
+  /* oxlint-enable eslint/no-await-in-loop */
 
   throw new Error(`Timed out waiting for ${expected}`);
 }

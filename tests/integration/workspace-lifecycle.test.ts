@@ -1,4 +1,3 @@
-/* oxlint-disable typescript/no-unsafe-type-assertion -- PGlite is the adapter-compatible database test double used by the service suite. */
 import { readFile, readdir } from "node:fs/promises";
 import { PGlite } from "@electric-sql/pglite";
 import { drizzle } from "drizzle-orm/pglite";
@@ -32,10 +31,13 @@ describe("workspace lifecycle", () => {
       ["suspended", "active"],
       ["active", "pending_deletion"],
     ] as const) {
+      // oxlint-disable-next-line eslint/no-await-in-loop -- Each state transition depends on the prior state.
       await service.client.exec(
         `UPDATE workspaces SET lifecycle_state = '${from}' WHERE id = 'workspace-a'`
       );
+      // oxlint-disable-next-line eslint/no-await-in-loop -- Each state transition depends on the prior state.
       await service.lifecycle.transitionWorkspaceLifecycle(service.owner, to);
+      // oxlint-disable-next-line eslint/no-await-in-loop -- Each state transition depends on the prior state.
       await expect(
         service.client.query(
           "SELECT lifecycle_state FROM workspaces WHERE id = 'workspace-a'"
@@ -85,6 +87,7 @@ describe("workspace lifecycle", () => {
   it("requires an active owner membership in the target workspace", async () => {
     const service = await loadService();
     for (const scope of [service.admin, service.member, service.wrongTenant]) {
+      // oxlint-disable-next-line eslint/no-await-in-loop -- Assertions share the same mutable lifecycle fixture.
       await expect(
         service.lifecycle.transitionWorkspaceLifecycle(scope, "suspended")
       ).rejects.toBeInstanceOf(
@@ -320,17 +323,21 @@ async function loadService() {
 async function createDatabase() {
   const client = new PGlite();
   databases.push(client);
-  for (const name of (
+  for (const migrationName of (
     await readdir(new URL("../../db/migrations/", import.meta.url))
   )
     .filter((name) => name.endsWith(".sql"))
-    .sort()) {
+    .toSorted()) {
+    // oxlint-disable-next-line eslint/no-await-in-loop -- Migration files must execute in committed order.
     const migration = await readFile(
-      new URL(`../../db/migrations/${name}`, import.meta.url),
+      new URL(`../../db/migrations/${migrationName}`, import.meta.url),
       "utf8"
     );
     for (const statement of migration.split("--> statement-breakpoint")) {
-      if (statement.trim()) await client.exec(statement);
+      if (statement.trim()) {
+        // oxlint-disable-next-line eslint/no-await-in-loop -- Migration statements must execute in committed order.
+        await client.exec(statement);
+      }
     }
   }
   return client;

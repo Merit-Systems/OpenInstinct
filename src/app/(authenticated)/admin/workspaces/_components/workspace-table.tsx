@@ -103,13 +103,13 @@ export function WorkspaceTable() {
                 <TableCell>
                   {target ? (
                     <Button
-                      onClick={() =>
+                      onClick={() => {
                         setPending({
                           id: workspace.id,
                           displayName: workspace.displayName,
                           to: target,
-                        })
-                      }
+                        });
+                      }}
                       size="sm"
                       type="button"
                       variant={
@@ -132,7 +132,9 @@ export function WorkspaceTable() {
       {workspaces.data?.nextCursor ? (
         <Button
           disabled={workspaces.isFetching}
-          onClick={() => setCursor(workspaces.data?.nextCursor ?? undefined)}
+          onClick={() => {
+            setCursor(workspaces.data.nextCursor ?? undefined);
+          }}
           type="button"
           variant="outline"
         >
@@ -161,10 +163,14 @@ export function WorkspaceTable() {
           <DialogFooter showCloseButton>
             <Button
               disabled={!pending || transition.isPending}
-              onClick={() =>
-                pending &&
-                transition.mutate({ workspaceId: pending.id, to: pending.to })
-              }
+              onClick={() => {
+                if (pending) {
+                  transition.mutate({
+                    workspaceId: pending.id,
+                    to: pending.to,
+                  });
+                }
+              }}
               type="button"
               variant={pending?.to === "suspended" ? "destructive" : "default"}
             >

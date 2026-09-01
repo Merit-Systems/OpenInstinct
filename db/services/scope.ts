@@ -62,7 +62,7 @@ export async function verifyScopeAccess(
     row.membershipStatus !== "active" ||
     !isWorkspaceMembershipRole(row.role)
   ) {
-    return;
+    return undefined;
   }
 
   return { ...scope, membershipStatus: row.membershipStatus, role: row.role };

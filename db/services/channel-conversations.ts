@@ -107,7 +107,7 @@ export async function createConversationBinding({
         )
       )
       .limit(1);
-    if (!identity) return;
+    if (!identity) return undefined;
 
     const activeAgents = await transaction
       .select({ id: agents.id, activeRevisionId: agents.activeRevisionId })
@@ -121,9 +121,9 @@ export async function createConversationBinding({
       )
       .for("update")
       .limit(2);
-    if (activeAgents.length !== 1) return;
+    if (activeAgents.length !== 1) return undefined;
     const [agent] = activeAgents;
-    if (!agent?.activeRevisionId) return;
+    if (!agent?.activeRevisionId) return undefined;
 
     await transaction
       .insert(platformLines)
@@ -176,7 +176,7 @@ export async function createConversationBinding({
         ],
       });
 
-    const [binding] = await transaction
+    const [conversationBinding] = await transaction
       .select(bindingSelection)
       .from(channelConversations)
       .innerJoin(
@@ -192,12 +192,12 @@ export async function createConversationBinding({
         })
       )
       .limit(1);
-    if (!binding) return;
+    if (!conversationBinding) return undefined;
 
     await transaction
       .insert(channelParticipants)
       .values({
-        conversationId: binding.id,
+        conversationId: conversationBinding.id,
         id: randomUUID(),
         phoneIdentityId,
       })
@@ -207,7 +207,7 @@ export async function createConversationBinding({
           channelParticipants.phoneIdentityId,
         ],
       });
-    return binding;
+    return conversationBinding;
   });
   if (binding) {
     void recordAuditEvent(scope, {

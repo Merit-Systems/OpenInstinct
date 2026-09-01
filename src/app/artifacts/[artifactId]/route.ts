@@ -53,19 +53,19 @@ async function openArtifact(
   const byteSize = artifact?.byteSize;
   const filename = artifact?.filename;
   const mediaType = artifact?.mediaType;
-  if (!artifact || !byteSize || !filename || !mediaType) return;
-  if (!env.BLOB_STORE_ID && !env.BLOB_READ_WRITE_TOKEN) return;
+  if (!artifact || !byteSize || !filename || !mediaType) return undefined;
+  if (!env.BLOB_STORE_ID && !env.BLOB_READ_WRITE_TOKEN) return undefined;
   const result = await get(artifact.storagePathname, {
     access: "private",
     abortSignal: options.signal,
     ifNoneMatch: options.ifNoneMatch,
   });
-  if (!result) return;
+  if (!result) return undefined;
   if (
     result.statusCode === 200 &&
     (result.blob.size !== byteSize || result.blob.contentType !== mediaType)
   )
-    return;
+    return undefined;
   return { artifact: { ...artifact, byteSize, filename, mediaType }, result };
 }
 

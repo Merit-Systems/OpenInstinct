@@ -121,7 +121,7 @@ describe("Linq delivery", () => {
   });
 
   it.each([
-    [2008, "LINQ_RECIPIENT_NOT_VERIFIED", "message your deployment"],
+    [2008, "LINQ_RECIPIENT_NOT_VERIFIED", "text the deployment"],
     [2024, "LINQ_RECIPIENT_OPTED_OUT", "opted out"],
     [2027, "LINQ_REPUTATION_BLOCKED", "messaging reputation"],
   ])("maps Linq code %i to actionable OTP copy", (code, expectedCode, copy) => {
@@ -142,8 +142,8 @@ describe("Linq delivery", () => {
       })
     );
 
-    expect(failure.code).toBe("LINQ_SENDING_LINE_NOT_VERIFIED");
-    expect(failure.message).toContain("Phone Numbers verification instruction");
+    expect(failure.code).toBe("LINQ_SENDING_LINE_UNAVAILABLE");
+    expect(failure.message).toContain("first-time sign-in steps");
   });
 
   it("does not mislabel unrelated Linq conflicts as verification failures", () => {

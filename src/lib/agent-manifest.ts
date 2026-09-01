@@ -47,7 +47,7 @@ function canonicalJson(value: CanonicalJsonValue): string {
   if (Array.isArray(value)) return `[${value.map(canonicalJson).join(",")}]`;
   if (isCanonicalJsonRecord(value)) {
     return `{${Object.keys(value)
-      .sort()
+      .toSorted()
       .map((key) => {
         const child = value[key];
         if (child === undefined) throw new Error("Invalid canonical JSON.");

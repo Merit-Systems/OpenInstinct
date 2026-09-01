@@ -336,16 +336,17 @@ export function ArtifactMessageImage({
   if (!parsedSource.success || !isBrowserImageArtifactUrl(parsedSource.data)) {
     return (
       <span className="text-muted-foreground">
-        Image not displayed: {alt || "external image"}
+        Image not displayed: {alt ?? "external image"}
       </span>
     );
   }
 
   return (
     <a href={parsedSource.data} rel="noreferrer" target="_blank">
+      {/* oxlint-disable-next-line nextjs/no-img-element -- validated runtime browser image URL */}
       <img
         {...props}
-        alt={alt || "Browser image"}
+        alt={alt ?? "Browser image"}
         className={cn(
           "my-3 max-h-[32rem] w-auto max-w-full rounded-lg border bg-muted object-contain",
           className

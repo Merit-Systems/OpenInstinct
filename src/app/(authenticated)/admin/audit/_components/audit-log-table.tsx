@@ -45,7 +45,9 @@ export function AuditLogTable() {
       >
         <Input
           aria-label="Workspace ID"
-          onChange={(event) => setWorkspaceId(event.target.value)}
+          onChange={(event) => {
+            setWorkspaceId(event.target.value);
+          }}
           placeholder="Filter by workspace ID"
           value={workspaceId}
         />
@@ -94,7 +96,9 @@ export function AuditLogTable() {
       {auditLog.data?.nextCursor ? (
         <Button
           disabled={auditLog.isFetching}
-          onClick={() => setCursor(auditLog.data?.nextCursor ?? undefined)}
+          onClick={() => {
+            setCursor(auditLog.data.nextCursor ?? undefined);
+          }}
           type="button"
           variant="outline"
         >

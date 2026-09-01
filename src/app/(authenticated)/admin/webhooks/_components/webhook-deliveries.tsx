@@ -32,7 +32,9 @@ export function WebhookDeliveries() {
       <div className="flex flex-wrap items-center gap-3">
         <Button
           disabled={drain.isPending}
-          onClick={() => drain.mutate({ limit: 50 })}
+          onClick={() => {
+            drain.mutate({ limit: 50 });
+          }}
           type="button"
         >
           {drain.isPending ? "Draining…" : "Drain now"}

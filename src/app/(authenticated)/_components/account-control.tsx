@@ -9,7 +9,7 @@ export function AuthenticatedAccountControl() {
   if (!session?.user) return null;
 
   return (
-    <div className="flex items-center gap-2 border-t border-sidebar-border px-3 py-3">
+    <div className="flex items-center gap-2 border-t border-sidebar-border p-3">
       <UserIcon className="size-4 shrink-0 text-muted-foreground" />
       <span className="min-w-0 flex-1 truncate type-label text-muted-foreground">
         {session.user.phoneNumber ?? "Signed in"}

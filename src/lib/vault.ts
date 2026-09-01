@@ -323,6 +323,7 @@ export function loginAccountHint(
       case "username":
         return `Username · ${identifier.value.slice(0, 2)}•••`;
     }
+    throw new Error("Unsupported login identifier type.");
   })();
   return origin
     ? `${new URL(origin).hostname} · ${identifierHint}`

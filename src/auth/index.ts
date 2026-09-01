@@ -82,11 +82,14 @@ export function createPhoneNumberOptions(
     expiresIn: 300,
     phoneNumberValidator: isE164PhoneNumber,
     requireVerification: true,
-    callbackOnVerification: async ({ phoneNumber: phoneNumberValue, user }) => {
+    callbackOnVerification: async ({
+      phoneNumber: phoneNumberValue,
+      user: verifiedUser,
+    }) => {
       try {
         await dependencies.recordVerifiedPhoneIdentity({
           phoneNumber: phoneNumberValue,
-          userId: user.id,
+          userId: verifiedUser.id,
         });
       } catch (error) {
         console.error(

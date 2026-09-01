@@ -1,4 +1,3 @@
-/* oxlint-disable typescript/no-unsafe-type-assertion -- PGlite is the adapter-compatible database test double. */
 import { readFile, readdir } from "node:fs/promises";
 import { PGlite } from "@electric-sql/pglite";
 import { drizzle } from "drizzle-orm/pglite";
@@ -65,34 +64,37 @@ describe("/v1 platform API", () => {
     const revisionContext = {
       params: Promise.resolve({ agentId: created, revisionId: "missing" }),
     };
-    for (const handler of [
-      () =>
-        api.agents.POST(
-          request(
-            "/v1/agents",
-            api.readKey,
-            { slug: "no" },
-            { "idempotency-key": "no" }
-          )
-        ),
-      () =>
-        api.revisions.POST(
-          request(`/v1/agents/${created}/revisions`, api.readKey, manifest, {
-            "idempotency-key": "no",
-          }),
-          context
-        ),
-      () =>
-        api.publish.POST(
-          request(
-            `/v1/agents/${created}/revisions/missing/publish`,
-            api.readKey,
-            {}
+    await Promise.all(
+      [
+        () =>
+          api.agents.POST(
+            request(
+              "/v1/agents",
+              api.readKey,
+              { slug: "no" },
+              { "idempotency-key": "no" }
+            )
           ),
-          revisionContext
-        ),
-    ])
-      expect((await handler()).status).toBe(403);
+        () =>
+          api.revisions.POST(
+            request(`/v1/agents/${created}/revisions`, api.readKey, manifest, {
+              "idempotency-key": "no",
+            }),
+            context
+          ),
+        () =>
+          api.publish.POST(
+            request(
+              `/v1/agents/${created}/revisions/missing/publish`,
+              api.readKey,
+              {}
+            ),
+            revisionContext
+          ),
+      ].map(async (handler) => {
+        expect((await handler()).status).toBe(403);
+      })
+    );
     const first = await api.revisions.POST(
       request(`/v1/agents/${created}/revisions`, api.agentKey, manifest, {
         "idempotency-key": "revision-key",
@@ -432,16 +434,20 @@ async function loadApi(enforcementEnabled = false) {
 }
 
 async function applyAllMigrations(database: PGlite) {
-  for (const name of (
+  for (const migrationName of (
     await readdir(new URL("../../db/migrations/", import.meta.url))
   )
     .filter((name) => name.endsWith(".sql"))
-    .sort()) {
+    .toSorted()) {
+    // oxlint-disable-next-line eslint/no-await-in-loop -- Migration files must execute in committed order.
     const migration = await readFile(
-      new URL(`../../db/migrations/${name}`, import.meta.url),
+      new URL(`../../db/migrations/${migrationName}`, import.meta.url),
       "utf8"
     );
     for (const statement of migration.split("--> statement-breakpoint"))
-      if (statement.trim()) await database.exec(statement);
+      if (statement.trim()) {
+        // oxlint-disable-next-line eslint/no-await-in-loop -- Migration statements must execute in committed order.
+        await database.exec(statement);
+      }
   }
 }

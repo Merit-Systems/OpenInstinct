@@ -32,14 +32,17 @@ describe("GET /api/cron/drain-webhooks", () => {
   it("returns 404 for missing or incorrect bearer credentials", async () => {
     const route = await loadRoute("cron-secret");
 
-    for (const authorization of [undefined, "Bearer wrong-secret"]) {
-      const headers = authorization ? { authorization } : undefined;
-      await expect(
-        route.GET(
-          new Request("http://test/api/cron/drain-webhooks", { headers })
-        )
-      ).resolves.toMatchObject({ status: 404 });
-    }
+    await Promise.all(
+      [undefined, "Bearer wrong-secret"].map(async (authorization) => {
+        const headers =
+          authorization === undefined ? undefined : { authorization };
+        await expect(
+          route.GET(
+            new Request("http://test/api/cron/drain-webhooks", { headers })
+          )
+        ).resolves.toMatchObject({ status: 404 });
+      })
+    );
     expect(drainWebhookDeliveries).not.toHaveBeenCalled();
   });
 

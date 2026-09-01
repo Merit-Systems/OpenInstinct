@@ -1,6 +1,6 @@
 "use client";
 
-import { type FormEvent, useState } from "react";
+import { type SubmitEvent, useState } from "react";
 import { useRouter } from "next/navigation";
 import { z } from "zod";
 import { Button } from "@/components/ui/button";
@@ -84,9 +84,11 @@ export function LoginForm({
   });
   const result = loginFormSchema.safeParse(form);
   const errors =
-    attempted && !result.success ? result.error.flatten().fieldErrors : {};
+    attempted && !result.success
+      ? z.flattenError(result.error).fieldErrors
+      : {};
 
-  const submit = (event: FormEvent) => {
+  const submit = (event: SubmitEvent<HTMLFormElement>) => {
     event.preventDefault();
     setAttempted(true);
     if (!result.success) return;
@@ -119,9 +121,9 @@ export function LoginForm({
             error={errors.nickname?.[0]}
             id="vault-login-label"
             label="Name"
-            onChange={(nickname) =>
-              setForm((current) => ({ ...current, nickname }))
-            }
+            onChange={(nickname) => {
+              setForm((current) => ({ ...current, nickname }));
+            }}
             placeholder="GitHub"
             value={form.nickname}
           />
@@ -132,7 +134,9 @@ export function LoginForm({
           id="vault-login-origin"
           inputMode="url"
           label="Website"
-          onChange={(origin) => setForm((current) => ({ ...current, origin }))}
+          onChange={(origin) => {
+            setForm((current) => ({ ...current, origin }));
+          }}
           placeholder="https://www.ubereats.com"
           type="url"
           value={form.origin}
@@ -178,9 +182,9 @@ export function LoginForm({
             error={errors.identifier?.[0]}
             id="vault-login-identifier"
             label={identifierLabel(form.identifierType)}
-            onChange={(identifier) =>
-              setForm((current) => ({ ...current, identifier }))
-            }
+            onChange={(identifier) => {
+              setForm((current) => ({ ...current, identifier }));
+            }}
             placeholder={identifierPlaceholder(form.identifierType)}
             value={form.identifier}
           />
@@ -193,9 +197,9 @@ export function LoginForm({
           error={errors.password?.[0]}
           id="vault-login-password"
           label={passwordOptional ? "Password (optional)" : "Password"}
-          onChange={(password) =>
-            setForm((current) => ({ ...current, password }))
-          }
+          onChange={(password) => {
+            setForm((current) => ({ ...current, password }));
+          }}
           type="password"
           value={form.password}
         />

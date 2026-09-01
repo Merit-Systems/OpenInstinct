@@ -501,7 +501,9 @@ export const appRouter = createTRPCRouter({
     import: protectedProcedure
       .input(vaultImportItemsSchema)
       .mutation(async ({ ctx, input }) => {
+        /* oxlint-disable eslint/no-await-in-loop -- Import preserves source order and avoids concurrent writes to the same vault scope. */
         for (const item of input) await saveVaultItem(ctx.scope, item);
+        /* oxlint-enable eslint/no-await-in-loop */
       }),
     remove: protectedProcedure
       .input(z.object({ id: z.string().min(1) }))

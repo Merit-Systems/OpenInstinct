@@ -1,45 +1,43 @@
 import type { RouteHandlerArgs } from "eve/channels";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import eveChannel, { eveChannelDependencies } from "@/agent/channels/eve";
+import * as AuthSession from "@/auth/session";
+import * as SessionService from "@/db/services/sessions";
+import * as ScopeService from "@/db/services/scope";
+import * as Environment from "@/env";
+import eveChannel from "@/agent/channels/eve";
+import { authSessionFor } from "@/tests/helpers/auth-session";
 
-const getAuthSession = vi.fn<typeof eveChannelDependencies.getAuthSession>();
-const isSessionOwned = vi.fn<typeof eveChannelDependencies.isSessionOwned>();
-const isWorkspaceScopeEnforcementEnabled =
-  vi.fn<typeof eveChannelDependencies.isWorkspaceScopeEnforcementEnabled>();
-const verifyScopeAccess =
-  vi.fn<typeof eveChannelDependencies.verifyScopeAccess>();
-const originalDependencies = { ...eveChannelDependencies };
+const getAuthSessionMock = vi.spyOn(AuthSession, "getAuthSession");
+const isSessionOwnedMock = vi.spyOn(SessionService, "isSessionOwned");
+const isWorkspaceScopeEnforcementEnabledMock = vi.spyOn(
+  Environment,
+  "isWorkspaceScopeEnforcementEnabled"
+);
+const verifyScopeAccessMock = vi.spyOn(ScopeService, "verifyScopeAccess");
 
 beforeEach(() => {
   vi.useFakeTimers();
   vi.clearAllMocks();
-  getAuthSession.mockResolvedValue({
-    user: {
+  getAuthSessionMock.mockResolvedValue(
+    authSessionFor({
       id: "user-1",
       phoneNumber: "+12025550123",
       phoneNumberVerified: true,
-    },
-  });
-  isSessionOwned.mockResolvedValue(false);
-  isWorkspaceScopeEnforcementEnabled.mockReturnValue(false);
-  Object.assign(eveChannelDependencies, {
-    getAuthSession,
-    isSessionOwned,
-    isWorkspaceScopeEnforcementEnabled,
-    verifyScopeAccess,
-  });
+    })
+  );
+  isSessionOwnedMock.mockResolvedValue(false);
+  isWorkspaceScopeEnforcementEnabledMock.mockReturnValue(false);
 });
 
 afterEach(() => {
   vi.useRealTimers();
-  Object.assign(eveChannelDependencies, originalDependencies);
 });
 
 describe("Eve channel authentication", () => {
   it("rejects a denied scope with the same response as a missing session", async () => {
     const route = sessionStreamRoute();
-    isWorkspaceScopeEnforcementEnabled.mockReturnValue(true);
-    verifyScopeAccess.mockResolvedValue(undefined);
+    isWorkspaceScopeEnforcementEnabledMock.mockReturnValue(true);
+    verifyScopeAccessMock.mockResolvedValue(undefined);
 
     const denied = await route.handler(
       new Request(
@@ -47,7 +45,7 @@ describe("Eve channel authentication", () => {
       ),
       unexpectedRouteContext()
     );
-    getAuthSession.mockResolvedValue(null);
+    getAuthSessionMock.mockResolvedValue(null);
     const unauthenticated = await route.handler(
       new Request(
         "https://assistant.example/eve/v1/session/session-one/stream"
@@ -71,7 +69,7 @@ describe("Eve channel authentication", () => {
     await vi.runAllTimersAsync();
     await responsePromise;
 
-    expect(verifyScopeAccess).not.toHaveBeenCalled();
+    expect(verifyScopeAccessMock).not.toHaveBeenCalled();
   });
 
   it("checks decoded session route ids against workspace ownership", async () => {
@@ -87,7 +85,7 @@ describe("Eve channel authentication", () => {
     const response = await responsePromise;
 
     expect(response.status).toBe(403);
-    expect(isSessionOwned).toHaveBeenCalledWith(
+    expect(isSessionOwnedMock).toHaveBeenCalledWith(
       expect.objectContaining({ userId: "better-auth:user-1" }),
       "session/one"
     );
@@ -108,17 +106,17 @@ function sessionStreamRoute() {
 }
 
 function unexpectedRouteContext() {
-  const unexpected = () => {
-    throw new Error("The request should stop at authorization.");
-  };
-
   return {
-    attachSession: unexpected,
-    from: unexpected,
+    attachSession: unexpectedRouteRequest,
+    from: unexpectedRouteRequest,
     params: { sessionId: "session/one" },
     requestIp: null,
-    resolveSession: unexpected,
-    to: unexpected,
-    waitUntil: unexpected,
+    resolveSession: unexpectedRouteRequest,
+    to: unexpectedRouteRequest,
+    waitUntil: unexpectedRouteRequest,
   } satisfies RouteHandlerArgs;
+}
+
+function unexpectedRouteRequest(): never {
+  throw new Error("The request should stop at authorization.");
 }

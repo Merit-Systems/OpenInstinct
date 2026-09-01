@@ -73,11 +73,12 @@ export async function readGmailThread(ctx: ToolContext, threadId: string) {
     );
     return {
       id: thread.id ?? threadId,
-      messages: (thread.messages ?? []).slice(-20).map((message) => ({
-        ...minimizeMessage(message),
-        attachments: collectAttachments(message.payload),
-        body: redactGoogleText(plainText(message.payload)),
-      })),
+      messages: (thread.messages ?? []).slice(-20).map((message) =>
+        Object.assign({}, minimizeMessage(message), {
+          attachments: collectAttachments(message.payload),
+          body: redactGoogleText(plainText(message.payload)),
+        })
+      ),
     };
   });
 }
@@ -162,6 +163,7 @@ export function gmailUpdateLabels(action: GmailUpdateAction) {
     case "unstar":
       return { addLabelIds: [], removeLabelIds: ["STARRED"] };
   }
+  throw new Error("Unsupported Gmail update action.");
 }
 
 function header(part: GmailPart | undefined, name: string) {

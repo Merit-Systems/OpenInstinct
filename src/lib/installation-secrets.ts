@@ -66,7 +66,7 @@ async function resolveInstallationSecrets() {
 function configuredInstallationSecrets() {
   const betterAuthSecret = env.BETTER_AUTH_SECRET;
   const secretEncryptionKey = env.SECRET_ENCRYPTION_KEY;
-  if (!betterAuthSecret && !secretEncryptionKey) return;
+  if (!betterAuthSecret && !secretEncryptionKey) return undefined;
   if (!betterAuthSecret || !secretEncryptionKey) {
     throw new Error(
       "Set both BETTER_AUTH_SECRET and SECRET_ENCRYPTION_KEY, or leave both unset for automatic private Blob provisioning."
@@ -84,7 +84,7 @@ async function readInstallationSecrets(pathname: string) {
     access: "private",
     useCache: false,
   });
-  if (!result) return;
+  if (!result) return undefined;
   if (result.statusCode !== 200) {
     throw new Error("The installation secrets Blob returned no content.");
   }

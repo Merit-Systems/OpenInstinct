@@ -3,9 +3,9 @@
 import type {
   ChangeEvent,
   ComponentProps,
-  FormEvent,
   HTMLAttributes,
   ReactNode,
+  SubmitEvent,
 } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -60,7 +60,7 @@ export type QuestionProps = Omit<
   disabled?: boolean;
   onSubmit?: (
     response: QuestionResponse,
-    event: FormEvent<HTMLFormElement>
+    event: SubmitEvent<HTMLFormElement>
   ) => void | Promise<void>;
   onValueChange?: (value: QuestionValue) => void;
   selectionMode?: SelectionMode;
@@ -143,7 +143,7 @@ export const Question = ({
   );
 
   const handleSubmit = useCallback(
-    async (event: FormEvent<HTMLFormElement>) => {
+    async (event: SubmitEvent<HTMLFormElement>) => {
       event.preventDefault();
       if (disabled) {
         return;
@@ -172,7 +172,9 @@ export const Question = ({
           "space-y-4 rounded-lg border bg-background p-4",
           className
         )}
-        onSubmit={handleSubmit}
+        onSubmit={(event) => {
+          void handleSubmit(event);
+        }}
         {...props}
       >
         {children}
@@ -317,7 +319,7 @@ export const QuestionSubmit = ({
 
   return (
     <Button
-      disabled={question.disabled || disabled || !hasResponse}
+      disabled={question.disabled || disabled === true || !hasResponse}
       type="submit"
       {...props}
     >

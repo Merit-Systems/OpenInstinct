@@ -47,11 +47,11 @@ import {
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
-export type AgentInputResponse = {
+export interface AgentInputResponse {
   readonly optionId?: string;
   readonly requestId: string;
   readonly text?: string;
-};
+}
 
 type EveFilePart = Extract<EveMessagePart, { type: "file" }>;
 
@@ -263,6 +263,7 @@ function AgentMessagePart({
       return tool;
     }
   }
+  throw new Error("Unsupported agent message part.");
 }
 
 function QuestionRequest({
@@ -355,6 +356,8 @@ function AttachmentPart({ part }: { readonly part: EveFilePart }) {
   const body = (
     <span className="flex max-w-sm items-center gap-3 rounded-md border bg-background/60 p-2 text-sm">
       {isImage ? (
+        // Browser artifacts use runtime URLs that cannot be declared in Next Image configuration.
+        // oxlint-disable-next-line nextjs/no-img-element -- runtime browser artifact URL
         <img
           alt={label}
           className="size-12 shrink-0 rounded-sm object-cover"
@@ -447,6 +450,7 @@ function AuthorizationPrompt({
             <Button
               render={
                 <a
+                  aria-label={`Sign in with ${part.displayName}`}
                   href={part.authorization.url}
                   rel="noreferrer"
                   target="_blank"
@@ -498,6 +502,7 @@ function formatAuthorizationOutcome(
     case "timed-out":
       return "timed out";
   }
+  throw new Error("Unsupported authorization outcome.");
 }
 
 function formatBytes(size: number | undefined): string | undefined {
@@ -505,7 +510,7 @@ function formatBytes(size: number | undefined): string | undefined {
     return undefined;
   }
   if (size < 1024) {
-    return `${size} B`;
+    return `${String(size)} B`;
   }
   if (size < 1024 * 1024) {
     return `${(size / 1024).toFixed(1)} KB`;
@@ -529,7 +534,7 @@ function InputRequestActions({
     return null;
   }
 
-  const inputResponse = part.toolMetadata?.eve?.inputResponse;
+  const inputResponse = part.toolMetadata.eve.inputResponse;
   const selectedOption = inputRequest.options?.find(
     (option) => option.id === inputResponse?.optionId
   );
@@ -574,10 +579,10 @@ function InputRequestActions({
 function partKey(part: EveMessagePart, index: number): string {
   switch (part.type) {
     case "authorization":
-      return `authorization:${part.turnId}:${part.stepIndex}:${part.name}`;
+      return `authorization:${part.turnId}:${String(part.stepIndex)}:${part.name}`;
     case "dynamic-tool":
       return part.toolCallId;
     default:
-      return `${part.type}:${index}`;
+      return `${part.type}:${String(index)}`;
   }
 }

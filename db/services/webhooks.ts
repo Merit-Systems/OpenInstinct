@@ -217,6 +217,8 @@ export async function drainWebhookDeliveries({
   await fanOutWebhookEvents();
   const summary = { dead: 0, delivered: 0, failed: 0 };
   for (let index = 0; index < Math.max(1, Math.min(limit, 500)); index += 1) {
+    // Deliveries must be claimed one at a time under a row lock.
+    // eslint-disable-next-line no-await-in-loop
     const result = await db.transaction(async (transaction) => {
       const [row] = await transaction
         .select({
@@ -243,15 +245,16 @@ export async function drainWebhookDeliveries({
         )
         .for("update", { skipLocked: true })
         .limit(1);
-      if (!row) return;
-      return await deliver(
-        transaction,
-        row.delivery,
-        row.endpoint,
-        row.event,
-        fetchImpl,
-        secretEncryptionKey
-      );
+      return row
+        ? deliver(
+            transaction,
+            row.delivery,
+            row.endpoint,
+            row.event,
+            fetchImpl,
+            secretEncryptionKey
+          )
+        : undefined;
     });
     if (!result) break;
     summary[result] += 1;
@@ -268,17 +271,18 @@ async function fanOutWebhookEvents() {
       .where(isNull(webhookEvents.fannedOutAt))
       .for("update", { skipLocked: true });
     for (const event of events) {
-      const endpoints = (
-        await transaction
-          .select()
-          .from(webhookEndpoints)
-          .where(
-            and(
-              eq(webhookEndpoints.workspaceId, event.workspaceId),
-              eq(webhookEndpoints.status, "active")
-            )
+      // Each event must fan out and be marked atomically before the next event.
+      // eslint-disable-next-line no-await-in-loop
+      const endpointRows = await transaction
+        .select()
+        .from(webhookEndpoints)
+        .where(
+          and(
+            eq(webhookEndpoints.workspaceId, event.workspaceId),
+            eq(webhookEndpoints.status, "active")
           )
-      ).filter((endpoint) => {
+        );
+      const endpoints = endpointRows.filter((endpoint) => {
         const subscribedEvents = z
           .array(z.string())
           .safeParse(endpoint.subscribedEvents);
@@ -287,6 +291,7 @@ async function fanOutWebhookEvents() {
           : false;
       });
       if (endpoints.length > 0) {
+        // eslint-disable-next-line no-await-in-loop -- Same transaction as event marking.
         await transaction.insert(webhookDeliveries).values(
           endpoints.map((endpoint) => ({
             createdAt: now,
@@ -299,6 +304,7 @@ async function fanOutWebhookEvents() {
           }))
         );
       }
+      // eslint-disable-next-line no-await-in-loop -- Same transaction as delivery fan-out.
       await transaction
         .update(webhookEvents)
         .set({ fannedOutAt: now })

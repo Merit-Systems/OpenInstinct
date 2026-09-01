@@ -9,8 +9,12 @@ export function GoogleWorkspaceAction({
   readonly state?: "connected" | "disconnected" | "unavailable";
 }) {
   const update = api.googleWorkspace.update.useMutation({
-    onError: () => window.location.assign("/?google=unavailable"),
-    onSuccess: ({ redirectTo }) => window.location.assign(redirectTo),
+    onError: () => {
+      window.location.assign("/?google=unavailable");
+    },
+    onSuccess: ({ redirectTo }) => {
+      window.location.assign(redirectTo);
+    },
   });
 
   if (!state) {
@@ -26,7 +30,9 @@ export function GoogleWorkspaceAction({
   return (
     <Button
       disabled={update.isPending}
-      onClick={() => update.mutate(action)}
+      onClick={() => {
+        update.mutate(action);
+      }}
       size="sm"
       type="button"
       variant="outline"

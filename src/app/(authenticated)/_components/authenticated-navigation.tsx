@@ -109,6 +109,7 @@ function activeRoute(pathname: string) {
   if (pathname.startsWith("/admin/webhooks")) return "admin-webhooks";
   if (pathname.startsWith("/admin/usage")) return "admin-usage";
   if (pathname.startsWith("/admin")) return "admin";
+  return undefined;
 }
 
 const adminNavigation = [

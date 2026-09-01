@@ -89,7 +89,7 @@ export async function authenticateApiKey(rawKey: string) {
       )
     )
     .limit(1);
-  if (!credential) return;
+  if (!credential) return undefined;
   void db
     .update(apiCredentials)
     .set({ lastUsedAt: now, updatedAt: now })

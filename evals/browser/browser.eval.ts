@@ -23,6 +23,7 @@ export default browserBenchmarkTasks.flatMap((task) =>
         let session: EveEvalSession | typeof t = t;
         let completed: EveEvalTurn | null = null;
         const workerEvents = [...started.events];
+        /* oxlint-disable eslint/no-await-in-loop -- Each watch resumes from the stream index produced by the previous turn. */
         for (let attempt = 0; attempt < 8 && completed === null; attempt += 1) {
           const live = t.target.watchTurn(started.sessionId, {
             startIndex: requireStreamIndex(session),
@@ -33,6 +34,7 @@ export default browserBenchmarkTasks.flatMap((task) =>
           if (didFinishWorker(workerEvents)) completed = turn;
           session = live.session;
         }
+        /* oxlint-enable eslint/no-await-in-loop */
 
         await t.require(
           completed,

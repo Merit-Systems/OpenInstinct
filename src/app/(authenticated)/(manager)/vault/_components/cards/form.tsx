@@ -1,6 +1,6 @@
 "use client";
 
-import { type FormEvent, useState } from "react";
+import { type SubmitEvent, useState } from "react";
 import { useRouter } from "next/navigation";
 import { z } from "zod";
 import { Badge } from "@/components/ui/badge";
@@ -64,9 +64,11 @@ export function CardForm({
   const cardType = paymentCardType(form.cardNumber);
   const result = paymentCardFormSchema.safeParse(form);
   const errors =
-    attempted && !result.success ? result.error.flatten().fieldErrors : {};
+    attempted && !result.success
+      ? z.flattenError(result.error).fieldErrors
+      : {};
 
-  const submit = (event: FormEvent) => {
+  const submit = (event: SubmitEvent<HTMLFormElement>) => {
     event.preventDefault();
     setAttempted(true);
     if (!result.success) return;
@@ -103,9 +105,9 @@ export function CardForm({
             id="vault-payment-cardholder"
             label="Name on card"
             name="cc-name"
-            onChange={(cardholderName) =>
-              setForm((current) => ({ ...current, cardholderName }))
-            }
+            onChange={(cardholderName) => {
+              setForm((current) => ({ ...current, cardholderName }));
+            }}
             value={form.cardholderName}
           />
           <CardField
@@ -114,9 +116,9 @@ export function CardForm({
             id="vault-payment-nickname"
             label="Nickname (optional)"
             name="card-nickname"
-            onChange={(nickname) =>
-              setForm((current) => ({ ...current, nickname }))
-            }
+            onChange={(nickname) => {
+              setForm((current) => ({ ...current, nickname }));
+            }}
             placeholder="Personal"
             value={form.nickname}
           />
@@ -130,12 +132,12 @@ export function CardForm({
           label="Card number"
           maxLength={23}
           name="cc-number"
-          onChange={(value) =>
+          onChange={(value) => {
             setForm((current) => ({
               ...current,
               cardNumber: formatCardNumber(value),
-            }))
-          }
+            }));
+          }}
           placeholder="1234 5678 9012 3456"
           trailingLabel={cardType?.niceType}
           value={form.cardNumber}
@@ -150,12 +152,12 @@ export function CardForm({
             label="Expiration"
             maxLength={7}
             name="cc-exp"
-            onChange={(value) =>
+            onChange={(value) => {
               setForm((current) => ({
                 ...current,
                 expiration: formatExpiration(value),
-              }))
-            }
+              }));
+            }}
             placeholder="MM / YY"
             value={form.expiration}
           />
@@ -167,12 +169,12 @@ export function CardForm({
             label="CVC"
             maxLength={4}
             name="cc-csc"
-            onChange={(value) =>
+            onChange={(value) => {
               setForm((current) => ({
                 ...current,
                 cvc: value.replaceAll(/\D/gu, "").slice(0, 4),
-              }))
-            }
+              }));
+            }}
             placeholder="123"
             value={form.cvc}
           />
@@ -184,9 +186,9 @@ export function CardForm({
             label="Billing ZIP / postal"
             maxLength={20}
             name="postal-code"
-            onChange={(billingPostalCode) =>
-              setForm((current) => ({ ...current, billingPostalCode }))
-            }
+            onChange={(billingPostalCode) => {
+              setForm((current) => ({ ...current, billingPostalCode }));
+            }}
             value={form.billingPostalCode}
           />
         </div>
@@ -229,7 +231,9 @@ function CardField({
         {...inputProps}
         aria-invalid={error ? true : undefined}
         id={id}
-        onChange={(event) => onChange(event.target.value)}
+        onChange={(event) => {
+          onChange(event.target.value);
+        }}
       />
       <FieldError errors={error ? [{ message: error }] : undefined} />
     </Field>

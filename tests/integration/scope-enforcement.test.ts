@@ -1,4 +1,3 @@
-/* oxlint-disable typescript/no-unsafe-type-assertion -- PGlite is the adapter-compatible database test double used by the service suite. */
 import { readFile } from "node:fs/promises";
 import { PGlite } from "@electric-sql/pglite";
 import { drizzle } from "drizzle-orm/pglite";
@@ -166,17 +165,21 @@ async function requestScopeService() {
 }
 
 async function applyMigrations(database: PGlite) {
-  for (const name of [
+  for (const migrationName of [
     "0000_fluffy_the_spike.sql",
     "0003_unusual_fabian_cortez.sql",
     "0004_wide_mysterio.sql",
   ]) {
+    // oxlint-disable-next-line eslint/no-await-in-loop -- Migration files must execute in committed order.
     const migration = await readFile(
-      new URL(`../../db/migrations/${name}`, import.meta.url),
+      new URL(`../../db/migrations/${migrationName}`, import.meta.url),
       "utf8"
     );
     for (const statement of migration.split("--> statement-breakpoint")) {
-      if (statement.trim()) await database.exec(statement);
+      if (statement.trim()) {
+        // oxlint-disable-next-line eslint/no-await-in-loop -- Migration statements must execute in committed order.
+        await database.exec(statement);
+      }
     }
   }
 }

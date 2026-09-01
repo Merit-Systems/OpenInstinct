@@ -67,10 +67,11 @@ export async function readVaultItems(scope: AccessScope) {
   await ensureScope(scope);
   const records = await listVaultItems(scope);
   return Promise.all(
-    records.map(async (record) => ({
-      ...record,
-      hasSecret: await hasVaultSecret(scope, record.id),
-    }))
+    records.map(async (record) =>
+      Object.assign({}, record, {
+        hasSecret: await hasVaultSecret(scope, record.id),
+      })
+    )
   );
 }
 
@@ -160,6 +161,7 @@ function vaultAccountHint(input: VaultCreateItem) {
     case "contact":
       return "";
   }
+  throw new Error("Unsupported vault item kind.");
 }
 
 function encryptVaultSecret(

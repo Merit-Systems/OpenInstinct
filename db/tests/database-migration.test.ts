@@ -275,9 +275,11 @@ async function applyMigration(database: PGlite, name: string) {
     new URL(`../migrations/${name}`, import.meta.url),
     "utf8"
   );
+  /* oxlint-disable eslint/no-await-in-loop -- SQL migration statements must execute in file order. */
   for (const statement of migration.split("--> statement-breakpoint")) {
     if (statement.trim()) await database.exec(statement);
   }
+  /* oxlint-enable eslint/no-await-in-loop */
 }
 
 async function pendingConstraintCount(database: PGlite) {

@@ -137,8 +137,8 @@ describe("database services", () => {
     expect(await sessions.isSessionOwned(bob, "session-alice")).toBe(false);
 
     await sessions.claimSession(alice, "session-imessage");
-    const unindexedChats = (await chats.listChats(alice)).sort((left, right) =>
-      left.sessionId.localeCompare(right.sessionId)
+    const unindexedChats = (await chats.listChats(alice)).toSorted(
+      (left, right) => left.sessionId.localeCompare(right.sessionId)
     );
     expect(
       unindexedChats.map(({ sessionId, title, usage }) => ({
@@ -355,9 +355,11 @@ async function applyInitialMigration(database: PGlite) {
     new URL("../migrations/0000_fluffy_the_spike.sql", import.meta.url),
     "utf8"
   );
+  /* oxlint-disable eslint/no-await-in-loop -- SQL migration statements must execute in file order. */
   for (const statement of migration.split("--> statement-breakpoint")) {
     if (statement.trim()) await database.exec(statement);
   }
+  /* oxlint-enable eslint/no-await-in-loop */
 }
 
 async function applyBrowserImageMigration(database: PGlite) {
@@ -365,9 +367,11 @@ async function applyBrowserImageMigration(database: PGlite) {
     new URL("../migrations/0003_unusual_fabian_cortez.sql", import.meta.url),
     "utf8"
   );
+  /* oxlint-disable eslint/no-await-in-loop -- SQL migration statements must execute in file order. */
   for (const statement of migration.split("--> statement-breakpoint")) {
     if (statement.trim()) await database.exec(statement);
   }
+  /* oxlint-enable eslint/no-await-in-loop */
 }
 
 async function applyWorkspaceTenancyMigration(database: PGlite) {
@@ -375,9 +379,11 @@ async function applyWorkspaceTenancyMigration(database: PGlite) {
     new URL("../migrations/0004_wide_mysterio.sql", import.meta.url),
     "utf8"
   );
+  /* oxlint-disable eslint/no-await-in-loop -- SQL migration statements must execute in file order. */
   for (const statement of migration.split("--> statement-breakpoint")) {
     if (statement.trim()) await database.exec(statement);
   }
+  /* oxlint-enable eslint/no-await-in-loop */
 }
 
 async function applyBrowserTraceTelemetryMigration(database: PGlite) {
@@ -385,7 +391,9 @@ async function applyBrowserTraceTelemetryMigration(database: PGlite) {
     new URL("../migrations/0013_browser_trace_telemetry.sql", import.meta.url),
     "utf8"
   );
+  /* oxlint-disable eslint/no-await-in-loop -- SQL migration statements must execute in file order. */
   for (const statement of migration.split("--> statement-breakpoint")) {
     if (statement.trim()) await database.exec(statement);
   }
+  /* oxlint-enable eslint/no-await-in-loop */
 }

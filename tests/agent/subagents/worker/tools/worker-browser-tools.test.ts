@@ -1,4 +1,3 @@
-/* oxlint-disable typescript/no-unsafe-type-assertion -- Eve tool contexts are runtime-owned; these fixtures exercise only mocked authorization and abort-signal boundaries. */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 import * as WorkerAccess from "@/agent/subagents/worker/lib/access";

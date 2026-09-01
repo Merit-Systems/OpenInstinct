@@ -30,21 +30,43 @@ export async function recordVerifiedPhoneIdentity({
     secretEncryptionKey
   );
 
-  for (let attempt = 0; attempt < 2; attempt += 1) {
-    try {
-      return await recordVerifiedPhoneIdentityTransaction({
+  return recordVerifiedPhoneIdentityWithRetry({
+    normalizedPhoneNumber,
+    phoneLookupHash,
+    secretEncryptionKey,
+    userId,
+  });
+}
+
+async function recordVerifiedPhoneIdentityWithRetry({
+  normalizedPhoneNumber,
+  phoneLookupHash,
+  secretEncryptionKey,
+  userId,
+}: {
+  readonly normalizedPhoneNumber: string;
+  readonly phoneLookupHash: string;
+  readonly secretEncryptionKey: string;
+  readonly userId: string;
+}) {
+  try {
+    return await recordVerifiedPhoneIdentityTransaction({
+      normalizedPhoneNumber,
+      phoneLookupHash,
+      secretEncryptionKey,
+      userId,
+    });
+  } catch (error) {
+    if (error instanceof Error && isUniqueViolation(error)) {
+      return recordVerifiedPhoneIdentityTransaction({
         normalizedPhoneNumber,
         phoneLookupHash,
         secretEncryptionKey,
         userId,
       });
-    } catch (error) {
-      if (attempt === 0 && error instanceof Error && isUniqueViolation(error))
-        continue;
-      throw error;
     }
+    throw error;
   }
-  throw new Error("Failed to record phone identity.");
 }
 
 async function recordVerifiedPhoneIdentityTransaction({

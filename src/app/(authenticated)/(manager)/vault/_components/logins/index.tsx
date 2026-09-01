@@ -59,13 +59,20 @@ export function VaultLogins({
             />
             <div className="flex justify-end gap-2">
               <Button
-                onClick={() => section.setView("import")}
+                onClick={() => {
+                  section.setView("import");
+                }}
                 type="button"
                 variant="outline"
               >
                 Bulk import
               </Button>
-              <Button onClick={() => section.setView("add")} type="button">
+              <Button
+                onClick={() => {
+                  section.setView("add");
+                }}
+                type="button"
+              >
                 <PlusIcon />
                 Add login
               </Button>
@@ -74,11 +81,17 @@ export function VaultLogins({
         ) : (
           <>
             <VaultSectionBackButton
-              onClick={() => section.setView("list")}
+              onClick={() => {
+                section.setView("list");
+              }}
               title="Logins"
             />
             {section.view === "import" ? (
-              <ChromeImportPanel onDone={() => section.setView("list")} />
+              <ChromeImportPanel
+                onDone={() => {
+                  section.setView("list");
+                }}
+              />
             ) : (
               <>
                 <DialogHeader className="pr-10 sm:pr-6">
@@ -93,7 +106,9 @@ export function VaultLogins({
                   initialIdentifierType={initialSetup?.identifierType}
                   initialLabel={initialSetup?.label}
                   initialOrigin={initialSetup?.origin}
-                  onSaved={() => section.setView("list")}
+                  onSaved={() => {
+                    section.setView("list");
+                  }}
                 />
               </>
             )}

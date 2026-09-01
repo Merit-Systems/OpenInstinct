@@ -34,11 +34,12 @@ export const Conversation = ({
   scrollRestorationKey,
   ...props
 }: ConversationProps) => {
-  const parsedRenderer = z.function().safeParse(children);
-  // SAFETY: z.function established that this branch contains the render-child member of the children union.
-  const renderChild = parsedRenderer.success
-    ? (parsedRenderer.data as ConversationRenderChild)
-    : undefined;
+  const parsedRenderer = z
+    .custom<ConversationRenderChild>(
+      (value) => z.function().safeParse(value).success
+    )
+    .safeParse(children);
+  const renderChild = parsedRenderer.success ? parsedRenderer.data : undefined;
   return (
     <StickToBottom
       className={cn("relative flex-1 overflow-y-hidden", className)}
@@ -82,7 +83,7 @@ function ConversationScrollRestoration({
 
   useLayoutEffect(() => {
     const scrollElement = scrollRef.current;
-    if (scrollElement === null) return;
+    if (scrollElement === null) return undefined;
 
     if (restoredKeyRef.current !== storageKey) {
       const saved = readScrollPosition(sessionStorage.getItem(storageKey));
@@ -93,7 +94,7 @@ function ConversationScrollRestoration({
         });
       } else {
         scrollElement.scrollTop = scrollElement.scrollHeight;
-        scrollToBottom({ animation: "instant", ignoreEscapes: true });
+        void scrollToBottom({ animation: "instant", ignoreEscapes: true });
       }
       restoredKeyRef.current = storageKey;
     }
@@ -194,7 +195,8 @@ export const ConversationEmptyState = ({
 
 export type ConversationScrollButtonProps = ComponentProps<typeof Button>;
 
-const subscribeToHydration = () => () => {};
+const unsubscribeFromHydration = () => undefined;
+const subscribeToHydration = () => unsubscribeFromHydration;
 
 export const ConversationScrollButton = ({
   className,
@@ -208,7 +210,7 @@ export const ConversationScrollButton = ({
   );
 
   const handleScrollToBottom = useCallback(() => {
-    scrollToBottom();
+    void scrollToBottom();
   }, [scrollToBottom]);
 
   return (
