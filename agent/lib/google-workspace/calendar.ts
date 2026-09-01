@@ -72,8 +72,8 @@ export function parseCalendarAvailability(
   value: calendar_v3.Schema$FreeBusyResponse
 ) {
   const failures = Object.entries(value.calendars ?? {}).flatMap(
-    ([calendarId, calendar]) =>
-      (calendar.errors ?? []).map(
+    ([calendarId, calendarResult]) =>
+      (calendarResult.errors ?? []).map(
         (error) => `${calendarId}: ${error.reason ?? error.domain ?? "unknown"}`
       )
   );

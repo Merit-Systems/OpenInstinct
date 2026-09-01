@@ -6,10 +6,13 @@ import {
   type LinqChannelConfig,
   type LinqChannelCredentials,
 } from "eve/channels/linq";
+import { parseError } from "evlog";
+import { useLogger as getEvlog } from "evlog/eve";
 import { z } from "zod";
-import { auth } from "@/auth";
+import { getAuth } from "@/auth";
 import { normalizeAuthPhoneNumber } from "@/auth/phone-number";
 import { accessScopeForUser, scopeFromPrincipal } from "@/lib/access-scope";
+import { prepareLinqBrowserImageDelivery } from "../lib/linq-browser-image-delivery";
 import {
   verifyScopeAccess,
   WorkspaceNotOperableError,
@@ -28,10 +31,9 @@ import { findVerifiedUserByPhoneNumber } from "@/db/services/phone-identities";
 import {
   extractBrowserImageMarkdownReferences,
   stripBrowserImageMarkdownReferences,
-} from "@/lib/browser-images";
-import { env, isWorkspaceScopeEnforcementEnabled } from "@/lib/env";
+} from "../lib/linq-browser-image-markdown";
+import { env, isWorkspaceScopeEnforcementEnabled } from "@/env";
 import { consumeWorkerCancellationTurn } from "../lib/worker-cancellation-delivery";
-import { prepareLinqBrowserImageDelivery } from "../lib/linq-browser-image-delivery";
 
 const verifiedPhoneUserSchema = z.object({
   id: z.string().min(1),
@@ -96,12 +98,15 @@ async function postLinqReply(
     if (files.length > 0) recordLinqUsage(scope);
     return;
   }
+  /* oxlint-disable eslint/no-await-in-loop -- Reply bubbles must be posted in conversational order. */
   for (const [index, bubble] of bubbles.entries()) {
-    await thread.post({
-      markdown: bubble,
-      ...(index === bubbles.length - 1 && files.length > 0 ? { files } : {}),
-    });
+    if (index === bubbles.length - 1 && files.length > 0) {
+      await thread.post({ files, markdown: bubble });
+    } else {
+      await thread.post({ markdown: bubble });
+    }
   }
+  /* oxlint-enable eslint/no-await-in-loop */
   recordLinqUsage(scope);
 }
 
@@ -128,7 +133,7 @@ const credentials: LinqChannelCredentials = env.LINQ_CONNECTOR
       },
     };
 
-export default linqChannel({
+export const linqChannelConfig = {
   credentials,
   events: {
     "action.result"(event, context) {
@@ -160,21 +165,115 @@ export default linqChannel({
               .map((line) => line.trim())
               .find(Boolean) ?? null)
           : null;
-        if (context.thread) {
-          const messageId = context.thread.toJSON().currentMessage?.id;
-          if (
-            messageId &&
-            context.state.acknowledgedLinqMessageId !== messageId
-          ) {
-            try {
-              await context.bot
-                .getAdapter("linq")
-                .addReaction(context.thread.id, messageId, "thumbs_up");
-              context.state.acknowledgedLinqMessageId = messageId;
-            } catch {
-              // SMS/RCS and some carrier paths do not support iMessage tapbacks.
-            }
+        let log: ReturnType<typeof getEvlog> | undefined;
+        try {
+          log = getEvlog(session);
+        } catch (error) {
+          console.warn("[linq] evlog unavailable", {
+            error: parseError(error),
+            sessionId: session.session.id,
+            turnId: event.turnId,
+          });
+        }
+        if (!context.thread) {
+          const reaction = { outcome: "missing-thread" };
+          if (log) {
+            log.warn("Linq reaction skipped", {
+              channel: { linq: { reactions: [reaction] } },
+            });
+          } else {
+            console.warn("[linq] reaction skipped", {
+              ...reaction,
+              sessionId: session.session.id,
+              turnId: event.turnId,
+            });
           }
+          return;
+        }
+
+        const messageId = context.thread.toJSON().currentMessage?.id;
+        if (!messageId) {
+          const reaction = {
+            outcome: "missing-message-id",
+            threadId: context.thread.id,
+          };
+          if (log) {
+            log.warn("Linq reaction skipped", {
+              channel: { linq: { reactions: [reaction] } },
+            });
+          } else {
+            console.warn("[linq] reaction skipped", {
+              ...reaction,
+              sessionId: session.session.id,
+              turnId: event.turnId,
+            });
+          }
+          return;
+        }
+
+        if (context.state.acknowledgedLinqMessageId === messageId) {
+          const reaction = {
+            messageId,
+            outcome: "already-acknowledged",
+            threadId: context.thread.id,
+          };
+          if (log) {
+            log.info("Linq reaction skipped", {
+              channel: { linq: { reactions: [reaction] } },
+            });
+          } else {
+            console.info("[linq] reaction skipped", {
+              ...reaction,
+              sessionId: session.session.id,
+              turnId: event.turnId,
+            });
+          }
+          return;
+        }
+
+        try {
+          await context.bot
+            .getAdapter("linq")
+            .addReaction(context.thread.id, messageId, "thumbs_up");
+          context.state.acknowledgedLinqMessageId = messageId;
+          const reaction = {
+            emoji: "thumbs_up",
+            messageId,
+            outcome: "accepted",
+            threadId: context.thread.id,
+          };
+          if (log) {
+            log.set({
+              channel: { linq: { reactions: [reaction] } },
+            });
+          } else {
+            console.info("[linq] reaction accepted", {
+              ...reaction,
+              sessionId: session.session.id,
+              turnId: event.turnId,
+            });
+          }
+        } catch (error) {
+          const failure = parseError(error);
+          const reaction = {
+            emoji: "thumbs_up",
+            error: failure,
+            messageId,
+            outcome: "failed",
+            threadId: context.thread.id,
+          };
+          log?.warn("Linq reaction failed", {
+            channel: {
+              linq: {
+                reactions: [reaction],
+              },
+            },
+          });
+          console.warn("[linq] reaction failed", {
+            ...reaction,
+            sessionId: session.session.id,
+            turnId: event.turnId,
+          });
         }
         return;
       }
@@ -265,11 +364,10 @@ export default linqChannel({
     if (message.author.isBot) return null;
 
     const auth = defaultLinqAuth(message);
-    const authorUserName: unknown = message.author.userName;
-    const phoneNumber =
-      typeof authorUserName === "string"
-        ? normalizeAuthPhoneNumber(authorUserName)
-        : undefined;
+    const authorUserName = z.string().safeParse(message.author.userName);
+    const phoneNumber = authorUserName.success
+      ? normalizeAuthPhoneNumber(authorUserName.data)
+      : undefined;
     const verifiedUserId = phoneNumber
       ? await findVerifiedAuthUserIdByPhoneNumber(phoneNumber)
       : undefined;
@@ -277,15 +375,15 @@ export default linqChannel({
       ? `better-auth:${verifiedUserId}`
       : auth.principalId;
     const scope = accessScopeForUser(principalId);
+    const attributes =
+      verifiedUserId && phoneNumber
+        ? { ...auth.attributes, phoneNumber, workspaceId: scope.workspaceId }
+        : { ...auth.attributes, workspaceId: scope.workspaceId };
     if (!isWorkspaceScopeEnforcementEnabled()) {
       return {
         auth: {
           ...auth,
-          attributes: {
-            ...auth.attributes,
-            ...(verifiedUserId && phoneNumber ? { phoneNumber } : {}),
-            workspaceId: scope.workspaceId,
-          },
+          attributes,
           principalId,
         },
       };
@@ -298,9 +396,11 @@ export default linqChannel({
       const identity = await findVerifiedUserByPhoneNumber(phoneNumber);
       if (identity?.userId === verifiedUserId) {
         const provider = "linq";
-        const providerAccountId = env.LINQ_CONNECTOR;
-        const providerLineId = env.LINQ_PHONE_NUMBER;
-        const providerConversationId = context.thread.id;
+        const { connector: providerAccountId, phoneNumber: providerLineId } = {
+          connector: env.LINQ_CONNECTOR,
+          phoneNumber: env.LINQ_PHONE_NUMBER,
+        };
+        const providerConversationId = context.thread?.id;
         if (providerAccountId && providerLineId && providerConversationId) {
           let binding = await resolveConversationBinding({
             provider,
@@ -342,18 +442,17 @@ export default linqChannel({
     return {
       auth: {
         ...auth,
-        attributes: {
-          ...auth.attributes,
-          ...(verifiedUserId && phoneNumber ? { phoneNumber } : {}),
-          workspaceId: scope.workspaceId,
-        },
+        attributes,
         principalId,
       },
     };
   },
-});
+} satisfies LinqChannelConfig;
+
+export default linqChannel(linqChannelConfig);
 
 async function findVerifiedAuthUserIdByPhoneNumber(phoneNumber: string) {
+  const auth = await getAuth();
   const context = await auth.$context;
   const user = await context.adapter.findOne({
     model: "user",

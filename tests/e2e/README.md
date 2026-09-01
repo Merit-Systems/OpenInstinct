@@ -1,6 +1,6 @@
 # End-to-end tests
 
-`pnpm test:e2e` starts `scripts/dev.mjs` through Playwright's `webServer`.
+`pnpm test:e2e` starts `scripts/dev.ts` through Playwright's `webServer`.
 That supervisor starts the isolated Compose Postgres project, runs migrations,
 starts Next on `localhost:3000`, and tears the database down when Playwright
 stops it. `localhost` avoids Next 16 dev-origin protection blocking `_next`

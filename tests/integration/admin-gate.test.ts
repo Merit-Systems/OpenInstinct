@@ -1,17 +1,19 @@
-/* oxlint-disable typescript/no-unsafe-type-assertion -- PGlite is the adapter-compatible database test double used by the integration suite. */
 import { readFile, readdir } from "node:fs/promises";
 import { PGlite } from "@electric-sql/pglite";
 import { drizzle } from "drizzle-orm/pglite";
-import { afterEach, describe, expect, it, vi } from "vitest";
-import type { db } from "@/db";
+import { afterEach, describe, expect, it } from "vitest";
+import {
+  resetDatabaseForIntegrationTest,
+  setDatabaseForIntegrationTest,
+} from "@/db";
+import { adminDependencies } from "@/lib/admin";
 import * as schema from "../../db/schema";
 
 const databases: PGlite[] = [];
 
 afterEach(async () => {
-  vi.doUnmock("@/db");
-  vi.doUnmock("@/lib/env");
-  vi.resetModules();
+  resetDatabaseForIntegrationTest();
+  adminDependencies.adminPhoneNumbers = () => "";
   await Promise.all(databases.splice(0).map((database) => database.close()));
 });
 
@@ -66,24 +68,25 @@ describe("requireAdminScopeFor", () => {
 async function loadGate(ADMIN_PHONE_NUMBERS: string | undefined) {
   const client = new PGlite();
   databases.push(client);
-  for (const name of (
+  for (const migrationName of (
     await readdir(new URL("../../db/migrations/", import.meta.url))
   )
     .filter((name) => name.endsWith(".sql"))
-    .sort()) {
+    .toSorted()) {
+    // oxlint-disable-next-line eslint/no-await-in-loop -- Migration files must execute in committed order.
     const migration = await readFile(
-      new URL(`../../db/migrations/${name}`, import.meta.url),
+      new URL(`../../db/migrations/${migrationName}`, import.meta.url),
       "utf8"
     );
     for (const statement of migration.split("--> statement-breakpoint")) {
-      if (statement.trim()) await client.exec(statement);
+      if (statement.trim()) {
+        // oxlint-disable-next-line eslint/no-await-in-loop -- Migration statements must execute in committed order.
+        await client.exec(statement);
+      }
     }
   }
-  const database = drizzle(client, { schema }) as unknown as typeof db;
-  vi.doMock("@/db", () => ({ ...schema, db: database }));
-  vi.doMock("@/lib/env", () => ({
-    env: { ADMIN_PHONE_NUMBERS },
-    localPhoneAuthBypassEnabled: false,
-  }));
+  const database = drizzle(client, { schema });
+  setDatabaseForIntegrationTest(database);
+  adminDependencies.adminPhoneNumbers = () => ADMIN_PHONE_NUMBERS ?? "";
   return { ...(await import("@/lib/admin")), client };
 }

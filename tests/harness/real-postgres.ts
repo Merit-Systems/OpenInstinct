@@ -4,11 +4,13 @@ import { readFile, readdir } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { Pool } from "pg";
 
-export async function createRealPostgres() {
+export async function createRealPostgres(): Promise<
+  { connectionString: string; close: () => Promise<void> } | undefined
+> {
   // REAL_PG: unset auto-detects, 0 force-skips, and 1 requires Compose Postgres.
   // oxlint-disable-next-line eslint/no-restricted-properties -- this optional harness switch avoids requiring Docker for the default suite.
   const mode = process.env.REAL_PG;
-  if (mode === "0") return;
+  if (mode === "0") return undefined;
 
   const repositoryRoot = fileURLToPath(new URL("../../", import.meta.url));
   const derivedProjectName = `open-instinct-${createHash("sha256")
@@ -32,7 +34,7 @@ export async function createRealPostgres() {
         "REAL_PG=1 requires a reachable Compose Postgres service."
       );
     }
-    return;
+    return undefined;
   }
 
   const databaseName = `test_${randomUUID().replaceAll("-", "")}`;
@@ -48,7 +50,7 @@ export async function createRealPostgres() {
         cause: error,
       });
     }
-    return;
+    return undefined;
   }
 
   try {
@@ -96,14 +98,18 @@ async function applyMigrations(connectionString: string) {
     const migrationDirectory = new URL("../../db/migrations/", import.meta.url);
     const names = (await readdir(migrationDirectory))
       .filter((name) => name.endsWith(".sql"))
-      .sort();
-    for (const name of names) {
+      .toSorted();
+    for (const migrationName of names) {
+      // oxlint-disable-next-line eslint/no-await-in-loop -- Migration files must execute in committed order.
       const migration = await readFile(
-        new URL(name, migrationDirectory),
+        new URL(migrationName, migrationDirectory),
         "utf8"
       );
       for (const statement of migration.split("--> statement-breakpoint")) {
-        if (statement.trim()) await database.query(statement);
+        if (statement.trim()) {
+          // oxlint-disable-next-line eslint/no-await-in-loop -- Migration statements must execute in committed order.
+          await database.query(statement);
+        }
       }
     }
   } finally {

@@ -1,27 +1,22 @@
-/* oxlint-disable typescript/no-unsafe-type-assertion -- PGlite is the adapter-compatible database test double used by the service suite. */
 import { readFile, readdir } from "node:fs/promises";
 import { PGlite } from "@electric-sql/pglite";
 import type { TRPCError } from "@trpc/server";
 import { drizzle } from "drizzle-orm/pglite";
-import { afterEach, describe, expect, it, vi } from "vitest";
-import type { db } from "@/db";
-import type { AccessScope } from "@/lib/access-scope";
+import { afterEach, describe, expect, it } from "vitest";
+import {
+  resetDatabaseForIntegrationTest,
+  setDatabaseForIntegrationTest,
+} from "@/db";
+import { AdminNotFoundError } from "@/lib/admin";
+import { adminProcedureDependencies } from "@/trpc/init";
 import * as schema from "../../db/schema";
 
 const databases: PGlite[] = [];
-const mocks = vi.hoisted(() => {
-  class AdminNotFoundError extends Error {}
-  return {
-    AdminNotFoundError,
-    requireAdminScopeFor: vi.fn<(scope: AccessScope) => Promise<AccessScope>>(),
-  };
-});
+const originalAdminScopeFor = adminProcedureDependencies.requireAdminScopeFor;
 
 afterEach(async () => {
-  vi.doUnmock("@/db");
-  vi.doUnmock("@/lib/admin");
-  vi.resetModules();
-  vi.clearAllMocks();
+  resetDatabaseForIntegrationTest();
+  adminProcedureDependencies.requireAdminScopeFor = originalAdminScopeFor;
   await Promise.all(databases.splice(0).map((database) => database.close()));
 });
 
@@ -128,30 +123,12 @@ describe("admin router", () => {
 
 async function loadRouter(allowed: boolean) {
   const client = await createDatabase();
-  const database = drizzle(client, { schema }) as unknown as typeof db;
-  vi.doMock("@/db", () => ({ ...schema, db: database }));
-  vi.doMock("@/lib/admin", () => ({
-    AdminNotFoundError: mocks.AdminNotFoundError,
-    requireAdminScopeFor: mocks.requireAdminScopeFor,
-  }));
-  vi.doMock("@/lib/model-catalog/server", () => ({
-    readModelCatalog: () => undefined,
-  }));
-  vi.doMock("@/lib/task-history/server", () => ({
-    readTaskHistoryPage: () => undefined,
-  }));
-  vi.doMock("@/db/services/chats", () => ({ saveChat: () => undefined }));
-  vi.doMock("@/lib/google-workspace/server", () => ({
-    disconnectGoogleWorkspace: () => undefined,
-    startGoogleWorkspaceAuthorization: () => undefined,
-  }));
-  vi.doMock("@/lib/manager/server/store", () => ({
-    applyManagerMutation: () => undefined,
-  }));
-  mocks.requireAdminScopeFor.mockImplementation(async (scope) => {
-    if (!allowed) throw new mocks.AdminNotFoundError();
+  const database = drizzle(client, { schema });
+  setDatabaseForIntegrationTest(database);
+  adminProcedureDependencies.requireAdminScopeFor = async (scope) => {
+    if (!allowed) throw new AdminNotFoundError();
     return scope;
-  });
+  };
   const { appRouter } = await import("@/trpc/router");
   const scope = { userId: "admin", workspaceId: "admin-workspace" };
   return {
@@ -163,17 +140,21 @@ async function loadRouter(allowed: boolean) {
 async function createDatabase() {
   const client = new PGlite();
   databases.push(client);
-  for (const name of (
+  for (const migrationName of (
     await readdir(new URL("../../db/migrations/", import.meta.url))
   )
     .filter((name) => name.endsWith(".sql"))
-    .sort()) {
+    .toSorted()) {
+    // oxlint-disable-next-line eslint/no-await-in-loop -- Migration files must execute in committed order.
     const migration = await readFile(
-      new URL(`../../db/migrations/${name}`, import.meta.url),
+      new URL(`../../db/migrations/${migrationName}`, import.meta.url),
       "utf8"
     );
     for (const statement of migration.split("--> statement-breakpoint")) {
-      if (statement.trim()) await client.exec(statement);
+      if (statement.trim()) {
+        // oxlint-disable-next-line eslint/no-await-in-loop -- Migration statements must execute in committed order.
+        await client.exec(statement);
+      }
     }
   }
   return client;

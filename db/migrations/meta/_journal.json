@@ -92,6 +92,20 @@
       "when": 1788028601799,
       "tag": "0012_bright_killmonger",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1788288784000,
+      "tag": "0013_browser_trace_telemetry",
+      "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1788295418818,
+      "tag": "0014_personal_info",
+      "breakpoints": true
     }
   ]
 }

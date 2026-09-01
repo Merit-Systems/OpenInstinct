@@ -1,26 +1,24 @@
-/* oxlint-disable typescript/no-unsafe-type-assertion -- PGlite is the adapter-compatible database test double used by the service suite. */
 import { readFile } from "node:fs/promises";
 import { PGlite } from "@electric-sql/pglite";
 import { drizzle } from "drizzle-orm/pglite";
-import { afterEach, describe, expect, it, vi } from "vitest";
-import type { db } from "@/db";
+import { afterEach, describe, expect, it } from "vitest";
+import {
+  resetDatabaseForIntegrationTest,
+  setDatabaseForIntegrationTest,
+} from "@/db";
+import { createRequireRequestScope } from "@/lib/request-scope";
 import { accessScopeForUser } from "@/lib/access-scope";
 import * as schema from "../../db/schema";
 
 const databases: PGlite[] = [];
 
 afterEach(async () => {
-  vi.doUnmock("@/db");
-  vi.doUnmock("@/auth/session");
-  vi.doUnmock("next/headers");
-  vi.resetModules();
-  vi.stubEnv("WORKSPACE_SCOPE_ENFORCEMENT", "off");
+  resetDatabaseForIntegrationTest();
   await Promise.all(databases.splice(0).map((database) => database.close()));
 });
 
 describe("workspace scope verification", () => {
   it("enforces bootstrap admission and revoked membership denial at the request entrypoint", async () => {
-    vi.stubEnv("WORKSPACE_SCOPE_ENFORCEMENT", "enforce");
     const scope = accessScopeForUser("better-auth:user-a");
     const service = await requestScopeService();
 
@@ -36,11 +34,8 @@ describe("workspace scope verification", () => {
       INSERT INTO workspace_memberships (workspace_id, user_id, role, status, created_at)
       VALUES ('${scope.workspaceId}', '${scope.userId}', 'owner', 'revoked', '2026-01-01');
     `);
-    vi.resetModules();
-
-    const denied = await import("@/lib/request-scope");
-    await expect(denied.requireRequestScope()).rejects.toBeInstanceOf(
-      denied.UnauthenticatedError
+    await expect(service.createRequestScope()).rejects.toBeInstanceOf(
+      service.UnauthenticatedError
     );
   });
 
@@ -133,8 +128,8 @@ async function scopeService() {
   const client = new PGlite();
   databases.push(client);
   await applyMigrations(client);
-  const database = drizzle(client, { schema }) as unknown as typeof db;
-  vi.doMock("@/db", () => ({ ...schema, db: database }));
+  const database = drizzle(client, { schema });
+  setDatabaseForIntegrationTest(database);
   const { ensureScope, verifyScopeAccess } =
     await import("@/db/services/scope");
   return { database: client, ensureScope, verifyScopeAccess };
@@ -144,28 +139,47 @@ async function requestScopeService() {
   const client = new PGlite();
   databases.push(client);
   await applyMigrations(client);
-  const database = drizzle(client, { schema }) as unknown as typeof db;
-  vi.doMock("@/db", () => ({ ...schema, db: database }));
-  vi.doMock("next/headers", () => ({ headers: async () => new Headers() }));
-  vi.doMock("@/auth/session", () => ({
-    getAuthSession: async () => ({ user: { id: "user-a" } }),
-  }));
-  const { requireRequestScope } = await import("@/lib/request-scope");
-  return { database: client, requireRequestScope };
+  const database = drizzle(client, { schema });
+  setDatabaseForIntegrationTest(database);
+  const { UnauthenticatedError } = await import("@/lib/request-scope");
+  const { verifyScopeAccess } = await import("@/db/services/scope");
+  const createRequestScope = () =>
+    createRequireRequestScope({
+      getAuthSession: async () => ({
+        user: {
+          id: "user-a",
+          phoneNumber: "+12025550123",
+          phoneNumberVerified: true as const,
+        },
+      }),
+      headers: async () => new Headers(),
+      isWorkspaceScopeEnforcementEnabled: () => true,
+      verifyScopeAccess,
+    })();
+  return {
+    database: client,
+    createRequestScope,
+    requireRequestScope: createRequestScope,
+    UnauthenticatedError,
+  };
 }
 
 async function applyMigrations(database: PGlite) {
-  for (const name of [
+  for (const migrationName of [
     "0000_fluffy_the_spike.sql",
     "0003_unusual_fabian_cortez.sql",
     "0004_wide_mysterio.sql",
   ]) {
+    // oxlint-disable-next-line eslint/no-await-in-loop -- Migration files must execute in committed order.
     const migration = await readFile(
-      new URL(`../../db/migrations/${name}`, import.meta.url),
+      new URL(`../../db/migrations/${migrationName}`, import.meta.url),
       "utf8"
     );
     for (const statement of migration.split("--> statement-breakpoint")) {
-      if (statement.trim()) await database.exec(statement);
+      if (statement.trim()) {
+        // oxlint-disable-next-line eslint/no-await-in-loop -- Migration statements must execute in committed order.
+        await database.exec(statement);
+      }
     }
   }
 }

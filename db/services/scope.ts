@@ -8,7 +8,19 @@ import {
   type WorkspaceMembershipRole,
   type WorkspaceMembershipStatus,
 } from "@/db";
-import { isWorkspaceScopeEnforcementEnabled } from "@/lib/env";
+import { isWorkspaceScopeEnforcementEnabled } from "@/env";
+
+let scopeEnforcementEnabled = isWorkspaceScopeEnforcementEnabled;
+
+export function setScopeEnforcementForIntegrationTest(
+  isEnabled: typeof isWorkspaceScopeEnforcementEnabled
+) {
+  scopeEnforcementEnabled = isEnabled;
+}
+
+export function resetScopeEnforcementForIntegrationTest() {
+  scopeEnforcementEnabled = isWorkspaceScopeEnforcementEnabled;
+}
 
 export class WorkspaceNotOperableError extends Error {
   constructor(readonly lifecycleState: string | undefined) {
@@ -50,7 +62,7 @@ export async function verifyScopeAccess(
     row.membershipStatus !== "active" ||
     !isWorkspaceMembershipRole(row.role)
   ) {
-    return;
+    return undefined;
   }
 
   return { ...scope, membershipStatus: row.membershipStatus, role: row.role };
@@ -59,6 +71,7 @@ export async function verifyScopeAccess(
 function isWorkspaceMembershipRole(
   value: string | null
 ): value is WorkspaceMembershipRole {
+  // SAFETY: workspaceMembershipRoles is the database-derived source of truth.
   return (
     value !== null &&
     (workspaceMembershipRoles as readonly string[]).includes(value)
@@ -89,7 +102,7 @@ export async function ensureScope(scope: AccessScope) {
 }
 
 export async function assertWorkspaceOperable(scope: AccessScope) {
-  if (!isWorkspaceScopeEnforcementEnabled()) return;
+  if (!scopeEnforcementEnabled()) return;
   const [workspace] = await db
     .select({ lifecycleState: workspaces.lifecycleState })
     .from(workspaces)

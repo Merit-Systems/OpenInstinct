@@ -1,9 +1,15 @@
-/* oxlint-disable typescript/no-unsafe-type-assertion -- PGlite is the adapter-compatible database test double used by the service suite. */
 import { readFile, readdir } from "node:fs/promises";
 import { PGlite } from "@electric-sql/pglite";
 import { drizzle } from "drizzle-orm/pglite";
-import { afterEach, describe, expect, it, vi } from "vitest";
-import type { db } from "@/db";
+import { afterEach, describe, expect, it } from "vitest";
+import {
+  resetDatabaseForIntegrationTest,
+  setDatabaseForIntegrationTest,
+} from "@/db";
+import {
+  resetWorkspaceScopeEnforcementForIntegrationTest,
+  setWorkspaceScopeEnforcementForIntegrationTest,
+} from "@/env";
 import * as schema from "../../db/schema";
 
 const databases: PGlite[] = [];
@@ -11,10 +17,8 @@ let enforcementEnabled = false;
 
 afterEach(async () => {
   enforcementEnabled = false;
-  vi.doUnmock("@/db");
-  vi.doUnmock("@/db/services/scope");
-  vi.doUnmock("@/lib/env");
-  vi.resetModules();
+  resetDatabaseForIntegrationTest();
+  resetWorkspaceScopeEnforcementForIntegrationTest();
   await Promise.all(databases.splice(0).map((database) => database.close()));
 });
 
@@ -27,10 +31,13 @@ describe("workspace lifecycle", () => {
       ["suspended", "active"],
       ["active", "pending_deletion"],
     ] as const) {
+      // oxlint-disable-next-line eslint/no-await-in-loop -- Each state transition depends on the prior state.
       await service.client.exec(
         `UPDATE workspaces SET lifecycle_state = '${from}' WHERE id = 'workspace-a'`
       );
+      // oxlint-disable-next-line eslint/no-await-in-loop -- Each state transition depends on the prior state.
       await service.lifecycle.transitionWorkspaceLifecycle(service.owner, to);
+      // oxlint-disable-next-line eslint/no-await-in-loop -- Each state transition depends on the prior state.
       await expect(
         service.client.query(
           "SELECT lifecycle_state FROM workspaces WHERE id = 'workspace-a'"
@@ -80,6 +87,7 @@ describe("workspace lifecycle", () => {
   it("requires an active owner membership in the target workspace", async () => {
     const service = await loadService();
     for (const scope of [service.admin, service.member, service.wrongTenant]) {
+      // oxlint-disable-next-line eslint/no-await-in-loop -- Assertions share the same mutable lifecycle fixture.
       await expect(
         service.lifecycle.transitionWorkspaceLifecycle(scope, "suspended")
       ).rejects.toBeInstanceOf(
@@ -137,6 +145,7 @@ describe("workspace lifecycle", () => {
       service.browsers.createBrowserSession(service.owner, {
         createdAt: "2026-01-01",
         sessionId: "suspended-browser",
+        workerSessionId: "worker-suspended-browser",
       })
     ).rejects.toBeInstanceOf(service.scope.WorkspaceNotOperableError);
     await expect(
@@ -154,20 +163,17 @@ describe("workspace lifecycle", () => {
 
   it("does not call the lifecycle guard while enforcement is off", async () => {
     const client = await createDatabase();
-    const database = drizzle(client, { schema }) as unknown as typeof db;
-    const assertWorkspaceOperable = vi.fn<() => void>();
-    vi.doMock("@/db", () => ({ ...schema, db: database }));
-    vi.doMock("@/lib/env", () => ({
-      isWorkspaceScopeEnforcementEnabled: () => false,
-    }));
-    vi.doMock("@/db/services/scope", () => ({ assertWorkspaceOperable }));
+    const database = drizzle(client, { schema });
+    setDatabaseForIntegrationTest(database);
+    setWorkspaceScopeEnforcementForIntegrationTest(() => false);
     const usage = await import("@/db/services/usage");
 
-    await usage.checkBudget(
-      { userId: "owner", workspaceId: "workspace-a" },
-      "model_tokens"
-    );
-    expect(assertWorkspaceOperable).not.toHaveBeenCalled();
+    await expect(
+      usage.checkBudget(
+        { userId: "owner", workspaceId: "workspace-a" },
+        "model_tokens"
+      )
+    ).resolves.toBeUndefined();
   });
 
   it("deletes owned data only from a pending-deletion workspace and preserves retained records", async () => {
@@ -196,11 +202,20 @@ describe("workspace lifecycle", () => {
     ).rejects.toBeInstanceOf(
       service.lifecycle.WorkspaceLifecycleAuthorizationError
     );
+    const credential = await service.credentials.mintApiCredential(
+      service.owner,
+      {
+        name: "Deletion regression",
+        scopes: ["agents:read"],
+      }
+    );
     const counts = await service.lifecycle.deleteWorkspaceData(service.owner);
-    expect(counts).toMatchObject({
+    expect(counts).toEqual({
       agentRevisions: 1,
       agentSessions: 1,
       agents: 1,
+      apiCredentials: 1,
+      apiIdempotencyKeys: 1,
       browserImageArtifacts: 1,
       browserSessions: 1,
       channelConversations: 1,
@@ -209,6 +224,7 @@ describe("workspace lifecycle", () => {
       connectionInstallations: 1,
       encryptedSecrets: 1,
       settings: 1,
+      userProfiles: 1,
       vaultItems: 1,
       webhookDeliveries: 1,
       webhookEndpoints: 1,
@@ -216,27 +232,40 @@ describe("workspace lifecycle", () => {
       workspaceBudgets: 1,
       workspaceMemberships: 3,
     });
-    const [workspace, usage, audit, auditCount, deletedRows, otherTenantVault] =
-      await Promise.all([
-        service.client.query(
-          "SELECT lifecycle_state FROM workspaces WHERE id = 'workspace-a'"
-        ),
-        service.client.query(
-          "SELECT count(*)::int AS count FROM usage_events WHERE workspace_id = 'workspace-a'"
-        ),
-        service.client.query(
-          "SELECT action, actor_user_id, metadata FROM audit_events WHERE workspace_id = 'workspace-a' ORDER BY created_at DESC LIMIT 1"
-        ),
-        service.client.query(
-          "SELECT count(*)::int AS count FROM audit_events WHERE workspace_id = 'workspace-a'"
-        ),
-        service.client.query<{ table_name: string; count: number }>(
-          `
+    await expect(
+      service.credentials.authenticateApiKey(credential.secret)
+    ).resolves.toBeUndefined();
+    const [
+      workspace,
+      usage,
+      audit,
+      auditCount,
+      deletedRows,
+      phoneIdentity,
+      otherTenantVault,
+    ] = await Promise.all([
+      service.client.query(
+        "SELECT lifecycle_state FROM workspaces WHERE id = 'workspace-a'"
+      ),
+      service.client.query(
+        "SELECT count(*)::int AS count FROM usage_events WHERE workspace_id = 'workspace-a'"
+      ),
+      service.client.query(
+        "SELECT action, actor_user_id, metadata FROM audit_events WHERE workspace_id = 'workspace-a' ORDER BY created_at DESC LIMIT 1"
+      ),
+      service.client.query(
+        "SELECT count(*)::int AS count FROM audit_events WHERE workspace_id = 'workspace-a'"
+      ),
+      service.client.query<{ table_name: string; count: number }>(
+        `
           SELECT 'agent_revisions' AS table_name, count(*)::int AS count FROM agent_revisions WHERE workspace_id = 'workspace-a'
           UNION ALL SELECT 'agent_sessions', count(*)::int FROM agent_sessions WHERE workspace_id = 'workspace-a'
           UNION ALL SELECT 'agents', count(*)::int FROM agents WHERE workspace_id = 'workspace-a'
           UNION ALL SELECT 'browser_image_artifacts', count(*)::int FROM browser_image_artifacts WHERE workspace_id = 'workspace-a'
           UNION ALL SELECT 'browser_sessions', count(*)::int FROM browser_sessions WHERE workspace_id = 'workspace-a'
+          UNION ALL SELECT 'browser_traces', count(*)::int FROM browser_traces WHERE workspace_id = 'workspace-a'
+          UNION ALL SELECT 'browser_trace_events', count(*)::int FROM browser_trace_events WHERE trace_session_id = 'trace-a'
+          UNION ALL SELECT 'browser_trace_domains', count(*)::int FROM browser_trace_domains WHERE trace_session_id = 'trace-a'
           UNION ALL SELECT 'channel_conversations', count(*)::int FROM channel_conversations WHERE workspace_id = 'workspace-a'
           UNION ALL SELECT 'chats', count(*)::int FROM chats WHERE workspace_id = 'workspace-a'
           UNION ALL SELECT 'connection_installations', count(*)::int FROM connection_installations WHERE workspace_id = 'workspace-a'
@@ -249,41 +278,74 @@ describe("workspace lifecycle", () => {
           UNION ALL SELECT 'webhook_deliveries', count(*)::int FROM webhook_deliveries WHERE workspace_id = 'workspace-a'
           UNION ALL SELECT 'webhook_endpoints', count(*)::int FROM webhook_endpoints WHERE workspace_id = 'workspace-a'
           UNION ALL SELECT 'webhook_events', count(*)::int FROM webhook_events WHERE workspace_id = 'workspace-a'
+          UNION ALL SELECT 'api_credentials', count(*)::int FROM api_credentials WHERE workspace_id = 'workspace-a'
+          UNION ALL SELECT 'api_idempotency_keys', count(*)::int FROM api_idempotency_keys WHERE workspace_id = 'workspace-a'
+          UNION ALL SELECT 'user_profiles', count(*)::int FROM user_profiles WHERE workspace_id = 'workspace-a'
         `
-        ),
-        service.client.query(
-          "SELECT count(*)::int AS count FROM vault_items WHERE workspace_id = 'workspace-b'"
-        ),
-      ]);
+      ),
+      service.client.query(
+        "SELECT count(*)::int AS count FROM phone_identities WHERE id = 'identity-a'"
+      ),
+      service.client.query(
+        "SELECT count(*)::int AS count FROM vault_items WHERE workspace_id = 'workspace-b'"
+      ),
+    ]);
     expect(workspace.rows).toEqual([{ lifecycle_state: "deleted" }]);
     expect(usage.rows).toEqual([{ count: 1 }]);
-    expect(auditCount.rows).toEqual([{ count: 2 }]);
-    expect(audit.rows).toMatchObject([
+    expect(auditCount.rows).toEqual([{ count: 3 }]);
+    expect(audit.rows).toEqual([
       {
         action: "workspace.delete",
         actor_user_id: "owner",
         metadata: {
-          deletedCounts: { agents: 1 },
+          deletedCounts: counts,
           externalCleanupPending: ["blob", "kernel", "provider_grants"],
           retained: ["usage_events", "audit_events"],
         },
       },
     ]);
-    expect(deletedRows.rows).toHaveLength(17);
-    for (const row of deletedRows.rows) expect(row.count).toBe(0);
+    expect(
+      Object.fromEntries(
+        deletedRows.rows.map((row) => [row.table_name, row.count])
+      )
+    ).toEqual({
+      agent_revisions: 0,
+      agent_sessions: 0,
+      agents: 0,
+      api_credentials: 0,
+      api_idempotency_keys: 0,
+      browser_image_artifacts: 0,
+      browser_sessions: 0,
+      browser_trace_domains: 0,
+      browser_trace_events: 0,
+      browser_traces: 0,
+      channel_conversations: 0,
+      channel_participants: 0,
+      chats: 0,
+      connection_installations: 0,
+      encrypted_secrets: 0,
+      settings: 0,
+      user_profiles: 0,
+      vault_items: 0,
+      webhook_deliveries: 0,
+      webhook_endpoints: 0,
+      webhook_events: 0,
+      workspace_budgets: 0,
+      workspace_memberships: 0,
+    });
+    expect(phoneIdentity.rows).toEqual([{ count: 1 }]);
     expect(otherTenantVault.rows).toEqual([{ count: 1 }]);
   });
 });
 
 async function loadService() {
   const client = await createDatabase();
-  const database = drizzle(client, { schema }) as unknown as typeof db;
-  vi.doMock("@/db", () => ({ ...schema, db: database }));
-  vi.doMock("@/lib/env", () => ({
-    isWorkspaceScopeEnforcementEnabled: () => enforcementEnabled,
-  }));
+  const database = drizzle(client, { schema });
+  setDatabaseForIntegrationTest(database);
+  setWorkspaceScopeEnforcementForIntegrationTest(() => enforcementEnabled);
   const lifecycle = await import("@/db/services/workspace-lifecycle");
   const browsers = await import("@/db/services/browsers");
+  const credentials = await import("@/db/services/api-credentials");
   const scope = await import("@/db/services/scope");
   const usage = await import("@/db/services/usage");
   const owner = { userId: "owner", workspaceId: "workspace-a" };
@@ -307,6 +369,7 @@ async function loadService() {
     admin,
     browsers,
     client,
+    credentials,
     lifecycle,
     member,
     owner,
@@ -319,17 +382,21 @@ async function loadService() {
 async function createDatabase() {
   const client = new PGlite();
   databases.push(client);
-  for (const name of (
+  for (const migrationName of (
     await readdir(new URL("../../db/migrations/", import.meta.url))
   )
     .filter((name) => name.endsWith(".sql"))
-    .sort()) {
+    .toSorted()) {
+    // oxlint-disable-next-line eslint/no-await-in-loop -- Migration files must execute in committed order.
     const migration = await readFile(
-      new URL(`../../db/migrations/${name}`, import.meta.url),
+      new URL(`../../db/migrations/${migrationName}`, import.meta.url),
       "utf8"
     );
     for (const statement of migration.split("--> statement-breakpoint")) {
-      if (statement.trim()) await client.exec(statement);
+      if (statement.trim()) {
+        // oxlint-disable-next-line eslint/no-await-in-loop -- Migration statements must execute in committed order.
+        await client.exec(statement);
+      }
     }
   }
   return client;
@@ -372,6 +439,15 @@ async function seedOwnedRows(
     VALUES ('agent-session-${id}', '${workspaceId}', '${userId}', '2026-01-01');
     INSERT INTO browser_sessions (session_id, workspace_id, created_by_user_id, created_at)
     VALUES ('browser-session-${id}', '${workspaceId}', '${userId}', '2026-01-01');
+    INSERT INTO browser_traces (
+      session_id, workspace_id, created_by_user_id, task, status, started_at
+    ) VALUES (
+      'trace-${id}', '${workspaceId}', '${userId}', 'Trace', 'success', '2026-01-01'
+    );
+    INSERT INTO browser_trace_events (id, trace_session_id, at, type, label, detail)
+    VALUES ('trace-event-${id}', 'trace-${id}', '2026-01-01', 'step', 'Step', '{}');
+    INSERT INTO browser_trace_domains (trace_session_id, domain, first_seen_at)
+    VALUES ('trace-${id}', 'example.test', '2026-01-01');
     INSERT INTO browser_image_artifacts (
       id, workspace_id, created_by_user_id, root_session_id, worker_session_id,
       browser_session_id, status, label, storage_pathname, source_kind, idempotency_key, created_at
@@ -389,6 +465,11 @@ async function seedOwnedRows(
     INSERT INTO connection_installations (id, workspace_id, provider, connector_id, authorization_subject)
     VALUES ('installation-${id}', '${workspaceId}', 'linq', 'connector-${id}', 'subject-${id}');
     INSERT INTO workspace_budgets (workspace_id, model_token_limit) VALUES ('${workspaceId}', 10);
+    INSERT INTO user_profiles (workspace_id, first_name, updated_at)
+    VALUES ('${workspaceId}', 'Owner', '2026-01-01');
+    INSERT INTO api_idempotency_keys (
+      id, workspace_id, route, idempotency_key, response_status
+    ) VALUES ('idempotency-${id}', '${workspaceId}', '/v1/agents', 'key-${id}', 201);
     INSERT INTO usage_events (id, workspace_id, kind, quantity, unit)
     VALUES ('usage-${id}', '${workspaceId}', 'model_tokens', 1, 'tokens');
     INSERT INTO audit_events (id, workspace_id, action) VALUES ('audit-${id}', '${workspaceId}', 'seed');

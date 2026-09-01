@@ -1,8 +1,7 @@
 import { defineHook } from "eve/hooks";
 import { saveChat } from "@/db/services/chats";
 import { ensureScope } from "@/db/services/scope";
-import { checkBudget } from "@/db/services/usage";
-import { recordUsageEvent } from "@/db/services/usage";
+import { checkBudget, recordUsageEvent } from "@/db/services/usage";
 import { claimSession } from "@/db/services/sessions";
 import { scopeFromPrincipal } from "@/lib/access-scope";
 
@@ -27,18 +26,17 @@ export default defineHook({
     async "turn.started"(_event, ctx) {
       const initiator = ctx.session.auth.initiator;
       if (!initiator) return;
-      const scope = scopeFromPrincipal(initiator);
-      await checkBudget(scope, "model_tokens");
+      await checkBudget(scopeFromPrincipal(initiator), "model_tokens");
     },
     async "step.completed"(event, ctx) {
       const initiator = ctx.session.auth.initiator;
-      if (!initiator || !event.data.usage) return;
-      const inputTokens = event.data.usage.inputTokens ?? 0;
-      const outputTokens = event.data.usage.outputTokens ?? 0;
-      const quantity = inputTokens + outputTokens;
+      const usage = event.data.usage;
+      if (!initiator || !usage) return;
+      const quantity = (usage.inputTokens ?? 0) + (usage.outputTokens ?? 0);
       if (quantity <= 0) return;
-      void recordUsageEvent(scopeFromPrincipal(initiator), {
-        costEstimateUsd: event.data.usage.costUsd,
+      const scope = scopeFromPrincipal(initiator);
+      void recordUsageEvent(scope, {
+        costEstimateUsd: usage.costUsd,
         kind: "model_tokens",
         metadata: {
           stepIndex: event.data.stepIndex,

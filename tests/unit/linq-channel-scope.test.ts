@@ -1,173 +1,118 @@
-/* oxlint-disable typescript/no-unsafe-assignment, typescript/no-unsafe-type-assertion, typescript/no-unnecessary-type-assertion -- Eve's Linq adapter exposes the inbound handler through transitive any types; this fixture supplies only the fields it exercises. */
-import type * as EnvModule from "@/lib/env";
-import type * as LinqModule from "eve/channels/linq";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { accessScopeForUser } from "@/lib/access-scope";
 
 const mocks = vi.hoisted(() => ({
-  createConversationBinding: vi.fn<() => Promise<unknown>>(),
-  config: undefined as unknown,
-  findVerifiedUserByPhoneNumber: vi.fn<() => Promise<unknown>>(),
-  findOne: vi.fn<() => Promise<unknown>>(),
-  resolveConversationBinding: vi.fn<() => Promise<unknown>>(),
-  recordConnectionInstallation: vi.fn<() => Promise<unknown>>(),
-  scopeEnforcementEnabled: vi.fn<() => boolean>(),
-  verifyScopeAccess: vi.fn<(_scope: unknown) => Promise<unknown>>(),
+  createBinding:
+    vi.fn<() => Promise<{ readonly workspaceId: string } | undefined>>(),
+  findOne:
+    vi.fn<
+      () => Promise<
+        { readonly id: string; readonly phoneNumberVerified: true } | undefined
+      >
+    >(),
+  findIdentity:
+    vi.fn<
+      () => Promise<
+        | { readonly phoneIdentityId: string; readonly userId: string }
+        | undefined
+      >
+    >(),
+  enabled: vi.fn<() => boolean>(),
+  recordInstallation: vi.fn<() => Promise<void>>(),
+  resolveBinding:
+    vi.fn<() => Promise<{ readonly workspaceId: string } | undefined>>(),
+  verifyScope:
+    vi.fn<() => Promise<{ readonly workspaceId: string } | undefined>>(),
 }));
-
 vi.mock("@/auth", () => ({
-  auth: {
+  getAuth: vi.fn<
+    () => Promise<{
+      readonly $context: Promise<{
+        readonly adapter: { readonly findOne: typeof mocks.findOne };
+      }>;
+    }>
+  >(async () => ({
     $context: Promise.resolve({ adapter: { findOne: mocks.findOne } }),
-  },
+  })),
+}));
+vi.mock("@/env", () => ({
+  env: { LINQ_CONNECTOR: "linq/test", LINQ_PHONE_NUMBER: "+12025550999" },
+  isWorkspaceScopeEnforcementEnabled: mocks.enabled,
 }));
 vi.mock("@/db/services/scope", () => ({
-  verifyScopeAccess: mocks.verifyScopeAccess,
+  verifyScopeAccess: mocks.verifyScope,
 }));
 vi.mock("@/db/services/channel-conversations", () => ({
-  createConversationBinding: mocks.createConversationBinding,
-  resolveConversationBinding: mocks.resolveConversationBinding,
+  createConversationBinding: mocks.createBinding,
+  resolveConversationBinding: mocks.resolveBinding,
 }));
 vi.mock("@/db/services/connection-installations", () => ({
-  recordConnectionInstallation: mocks.recordConnectionInstallation,
+  recordConnectionInstallation: mocks.recordInstallation,
 }));
 vi.mock("@/db/services/phone-identities", () => ({
-  findVerifiedUserByPhoneNumber: mocks.findVerifiedUserByPhoneNumber,
+  findVerifiedUserByPhoneNumber: mocks.findIdentity,
 }));
-vi.mock("@/lib/env", async (importOriginal) => ({
-  ...(await importOriginal<typeof EnvModule>()),
-  env: {
-    ...(await importOriginal<typeof EnvModule>()).env,
-    LINQ_CONNECTOR: "linq/test",
-    LINQ_PHONE_NUMBER: "+12025550999",
-  },
-  isWorkspaceScopeEnforcementEnabled: mocks.scopeEnforcementEnabled,
-}));
-vi.mock("eve/channels/linq", async (importOriginal) => {
-  const original = await importOriginal<typeof LinqModule>();
-  return {
-    ...original,
-    linqChannel(config: unknown) {
-      mocks.config = config;
-      return config;
-    },
-  };
+
+const { linqChannelConfig } = await import("../../agent/channels/linq");
+type OnMessage = typeof linqChannelConfig.onMessage;
+type Context = Parameters<OnMessage>[0];
+type Message = Parameters<OnMessage>[1];
+const workspaceId = accessScopeForUser("better-auth:alice").workspaceId;
+const message = (): Message => ({
+  author: { isBot: false, userId: "linq-user", userName: "+12025550123" },
 });
-
-await import("../../agent/channels/linq");
-
-const onMessage = (mocks.config as LinqModule.LinqChannelConfig).onMessage;
-if (!onMessage) throw new Error("Linq onMessage is not configured.");
-const aliceWorkspaceId = accessScopeForUser("better-auth:alice").workspaceId;
+const context = (threadId?: string): Context => ({
+  thread: { id: threadId ?? "" },
+});
 
 beforeEach(() => {
   vi.clearAllMocks();
-  mocks.scopeEnforcementEnabled.mockReturnValue(false);
-  mocks.findOne.mockResolvedValue(null);
-  mocks.findVerifiedUserByPhoneNumber.mockResolvedValue(undefined);
-  mocks.resolveConversationBinding.mockResolvedValue(undefined);
-  mocks.createConversationBinding.mockResolvedValue(undefined);
-  mocks.recordConnectionInstallation.mockResolvedValue({});
+  mocks.enabled.mockReturnValue(false);
+  mocks.findOne.mockResolvedValue(undefined);
+  mocks.findIdentity.mockResolvedValue(undefined);
+  mocks.resolveBinding.mockResolvedValue(undefined);
+  mocks.createBinding.mockResolvedValue(undefined);
+  mocks.recordInstallation.mockResolvedValue(undefined);
 });
 
 describe("Linq channel scope", () => {
   it("does not verify membership while enforcement is off", async () => {
-    const result = await onMessage(
-      {} as never,
-      { author: { isBot: false, userName: "+12025550123" } } as never
-    );
-
-    expect(result).toMatchObject({
-      auth: { attributes: { workspaceId: expect.any(String) } },
-    });
-    expect(mocks.verifyScopeAccess).not.toHaveBeenCalled();
+    expect(
+      await linqChannelConfig.onMessage(context(), message())
+    ).not.toBeNull();
+    expect(mocks.verifyScope).not.toHaveBeenCalled();
   });
-
   it("drops a denied scope while enforcement is on", async () => {
-    mocks.scopeEnforcementEnabled.mockReturnValue(true);
-    mocks.verifyScopeAccess.mockResolvedValue(undefined);
-
+    mocks.enabled.mockReturnValue(true);
+    mocks.verifyScope.mockResolvedValue(undefined);
     await expect(
-      onMessage(
-        {} as never,
-        { author: { isBot: false, userName: "+12025550123" } } as never
-      )
+      linqChannelConfig.onMessage(context(), message())
     ).resolves.toBeNull();
   });
-
   it("does not resolve conversation bindings while enforcement is off", async () => {
-    await onMessage(
-      {} as never,
-      { author: { isBot: false, userName: "+12025550123" } } as never
-    );
-
-    expect(mocks.resolveConversationBinding).not.toHaveBeenCalled();
-    expect(mocks.createConversationBinding).not.toHaveBeenCalled();
+    await linqChannelConfig.onMessage(context(), message());
+    expect(mocks.resolveBinding).not.toHaveBeenCalled();
+    expect(mocks.createBinding).not.toHaveBeenCalled();
   });
-
   it("drops an existing binding owned by another workspace", async () => {
-    mocks.scopeEnforcementEnabled.mockReturnValue(true);
-    mocks.verifyScopeAccess.mockResolvedValue({});
-    mocks.findOne.mockResolvedValue({
-      id: "alice",
-      phoneNumberVerified: true,
-    });
-    mocks.findVerifiedUserByPhoneNumber.mockResolvedValue({
-      phoneIdentityId: "identity-alice",
-      userId: "alice",
-    });
-    mocks.resolveConversationBinding.mockResolvedValue({
-      workspaceId: "workspace:other",
-    });
-
+    allowAlice();
+    mocks.resolveBinding.mockResolvedValue(binding("workspace:other"));
     await expect(
-      onMessage(
-        { thread: { id: "linq:chat-1:dm" } } as never,
-        { author: { isBot: false, userName: "+12025550123" } } as never
-      )
+      linqChannelConfig.onMessage(context("linq:chat-1:dm"), message())
     ).resolves.toBeNull();
   });
-
-  it("preserves the current behavior when no active agent can create a binding", async () => {
-    mocks.scopeEnforcementEnabled.mockReturnValue(true);
-    mocks.verifyScopeAccess.mockResolvedValue({});
-    mocks.findOne.mockResolvedValue({
-      id: "alice",
-      phoneNumberVerified: true,
-    });
-    mocks.findVerifiedUserByPhoneNumber.mockResolvedValue({
-      phoneIdentityId: "identity-alice",
-      userId: "alice",
-    });
-
-    await expect(
-      onMessage(
-        { thread: { id: "linq:chat-1:dm" } } as never,
-        { author: { isBot: false, userName: "+12025550123" } } as never
-      )
-    ).resolves.toMatchObject({
-      auth: { attributes: { workspaceId: expect.any(String) } },
-    });
-    expect(mocks.createConversationBinding).toHaveBeenCalledOnce();
+  it("preserves behavior when no active agent can create a binding", async () => {
+    allowAlice();
+    expect(
+      await linqChannelConfig.onMessage(context("linq:chat-1:dm"), message())
+    ).not.toBeNull();
+    expect(mocks.createBinding).toHaveBeenCalledOnce();
   });
-
   it("records the Linq installation for a newly bound workspace", async () => {
-    mocks.scopeEnforcementEnabled.mockReturnValue(true);
-    mocks.verifyScopeAccess.mockResolvedValue({});
-    mocks.findOne.mockResolvedValue({ id: "alice", phoneNumberVerified: true });
-    mocks.findVerifiedUserByPhoneNumber.mockResolvedValue({
-      phoneIdentityId: "identity-alice",
-      userId: "alice",
-    });
-    mocks.createConversationBinding.mockResolvedValue({
-      workspaceId: aliceWorkspaceId,
-    });
-
-    await onMessage(
-      { thread: { id: "linq:chat-1:dm" } } as never,
-      { author: { isBot: false, userName: "+12025550123" } } as never
-    );
-
-    expect(mocks.recordConnectionInstallation).toHaveBeenCalledWith(
+    allowAlice();
+    mocks.createBinding.mockResolvedValue(binding(workspaceId));
+    await linqChannelConfig.onMessage(context("linq:chat-1:dm"), message());
+    expect(mocks.recordInstallation).toHaveBeenCalledWith(
       expect.any(Object),
       expect.objectContaining({
         authorizationSubject: "+12025550999",
@@ -176,70 +121,74 @@ describe("Linq channel scope", () => {
       })
     );
   });
-
   it("keeps the message when installation recording fails", async () => {
-    mocks.scopeEnforcementEnabled.mockReturnValue(true);
-    mocks.verifyScopeAccess.mockResolvedValue({});
-    mocks.findOne.mockResolvedValue({ id: "alice", phoneNumberVerified: true });
-    mocks.findVerifiedUserByPhoneNumber.mockResolvedValue({
-      phoneIdentityId: "identity-alice",
-      userId: "alice",
-    });
-    mocks.createConversationBinding.mockResolvedValue({
-      workspaceId: aliceWorkspaceId,
-    });
-    mocks.recordConnectionInstallation.mockRejectedValue(
+    allowAlice();
+    mocks.createBinding.mockResolvedValue(binding(workspaceId));
+    mocks.recordInstallation.mockRejectedValue(
       new Error("database unavailable")
     );
-
-    await expect(
-      onMessage(
-        { thread: { id: "linq:chat-1:dm" } } as never,
-        { author: { isBot: false, userName: "+12025550123" } } as never
-      )
-    ).resolves.toMatchObject({
-      auth: { attributes: { workspaceId: expect.any(String) } },
-    });
+    expect(
+      await linqChannelConfig.onMessage(context("linq:chat-1:dm"), message())
+    ).not.toBeNull();
   });
-
   it("does not re-record an installation for an existing binding", async () => {
-    mocks.scopeEnforcementEnabled.mockReturnValue(true);
-    mocks.verifyScopeAccess.mockResolvedValue({});
-    mocks.findOne.mockResolvedValue({ id: "alice", phoneNumberVerified: true });
-    mocks.findVerifiedUserByPhoneNumber.mockResolvedValue({
-      phoneIdentityId: "identity-alice",
-      userId: "alice",
-    });
-    mocks.resolveConversationBinding.mockResolvedValue({
-      workspaceId: aliceWorkspaceId,
-    });
-
-    await onMessage(
-      { thread: { id: "linq:chat-1:dm" } } as never,
-      { author: { isBot: false, userName: "+12025550123" } } as never
-    );
-
-    expect(mocks.recordConnectionInstallation).not.toHaveBeenCalled();
+    allowAlice();
+    mocks.resolveBinding.mockResolvedValue(binding(workspaceId));
+    await linqChannelConfig.onMessage(context("linq:chat-1:dm"), message());
+    expect(mocks.recordInstallation).not.toHaveBeenCalled();
   });
-
   it("does not attempt a binding when the phone identity belongs to another user", async () => {
-    mocks.scopeEnforcementEnabled.mockReturnValue(true);
-    mocks.verifyScopeAccess.mockResolvedValue({});
-    mocks.findOne.mockResolvedValue({
-      id: "alice",
-      phoneNumberVerified: true,
-    });
-    mocks.findVerifiedUserByPhoneNumber.mockResolvedValue({
+    mocks.enabled.mockReturnValue(true);
+    mocks.verifyScope.mockResolvedValue(scope());
+    mocks.findOne.mockResolvedValue({ id: "alice", phoneNumberVerified: true });
+    mocks.findIdentity.mockResolvedValue({
       phoneIdentityId: "identity-bob",
       userId: "bob",
     });
-
-    await onMessage(
-      { thread: { id: "linq:chat-1:dm" } } as never,
-      { author: { isBot: false, userName: "+12025550123" } } as never
-    );
-
-    expect(mocks.resolveConversationBinding).not.toHaveBeenCalled();
-    expect(mocks.createConversationBinding).not.toHaveBeenCalled();
+    await linqChannelConfig.onMessage(context("linq:chat-1:dm"), message());
+    expect(mocks.resolveBinding).not.toHaveBeenCalled();
+    expect(mocks.createBinding).not.toHaveBeenCalled();
   });
 });
+function allowAlice() {
+  mocks.enabled.mockReturnValue(true);
+  mocks.verifyScope.mockResolvedValue(scope());
+  mocks.findOne.mockResolvedValue({ id: "alice", phoneNumberVerified: true });
+  mocks.findIdentity.mockResolvedValue({
+    phoneIdentityId: "identity-alice",
+    userId: "alice",
+  });
+}
+function scope() {
+  return {
+    membershipStatus: "active",
+    role: "owner",
+    userId: "alice",
+    workspaceId,
+  };
+}
+function binding(bindingWorkspaceId: string) {
+  return {
+    agentId: "agent-1",
+    createdAt: "2026-09-01T00:00:00.000Z",
+    id: "binding-1",
+    pinnedRevisionId: "revision-1",
+    platformLine: {
+      connectorId: "linq/test",
+      createdAt: "2026-09-01T00:00:00.000Z",
+      environment: null,
+      id: "line-1",
+      provider: "linq",
+      providerLineId: "+12025550999",
+      status: "active",
+      updatedAt: "2026-09-01T00:00:00.000Z",
+    },
+    platformLineId: "line-1",
+    provider: "linq",
+    providerAccountId: "linq",
+    providerConversationId: "chat-1",
+    status: "active",
+    updatedAt: "2026-09-01T00:00:00.000Z",
+    workspaceId: bindingWorkspaceId,
+  };
+}

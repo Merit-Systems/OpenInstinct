@@ -1,9 +1,12 @@
-import { createHmac, hkdfSync } from "node:crypto";
+import { createDecipheriv, createHmac, hkdfSync } from "node:crypto";
 import { readFile, readdir } from "node:fs/promises";
 import { PGlite } from "@electric-sql/pglite";
 import { drizzle } from "drizzle-orm/pglite";
-import { afterEach, describe, expect, it, vi } from "vitest";
-import type { db } from "@/db";
+import { afterEach, describe, expect, it } from "vitest";
+import {
+  resetDatabaseForIntegrationTest,
+  setDatabaseForIntegrationTest,
+} from "@/db";
 import * as schema from "../../db/schema";
 
 const databases: PGlite[] = [];
@@ -12,8 +15,7 @@ const normalizedPhoneNumber = "+12025550123";
 const testSecretEncryptionKey = "AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE=";
 
 afterEach(async () => {
-  vi.doUnmock("@/db");
-  vi.resetModules();
+  resetDatabaseForIntegrationTest();
   await Promise.all(databases.splice(0).map((database) => database.close()));
 });
 
@@ -31,15 +33,17 @@ describe("phone identities", () => {
     );
     expect(identity.phoneLookupHash).toBe(expectedLookupHash());
     expect(
-      service.decryptPhoneIdentityForTest(
+      decryptPhoneIdentity(
         identity.id,
-        identity.encryptedPhoneNumber
+        identity.encryptedPhoneNumber,
+        testSecretEncryptionKey
       )
     ).toBe(normalizedPhoneNumber);
     expect(() =>
-      service.decryptPhoneIdentityForTest(
+      decryptPhoneIdentity(
         "different-row-id",
-        identity.encryptedPhoneNumber
+        identity.encryptedPhoneNumber,
+        testSecretEncryptionKey
       )
     ).toThrow(/authenticate/i);
     expect(identity.status).toBe("verified");
@@ -133,24 +137,6 @@ describe("phone identities", () => {
       service.findVerifiedUserByPhoneNumber(phoneNumber)
     ).resolves.toBeUndefined();
   });
-
-  it("retries once when a concurrent verified insert wins the partial index", async () => {
-    const conflict = Object.assign(new Error("unique conflict"), {
-      cause: { code: "23505" },
-    });
-    const retriedIdentity = { id: "retried-identity" };
-    const transaction = vi
-      .fn<(operation: () => Promise<unknown>) => Promise<unknown>>()
-      .mockRejectedValueOnce(conflict)
-      .mockResolvedValueOnce(retriedIdentity);
-    vi.doMock("@/db", () => ({ db: { transaction }, phoneIdentities: {} }));
-    const service = await import("@/db/services/phone-identities");
-
-    await expect(
-      service.recordVerifiedPhoneIdentity({ phoneNumber, userId: "alice" })
-    ).resolves.toBe(retriedIdentity);
-    expect(transaction).toHaveBeenCalledTimes(2);
-  });
 });
 
 function expectedLookupHash() {
@@ -163,6 +149,36 @@ function expectedLookupHash() {
     .digest("hex");
 }
 
+function decryptPhoneIdentity(
+  id: string,
+  value: string,
+  secretEncryptionKey: string
+) {
+  const [version, encodedIv, encodedTag, encodedCiphertext] = value.split(".");
+  if (version !== "v1" || !encodedIv || !encodedTag || !encodedCiphertext)
+    throw new Error("The stored phone identity uses an unsupported format.");
+  const key = Buffer.from(
+    hkdfSync(
+      "sha256",
+      Buffer.from(secretEncryptionKey, "base64"),
+      Buffer.alloc(0),
+      "phone-identity-aead",
+      32
+    )
+  );
+  const decipher = createDecipheriv(
+    "aes-256-gcm",
+    key,
+    Buffer.from(encodedIv, "base64url")
+  );
+  decipher.setAAD(Buffer.from(`phone-identity\u0000${id}`));
+  decipher.setAuthTag(Buffer.from(encodedTag, "base64url"));
+  return Buffer.concat([
+    decipher.update(Buffer.from(encodedCiphertext, "base64url")),
+    decipher.final(),
+  ]).toString("utf8");
+}
+
 async function loadPhoneIdentityService() {
   const client = new PGlite();
   databases.push(client);
@@ -173,10 +189,8 @@ async function loadPhoneIdentityService() {
       ('alice', 'Alice', 'alice@example.test'),
       ('bob', 'Bob', 'bob@example.test')
   `);
-  const pgliteDatabase = drizzle(client, { schema });
-  // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- adapter-compatible integration test double
-  const database = pgliteDatabase as unknown as typeof db;
-  vi.doMock("@/db", () => ({ ...schema, db: database }));
+  const database = drizzle(client, { schema });
+  setDatabaseForIntegrationTest(database);
   const service = await import("@/db/services/phone-identities");
   return {
     client,
@@ -201,14 +215,18 @@ async function applyAllMigrations(database: PGlite) {
     await readdir(new URL("../../db/migrations/", import.meta.url))
   )
     .filter((name) => name.endsWith(".sql"))
-    .sort();
-  for (const name of names) {
+    .toSorted();
+  for (const migrationName of names) {
+    // oxlint-disable-next-line eslint/no-await-in-loop -- Migration files must execute in committed order.
     const migration = await readFile(
-      new URL(`../../db/migrations/${name}`, import.meta.url),
+      new URL(`../../db/migrations/${migrationName}`, import.meta.url),
       "utf8"
     );
     for (const statement of migration.split("--> statement-breakpoint")) {
-      if (statement.trim()) await database.exec(statement);
+      if (statement.trim()) {
+        // oxlint-disable-next-line eslint/no-await-in-loop -- Migration statements must execute in committed order.
+        await database.exec(statement);
+      }
     }
   }
 }

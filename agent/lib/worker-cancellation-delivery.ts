@@ -1,3 +1,4 @@
+// SAFETY: This intersection only adds one optional, repository-owned key to globalThis.
 const runtime = globalThis as typeof globalThis & {
   openInstinctWorkerCancellationTurns?: Map<string, string>;
 };

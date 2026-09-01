@@ -1,0 +1,35 @@
+import { NextResponse, type NextRequest } from "next/server";
+import { getAuthSession } from "@/auth/session";
+
+export const proxyDependencies = { getAuthSession };
+
+export function createProxy(dependencies = proxyDependencies) {
+  return async function proxy(request: NextRequest) {
+    const pathname = request.nextUrl.pathname;
+    if (
+      pathname === "/sign-in" ||
+      pathname.startsWith("/api/auth/") ||
+      pathname.startsWith("/api/cron/") ||
+      pathname.startsWith("/v1/") ||
+      pathname === "/eve/v1/health"
+    ) {
+      return NextResponse.next();
+    }
+
+    if (await dependencies.getAuthSession(request.headers))
+      return NextResponse.next();
+
+    const signInUrl = new URL("/sign-in", request.url);
+    signInUrl.searchParams.set(
+      "callbackUrl",
+      `${request.nextUrl.pathname}${request.nextUrl.search}`
+    );
+    return NextResponse.redirect(signInUrl);
+  };
+}
+
+export const proxy = createProxy();
+
+export const config = {
+  matcher: ["/((?!_next/static|_next/image|fonts|favicon.ico).*)"],
+};

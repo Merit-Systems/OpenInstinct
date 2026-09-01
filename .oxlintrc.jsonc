@@ -15,14 +15,16 @@
   "options": {
     "denyWarnings": true,
     "typeAware": true,
-    "reportUnusedDisableDirectives": "off"
+    "reportUnusedDisableDirectives": "error"
   },
   "categories": {
     "correctness": "error",
     "suspicious": "error",
     "perf": "error"
   },
+  "ignorePatterns": ["tools/oxlint/anti-slop/**"],
   "jsPlugins": [
+    "./tools/oxlint/anti-slop/index.ts",
     "./tools/oxlint/next/index.ts",
     "eslint-plugin-turbo",
     {
@@ -33,10 +35,25 @@
   ],
   "settings": {
     "tailwindcss": {
-      "entryPoint": "app/globals.css"
+      "entryPoint": "src/app/globals.css"
     }
   },
   "rules": {
+    "anti-slop/no-chained-type-assertions": "error",
+    "anti-slop/no-conditional-empty-object-spread": "error",
+    "anti-slop/no-known-value-widening": "error",
+    "anti-slop/no-module-mocking": "error",
+    "anti-slop/no-object-parameters": "error",
+    "anti-slop/no-reflect-apply": "error",
+    "anti-slop/no-reflect-get": "error",
+    "anti-slop/no-runtime-typeof": "error",
+    "anti-slop/no-shape-in-symbol-names": "error",
+    "anti-slop/no-unknown-parameters": "error",
+    "anti-slop/no-unknown-returns": "error",
+    "anti-slop/no-unknown-type-aliases": "error",
+    "anti-slop/no-unsafe-dictionary-type": "error",
+    "anti-slop/no-widen-then-assert": "error",
+    "anti-slop/require-safety-comment-for-type-assertion": "error",
     "local-next/no-route-private-imports": "error",
     "local-next/prefer-nearest-route-private-owner": "error",
     "local-next/require-generated-route-props": "error",
@@ -56,7 +73,12 @@
     "hooks/unsupported-syntax": "warn",
     "hooks/use-memo": "error",
     "import/no-cycle": "error",
-    "import/no-unassigned-import": "off",
+    "import/no-unassigned-import": [
+      "error",
+      {
+        "allow": ["**/*.css"]
+      }
+    ],
     "jsx-a11y/alt-text": "error",
     "jsx-a11y/anchor-has-content": "error",
     "jsx-a11y/anchor-is-valid": "error",
@@ -194,7 +216,7 @@
     "nextjs/no-typos": "warn",
     "nextjs/no-unwanted-polyfillio": "warn",
     "no-array-constructor": "error",
-    "no-await-in-loop": "off",
+    "no-await-in-loop": "error",
     "no-case-declarations": "error",
     "no-empty": "error",
     "no-empty-function": "error",
@@ -210,11 +232,11 @@
         "message": "Read environment variables through an env.ts or env/ module validated with @t3-oss/env-nextjs for Next.js or @t3-oss/env-core for other runtimes."
       }
     ],
-    "no-shadow": "off",
+    "no-shadow": "error",
     "no-undef": "off",
     "no-useless-assignment": "error",
     "no-var": "error",
-    "oxc/no-map-spread": "off",
+    "oxc/no-map-spread": "error",
     "prefer-const": "error",
     "prefer-rest-params": "error",
     "prefer-spread": "error",
@@ -225,7 +247,7 @@
     "react/jsx-no-duplicate-props": "error",
     "react/jsx-no-target-blank": "error",
     "react/jsx-no-undef": "error",
-    "react/no-array-index-key": "off",
+    "react/no-array-index-key": "error",
     "react/no-children-prop": "error",
     "react/no-danger-with-children": "error",
     "react/no-direct-mutation-state": "error",
@@ -251,7 +273,7 @@
     "tailwindcss/no-deprecated-classes": "warn",
     "tailwindcss/no-duplicate-classes": "error",
     // The semantic typography utilities are hand-authored `@layer utilities`
-    // classes in app/styles/brand/typography.css.
+    // classes in src/app/styles/brand/typography.css.
     "tailwindcss/no-unknown-classes": [
       "warn",
       {
@@ -272,7 +294,7 @@
     "typescript/class-literal-property-style": "error",
     "typescript/consistent-generic-constructors": "error",
     "typescript/consistent-indexed-object-style": "error",
-    "typescript/consistent-return": "off",
+    "typescript/consistent-return": "error",
     "typescript/consistent-type-assertions": "error",
     "typescript/consistent-type-definitions": "error",
     "typescript/consistent-type-exports": "error",
@@ -343,8 +365,8 @@
     "typescript/return-await": ["error", "error-handling-correctness-only"],
     "typescript/unified-signatures": "error",
     "typescript/use-unknown-in-catch-callback-variable": "error",
-    "unicorn/consistent-function-scoping": "off",
-    "unicorn/no-array-sort": "off",
+    "unicorn/consistent-function-scoping": "error",
+    "unicorn/no-array-sort": "error",
     "unicorn/no-instanceof-builtins": [
       "error",
       {
@@ -353,60 +375,6 @@
     ]
   },
   "overrides": [
-    {
-      "files": ["**/*.{js,mjs,cjs}"],
-      "rules": {
-        "typescript/await-thenable": "off",
-        "typescript/consistent-type-exports": "off",
-        "typescript/dot-notation": "off",
-        "typescript/no-array-delete": "off",
-        "typescript/no-base-to-string": "off",
-        "typescript/no-confusing-void-expression": "off",
-        "typescript/no-deprecated": "off",
-        "typescript/no-duplicate-type-constituents": "off",
-        "typescript/no-floating-promises": "off",
-        "typescript/no-for-in-array": "off",
-        "typescript/no-implied-eval": "off",
-        "typescript/no-meaningless-void-operator": "off",
-        "typescript/no-misused-promises": "off",
-        "typescript/no-misused-spread": "off",
-        "typescript/no-mixed-enums": "off",
-        "typescript/no-redundant-type-constituents": "off",
-        "typescript/no-unnecessary-boolean-literal-compare": "off",
-        "typescript/no-unnecessary-condition": "off",
-        "typescript/no-unnecessary-template-expression": "off",
-        "typescript/no-unnecessary-type-arguments": "off",
-        "typescript/no-unnecessary-type-assertion": "off",
-        "typescript/no-unnecessary-type-conversion": "off",
-        "typescript/no-unnecessary-type-parameters": "off",
-        "typescript/no-unsafe-argument": "off",
-        "typescript/no-unsafe-assignment": "off",
-        "typescript/no-unsafe-call": "off",
-        "typescript/no-unsafe-enum-comparison": "off",
-        "typescript/no-unsafe-member-access": "off",
-        "typescript/no-unsafe-return": "off",
-        "typescript/no-unsafe-type-assertion": "off",
-        "typescript/no-unsafe-unary-minus": "off",
-        "typescript/no-useless-default-assignment": "off",
-        "typescript/non-nullable-type-assertion-style": "off",
-        "typescript/only-throw-error": "off",
-        "typescript/prefer-find": "off",
-        "typescript/prefer-includes": "off",
-        "typescript/prefer-nullish-coalescing": "off",
-        "typescript/prefer-optional-chain": "off",
-        "typescript/prefer-promise-reject-errors": "off",
-        "typescript/prefer-reduce-type-parameter": "off",
-        "typescript/prefer-regexp-exec": "off",
-        "typescript/prefer-return-this-type": "off",
-        "typescript/related-getter-setter-pairs": "off",
-        "typescript/require-array-sort-compare": "off",
-        "typescript/restrict-plus-operands": "off",
-        "typescript/restrict-template-expressions": "off",
-        "typescript/return-await": "off",
-        "typescript/unbound-method": "off",
-        "typescript/use-unknown-in-catch-callback-variable": "off"
-      }
-    },
     {
       "files": [
         "**/env.{js,cjs,mjs,ts,cts,mts}",
@@ -419,6 +387,7 @@
     {
       "files": ["**/tests/**/*.{ts,tsx,mts,cts}", "**/*.test.{ts,tsx,mts,cts}"],
       "rules": {
+        "anti-slop/no-module-mocking": "off",
         "vitest/consistent-test-filename": [
           "error",
           {
@@ -445,47 +414,22 @@
     {
       // shadcn registry source uses behavior utilities that the Tailwind
       // linter cannot resolve through package stylesheet imports.
-      "files": ["components/ui/**/*.tsx"],
+      "files": ["src/components/ui/**/*.tsx"],
       "rules": {
         "tailwindcss/no-unknown-classes": "off"
       }
     },
     {
-      // Eve owns this generated Web Chat scaffold. Keep it updateable from the
-      // framework.
-      "files": ["app/**/*.tsx", "components/ai-elements/**/*.tsx"],
+      // AI Elements uses typography and animation utilities supplied through
+      // package styles that the Tailwind linter cannot resolve from the app
+      // entrypoint. Keep this exception limited to the affected components.
+      "files": [
+        "src/components/ai-elements/message.tsx",
+        "src/components/ai-elements/reasoning.tsx",
+        "src/components/ai-elements/tool.tsx"
+      ],
       "rules": {
-        "eslint/no-empty-function": "off",
-        "eslint/no-underscore-dangle": "off",
-        "hooks/refs": "off",
-        "hooks/set-state-in-effect": "off",
-        "hooks/static-components": "off",
-        "jsx-a11y/anchor-has-content": "off",
-        "jsx-a11y/control-has-associated-label": "off",
-        "jsx-a11y/heading-has-content": "off",
-        "nextjs/no-img-element": "off",
-        "promise/always-return": "off",
-        "tailwindcss/enforce-consistent-important-position": "off",
-        "tailwindcss/enforce-shorthand": "off",
-        "tailwindcss/no-deprecated-classes": "off",
-        "tailwindcss/no-unknown-classes": "off",
-        "typescript/consistent-type-definitions": "off",
-        "typescript/no-confusing-void-expression": "off",
-        "typescript/no-deprecated": "off",
-        "typescript/no-floating-promises": "off",
-        "typescript/no-misused-promises": "off",
-        "typescript/no-unnecessary-condition": "off",
-        "typescript/no-unnecessary-type-assertion": "off",
-        "typescript/no-unsafe-argument": "off",
-        "typescript/no-unsafe-assignment": "off",
-        "typescript/no-unsafe-member-access": "off",
-        "typescript/no-unsafe-return": "off",
-        "typescript/no-unsafe-type-assertion": "off",
-        "typescript/prefer-nullish-coalescing": "off",
-        "typescript/restrict-template-expressions": "off",
-        "typescript/return-await": "off",
-        "typescript/use-unknown-in-catch-callback-variable": "off",
-        "unicorn/prefer-add-event-listener": "off"
+        "tailwindcss/no-unknown-classes": "off"
       }
     }
   ]

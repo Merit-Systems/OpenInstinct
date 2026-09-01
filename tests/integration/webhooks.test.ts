@@ -1,17 +1,18 @@
-/* oxlint-disable typescript/no-unsafe-type-assertion -- PGlite is the adapter-compatible database test double. */
 import { createHmac } from "node:crypto";
 import { readFile, readdir } from "node:fs/promises";
 import { PGlite } from "@electric-sql/pglite";
 import { drizzle } from "drizzle-orm/pglite";
-import { afterEach, describe, expect, it, vi } from "vitest";
-import type { db } from "@/db";
+import { afterEach, describe, expect, it } from "vitest";
+import {
+  db,
+  resetDatabaseForIntegrationTest,
+  setDatabaseForIntegrationTest,
+} from "@/db";
 import * as schema from "../../db/schema";
 
 const databases: PGlite[] = [];
 afterEach(async () => {
-  vi.doUnmock("@/db");
-  vi.doUnmock("@/lib/env");
-  vi.resetModules();
+  resetDatabaseForIntegrationTest();
   await Promise.all(databases.splice(0).map((database) => database.close()));
 });
 
@@ -27,6 +28,7 @@ describe("webhook outbox", () => {
       "https://192.168.1.1",
       "https://0.0.0.0",
     ]) {
+      // oxlint-disable-next-line eslint/no-await-in-loop -- Each rejected attempt exercises the shared endpoint fixture serially.
       await expect(
         service.webhooks.registerWebhookEndpoint(service.alice, {
           url,
@@ -43,9 +45,15 @@ describe("webhook outbox", () => {
     );
     expect(registered.secret).toMatch(/^whsec_[A-Za-z0-9_-]{43}$/);
     expect(
-      service.webhooks.encryptWebhookSecretForTest("iv-test", "same-secret")
+      await service.webhooks.encryptWebhookSecretForTest(
+        "iv-test",
+        "same-secret"
+      )
     ).not.toBe(
-      service.webhooks.encryptWebhookSecretForTest("iv-test", "same-secret")
+      await service.webhooks.encryptWebhookSecretForTest(
+        "iv-test",
+        "same-secret"
+      )
     );
     const [stored] = (
       await service.client.query<{
@@ -56,17 +64,17 @@ describe("webhook outbox", () => {
     if (!stored) throw new Error("Expected a stored endpoint.");
     expect(stored.encrypted_signing_secret).not.toContain(registered.secret);
     expect(
-      service.webhooks.decryptWebhookSecretForTest(
+      await service.webhooks.decryptWebhookSecretForTest(
         stored.id,
         stored.encrypted_signing_secret
       )
     ).toBe(registered.secret);
-    expect(() =>
+    await expect(
       service.webhooks.decryptWebhookSecretForTest(
         "wrong",
         stored.encrypted_signing_secret
       )
-    ).toThrow("Unsupported");
+    ).rejects.toThrow("Unsupported");
     await expect(
       service.webhooks.registerWebhookEndpoint(service.member, {
         url: "https://no.example.test",
@@ -149,24 +157,19 @@ describe("webhook outbox", () => {
       payload: { agentId: "a", revisionId: "r" },
     });
     let url = "";
-    let init: RequestInit | undefined;
+    let body = "";
+    let headers = new Headers();
     const delivered = await service.webhooks.drainWebhookDeliveries({
       fetchImpl: async (input, requestInit) => {
-        url =
-          typeof input === "string"
-            ? input
-            : input instanceof URL
-              ? input.href
-              : input.url;
-        init = requestInit;
-        return { status: 204 } as Response;
+        const request = new Request(input);
+        url = request.url;
+        body = await new Response(requestInit?.body ?? null).text();
+        headers = new Headers(requestInit?.headers);
+        return new Response(null, { status: 204 });
       },
     });
     expect(delivered).toMatchObject({ delivered: 1 });
     expect(url).toBe("https://hooks.example.test/");
-    if (!init) throw new Error("Expected delivery request init.");
-    const body = init.body as string;
-    const headers = new Headers(init.headers);
     const timestamp = headers.get("x-oi-timestamp");
     if (!timestamp) throw new Error("Expected delivery timestamp.");
     expect(headers.get("x-oi-signature")).toBe(
@@ -362,12 +365,8 @@ async function loadService() {
   const client = new PGlite();
   databases.push(client);
   await applyAllMigrations(client);
-  const database = drizzle(client, { schema }) as unknown as typeof db;
-  vi.doMock("@/db", () => ({ ...schema, db: database }));
-  vi.doMock("@/lib/env", () => ({
-    env: { SECRET_ENCRYPTION_KEY: Buffer.alloc(32, 7).toString("base64") },
-    isWorkspaceScopeEnforcementEnabled: () => false,
-  }));
+  const database = drizzle(client, { schema });
+  setDatabaseForIntegrationTest(database);
   const webhooks = await import("@/db/services/webhooks");
   const agents = await import("@/db/services/agents");
   const scope = await import("@/db/services/scope");
@@ -379,20 +378,24 @@ async function loadService() {
   await client.exec(
     "INSERT INTO workspace_memberships (workspace_id, user_id, role, created_at) VALUES ('workspace:alice', 'member', 'member', '2026-01-01')"
   );
-  return { agents, alice, bob, client, database, member, webhooks };
+  return { agents, alice, bob, client, database: db, member, webhooks };
 }
 async function applyAllMigrations(database: PGlite) {
   const names = (
     await readdir(new URL("../../db/migrations/", import.meta.url))
   )
     .filter((name) => name.endsWith(".sql"))
-    .sort();
-  for (const name of names) {
+    .toSorted();
+  for (const migrationName of names) {
+    // oxlint-disable-next-line eslint/no-await-in-loop -- Migration files must execute in committed order.
     const migration = await readFile(
-      new URL(`../../db/migrations/${name}`, import.meta.url),
+      new URL(`../../db/migrations/${migrationName}`, import.meta.url),
       "utf8"
     );
     for (const statement of migration.split("--> statement-breakpoint"))
-      if (statement.trim()) await database.exec(statement);
+      if (statement.trim()) {
+        // oxlint-disable-next-line eslint/no-await-in-loop -- Migration statements must execute in committed order.
+        await database.exec(statement);
+      }
   }
 }

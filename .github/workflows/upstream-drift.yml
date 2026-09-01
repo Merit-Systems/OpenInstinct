@@ -1,0 +1,48 @@
+name: Upstream drift
+
+on:
+  schedule:
+    - cron: "0 9 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  drift:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Compare with upstream
+        id: compare
+        run: |
+          git remote add upstream https://github.com/Merit-Systems/OpenInstinct.git
+          git fetch upstream --quiet
+          COUNT=$(git rev-list --count HEAD..upstream/main)
+          echo "count=$COUNT" >> "$GITHUB_OUTPUT"
+          DELIM="EOF_$(openssl rand -hex 16)"
+          {
+            echo "commits<<$DELIM"
+            git log --first-parent --oneline HEAD..upstream/main | head -40
+            echo "$DELIM"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Open or update the drift issue
+        if: steps.compare.outputs.count != '0'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          COUNT: ${{ steps.compare.outputs.count }}
+          COMMITS: ${{ steps.compare.outputs.commits }}
+        run: |
+          BODY=$(printf 'Upstream is %s commits ahead as of %s.\n\nFirst-parent log:\n\n```\n%s\n```\n\nRun the SYNC.md procedure to catch up.' "$COUNT" "$(date -u +%F)" "$COMMITS")
+          EXISTING=$(gh issue list --state open --search "Upstream drift in:title" --json number --jq '.[0].number')
+          if [ -n "$EXISTING" ]; then
+            gh issue comment "$EXISTING" --body "$BODY"
+          else
+            gh issue create --title "Upstream drift: sync needed" --body "$BODY"
+          fi

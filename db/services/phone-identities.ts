@@ -1,16 +1,16 @@
 import {
   createCipheriv,
-  createDecipheriv,
   createHmac,
   hkdfSync,
   randomBytes,
   randomUUID,
 } from "node:crypto";
 import { and, eq } from "drizzle-orm";
+import { z } from "zod";
 import { normalizeAuthPhoneNumber } from "@/auth/phone-number";
 import { db, phoneIdentities } from "@/db";
-import { env } from "@/lib/env";
 import { accessScopeForUser } from "@/lib/access-scope";
+import { getInstallationSecrets } from "@/lib/installation-secrets";
 import { recordAuditEvent } from "./audit";
 
 // This encryption guarantee covers phone_identities only; Better Auth's user
@@ -23,31 +23,61 @@ export async function recordVerifiedPhoneIdentity({
   readonly phoneNumber: string;
   readonly userId: string;
 }) {
+  const { secretEncryptionKey } = await getInstallationSecrets();
   const normalizedPhoneNumber = requireNormalizedPhoneNumber(phoneNumber);
-  const phoneLookupHash = lookupHash(normalizedPhoneNumber);
+  const phoneLookupHash = lookupHash(
+    normalizedPhoneNumber,
+    secretEncryptionKey
+  );
 
-  for (let attempt = 0; attempt < 2; attempt += 1) {
-    try {
-      return await recordVerifiedPhoneIdentityTransaction({
+  return recordVerifiedPhoneIdentityWithRetry({
+    normalizedPhoneNumber,
+    phoneLookupHash,
+    secretEncryptionKey,
+    userId,
+  });
+}
+
+async function recordVerifiedPhoneIdentityWithRetry({
+  normalizedPhoneNumber,
+  phoneLookupHash,
+  secretEncryptionKey,
+  userId,
+}: {
+  readonly normalizedPhoneNumber: string;
+  readonly phoneLookupHash: string;
+  readonly secretEncryptionKey: string;
+  readonly userId: string;
+}) {
+  try {
+    return await recordVerifiedPhoneIdentityTransaction({
+      normalizedPhoneNumber,
+      phoneLookupHash,
+      secretEncryptionKey,
+      userId,
+    });
+  } catch (error) {
+    if (error instanceof Error && isUniqueViolation(error)) {
+      return recordVerifiedPhoneIdentityTransaction({
         normalizedPhoneNumber,
         phoneLookupHash,
+        secretEncryptionKey,
         userId,
       });
-    } catch (error) {
-      if (attempt === 0 && isUniqueViolation(error)) continue;
-      throw error;
     }
+    throw error;
   }
-  throw new Error("Failed to record phone identity.");
 }
 
 async function recordVerifiedPhoneIdentityTransaction({
   normalizedPhoneNumber,
   phoneLookupHash,
+  secretEncryptionKey,
   userId,
 }: {
   readonly normalizedPhoneNumber: string;
   readonly phoneLookupHash: string;
+  readonly secretEncryptionKey: string;
   readonly userId: string;
 }) {
   const now = new Date().toISOString();
@@ -85,7 +115,11 @@ async function recordVerifiedPhoneIdentityTransaction({
     const [identity] = await transaction
       .insert(phoneIdentities)
       .values({
-        encryptedPhoneNumber: encryptPhoneNumber(id, normalizedPhoneNumber),
+        encryptedPhoneNumber: encryptPhoneNumber(
+          id,
+          normalizedPhoneNumber,
+          secretEncryptionKey
+        ),
         id,
         phoneLookupHash,
         userId,
@@ -98,6 +132,7 @@ async function recordVerifiedPhoneIdentityTransaction({
 }
 
 export async function findVerifiedUserByPhoneNumber(phoneNumber: string) {
+  const { secretEncryptionKey } = await getInstallationSecrets();
   const normalizedPhoneNumber = requireNormalizedPhoneNumber(phoneNumber);
   const [identity] = await db
     .select({
@@ -107,7 +142,10 @@ export async function findVerifiedUserByPhoneNumber(phoneNumber: string) {
     .from(phoneIdentities)
     .where(
       and(
-        eq(phoneIdentities.phoneLookupHash, lookupHash(normalizedPhoneNumber)),
+        eq(
+          phoneIdentities.phoneLookupHash,
+          lookupHash(normalizedPhoneNumber, secretEncryptionKey)
+        ),
         eq(phoneIdentities.status, "verified")
       )
     )
@@ -116,6 +154,7 @@ export async function findVerifiedUserByPhoneNumber(phoneNumber: string) {
 }
 
 export async function revokePhoneIdentity(userId: string, phoneNumber: string) {
+  const { secretEncryptionKey } = await getInstallationSecrets();
   const normalizedPhoneNumber = requireNormalizedPhoneNumber(phoneNumber);
   const now = new Date().toISOString();
   const rows = await db
@@ -124,7 +163,10 @@ export async function revokePhoneIdentity(userId: string, phoneNumber: string) {
     .where(
       and(
         eq(phoneIdentities.userId, userId),
-        eq(phoneIdentities.phoneLookupHash, lookupHash(normalizedPhoneNumber)),
+        eq(
+          phoneIdentities.phoneLookupHash,
+          lookupHash(normalizedPhoneNumber, secretEncryptionKey)
+        ),
         eq(phoneIdentities.status, "verified")
       )
     )
@@ -149,17 +191,24 @@ function requireNormalizedPhoneNumber(phoneNumber: string) {
   return normalizedPhoneNumber;
 }
 
-function lookupHash(phoneNumber: string) {
-  return createHmac("sha256", derivedKey("phone-identity-hmac"))
+function lookupHash(phoneNumber: string, secretEncryptionKey: string) {
+  return createHmac(
+    "sha256",
+    derivedKey("phone-identity-hmac", secretEncryptionKey)
+  )
     .update(phoneNumber, "utf8")
     .digest("hex");
 }
 
-function encryptPhoneNumber(id: string, phoneNumber: string) {
+function encryptPhoneNumber(
+  id: string,
+  phoneNumber: string,
+  secretEncryptionKey: string
+) {
   const iv = randomBytes(12);
   const cipher = createCipheriv(
     "aes-256-gcm",
-    derivedKey("phone-identity-aead"),
+    derivedKey("phone-identity-aead", secretEncryptionKey),
     iv
   );
   cipher.setAAD(phoneIdentityAad(id));
@@ -175,46 +224,33 @@ function encryptPhoneNumber(id: string, phoneNumber: string) {
   ].join(".");
 }
 
-export function decryptPhoneIdentityForTest(id: string, value: string) {
-  const [version, encodedIv, encodedTag, encodedCiphertext] = value.split(".");
-  if (version !== "v1" || !encodedIv || !encodedTag || !encodedCiphertext) {
-    throw new Error("The stored phone identity uses an unsupported format.");
-  }
-  const decipher = createDecipheriv(
-    "aes-256-gcm",
-    derivedKey("phone-identity-aead"),
-    Buffer.from(encodedIv, "base64url")
-  );
-  decipher.setAAD(phoneIdentityAad(id));
-  decipher.setAuthTag(Buffer.from(encodedTag, "base64url"));
-  return Buffer.concat([
-    decipher.update(Buffer.from(encodedCiphertext, "base64url")),
-    decipher.final(),
-  ]).toString("utf8");
-}
-
-function derivedKey(info: "phone-identity-aead" | "phone-identity-hmac") {
+function derivedKey(
+  info: "phone-identity-aead" | "phone-identity-hmac",
+  secretEncryptionKey: string
+) {
   return Buffer.from(
-    hkdfSync("sha256", encryptionKey(), Buffer.alloc(0), info, 32)
+    hkdfSync(
+      "sha256",
+      encryptionKey(secretEncryptionKey),
+      Buffer.alloc(0),
+      info,
+      32
+    )
   );
 }
 
-function encryptionKey() {
-  return Buffer.from(env.SECRET_ENCRYPTION_KEY, "base64");
+function encryptionKey(secretEncryptionKey: string) {
+  return Buffer.from(secretEncryptionKey, "base64");
 }
 
 function phoneIdentityAad(id: string) {
   return Buffer.from(`phone-identity\u0000${id}`);
 }
 
-function isUniqueViolation(error: unknown) {
-  return (
-    typeof error === "object" &&
-    error !== null &&
-    "cause" in error &&
-    typeof error.cause === "object" &&
-    error.cause !== null &&
-    "code" in error.cause &&
-    error.cause.code === "23505"
-  );
+const uniqueViolationSchema = z.object({
+  cause: z.object({ code: z.literal("23505") }),
+});
+
+function isUniqueViolation(error: Error) {
+  return uniqueViolationSchema.safeParse(error).success;
 }

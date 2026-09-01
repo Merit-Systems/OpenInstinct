@@ -1,8 +1,15 @@
 import { readFile, readdir } from "node:fs/promises";
 import { PGlite } from "@electric-sql/pglite";
 import { drizzle } from "drizzle-orm/pglite";
-import { afterEach, describe, expect, it, vi } from "vitest";
-import type { db } from "@/db";
+import { afterEach, describe, expect, it } from "vitest";
+import {
+  resetDatabaseForIntegrationTest,
+  setDatabaseForIntegrationTest,
+} from "@/db";
+import {
+  resetWorkspaceScopeEnforcementForIntegrationTest,
+  setWorkspaceScopeEnforcementForIntegrationTest,
+} from "@/env";
 import * as schema from "../../db/schema";
 
 const databases: PGlite[] = [];
@@ -10,9 +17,8 @@ let enforcementEnabled = false;
 
 afterEach(async () => {
   enforcementEnabled = false;
-  vi.doUnmock("@/db");
-  vi.doUnmock("@/lib/env");
-  vi.resetModules();
+  resetDatabaseForIntegrationTest();
+  resetWorkspaceScopeEnforcementForIntegrationTest();
   await Promise.all(databases.splice(0).map((database) => database.close()));
 });
 
@@ -26,6 +32,7 @@ describe("usage and audit services", () => {
     await service.browsers.createBrowserSession(service.alice, {
       createdAt: new Date().toISOString(),
       sessionId: "browser-1",
+      workerSessionId: "worker-browser-1",
     });
     await service.usage.recordUsageEvent(service.alice, {
       kind: "model_tokens",
@@ -65,6 +72,7 @@ describe("usage and audit services", () => {
   it("does not ledger cumulative web-chat saves because step.completed is the token producer", async () => {
     const service = await loadServices();
     for (const tokens of [100, 250, 400]) {
+      // oxlint-disable-next-line eslint/no-await-in-loop -- The assertion requires cumulative saves in order.
       await service.chats.saveChat(service.alice, {
         sessionId: "chat-cumulative",
         usage: { costUsd: 1, inputTokens: tokens, outputTokens: 0 },
@@ -139,6 +147,7 @@ describe("usage and audit services", () => {
       service.browsers.createBrowserSession(service.alice, {
         createdAt: new Date().toISOString(),
         sessionId: "browser-no-ledger",
+        workerSessionId: "worker-browser-no-ledger",
       })
     ).resolves.toBeUndefined();
   });
@@ -148,13 +157,9 @@ async function loadServices() {
   const client = new PGlite();
   databases.push(client);
   await applyAllMigrations(client);
-  const pgliteDatabase = drizzle(client, { schema });
-  // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- PGlite is adapter-compatible.
-  const database = pgliteDatabase as unknown as typeof db;
-  vi.doMock("@/db", () => ({ ...schema, db: database }));
-  vi.doMock("@/lib/env", () => ({
-    isWorkspaceScopeEnforcementEnabled: () => enforcementEnabled,
-  }));
+  const database = drizzle(client, { schema });
+  setDatabaseForIntegrationTest(database);
+  setWorkspaceScopeEnforcementForIntegrationTest(() => enforcementEnabled);
   const scope = await import("@/db/services/scope");
   const usage = await import("@/db/services/usage");
   const audit = await import("@/db/services/audit");
@@ -172,14 +177,18 @@ async function applyAllMigrations(database: PGlite) {
     await readdir(new URL("../../db/migrations/", import.meta.url))
   )
     .filter((name) => name.endsWith(".sql"))
-    .sort();
-  for (const name of names) {
+    .toSorted();
+  for (const migrationName of names) {
+    // oxlint-disable-next-line eslint/no-await-in-loop -- Migration files must execute in committed order.
     const migration = await readFile(
-      new URL(`../../db/migrations/${name}`, import.meta.url),
+      new URL(`../../db/migrations/${migrationName}`, import.meta.url),
       "utf8"
     );
     for (const statement of migration.split("--> statement-breakpoint")) {
-      if (statement.trim()) await database.exec(statement);
+      if (statement.trim()) {
+        // oxlint-disable-next-line eslint/no-await-in-loop -- Migration statements must execute in committed order.
+        await database.exec(statement);
+      }
     }
   }
 }

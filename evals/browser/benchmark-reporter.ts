@@ -1,14 +1,23 @@
-import { mkdir, readFile, writeFile } from "node:fs/promises";
-import { join } from "node:path";
+import { randomUUID } from "node:crypto";
+import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
+import { dirname, join } from "node:path";
 import type { EveEvalResult, EveEvalRunSummary } from "eve/evals";
 import type { EvalReporter } from "eve/evals/reporters";
-import { browserBenchmarkEnv } from "@/evals/browser/env";
+import type { MessageStreamEvent } from "eve/client";
+import { z } from "zod";
+import { traceTimelineRows } from "@/agent/subagents/worker/lib/trace/timeline";
 import {
-  measureBrowserTask,
-  readTaskCompletion,
-  terminalBrowserMessage,
-} from "@/lib/browser/benchmark";
+  browserBenchmarkActivity,
+  browserBenchmarkActivityDurations,
+  browserBenchmarkLiveViewUrl,
+} from "@/evals/browser/benchmark-activity";
+import { browserBenchmarkEnv } from "@/evals/browser/env";
+import { measureWorkerTask, terminalWorkerMessage } from "@/lib/worker-events";
 import type { BrowserBenchmark } from "@/evals/browser/benchmark-schema";
+import {
+  type BrowserBenchmarkLiveStatus,
+  updateBrowserBenchmarkLiveStatus,
+} from "@/evals/browser/live-status";
 
 const tableWidths = [34, 8, 10, 12, 64] as const;
 const taskNames = new Map<string, string>();
@@ -16,11 +25,17 @@ const completedTasks = new Map<
   string,
   ReturnType<typeof summarizeTaskResult>
 >();
+const liveActivities = new Map<string, string>();
+const liveActivityDurations = new Map<string, string>();
+const liveViewUrls = new Map<string, string>();
 
 export const browserBenchmarkReporter: EvalReporter = {
-  onRunStart(evaluations) {
+  async onRunStart(evaluations) {
     taskNames.clear();
     completedTasks.clear();
+    liveActivities.clear();
+    liveActivityDurations.clear();
+    liveViewUrls.clear();
 
     for (const evaluation of evaluations) {
       taskNames.set(evaluation.id, evaluation.description ?? evaluation.id);
@@ -32,8 +47,63 @@ export const browserBenchmarkReporter: EvalReporter = {
       tableRow(["TASK", "RESULT", "TIME", "LLM COST", "TERMINAL MESSAGE"])
     );
     console.log(tableBorder());
+
+    await updateLiveVariant((current) => ({
+      ...current,
+      completedAt: null,
+      error: null,
+      startedAt: new Date().toISOString(),
+      status: "running",
+      tasks: evaluations.map((evaluation) => ({
+        activity: null,
+        activityDurationsMs: {},
+        browserLiveViewUrl: null,
+        completedAt: null,
+        costComplete: false,
+        costUsd: null,
+        durationMs: null,
+        error: null,
+        id: evaluation.id,
+        judgeRationale: null,
+        judgeScore: null,
+        name: evaluation.description ?? evaluation.id,
+        sessions: [],
+        startedAt: null,
+        status: "pending",
+        success: null,
+        terminalMessage: null,
+        toolCalls: {},
+        verdict: null,
+      })),
+    }));
   },
-  onEvalComplete(result) {
+  async onEvalStart(event) {
+    console.log(`START ${event.evaluation.description ?? event.evaluation.id}`);
+    await updateLiveTask(event.evaluation.id, (task) => ({
+      ...task,
+      startedAt: event.startedAt,
+      status: "running",
+    }));
+  },
+  async onSessionStart(event) {
+    console.log(
+      `SESSION ${event.primary ? "root" : "worker"} ${event.sessionId} · ${event.evaluation.description ?? event.evaluation.id}`
+    );
+    await updateLiveTask(event.evaluation.id, (task) => ({
+      ...task,
+      sessions: task.sessions.some((session) => session.id === event.sessionId)
+        ? task.sessions
+        : [
+            ...task.sessions,
+            {
+              id: event.sessionId,
+              role: event.primary ? "root" : "worker",
+              traceId: event.traceContext.traceId,
+            },
+          ],
+    }));
+  },
+  async onEvalComplete(result) {
     const task = summarizeTaskResult(
       result,
       taskNames.get(result.id) ?? result.id
@@ -48,6 +118,21 @@ export const browserBenchmarkReporter: EvalReporter = {
         task.terminalMessage,
       ])
     );
+    await updateLiveTask(result.id, (current) => ({
+      ...current,
+      completedAt: result.completedAt,
+      costComplete: task.costComplete,
+      costUsd: task.costUsd,
+      durationMs: task.durationMs,
+      error: task.error,
+      judgeRationale: task.judgeRationale,
+      judgeScore: task.judgeScore,
+      status: task.success ? "passed" : failedTaskStatus(task.verdict),
+      success: task.success,
+      terminalMessage: task.terminalMessage,
+      toolCalls: task.toolCalls,
+      verdict: task.verdict,
+    }));
   },
   async onRunComplete(summary) {
     console.log(tableBorder());
@@ -59,11 +144,82 @@ export const browserBenchmarkReporter: EvalReporter = {
     );
     console.log(`Benchmark saved to ${artifactPath}`);
     console.log("");
+    await updateLiveVariant((current) => ({
+      ...current,
+      completedAt: summary.completedAt,
+      status: "completed",
+    }));
   },
 };
 
+export async function reportBrowserBenchmarkActivity(
+  taskName: string,
+  sessionId: string,
+  events: readonly MessageStreamEvent[]
+) {
+  const activity = browserBenchmarkActivity(events);
+  const activityDurationsMs = browserBenchmarkActivityDurations(events);
+  const browserLiveViewUrl = browserBenchmarkLiveViewUrl(events);
+  const durationSignature = JSON.stringify(activityDurationsMs);
+  const activityChanged =
+    activity !== null && liveActivities.get(taskName) !== activity;
+  const durationsChanged =
+    liveActivityDurations.get(taskName) !== durationSignature;
+  const liveViewChanged =
+    browserLiveViewUrl !== null &&
+    liveViewUrls.get(taskName) !== browserLiveViewUrl;
+  await writeLiveTrace(taskName, sessionId, events);
+  if (!activityChanged && !durationsChanged && !liveViewChanged) return;
+  if (activity !== null) liveActivities.set(taskName, activity);
+  liveActivityDurations.set(taskName, durationSignature);
+  if (browserLiveViewUrl !== null) {
+    liveViewUrls.set(taskName, browserLiveViewUrl);
+  }
+  await updateLiveVariant((variant) => ({
+    ...variant,
+    tasks: variant.tasks.map((task) => {
+      if (task.name !== taskName) return task;
+      const updated = { ...task, activityDurationsMs };
+      if (activity !== null) updated.activity = activity;
+      if (browserLiveViewUrl !== null) {
+        updated.browserLiveViewUrl = browserLiveViewUrl;
+      }
+      return updated;
+    }),
+  }));
+}
+
+async function writeLiveTrace(
+  taskName: string,
+  sessionId: string,
+  events: readonly MessageStreamEvent[]
+) {
+  const config = liveStatusConfig();
+  if (!config || !/^[A-Za-z0-9._:-]+$/u.test(sessionId)) return;
+  const traceDirectory = join(dirname(config.path), config.runId, "traces");
+  const tracePath = join(traceDirectory, `${sessionId}.json`);
+  const temporaryPath = `${tracePath}.${String(process.pid)}.${randomUUID()}.tmp`;
+  await mkdir(traceDirectory, { recursive: true });
+  await writeFile(
+    temporaryPath,
+    `${JSON.stringify(
+      {
+        events: events.flatMap((event) => traceTimelineRows(event)),
+        sessionId,
+        taskName,
+        updatedAt: new Date().toISOString(),
+        version: 1,
+      },
+      null,
+      2
+    )}\n`,
+    "utf8"
+  );
+  await rename(temporaryPath, tracePath);
+}
+
 function summarizeTaskResult(result: EveEvalResult, name: string) {
-  const metrics = measureBrowserTask(
+  const metrics = measureWorkerTask(
     result.result.events,
     elapsedMs(result.startedAt, result.completedAt)
   );
@@ -72,11 +228,27 @@ function summarizeTaskResult(result: EveEvalResult, name: string) {
     result.error ??
     result.skipReason ??
     "No reply";
-  const completion = readTaskCompletion(result.result.events);
-  const terminalMessage = terminalBrowserMessage(
+  const workerSession = result.result.sessions
+    ?.filter((session) => !session.primary)
+    .toSorted((left, right) => right.events.length - left.events.length)
+    .at(0);
+  const workerEvents = workerSession?.events;
+  const terminalMessage = terminalWorkerMessage(
     fallbackMessage,
-    result.result.events
+    workerEvents ?? result.result.events
   );
+  const workerFacts = workerSession ? [workerSession.derived] : [];
+  const facts = workerFacts.length > 0 ? workerFacts : [result.result.derived];
+  const calls = facts.flatMap((derived) => derived.toolCalls);
+  const toolCalls = calls.reduce<Record<string, number>>((counts, call) => {
+    counts[call.name] = (counts[call.name] ?? 0) + 1;
+    return counts;
+  }, {});
+  const judge = result.assertions.find(
+    (assertion) =>
+      assertion.name === "judge.autoevals.closedQA [task completed]"
+  );
+  const rationale = z.string().safeParse(judge?.metadata?.rationale);
 
   return {
     costComplete: metrics.costComplete,
@@ -84,12 +256,27 @@ function summarizeTaskResult(result: EveEvalResult, name: string) {
     durationMs: metrics.durationMs,
     error: result.error ?? null,
     evalDurationMs: elapsedMs(result.startedAt, result.completedAt),
+    failedToolCalls: calls.filter((call) => call.status === "failed").length,
     id: result.id,
+    inputTokens: metrics.inputTokens,
+    judgeRationale: rationale.success ? rationale.data : null,
+    judgeScore: judge?.score ?? null,
+    messageCount: facts.reduce(
+      (count, derived) => count + derived.messageCount,
+      0
+    ),
+    modelSteps: metrics.modelSteps,
     name,
+    outputTokens: metrics.outputTokens,
+    reasoningBlockCount: facts.reduce(
+      (count, derived) => count + derived.reasoningBlockCount,
+      0
+    ),
     sessionId: result.result.sessionId ?? null,
     status: result.result.status,
-    success: result.verdict === "passed" && completion?.status === "success",
+    success: result.verdict === "passed",
     terminalMessage,
+    toolCalls,
     verdict: result.verdict,
   };
 }
@@ -109,6 +296,16 @@ async function buildBenchmark(
   const measuredCosts = tasks.flatMap((task) =>
     task.costUsd === null ? [] : [task.costUsd]
   );
+  const judgeScores = tasks.flatMap((task) =>
+    task.judgeScore === null ? [] : [task.judgeScore]
+  );
+  const inputTokens = tasks.flatMap((task) =>
+    task.inputTokens === null ? [] : [task.inputTokens]
+  );
+  const outputTokens = tasks.flatMap((task) =>
+    task.outputTokens === null ? [] : [task.outputTokens]
+  );
+  const passed = tasks.filter((task) => task.success).length;
   const runtimeIdentity = summary.results.find(
     (result) => result.result.runtimeIdentity !== undefined
   )?.result.runtimeIdentity;
@@ -128,10 +325,40 @@ async function buildBenchmark(
       costComplete:
         tasks.length > 0 && tasks.every((task) => task.costComplete),
       failed: tasks.filter((task) => !task.success).length,
+      failedToolCalls: tasks.reduce(
+        (count, task) => count + task.failedToolCalls,
+        0
+      ),
+      meanJudgeScore:
+        judgeScores.length === 0
+          ? null
+          : judgeScores.reduce((total, score) => total + score, 0) /
+            judgeScores.length,
       medianDurationMs: percentile(successfulDurations, 0.5),
-      passed: tasks.filter((task) => task.success).length,
+      passed,
       p95DurationMs: percentile(successfulDurations, 0.95),
-      successRate: tasks.length === 0 ? 0 : summary.passed / tasks.length,
+      successRate: tasks.length === 0 ? 0 : passed / tasks.length,
+      totalInputTokens:
+        inputTokens.length === 0
+          ? null
+          : inputTokens.reduce((total, tokens) => total + tokens, 0),
+      totalModelSteps: tasks.reduce(
+        (count, task) => count + task.modelSteps,
+        0
+      ),
+      totalOutputTokens:
+        outputTokens.length === 0
+          ? null
+          : outputTokens.reduce((total, tokens) => total + tokens, 0),
+      totalToolCalls: tasks.reduce(
+        (count, task) =>
+          count +
+          Object.values(task.toolCalls).reduce(
+            (taskCount, calls) => taskCount + calls,
+            0
+          ),
+        0
+      ),
       totalCostUsd:
         measuredCosts.length === 0
           ? null
@@ -166,17 +393,21 @@ async function readCurrentGitSha() {
 }
 
 async function writeBenchmark(benchmark: BrowserBenchmark) {
-  const directory = join(process.cwd(), ".eve", "browser-benchmarks");
+  const explicitPath = browserBenchmarkEnv.BROWSER_BENCH_ARTIFACT_PATH?.trim();
+  const directory = explicitPath
+    ? dirname(explicitPath)
+    : join(process.cwd(), ".eve", "browser-benchmarks");
   const safeLabel = benchmark.label.replaceAll(/[^a-zA-Z0-9._-]/gu, "-");
   const timestamp = benchmark.startedAt.replaceAll(":", "-");
-  const artifactPath = join(directory, `${timestamp}-${safeLabel}.json`);
+  const artifactPath =
+    explicitPath ?? join(directory, `${timestamp}-${safeLabel}.json`);
   const serialized = `${JSON.stringify(benchmark, null, 2)}\n`;
 
   await mkdir(directory, { recursive: true });
-  await Promise.all([
-    writeFile(artifactPath, serialized, "utf8"),
-    writeFile(join(directory, "latest.json"), serialized, "utf8"),
-  ]);
+  await writeFile(artifactPath, serialized, "utf8");
+  if (!explicitPath) {
+    await writeFile(join(directory, "latest.json"), serialized, "utf8");
+  }
 
   return artifactPath;
 }
@@ -220,4 +451,49 @@ function tableRow(values: readonly string[]) {
     return ` ${clipped.padEnd(width)} `;
   });
   return `|${cells.join("|")}|`;
+}
+
+type LiveVariant = BrowserBenchmarkLiveStatus["variants"]["baseline"];
+type LiveTask = LiveVariant["tasks"][number];
+
+async function updateLiveVariant(
+  update: (variant: LiveVariant) => LiveVariant
+) {
+  const config = liveStatusConfig();
+  if (!config) return;
+  await updateBrowserBenchmarkLiveStatus(
+    config.path,
+    config.runId,
+    (status) => ({
+      ...status,
+      status: status.status === "preparing" ? "running" : status.status,
+      variants: {
+        ...status.variants,
+        [config.variant]: update(status.variants[config.variant]),
+      },
+    })
+  );
+}
+
+async function updateLiveTask(
+  id: string,
+  update: (task: LiveTask) => LiveTask
+) {
+  await updateLiveVariant((variant) => ({
+    ...variant,
+    tasks: variant.tasks.map((task) => (task.id === id ? update(task) : task)),
+  }));
+}
+
+function liveStatusConfig() {
+  const path = browserBenchmarkEnv.BROWSER_BENCH_STATUS_PATH?.trim();
+  const runId = browserBenchmarkEnv.BROWSER_BENCH_RUN_ID?.trim();
+  const variant = browserBenchmarkEnv.BROWSER_BENCH_VARIANT;
+  return path && runId && variant ? { path, runId, variant } : null;
+}
+
+function failedTaskStatus(
+  verdict: BrowserBenchmark["tasks"][number]["verdict"]
+) {
+  return verdict === "skipped" || verdict === "scored" ? verdict : "failed";
 }

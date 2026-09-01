@@ -5,7 +5,7 @@ import { checkBudget, recordUsageEvent } from "./usage";
 
 type BrowserSessionRecord = Pick<
   typeof browserSessions.$inferSelect,
-  "createdAt" | "sessionId"
+  "createdAt" | "sessionId" | "workerSessionId"
 >;
 
 export async function createBrowserSession(
@@ -17,6 +17,7 @@ export async function createBrowserSession(
     createdAt: record.createdAt,
     createdByUserId: scope.userId,
     sessionId: record.sessionId,
+    workerSessionId: record.workerSessionId,
     workspaceId: scope.workspaceId,
   });
   void recordUsageEvent(scope, {
@@ -27,6 +28,25 @@ export async function createBrowserSession(
   }).catch(() => {
     console.warn("[usage] usage event recording failed");
   });
+}
+
+export async function listWorkerBrowserSessions(
+  scope: AccessScope,
+  workerSessionId: string
+) {
+  return db
+    .select({
+      createdAt: browserSessions.createdAt,
+      sessionId: browserSessions.sessionId,
+    })
+    .from(browserSessions)
+    .where(
+      and(
+        eq(browserSessions.workspaceId, scope.workspaceId),
+        eq(browserSessions.workerSessionId, workerSessionId)
+      )
+    )
+    .orderBy(desc(browserSessions.createdAt));
 }
 
 export async function listBrowserSessions(scope: AccessScope) {
@@ -48,6 +68,7 @@ export async function readBrowserSession(
     .select({
       createdAt: browserSessions.createdAt,
       sessionId: browserSessions.sessionId,
+      workerSessionId: browserSessions.workerSessionId,
     })
     .from(browserSessions)
     .where(

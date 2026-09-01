@@ -20,6 +20,21 @@ const pairs = baseline.tasks.flatMap((baselineTask) => {
     ? [{ baseline: baselineTask, candidate: candidateTask }]
     : [];
 });
+const comparablePairs = pairs.filter(
+  (pair) => pair.baseline.success && pair.candidate.success
+);
+const baselineComparableDurations = comparablePairs.map(
+  (pair) => pair.baseline.durationMs
+);
+const candidateComparableDurations = comparablePairs.map(
+  (pair) => pair.candidate.durationMs
+);
+const baselineComparableCost = sumNullable(
+  comparablePairs.map((pair) => pair.baseline.costUsd)
+);
+const candidateComparableCost = sumNullable(
+  comparablePairs.map((pair) => pair.candidate.costUsd)
+);
 
 console.log("");
 console.log(`Browser benchmark: ${baseline.label} → ${candidate.label}`);
@@ -39,33 +54,59 @@ console.log(
 console.log(tableBorder());
 
 for (const pair of pairs) {
+  const comparable = pair.baseline.success && pair.candidate.success;
   console.log(
     tableRow([
       pair.baseline.name,
       `${pair.baseline.success ? "✓" : "✗"}→${pair.candidate.success ? "✓" : "✗"}`,
       formatDuration(pair.baseline.durationMs),
       formatDuration(pair.candidate.durationMs),
-      formatDelta(pair.baseline.durationMs, pair.candidate.durationMs, "ms"),
+      comparable
+        ? formatDelta(pair.baseline.durationMs, pair.candidate.durationMs, "ms")
+        : "—",
       formatCost(pair.baseline.costUsd),
       formatCost(pair.candidate.costUsd),
-      formatNullableDelta(pair.baseline.costUsd, pair.candidate.costUsd, "$"),
+      comparable
+        ? formatNullableDelta(
+            pair.baseline.costUsd,
+            pair.candidate.costUsd,
+            "$"
+          )
+        : "—",
     ])
   );
 }
 
 console.log(tableBorder());
 console.log(
-  `Success: ${formatRate(baseline.summary.successRate)} → ${formatRate(candidate.summary.successRate)}`
+  `Success: ${formatRate(taskSuccessRate(baseline.tasks))} → ${formatRate(taskSuccessRate(candidate.tasks))}`
 );
 console.log(
-  `Median: ${formatOptionalDuration(baseline.summary.medianDurationMs)} → ${formatOptionalDuration(candidate.summary.medianDurationMs)} (${formatNullableDelta(baseline.summary.medianDurationMs, candidate.summary.medianDurationMs, "ms")})`
+  `Comparable median (${String(comparablePairs.length)} shared passes): ${formatOptionalDuration(percentile(baselineComparableDurations, 0.5))} → ${formatOptionalDuration(percentile(candidateComparableDurations, 0.5))} (${formatNullableDelta(percentile(baselineComparableDurations, 0.5), percentile(candidateComparableDurations, 0.5), "ms")})`
 );
 console.log(
-  `P95: ${formatOptionalDuration(baseline.summary.p95DurationMs)} → ${formatOptionalDuration(candidate.summary.p95DurationMs)} (${formatNullableDelta(baseline.summary.p95DurationMs, candidate.summary.p95DurationMs, "ms")})`
+  `Comparable P95: ${formatOptionalDuration(percentile(baselineComparableDurations, 0.95))} → ${formatOptionalDuration(percentile(candidateComparableDurations, 0.95))} (${formatNullableDelta(percentile(baselineComparableDurations, 0.95), percentile(candidateComparableDurations, 0.95), "ms")})`
 );
 console.log(
-  `LLM cost: ${formatCost(baseline.summary.totalCostUsd)} → ${formatCost(candidate.summary.totalCostUsd)} (${formatNullableDelta(baseline.summary.totalCostUsd, candidate.summary.totalCostUsd, "$")})`
+  `Comparable LLM cost: ${formatCost(baselineComparableCost)} → ${formatCost(candidateComparableCost)} (${formatNullableDelta(baselineComparableCost, candidateComparableCost, "$")})`
 );
+console.log(
+  `Total LLM spend: ${formatCost(baseline.summary.totalCostUsd)} → ${formatCost(candidate.summary.totalCostUsd)}`
+);
+console.log(
+  `Judge score: ${formatScore(baseline.summary.meanJudgeScore)} → ${formatScore(candidate.summary.meanJudgeScore)}`
+);
+console.log(
+  `Model steps: ${String(baseline.summary.totalModelSteps)} → ${String(candidate.summary.totalModelSteps)}`
+);
+console.log(
+  `Tool calls: ${String(baseline.summary.totalToolCalls)} → ${String(candidate.summary.totalToolCalls)} (failed ${String(baseline.summary.failedToolCalls)} → ${String(candidate.summary.failedToolCalls)})`
+);
+console.log(
+  `Tokens (input/output): ${formatTokens(baseline.summary.totalInputTokens)}/${formatTokens(baseline.summary.totalOutputTokens)} → ${formatTokens(candidate.summary.totalInputTokens)}/${formatTokens(candidate.summary.totalOutputTokens)}`
+);
+console.log(`Baseline tool mix: ${formatToolMix(baseline.tasks)}`);
+console.log(`Candidate tool mix: ${formatToolMix(candidate.tasks)}`);
 console.log("");
 
 async function readBenchmark(filePath: string) {
@@ -107,6 +148,35 @@ function formatRate(rate: number) {
   return `${(rate * 100).toFixed(1)}%`;
 }
 
+function taskSuccessRate(tasks: (typeof baseline.tasks)[number][]) {
+  return tasks.length === 0
+    ? 0
+    : tasks.filter((task) => task.success).length / tasks.length;
+}
+
+function formatScore(score: number | null) {
+  return score === null ? "—" : score.toFixed(2);
+}
+
+function formatTokens(tokens: number | null) {
+  return tokens === null ? "—" : tokens.toLocaleString("en-US");
+}
+
+function formatToolMix(tasks: (typeof baseline.tasks)[number][]) {
+  const counts = new Map<string, number>();
+  for (const task of tasks) {
+    for (const [name, calls] of Object.entries(task.toolCalls)) {
+      counts.set(name, (counts.get(name) ?? 0) + calls);
+    }
+  }
+  return [...counts.entries()]
+    .toSorted(
+      (left, right) => right[1] - left[1] || left[0].localeCompare(right[0])
+    )
+    .map(([name, calls]) => `${name} ${String(calls)}`)
+    .join(", ");
+}
+
 function formatNullableDelta(
   baselineValue: number | null,
   candidateValue: number | null,
@@ -131,4 +201,16 @@ function formatDelta(
       ? `${sign}$${absolute.toFixed(6)}`
       : `${sign}${String(Math.round(absolute))}ms`;
   return `${absoluteText} (${sign}${percent.toFixed(1)}%)`;
+}
+
+function percentile(values: readonly number[], ratio: number) {
+  if (values.length === 0) return null;
+  const sorted = values.toSorted((left, right) => left - right);
+  return sorted[Math.max(0, Math.ceil(ratio * sorted.length) - 1)] ?? null;
+}
+
+function sumNullable(values: readonly (number | null)[]) {
+  return values.length === 0 || values.some((value) => value === null)
+    ? null
+    : values.reduce<number>((sum, value) => sum + (value ?? 0), 0);
 }

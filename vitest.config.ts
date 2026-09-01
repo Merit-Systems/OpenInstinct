@@ -3,9 +3,26 @@ import { defineConfig } from "vitest/config";
 
 const sharedProjectConfig = {
   resolve: {
-    alias: {
-      "@": fileURLToPath(new URL(".", import.meta.url)),
-    },
+    alias: [
+      {
+        find: "server-only",
+        replacement: fileURLToPath(
+          new URL("tests/helpers/server-only.ts", import.meta.url)
+        ),
+      },
+      {
+        find: "@/env",
+        replacement: fileURLToPath(new URL("src/env.ts", import.meta.url)),
+      },
+      {
+        find: /^@\/(app|auth|components|hooks|lib|proxy|trpc)(\/.*)?$/,
+        replacement: fileURLToPath(new URL("src/$1$2", import.meta.url)),
+      },
+      {
+        find: "@",
+        replacement: fileURLToPath(new URL(".", import.meta.url)),
+      },
+    ],
   },
   test: {
     setupFiles: ["./tests/setup-env.ts"],

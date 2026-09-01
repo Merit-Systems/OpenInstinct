@@ -60,13 +60,14 @@ const getFunction = (
     case "FunctionExpression":
       return expression;
   }
+  return undefined;
 };
 
 const getIdentifierName = (node: ESTree.Node | null | undefined) =>
   node?.type === "Identifier" ? node.name : undefined;
 
 const getRouteLiteral = (node: ESTree.TSType | undefined) => {
-  if (node?.type !== "TSLiteralType") return;
+  if (node?.type !== "TSLiteralType") return undefined;
   return isStringLiteral(node.literal) ? node.literal.value : undefined;
 };
 
@@ -214,6 +215,7 @@ export const requireGeneratedRoutePropsRule = defineRule({
         kind = match[1] ?? "";
         route = getAppRoute(filename, appDirectory);
         reportedParameters = new Set();
+        return undefined;
       },
       Program(program) {
         const functions = getDeclaredFunctions(program.body);

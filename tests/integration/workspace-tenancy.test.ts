@@ -238,15 +238,20 @@ function createDatabase() {
 }
 
 async function applyExistingMigrations(database: PGlite) {
-  for (const name of await migrationNames()) {
-    if (name !== (await tenancyMigrationName()))
-      await applyMigration(database, name);
+  const tenancyMigration = await tenancyMigrationName();
+  for (const migrationName of await migrationNames()) {
+    if (migrationName !== tenancyMigration) {
+      // oxlint-disable-next-line eslint/no-await-in-loop -- Migrations must execute in committed order.
+      await applyMigration(database, migrationName);
+    }
   }
 }
 
 async function applyAllMigrations(database: PGlite) {
-  for (const name of await migrationNames())
-    await applyMigration(database, name);
+  for (const migrationName of await migrationNames()) {
+    // oxlint-disable-next-line eslint/no-await-in-loop -- Migrations must execute in committed order.
+    await applyMigration(database, migrationName);
+  }
 }
 
 async function applyTenancyMigration(database: PGlite) {
@@ -256,26 +261,30 @@ async function applyTenancyMigration(database: PGlite) {
 async function migrationNames() {
   return (await readdir(new URL("../../db/migrations/", import.meta.url)))
     .filter((name) => name.endsWith(".sql"))
-    .sort();
+    .toSorted();
 }
 
 async function tenancyMigrationName() {
-  for (const name of await migrationNames()) {
+  for (const migrationName of await migrationNames()) {
+    // oxlint-disable-next-line eslint/no-await-in-loop -- Migration files must execute in committed order.
     const migration = await readFile(
-      new URL(`../../db/migrations/${name}`, import.meta.url),
+      new URL(`../../db/migrations/${migrationName}`, import.meta.url),
       "utf8"
     );
-    if (migration.includes('"lifecycle_state"')) return name;
+    if (migration.includes('"lifecycle_state"')) return migrationName;
   }
   throw new Error("Expected a committed workspace tenancy migration.");
 }
 
-async function applyMigration(database: PGlite, name: string) {
+async function applyMigration(database: PGlite, migrationName: string) {
   const migration = await readFile(
-    new URL(`../../db/migrations/${name}`, import.meta.url),
+    new URL(`../../db/migrations/${migrationName}`, import.meta.url),
     "utf8"
   );
   for (const statement of migration.split("--> statement-breakpoint")) {
-    if (statement.trim()) await database.exec(statement);
+    if (statement.trim()) {
+      // oxlint-disable-next-line eslint/no-await-in-loop -- Migration statements must execute in committed order.
+      await database.exec(statement);
+    }
   }
 }

@@ -1,44 +1,17 @@
 import { randomUUID } from "node:crypto";
 import { expect, test, type APIResponse } from "@playwright/test";
+import { z } from "zod";
 
-interface MintPayload {
-  readonly credential: Record<string, unknown>;
-  readonly secret: string;
-}
-
-type TrpcBatchResponse = readonly [
-  { readonly result: { readonly data: MintPayload } },
-];
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null;
-}
-
-function isMintResponse(value: unknown): value is TrpcBatchResponse {
-  if (!Array.isArray(value) || value.length !== 1) return false;
-  const entries: readonly unknown[] = value;
-  const entry = entries[0];
-  if (
-    !isRecord(entry) ||
-    !isRecord(entry.result) ||
-    !isRecord(entry.result.data)
-  )
-    return false;
-  return (
-    typeof entry.result.data.secret === "string" &&
-    isRecord(entry.result.data.credential)
-  );
-}
-
-function agentIdFromResponse(value: unknown): string {
-  if (
-    !isRecord(value) ||
-    !isRecord(value.data) ||
-    typeof value.data.id !== "string"
-  )
-    throw new Error(`Unexpected agent response: ${JSON.stringify(value)}`);
-  return value.data.id;
-}
+const mintResponseSchema = z.tuple([
+  z.object({
+    result: z.object({
+      data: z.object({ credential: z.object({}), secret: z.string() }),
+    }),
+  }),
+]);
+const agentResponseSchema = z.object({
+  data: z.object({ id: z.string(), slug: z.string().optional() }),
+});
 
 async function expectStatus(
   response: APIResponse,
@@ -72,10 +45,7 @@ test("mints a credential and uses the versioned agents API", async ({
     }
   );
   await expectStatus(mint, 200, "api-credentials-mint");
-  const minted: unknown = await mint.json();
-  if (!isMintResponse(minted)) {
-    throw new Error(`Unexpected mint response: ${JSON.stringify(minted)}`);
-  }
+  const minted = mintResponseSchema.parse(await mint.json());
   const secret = minted[0].result.data.secret;
   expect(secret).toMatch(/^oi_/);
 
@@ -106,17 +76,17 @@ test("mints a credential and uses the versioned agents API", async ({
     headers: { ...authorization, "Idempotency-Key": idempotencyKey },
   });
   await expectStatus(created, 201, "agents-create");
-  const createdBody: unknown = await created.json();
+  const createdBody = agentResponseSchema.parse(await created.json());
   expect(createdBody).toMatchObject({ data: { slug } });
-  const createdId = agentIdFromResponse(createdBody);
+  const createdId = createdBody.data.id;
 
   const replay = await page.request.post("/v1/agents", {
     data: { slug },
     headers: { ...authorization, "Idempotency-Key": idempotencyKey },
   });
   await expectStatus(replay, 201, "agents-create-replay");
-  const replayBody: unknown = await replay.json();
-  expect(agentIdFromResponse(replayBody)).toBe(createdId);
+  const replayBody = agentResponseSchema.parse(await replay.json());
+  expect(replayBody.data.id).toBe(createdId);
 
   const after = await page.request.get("/v1/agents", {
     headers: authorization,

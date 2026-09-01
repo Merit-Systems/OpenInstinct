@@ -9,7 +9,7 @@ import {
 import { and, eq, gte, inArray, isNull, lte } from "drizzle-orm";
 import { z } from "zod";
 import type { AccessScope } from "@/lib/access-scope";
-import { env } from "@/lib/env";
+import { getInstallationSecrets } from "@/lib/installation-secrets";
 import {
   db,
   webhookDeliveries,
@@ -34,15 +34,17 @@ const endpointInputSchema = z.object({
   url: z.string().trim().min(1).max(2048),
 });
 type Executor = typeof db | Parameters<Parameters<typeof db.transaction>[0]>[0];
+type WebhookEndpointInput = z.input<typeof endpointInputSchema>;
 class WebhookUrlRejectedError extends Error {}
 
 export async function registerWebhookEndpoint(
   scope: AccessScope,
-  input: unknown
+  input: WebhookEndpointInput
 ) {
   const parsed = endpointInputSchema.parse(input);
   const url = requirePublicHttpsUrl(parsed.url);
   await ensureScope(scope);
+  const { secretEncryptionKey } = await getInstallationSecrets();
   const id = randomUUID();
   const secret = webhookSecret();
   const now = new Date().toISOString();
@@ -51,7 +53,11 @@ export async function registerWebhookEndpoint(
     const [row] = await transaction
       .insert(webhookEndpoints)
       .values({
-        encryptedSigningSecret: encryptWebhookSecret(id, secret),
+        encryptedSigningSecret: encryptWebhookSecret(
+          id,
+          secret,
+          secretEncryptionKey
+        ),
         id,
         subscribedEvents: [...new Set(parsed.subscribedEvents)],
         url,
@@ -133,6 +139,7 @@ export async function rotateWebhookSecret(
   endpointId: string
 ) {
   await ensureScope(scope);
+  const { secretEncryptionKey } = await getInstallationSecrets();
   const secret = webhookSecret();
   const now = new Date().toISOString();
   const endpoint = await db.transaction(async (transaction) => {
@@ -140,7 +147,11 @@ export async function rotateWebhookSecret(
     const [row] = await transaction
       .update(webhookEndpoints)
       .set({
-        encryptedSigningSecret: encryptWebhookSecret(endpointId, secret),
+        encryptedSigningSecret: encryptWebhookSecret(
+          endpointId,
+          secret,
+          secretEncryptionKey
+        ),
         updatedAt: now,
       })
       .where(
@@ -192,6 +203,7 @@ export async function drainWebhookDeliveries({
   limit = 50,
   fetchImpl = globalThis.fetch,
 }: { readonly limit?: number; readonly fetchImpl?: typeof fetch } = {}) {
+  const { secretEncryptionKey } = await getInstallationSecrets();
   const now = new Date().toISOString();
   await db
     .update(webhookDeliveries)
@@ -205,6 +217,8 @@ export async function drainWebhookDeliveries({
   await fanOutWebhookEvents();
   const summary = { dead: 0, delivered: 0, failed: 0 };
   for (let index = 0; index < Math.max(1, Math.min(limit, 500)); index += 1) {
+    // Deliveries must be claimed one at a time under a row lock.
+    // eslint-disable-next-line no-await-in-loop
     const result = await db.transaction(async (transaction) => {
       const [row] = await transaction
         .select({
@@ -231,14 +245,16 @@ export async function drainWebhookDeliveries({
         )
         .for("update", { skipLocked: true })
         .limit(1);
-      if (!row) return;
-      return await deliver(
-        transaction,
-        row.delivery,
-        row.endpoint,
-        row.event,
-        fetchImpl
-      );
+      return row
+        ? deliver(
+            transaction,
+            row.delivery,
+            row.endpoint,
+            row.event,
+            fetchImpl,
+            secretEncryptionKey
+          )
+        : undefined;
     });
     if (!result) break;
     summary[result] += 1;
@@ -255,20 +271,27 @@ async function fanOutWebhookEvents() {
       .where(isNull(webhookEvents.fannedOutAt))
       .for("update", { skipLocked: true });
     for (const event of events) {
-      const endpoints = (
-        await transaction
-          .select()
-          .from(webhookEndpoints)
-          .where(
-            and(
-              eq(webhookEndpoints.workspaceId, event.workspaceId),
-              eq(webhookEndpoints.status, "active")
-            )
+      // Each event must fan out and be marked atomically before the next event.
+      // eslint-disable-next-line no-await-in-loop
+      const endpointRows = await transaction
+        .select()
+        .from(webhookEndpoints)
+        .where(
+          and(
+            eq(webhookEndpoints.workspaceId, event.workspaceId),
+            eq(webhookEndpoints.status, "active")
           )
-      ).filter((endpoint) =>
-        subscribedTo(endpoint.subscribedEvents, event.type)
-      );
+        );
+      const endpoints = endpointRows.filter((endpoint) => {
+        const subscribedEvents = z
+          .array(z.string())
+          .safeParse(endpoint.subscribedEvents);
+        return subscribedEvents.success
+          ? subscribedTo(subscribedEvents.data, event.type)
+          : false;
+      });
       if (endpoints.length > 0) {
+        // eslint-disable-next-line no-await-in-loop -- Same transaction as event marking.
         await transaction.insert(webhookDeliveries).values(
           endpoints.map((endpoint) => ({
             createdAt: now,
@@ -281,6 +304,7 @@ async function fanOutWebhookEvents() {
           }))
         );
       }
+      // eslint-disable-next-line no-await-in-loop -- Same transaction as delivery fan-out.
       await transaction
         .update(webhookEvents)
         .set({ fannedOutAt: now })
@@ -294,7 +318,8 @@ async function deliver(
   delivery: typeof webhookDeliveries.$inferSelect,
   endpoint: typeof webhookEndpoints.$inferSelect,
   event: typeof webhookEvents.$inferSelect,
-  fetchImpl: typeof fetch
+  fetchImpl: typeof fetch,
+  secretEncryptionKey: string
 ): Promise<"dead" | "delivered" | "failed"> {
   const now = new Date().toISOString();
   let responseStatus: number | null = null;
@@ -319,7 +344,11 @@ async function deliver(
     const timestamp = now;
     const signature = createHmac(
       "sha256",
-      decryptWebhookSecret(endpoint.id, endpoint.encryptedSigningSecret)
+      decryptWebhookSecret(
+        endpoint.id,
+        endpoint.encryptedSigningSecret,
+        secretEncryptionKey
+      )
     )
       .update(`${timestamp}.${body}`, "utf8")
       .digest("hex");
@@ -380,16 +409,13 @@ function fetchWithTimeout(
   });
 }
 
-function subscribedTo(value: unknown, type: string) {
-  return Array.isArray(value) && value.some((event) => event === type);
+function subscribedTo(value: readonly string[], type: string) {
+  return value.some((event) => event === type);
 }
 
 function assertSafePayload(payload: Record<string, string>) {
-  for (const [key, value] of Object.entries(payload)) {
-    if (
-      typeof value !== "string" ||
-      /secret|phone|password|token|credential/i.test(key)
-    )
+  for (const key of Object.keys(payload)) {
+    if (/secret|phone|password|token|credential/i.test(key))
       throw new Error(
         "Webhook payloads may only contain identifier and type fields."
       );
@@ -436,11 +462,11 @@ async function isOwner(executor: Executor, scope: AccessScope) {
 function webhookSecret() {
   return `whsec_${randomBytes(32).toString("base64url")}`;
 }
-function derivedKey() {
+function derivedKey(secretEncryptionKey: string) {
   return Buffer.from(
     hkdfSync(
       "sha256",
-      Buffer.from(env.SECRET_ENCRYPTION_KEY, "base64"),
+      Buffer.from(secretEncryptionKey, "base64"),
       Buffer.alloc(0),
       "webhook-endpoint-aead",
       32
@@ -450,9 +476,17 @@ function derivedKey() {
 function aad(id: string) {
   return Buffer.from(`webhook-endpoint\u0000${id}`);
 }
-function encryptWebhookSecret(id: string, secret: string) {
+function encryptWebhookSecret(
+  id: string,
+  secret: string,
+  secretEncryptionKey: string
+) {
   const iv = randomBytes(12);
-  const cipher = createCipheriv("aes-256-gcm", derivedKey(), iv);
+  const cipher = createCipheriv(
+    "aes-256-gcm",
+    derivedKey(secretEncryptionKey),
+    iv
+  );
   cipher.setAAD(aad(id));
   const ciphertext = Buffer.concat([
     cipher.update(secret, "utf8"),
@@ -465,19 +499,25 @@ function encryptWebhookSecret(id: string, secret: string) {
     ciphertext.toString("base64url"),
   ].join(".");
 }
-export function encryptWebhookSecretForTest(id: string, secret: string) {
-  return encryptWebhookSecret(id, secret);
+export async function encryptWebhookSecretForTest(id: string, secret: string) {
+  const { secretEncryptionKey } = await getInstallationSecrets();
+  return encryptWebhookSecret(id, secret, secretEncryptionKey);
 }
-export function decryptWebhookSecretForTest(id: string, value: string) {
-  return decryptWebhookSecret(id, value);
+export async function decryptWebhookSecretForTest(id: string, value: string) {
+  const { secretEncryptionKey } = await getInstallationSecrets();
+  return decryptWebhookSecret(id, value, secretEncryptionKey);
 }
-function decryptWebhookSecret(id: string, value: string) {
+function decryptWebhookSecret(
+  id: string,
+  value: string,
+  secretEncryptionKey: string
+) {
   const [version, iv, tag, ciphertext] = value.split(".");
   if (version !== "v1" || !iv || !tag || !ciphertext)
     throw new Error("The stored webhook secret uses an unsupported format.");
   const decipher = createDecipheriv(
     "aes-256-gcm",
-    derivedKey(),
+    derivedKey(secretEncryptionKey),
     Buffer.from(iv, "base64url")
   );
   decipher.setAAD(aad(id));

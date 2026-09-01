@@ -13,7 +13,7 @@
         "LINQ_*",
         "NODE_ENV",
         "SECRET_ENCRYPTION_KEY",
-        "VERCEL_ENV"
+        "VERCEL_*"
       ],
       "outputs": [".next/**", "!.next/cache/**", "next-env.d.ts"]
     },
@@ -28,8 +28,7 @@
         "LINQ_*",
         "NODE_ENV",
         "SECRET_ENCRYPTION_KEY",
-        "VERCEL",
-        "VERCEL_ENV"
+        "VERCEL_*"
       ],
       "outputs": [".next/**", "!.next/cache/**", "next-env.d.ts"]
     },
@@ -49,8 +48,7 @@
         "LINQ_*",
         "NODE_ENV",
         "SECRET_ENCRYPTION_KEY",
-        "VERCEL_ENV",
-        "VERCEL_OIDC_TOKEN"
+        "VERCEL_*"
       ],
       "persistent": true
     },
@@ -77,8 +75,7 @@
         "LINQ_*",
         "NODE_ENV",
         "SECRET_ENCRYPTION_KEY",
-        "VERCEL_ENV",
-        "VERCEL_OIDC_TOKEN"
+        "VERCEL_*"
       ],
       "persistent": true
     },

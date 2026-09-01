@@ -33,7 +33,7 @@ export default defineConfig({
     },
   ],
   webServer: {
-    command: "node scripts/dev.mjs",
+    command: "node scripts/dev.ts",
     env: {
       BETTER_AUTH_SECRET: "e2e-better-auth-secret-for-playwright-tests",
       BETTER_AUTH_URL: baseURL,

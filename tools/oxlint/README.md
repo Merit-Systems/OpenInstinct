@@ -8,3 +8,8 @@ It is kept local because this public repository cannot depend on Foundation's
 internal packages. The adaptation supports both root-level `app/` and
 `src/app/` Next.js projects. Rule activation belongs in the root
 `.oxlintrc.jsonc`.
+
+The `anti-slop` plugin vendors the generic rules and shared helpers from
+[`dmmulroy/anti-slop`](https://github.com/dmmulroy/anti-slop) at commit
+`0b863049ca2173b74ae6ebf1f8d0f6f911f9a220`. The upstream Effect integration
+is intentionally excluded. Its MIT license is included in the plugin folder.
