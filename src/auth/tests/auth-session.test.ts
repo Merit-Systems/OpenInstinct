@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createGetAuthSession } from "@/auth/session";
 import type { authSessionDependencies } from "@/auth/session";
-import { authSessionFor } from "../helpers/auth-session";
+import { authSessionFor } from "@/tests/helpers/auth-session";
 
 const getSession = vi.fn<typeof authSessionDependencies.getSession>();
 const getAuthSession = createGetAuthSession({ getSession });

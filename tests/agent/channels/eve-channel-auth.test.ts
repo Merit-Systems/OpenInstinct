@@ -1,6 +1,6 @@
 import type { RouteHandlerArgs } from "eve/channels";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import eveChannel, { eveChannelDependencies } from "../../agent/channels/eve";
+import eveChannel, { eveChannelDependencies } from "@/agent/channels/eve";
 
 const getAuthSession = vi.fn<typeof eveChannelDependencies.getAuthSession>();
 const isSessionOwned = vi.fn<typeof eveChannelDependencies.isSessionOwned>();

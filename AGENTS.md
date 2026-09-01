@@ -56,8 +56,8 @@ Run the validation the task requests. When it does not establish the behavior yo
 
 ## Testing tiers
 
-- Put pure logic, config, environment, and component tests in `tests/unit/`.
-- Put PGlite, migrations, service, and database tests in `tests/integration/`.
+- Colocate upstream-owned unit tests with their source; keep fork-only pure unit suites in `tests/unit/`, except `agent/` and `db/` tests follow their established local layout.
+- Keep fork-owned PGlite, migration, service, and database suites in `tests/integration/`.
 - Put browser journeys in `tests/e2e/` and run them with `pnpm test:e2e`. Playwright
   boots the app through `scripts/dev.mjs`, so it owns Compose, migrations, and
   teardown; it authenticates once through the local phone-auth bypass before the

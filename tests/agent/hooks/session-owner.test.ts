@@ -3,7 +3,7 @@ import {
   createSessionOwnerHandlers,
   sessionOwnerDependencies,
   type SessionOwnerContext,
-} from "../../agent/hooks/session-owner";
+} from "@/agent/hooks/session-owner";
 
 const checkBudget = vi.fn<typeof sessionOwnerDependencies.checkBudget>();
 const claimSession = vi.fn<typeof sessionOwnerDependencies.claimSession>();

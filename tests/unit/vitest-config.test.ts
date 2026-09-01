@@ -11,7 +11,7 @@ const ignoredDirectories = new Set([
 const testFilePattern = /\.(?:test|spec)\.[cm]?[jt]sx?$/u;
 
 describe("Vitest project configuration", () => {
-  it("collects every repository test file into exactly one tier", async () => {
+  it("collects colocated and integration tests into exactly one tier", async () => {
     const config = await readFile(
       new URL("../../vitest.config.ts", import.meta.url),
       "utf8"
@@ -30,7 +30,7 @@ describe("Vitest project configuration", () => {
     expect(config).toContain('include: ["tests/integration/**"]');
     expect(testFiles).not.toHaveLength(0);
     for (const path of testFiles) {
-      // Playwright owns tests/e2e; those specs must match no vitest project.
+      // Colocated tests are unit tests; Playwright owns tests/e2e exclusively.
       const expectedMatches = path.startsWith("tests/e2e/") ? 0 : 1;
       const matchingProjects = [
         matchesUnitProject(path),

@@ -272,7 +272,7 @@ function createDatabase() {
 
 async function applyMigration(database: PGlite, name: string) {
   const migration = await readFile(
-    new URL(`../../db/migrations/${name}`, import.meta.url),
+    new URL(`../migrations/${name}`, import.meta.url),
     "utf8"
   );
   for (const statement of migration.split("--> statement-breakpoint")) {

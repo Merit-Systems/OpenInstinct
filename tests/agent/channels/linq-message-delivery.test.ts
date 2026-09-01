@@ -3,8 +3,8 @@ import type { HookContext } from "eve/hooks";
 import { describe, expect, it, vi } from "vitest";
 import type * as Blob from "@vercel/blob";
 import type { AccessScope } from "@/lib/access-scope";
-import { linqChannelConfig } from "../../agent/channels/linq";
-import workerCancellationHook from "../../agent/hooks/worker-cancellation-delivery";
+import workerCancellationHook from "@/agent/hooks/worker-cancellation-delivery";
+import { linqChannelConfig } from "@/agent/channels/linq";
 
 interface BrowserImage {
   bytes: Uint8Array;

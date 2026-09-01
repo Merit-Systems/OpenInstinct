@@ -21,7 +21,7 @@ import {
   verification,
   workspaceMemberships,
   workspaces,
-} from "../../db/schema";
+} from "../schema";
 
 describe("database schema", () => {
   it("owns the application and Better Auth tables", () => {
@@ -173,7 +173,7 @@ describe("migration deployment policy", () => {
 
   it("adopts existing tables without request-time DDL", async () => {
     const migration = await readFile(
-      new URL("../../db/migrations/0000_fluffy_the_spike.sql", import.meta.url),
+      new URL("../migrations/0000_fluffy_the_spike.sql", import.meta.url),
       "utf8"
     );
     const services = await Promise.all(
@@ -189,7 +189,7 @@ describe("migration deployment policy", () => {
       ].map(
         async (name) =>
           await readFile(
-            new URL(`../../db/services/${name}.ts`, import.meta.url),
+            new URL(`../services/${name}.ts`, import.meta.url),
             "utf8"
           )
       )
@@ -199,7 +199,7 @@ describe("migration deployment policy", () => {
       "utf8"
     );
     const authMigration = await readFile(
-      new URL("../../db/migrations/0001_better-auth.sql", import.meta.url),
+      new URL("../migrations/0001_better-auth.sql", import.meta.url),
       "utf8"
     );
 

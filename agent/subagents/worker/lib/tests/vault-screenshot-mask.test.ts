@@ -1,6 +1,6 @@
 /* oxlint-disable vitest/require-mock-type-parameters -- The hoisted Kernel fake records cleanup request options. */
 import { describe, expect, it, vi } from "vitest";
-import { withVaultScreenshotMask } from "../../agent/subagents/worker/lib/vault-screenshot-mask";
+import { withVaultScreenshotMask } from "../vault-screenshot-mask";
 
 const playwrightExecuteMock =
   vi.fn<
