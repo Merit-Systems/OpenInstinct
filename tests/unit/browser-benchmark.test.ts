@@ -1,9 +1,6 @@
 import type { MessageStreamEvent } from "eve/client";
 import { describe, expect, it } from "vitest";
-import {
-  didCompleteBrowserWorker,
-  didFinishBrowserWorker,
-} from "@/lib/browser/benchmark";
+import { didCompleteWorker, didFinishWorker } from "@/lib/worker-events";
 
 type ActionResultEvent = Extract<MessageStreamEvent, { type: "action.result" }>;
 type SubagentResult = Extract<
@@ -75,7 +72,7 @@ function completedWorkerResult(
 describe("browser benchmark event detection", () => {
   it("recognizes a successful inline subagent result", () => {
     expect(
-      didCompleteBrowserWorker([
+      didCompleteWorker([
         completedWorkerResult({
           message: "Browser assignment completed.",
           status: "success",
@@ -97,10 +94,8 @@ describe("browser benchmark event detection", () => {
       }),
     ];
 
-    expect(didCompleteBrowserWorker(initialTurn)).toBe(false);
-    expect(didCompleteBrowserWorker([...initialTurn, ...terminalTurn])).toBe(
-      true
-    );
+    expect(didCompleteWorker(initialTurn)).toBe(false);
+    expect(didCompleteWorker([...initialTurn, ...terminalTurn])).toBe(true);
   });
 
   it("treats a structured worker failure as terminal but unsuccessful", () => {
@@ -116,8 +111,8 @@ describe("browser benchmark event detection", () => {
       }),
     ];
 
-    expect(didFinishBrowserWorker(events)).toBe(true);
-    expect(didCompleteBrowserWorker(events)).toBe(false);
+    expect(didFinishWorker(events)).toBe(true);
+    expect(didCompleteWorker(events)).toBe(false);
   });
 
   it.each(["failed.\n\nError:\nWorker failed.", "is cancelled."])(
@@ -131,8 +126,8 @@ describe("browser benchmark event detection", () => {
       const terminalTurn = [terminalWorkerNotification(notification)];
       const events = [...initialTurn, ...terminalTurn];
 
-      expect(didFinishBrowserWorker(events)).toBe(true);
-      expect(didCompleteBrowserWorker(events)).toBe(false);
+      expect(didFinishWorker(events)).toBe(true);
+      expect(didCompleteWorker(events)).toBe(false);
     }
   );
 });

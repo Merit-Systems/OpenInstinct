@@ -6,13 +6,11 @@ import {
   setDatabaseForIntegrationTest,
 } from "@/db";
 import { adminDependencies } from "@/lib/admin";
-import { routerDependencies } from "@/trpc/router";
 import * as schema from "../../db/schema";
 import { createRealPostgres } from "../harness/real-postgres";
 
 const realPostgres = await createRealPostgres();
 const originalAdminPhoneNumbers = adminDependencies.adminPhoneNumbers;
-const originalRouterDependencies = { ...routerDependencies };
 
 afterAll(async () => {
   await realPostgres?.close();
@@ -29,13 +27,6 @@ describe.skipIf(realPostgres === undefined)(
       const database = drizzle({ client: pool, schema });
       setDatabaseForIntegrationTest(database);
       adminDependencies.adminPhoneNumbers = () => "+12025550123";
-      Object.assign(routerDependencies, {
-        applyManagerMutation: () => undefined,
-        disconnectGoogleWorkspace: () => undefined,
-        readModelCatalog: () => undefined,
-        saveChat: () => undefined,
-        startGoogleWorkspaceAuthorization: () => undefined,
-      });
 
       try {
         const now = new Date().toISOString();
@@ -112,7 +103,6 @@ describe.skipIf(realPostgres === undefined)(
       } finally {
         resetDatabaseForIntegrationTest();
         adminDependencies.adminPhoneNumbers = originalAdminPhoneNumbers;
-        Object.assign(routerDependencies, originalRouterDependencies);
         await pool.end();
       }
     });

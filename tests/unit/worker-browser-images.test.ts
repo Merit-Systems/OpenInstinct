@@ -1,12 +1,5 @@
-/* oxlint-disable typescript/no-unsafe-type-assertion, vitest/require-mock-type-parameters -- Eve owns the tool context and Vitest owns these hoisted provider fakes. */
+/* oxlint-disable anti-slop/no-module-mocking, typescript/no-unsafe-type-assertion, vitest/require-mock-type-parameters -- The tool owns Kernel and Blob I/O. These fakes isolate external APIs without adding a production wrapper. */
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import * as WorkerAccess from "@/agent/subagents/worker/lib/access";
-import * as OwnedBrowser from "@/agent/subagents/worker/lib/owned-browser";
-import * as ScreenshotMask from "@/agent/subagents/worker/lib/vault-screenshot-mask";
-import * as BrowserImageService from "@/db/services/browser-images";
-import * as BrowserImageServer from "@/lib/browser-images/server";
-import { kernel } from "@/lib/kernel";
-import captureBrowserImage from "../../agent/subagents/worker/tools/capture_browser_image";
 import { toolContextFor } from "../helpers/tool-context";
 
 const artifactId = "0d01e667-d128-4bb7-a248-1ae21db72f4f";
@@ -20,23 +13,52 @@ const image = {
   url: `/artifacts/${artifactId}`,
 };
 
-const mocks = {
-  captureScreenshot: vi.spyOn(kernel.browsers.computer, "captureScreenshot"),
-  deleteFile: vi.spyOn(kernel.browsers.fs, "deleteFile"),
-  fetch: vi.spyOn(kernel.browsers, "fetch"),
-  mask: vi.spyOn(ScreenshotMask, "withVaultScreenshotMask"),
-  persist: vi.spyOn(BrowserImageServer, "persistReservedBrowserImage"),
-  playwrightExecute: vi.spyOn(kernel.browsers.playwright, "execute"),
-  readBoundedResponse: vi.spyOn(BrowserImageServer, "readBoundedResponse"),
-  readFile: vi.spyOn(kernel.browsers.fs, "readFile"),
-  reserve: vi.spyOn(BrowserImageService, "reserveBrowserImageArtifact"),
-  retrieve: vi.spyOn(kernel.browsers, "retrieve"),
-  requireOwnedBrowserSession: vi.spyOn(
-    OwnedBrowser,
-    "requireOwnedBrowserSession"
-  ),
-  requireWorkerScope: vi.spyOn(WorkerAccess, "requireWorkerScope"),
-};
+const mocks = vi.hoisted(() => ({
+  captureScreenshot: vi.fn(),
+  del: vi.fn(),
+  deleteFile: vi.fn(),
+  fetch: vi.fn(),
+  mask: vi.fn(),
+  persist: vi.fn(),
+  playwrightExecute: vi.fn(),
+  readFile: vi.fn(),
+  reserve: vi.fn(),
+  retrieve: vi.fn(),
+  put: vi.fn(),
+  requireOwnedBrowserSession: vi.fn(),
+  requireWorkerScope: vi.fn(),
+}));
+
+vi.mock("@/agent/subagents/worker/lib/access", () => ({
+  requireWorkerScope: mocks.requireWorkerScope,
+}));
+vi.mock("@/agent/subagents/worker/lib/owned-browser", () => ({
+  requireOwnedBrowserSession: mocks.requireOwnedBrowserSession,
+}));
+vi.mock("@/agent/subagents/worker/lib/vault-screenshot-mask", () => ({
+  withVaultScreenshotMask: mocks.mask,
+}));
+vi.mock("@/db/services/browser-images", () => ({
+  finalizeBrowserImageArtifact: mocks.persist,
+  reserveBrowserImageArtifact: mocks.reserve,
+}));
+vi.mock("@vercel/blob", () => ({
+  del: mocks.del,
+  put: mocks.put,
+}));
+vi.mock("@/lib/kernel", () => ({
+  kernel: {
+    browsers: {
+      computer: { captureScreenshot: mocks.captureScreenshot },
+      fetch: mocks.fetch,
+      fs: { deleteFile: mocks.deleteFile, readFile: mocks.readFile },
+      playwright: { execute: mocks.playwrightExecute },
+      retrieve: mocks.retrieve,
+    },
+  },
+}));
+
+import captureBrowserImage from "../../agent/subagents/worker/tools/capture_browser_image";
 
 const scope = { userId: "user-1", workspaceId: "workspace-1" };
 const reservation = {
@@ -53,12 +75,17 @@ beforeEach(() => {
     workerSessionId: "worker-session-1",
   });
   mocks.reserve.mockResolvedValue({ reservation, status: "pending" });
-  mocks.persist.mockResolvedValue(image);
-  mocks.mask.mockImplementation(async (_sessionId, _signal, capture) =>
-    capture()
+  mocks.persist.mockResolvedValue({ image, storagePathname: "stored/image" });
+  mocks.del.mockResolvedValue(undefined);
+  mocks.put.mockResolvedValue({ pathname: "stored/image" });
+  mocks.mask.mockImplementation(
+    async (
+      _sessionId: string,
+      _signal: AbortSignal,
+      capture: () => Promise<Uint8Array>
+    ) => capture()
   );
   mocks.captureScreenshot.mockResolvedValue(new Response(png));
-  mocks.readBoundedResponse.mockResolvedValue(png);
   mocks.playwrightExecute.mockResolvedValue({ result: true, success: true });
   mocks.readFile.mockResolvedValue(new Response(png));
   mocks.deleteFile.mockResolvedValue(undefined);
@@ -105,8 +132,7 @@ describe("capture_browser_image", () => {
     expect(mocks.persist).toHaveBeenCalledWith(
       scope,
       reservation,
-      expect.objectContaining({ sourceKind: "viewport" }),
-      toolContext.abortSignal
+      expect.objectContaining({ sourceKind: "viewport" })
     );
     expect(result).toEqual({ image });
     expect(JSON.stringify(result)).not.toContain("base64");
@@ -167,8 +193,7 @@ describe("capture_browser_image", () => {
     expect(mocks.persist).toHaveBeenCalledWith(
       scope,
       reservation,
-      expect.objectContaining({ sourceKind: "image_resource" }),
-      expect.any(AbortSignal)
+      expect.objectContaining({ sourceKind: "image_resource" })
     );
     expect(JSON.stringify(mocks.persist.mock.calls)).not.toContain(
       "private=ignored"
@@ -199,8 +224,7 @@ describe("capture_browser_image", () => {
     expect(mocks.persist).toHaveBeenCalledWith(
       scope,
       reservation,
-      expect.objectContaining({ sourceKind: "element" }),
-      toolContext.abortSignal
+      expect.objectContaining({ sourceKind: "element" })
     );
   });
 

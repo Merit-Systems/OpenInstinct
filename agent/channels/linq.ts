@@ -11,6 +11,7 @@ import { z } from "zod";
 import { getAuth } from "@/auth";
 import { normalizeAuthPhoneNumber } from "@/auth/phone-number";
 import { accessScopeForUser, scopeFromPrincipal } from "@/lib/access-scope";
+import { prepareLinqBrowserImageDelivery } from "../lib/linq-browser-image-delivery";
 import {
   verifyScopeAccess,
   WorkspaceNotOperableError,
@@ -29,10 +30,9 @@ import { findVerifiedUserByPhoneNumber } from "@/db/services/phone-identities";
 import {
   extractBrowserImageMarkdownReferences,
   stripBrowserImageMarkdownReferences,
-} from "@/lib/browser-images";
+} from "../lib/linq-browser-image-markdown";
 import { env, isWorkspaceScopeEnforcementEnabled } from "@/lib/env";
 import { consumeWorkerCancellationTurn } from "../lib/worker-cancellation-delivery";
-import { prepareLinqBrowserImageDelivery } from "../lib/linq-browser-image-delivery";
 
 const verifiedPhoneUserSchema = z.object({
   id: z.string().min(1),

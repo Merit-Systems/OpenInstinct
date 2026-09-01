@@ -11,8 +11,8 @@ import { env, isWorkspaceScopeEnforcementEnabled } from "@/lib/env";
 import { z } from "zod";
 import {
   googleWorkspaceSubject,
-  GOOGLE_WORKSPACE_SCOPES,
-} from "@/lib/google-workspace/config";
+  googleWorkspaceScopes,
+} from "@/lib/google-workspace";
 
 export const googleWorkspaceAuthOptions = {
   connector: env.GOOGLE_CONNECTOR_UID,
@@ -24,7 +24,7 @@ export const googleWorkspaceAuthOptions = {
     }
     return googleWorkspaceSubject(principal.id);
   },
-  tokenParams: { scopes: [...GOOGLE_WORKSPACE_SCOPES] },
+  tokenParams: { scopes: [...googleWorkspaceScopes] },
   validate: true,
 } satisfies EveAuthorizationOptions;
 
@@ -112,7 +112,7 @@ export function createWithGoogleAuth<Client extends GoogleOAuthClient>(
     if (connection) {
       await dependencies.recordConnectionInstallation(connection.scope, {
         ...connection.installation,
-        scopes: GOOGLE_WORKSPACE_SCOPES,
+        scopes: googleWorkspaceScopes,
       });
     }
     const authClient = dependencies.createOAuthClient();

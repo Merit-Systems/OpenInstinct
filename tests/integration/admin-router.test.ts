@@ -10,17 +10,14 @@ import {
 } from "@/db";
 import { AdminNotFoundError } from "@/lib/admin";
 import { adminProcedureDependencies } from "@/trpc/init";
-import { routerDependencies } from "@/trpc/router";
 import * as schema from "../../db/schema";
 
 const databases: PGlite[] = [];
 const originalAdminScopeFor = adminProcedureDependencies.requireAdminScopeFor;
-const originalRouterDependencies = { ...routerDependencies };
 
 afterEach(async () => {
   resetDatabaseForIntegrationTest();
   adminProcedureDependencies.requireAdminScopeFor = originalAdminScopeFor;
-  Object.assign(routerDependencies, originalRouterDependencies);
   await Promise.all(databases.splice(0).map((database) => database.close()));
 });
 
@@ -129,13 +126,6 @@ async function loadRouter(allowed: boolean) {
   const client = await createDatabase();
   const database = drizzle(client, { schema });
   setDatabaseForIntegrationTest(database);
-  Object.assign(routerDependencies, {
-    applyManagerMutation: () => undefined,
-    disconnectGoogleWorkspace: () => undefined,
-    readModelCatalog: () => undefined,
-    saveChat: () => undefined,
-    startGoogleWorkspaceAuthorization: () => undefined,
-  });
   adminProcedureDependencies.requireAdminScopeFor = async (scope) => {
     if (!allowed) throw new AdminNotFoundError();
     return scope;

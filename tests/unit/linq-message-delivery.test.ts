@@ -1,11 +1,68 @@
-/* oxlint-disable typescript/no-unsafe-type-assertion, vitest/require-mock-type-parameters -- Eve's Linq adapter exposes the handler context through a transitive Chat SDK `any`; the fixture supplies only the fields exercised here. */
+/* oxlint-disable anti-slop/no-module-mocking, typescript/no-unsafe-type-assertion, vitest/require-mock-type-parameters -- Linq delivery owns Blob I/O. These fakes isolate storage without adding a production wrapper; the handler fixture supplies only exercised Chat SDK fields. */
 import type { HookContext } from "eve/hooks";
 import { describe, expect, it, vi } from "vitest";
-import * as BrowserImageServer from "@/lib/browser-images/server";
+import type * as Blob from "@vercel/blob";
+import type { AccessScope } from "@/lib/access-scope";
 import { linqChannelConfig } from "../../agent/channels/linq";
 import workerCancellationHook from "../../agent/hooks/worker-cancellation-delivery";
 
-const readImageMock = vi.spyOn(BrowserImageServer, "readBrowserImageBytes");
+interface BrowserImage {
+  bytes: Uint8Array;
+  filename: string;
+  id: string;
+  mediaType: string;
+}
+
+const linqChannelCapture = vi.hoisted(() => ({
+  images: new Map<string, BrowserImage>(),
+  readImage: vi.fn<
+    (
+      scope: AccessScope,
+      id: string,
+      options: {
+        readonly rootSessionId: string;
+        readonly signal?: AbortSignal;
+      }
+    ) => Promise<BrowserImage | undefined>
+  >(),
+}));
+vi.mock("@/db/services/browser-images", () => ({
+  async readReadyBrowserImageArtifact(
+    scope: AccessScope,
+    id: string,
+    options: { readonly rootSessionId: string; readonly signal?: AbortSignal }
+  ) {
+    const image = await linqChannelCapture.readImage(scope, id, options);
+    if (!image) return undefined;
+    linqChannelCapture.images.set(id, image);
+    return {
+      byteSize: image.bytes.byteLength,
+      contentHash:
+        image.bytes[0] === 1
+          ? "039058c6f2c0cb492c533b0a4d14ef77cc0f78abccced5287d84a1a2011cfb81"
+          : "787c798e39a5bc1910355bae6d0cd87a36b2e10fd0202a83e3bb6b005da83472",
+      filename: image.filename,
+      id,
+      mediaType: image.mediaType,
+      storagePathname: id,
+    };
+  },
+}));
+vi.mock("@vercel/blob", async (importOriginal) => {
+  const blob = await importOriginal<typeof Blob>();
+  return {
+    ...blob,
+    async get(pathname: string) {
+      const image = linqChannelCapture.images.get(pathname);
+      if (!image) return null;
+      return {
+        blob: { contentType: image.mediaType, size: image.bytes.byteLength },
+        statusCode: 200,
+        stream: new Response(Buffer.from(image.bytes)).body,
+      };
+    },
+  };
+});
 const channelEvents = linqChannelConfig.events;
 const trackWorkerCancellation = channelEvents["action.result"];
 const deliverCompletedMessage = channelEvents["message.completed"];
@@ -51,7 +108,7 @@ describe("Linq message delivery", () => {
 
   it("replaces scoped artifact markdown with native iMessage files", async () => {
     const artifactId = "0d01e667-d128-4bb7-a248-1ae21db72f4f";
-    readImageMock.mockResolvedValue({
+    linqChannelCapture.readImage.mockResolvedValue({
       bytes: new Uint8Array([1, 2, 3]),
       filename: "product.png",
       id: artifactId,
@@ -67,7 +124,7 @@ describe("Linq message delivery", () => {
       sessionContext()
     );
 
-    expect(readImageMock).toHaveBeenCalledWith(
+    expect(linqChannelCapture.readImage).toHaveBeenCalledWith(
       expect.objectContaining({
         userId: "user-1",
         workspaceId: "workspace-1",
@@ -90,14 +147,16 @@ describe("Linq message delivery", () => {
   it("sends multiple artifact images as one native attachment gallery", async () => {
     const firstArtifactId = "0d01e667-d128-4bb7-a248-1ae21db72f4f";
     const secondArtifactId = "206c3a7e-c0b8-4317-9e34-552cff646673";
-    readImageMock.mockImplementation(async (_scope, artifactId) => ({
-      bytes: new Uint8Array(
-        artifactId === firstArtifactId ? [1, 2, 3] : [4, 5, 6]
-      ),
-      filename: artifactId === firstArtifactId ? "first.png" : "second.png",
-      id: artifactId,
-      mediaType: "image/png",
-    }));
+    linqChannelCapture.readImage.mockImplementation(
+      async (_scope, artifactId) => ({
+        bytes: new Uint8Array(
+          artifactId === firstArtifactId ? [1, 2, 3] : [4, 5, 6]
+        ),
+        filename: artifactId === firstArtifactId ? "first.png" : "second.png",
+        id: artifactId,
+        mediaType: "image/png",
+      })
+    );
     const { context, post } = handlerContext();
 
     await deliverCompletedMessage(
@@ -131,7 +190,7 @@ describe("Linq message delivery", () => {
 
   it("keeps reply bubbles and attaches images to the final bubble", async () => {
     const artifactId = "0d01e667-d128-4bb7-a248-1ae21db72f4f";
-    readImageMock.mockResolvedValue({
+    linqChannelCapture.readImage.mockResolvedValue({
       bytes: new Uint8Array([1, 2, 3]),
       filename: "product.png",
       id: artifactId,

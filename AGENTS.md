@@ -74,9 +74,18 @@ The admin webhook drain button remains the supported manual drain path.
 
 - The repository root owns the single Next.js application, Eve agent, and shared UI contract.
 - The workspace manager lives on `/` and the agent chat on `/chat`; browser execution belongs only to the declared worker's flat tool surface under `agent/subagents/worker/tools`.
-- Keep each worker browser tool's schema and implementation together. Share the Kernel SDK client through `src/lib/kernel.ts` and keep only cross-tool ownership guards under `agent/subagents/worker/lib`; do not add a Kernel extension or root browser connection.
+- Keep each worker browser tool's schema and implementation together. Share the Kernel SDK client through `src/lib/kernel.ts`; do not add a Kernel extension or root browser connection.
+- `agent/subagents/worker/lib` is for code genuinely shared by worker tools. Group a shared worker domain in a lower-case folder, such as `trace/domains.ts` or `autofill/provider.ts`; do not use it as a holding area for a tool's one-off logic.
 - Validate runtime environment variables through `src/lib/env.ts`. `KERNEL_API_KEY` is required by the worker browser tools.
 - Run `pnpm check` and `pnpm build` before handing off changes.
+
+## Code organization
+
+- Treat `src/lib` as a small shared infrastructure and contract boundary, not a default destination for application code. A file belongs there only when it has real cross-feature ownership; put database access in `db/services`, agent behavior under `agent`, and route or section behavior with its route.
+- Do not add a generic `src/modules` layer. Give code a concrete owner and colocate it there. A route section owns its section components, forms, and local parsing; split it only when the files have distinct responsibilities.
+- Prefer one cohesive call-site file for code used once. Do not add production factories, dependency containers, server wrappers, or files solely to make a unit test easier to mock.
+- Use lower-case file and folder names. When several files share a domain prefix, make that prefix a folder and name files for their role, such as `trace/domains.ts` rather than `trace-domains.ts`. Do not introduce camel-case filenames.
+- Avoid catch-all names such as `manager`, `store`, `helpers`, or `utils` for feature ownership. Reuse an existing narrowly named boundary or place the code at the concrete owner instead.
 
 ## Design system
 

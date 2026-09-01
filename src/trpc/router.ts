@@ -1,3 +1,5 @@
+import { gateway } from "ai";
+import { revokeToken, startAuthorization } from "@vercel/connect";
 import { z } from "zod";
 import { and, desc, eq, gte, lt, or, sql } from "drizzle-orm";
 import { adminTransitionWorkspaceLifecycle } from "@/db/services/workspace-lifecycle";
@@ -23,28 +25,35 @@ import {
   workspaceMemberships,
   workspaces,
 } from "@/db";
-import { readModelCatalog } from "@/lib/model-catalog/server";
 import { listBrowserTraces } from "@/db/services/browser-traces";
 import { saveChat } from "@/db/services/chats";
+import { selectGatewayModel } from "@/db/services/settings";
+import { deleteVaultItem, saveVaultItem } from "@/db/services/vault";
+import type { AccessScope } from "@/lib/access-scope";
 import { saveChatSchema } from "@/lib/chat";
-import { googleWorkspaceActionSchema } from "@/lib/google-workspace/config";
+import { env } from "@/lib/env";
 import {
-  disconnectGoogleWorkspace,
-  startGoogleWorkspaceAuthorization,
-} from "@/lib/google-workspace/server";
-import { managerMutationSchema, managerSnapshotSchema } from "@/lib/manager";
-import { applyManagerMutation } from "@/lib/manager/server/store";
+  googleWorkspaceSubject,
+  googleWorkspaceTokenParams,
+} from "@/lib/google-workspace";
 import {
   listApiCredentials,
   mintApiCredential,
   revokeApiCredential,
 } from "@/db/services/api-credentials";
 import {
+  deleteRevokedConnectionInstallation,
+  revokeConnectionInstallation,
+} from "@/db/services/connection-installations";
+import {
   disableWebhookEndpoint,
   listWebhookEndpoints,
   registerWebhookEndpoint,
   rotateWebhookSecret,
 } from "@/db/services/webhooks";
+import { isWorkspaceScopeEnforcementEnabled } from "@/lib/env";
+import { googleWorkspaceScopes } from "@/lib/google-workspace";
+import { vaultCreateItemSchema, vaultImportItemsSchema } from "@/lib/vault";
 import { adminProcedure, createTRPCRouter, protectedProcedure } from "./init";
 
 const auditCursorSchema = z.object({ createdAt: z.string(), id: z.string() });
@@ -73,15 +82,6 @@ function startOfCurrentUtcMonth() {
 function groupedCounts(rows: readonly { key: string; count: number }[]) {
   return Object.fromEntries(rows.map((row) => [row.key, row.count]));
 }
-
-export const routerDependencies = {
-  applyManagerMutation,
-  disconnectGoogleWorkspace,
-  listBrowserTraces,
-  readModelCatalog,
-  saveChat,
-  startGoogleWorkspaceAuthorization,
-};
 
 export const appRouter = createTRPCRouter({
   admin: {
@@ -439,51 +439,137 @@ export const appRouter = createTRPCRouter({
   chats: {
     save: protectedProcedure
       .input(saveChatSchema)
-      .mutation(({ ctx, input }) =>
-        routerDependencies.saveChat(ctx.scope, input)
-      ),
+      .mutation(({ ctx, input }) => saveChat(ctx.scope, input)),
   },
   googleWorkspace: {
     update: protectedProcedure
-      .input(googleWorkspaceActionSchema)
+      .input(z.enum(["connect", "disconnect"]))
       .mutation(async ({ ctx, input }) => {
         if (input === "disconnect") {
-          await routerDependencies.disconnectGoogleWorkspace(ctx.scope);
+          await revokeToken(env.GOOGLE_CONNECTOR_UID, {
+            subject: googleWorkspaceSubject(ctx.scope.userId),
+          });
+          if (isWorkspaceScopeEnforcementEnabled()) {
+            try {
+              await revokeConnectionInstallation(
+                ctx.scope,
+                googleWorkspaceInstallation(ctx.scope)
+              );
+            } catch {
+              console.warn(
+                "[google-workspace] connection installation revocation failed"
+              );
+            }
+          }
           return { redirectTo: "/?google=disconnected" };
         }
 
         const callbackUrl = new URL("/", ctx.origin);
         callbackUrl.searchParams.set("google", "connected");
+        if (isWorkspaceScopeEnforcementEnabled()) {
+          await deleteRevokedConnectionInstallation(
+            ctx.scope,
+            googleWorkspaceInstallation(ctx.scope)
+          );
+        }
         return {
-          redirectTo:
-            await routerDependencies.startGoogleWorkspaceAuthorization(
-              ctx.scope,
-              callbackUrl.toString()
-            ),
+          redirectTo: await startGoogleWorkspaceAuthorization(
+            ctx.scope,
+            callbackUrl.toString()
+          ),
         };
       }),
   },
-  manager: {
-    mutate: protectedProcedure
-      .input(managerMutationSchema)
-      .output(managerSnapshotSchema)
+  settings: {
+    selectModel: protectedProcedure
+      .input(z.object({ modelId: z.string().trim().min(1).max(300) }))
       .mutation(({ ctx, input }) =>
-        routerDependencies.applyManagerMutation(ctx.scope, input)
+        selectGatewayModel(ctx.scope, input.modelId)
       ),
-  },
-  models: {
-    list: protectedProcedure.query(routerDependencies.readModelCatalog),
   },
   traces: {
     list: protectedProcedure
       .input(z.object({ cursor: z.string().nullish() }))
       .query(({ ctx, input }) =>
-        routerDependencies.listBrowserTraces(
-          ctx.scope,
-          input.cursor ?? undefined
-        )
+        listBrowserTraces(ctx.scope, input.cursor ?? undefined)
       ),
+  },
+  vault: {
+    create: protectedProcedure
+      .input(vaultCreateItemSchema)
+      .mutation(({ ctx, input }) => saveVaultItem(ctx.scope, input)),
+    import: protectedProcedure
+      .input(vaultImportItemsSchema)
+      .mutation(async ({ ctx, input }) => {
+        for (const item of input) await saveVaultItem(ctx.scope, item);
+      }),
+    remove: protectedProcedure
+      .input(z.object({ id: z.string().min(1) }))
+      .mutation(({ ctx, input }) => deleteVaultItem(ctx.scope, input.id)),
+  },
+  models: {
+    list: protectedProcedure.query(readModelCatalog),
   },
 });
 
 export type AppRouter = typeof appRouter;
+
+async function startGoogleWorkspaceAuthorization(
+  scope: AccessScope,
+  callbackUrl: string
+) {
+  const authorization = await startAuthorization(
+    env.GOOGLE_CONNECTOR_UID,
+    googleWorkspaceTokenParams(scope.userId),
+    { callbackUrl, expiresInMs: 10 * 60_000 }
+  );
+  return authorization.url;
+}
+
+async function readModelCatalog() {
+  const { models } = await gateway.getAvailableModels();
+
+  return z
+    .array(
+      z.object({
+        id: z.string(),
+        name: z.string(),
+        ownedBy: z.string(),
+        pricing: z
+          .object({
+            input: z.number().nonnegative().optional(),
+            output: z.number().nonnegative().optional(),
+          })
+          .optional(),
+      })
+    )
+    .parse(
+      models
+        .filter((model) => model.modelType === "language")
+        .map((model) => ({
+          id: model.id,
+          name: model.name,
+          ownedBy: model.specification.provider,
+          pricing: model.pricing
+            ? {
+                input: perMillion(model.pricing.input),
+                output: perMillion(model.pricing.output),
+              }
+            : undefined,
+        }))
+    );
+}
+
+function perMillion(value: string) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed * 1_000_000 : undefined;
+}
+
+function googleWorkspaceInstallation(scope: AccessScope) {
+  return {
+    authorizationSubject: JSON.stringify(googleWorkspaceSubject(scope.userId)),
+    connectorId: env.GOOGLE_CONNECTOR_UID,
+    provider: "google" as const,
+    scopes: googleWorkspaceScopes,
+  };
+}
