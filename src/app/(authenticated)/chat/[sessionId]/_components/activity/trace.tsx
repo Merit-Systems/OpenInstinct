@@ -15,9 +15,10 @@ import {
   AlertTitle,
 } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
-import { getLatestTurnFailure } from "../_lib/turn-failure";
+import { getLatestTurnFailure } from "../../_lib/turn-failure";
+import { messageTimestamps } from "../../_lib/message-events";
 import type { SubagentStatus } from "@/app/_lib/subagent-sessions";
-import { AgentMessage } from "./agent-message";
+import { AgentMessage } from "../conversation/message";
 
 const messageReducer = defaultMessageReducer();
 
@@ -40,21 +41,7 @@ export function SubagentTrace({
       ),
     [events]
   );
-  const timestamps = useMemo(() => {
-    const values = new Map<string, string>();
-    for (const event of events) {
-      if (event.type === "message.received") {
-        values.set(`${event.data.turnId}:user`, event.meta.at);
-      }
-      if (
-        event.type === "message.completed" &&
-        event.data.finishReason !== "tool-calls"
-      ) {
-        values.set(`${event.data.turnId}:assistant`, event.meta.at);
-      }
-    }
-    return values;
-  }, [events]);
+  const timestamps = useMemo(() => messageTimestamps(events), [events]);
   const isRunning = status === "starting" || status === "working";
   const turnFailure = useMemo(() => getLatestTurnFailure(events), [events]);
   const error = streamError ?? turnFailure;

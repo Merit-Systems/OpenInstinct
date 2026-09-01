@@ -1,18 +1,9 @@
 "use client";
 
 import { Client, type MessageStreamEvent } from "eve/client";
-import {
-  ChevronRightIcon,
-  ListTreeIcon,
-  SparklesIcon,
-  XIcon,
-} from "lucide-react";
-import { useEffect, useMemo, useRef, useState, type RefObject } from "react";
+import { ListTreeIcon } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Card, CardContent } from "@/components/ui/card";
-import { Field, FieldLabel } from "@/components/ui/field";
-import { Switch } from "@/components/ui/switch";
 import {
   Sheet,
   SheetContent,
@@ -21,29 +12,31 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import {
+  collectSubagentSessions,
   getSubagentStatus,
   getSubagentSubscriptionKey,
-  getSubagentTask,
-  type SubagentSession,
-  type SubagentStatus,
 } from "@/app/_lib/subagent-sessions";
-import { formatChatUsage } from "@/app/(authenticated)/chat/_lib/chat-usage";
 import type { ChatUsage } from "@/lib/chat";
 import { cn } from "@/lib/utils";
-import { SubagentTrace } from "./subagent-trace";
+import type { TraceView } from "../../_lib/trace-view";
+import { ActivityCard } from "./card";
+import { TracePreview } from "./preview";
+import { useChatUsage } from "./use-chat-usage";
 
 const client = new Client({ host: "" });
 
 export function SubagentPanel({
+  events,
+  initialUsage,
   onTraceViewChange,
-  sessions,
+  sessionId,
   traceView,
-  usage,
 }: {
-  readonly onTraceViewChange: (view: "imessage" | "trace") => void;
-  readonly sessions: readonly SubagentSession[];
-  readonly traceView: "imessage" | "trace";
-  readonly usage: ChatUsage;
+  readonly events: readonly MessageStreamEvent[];
+  readonly initialUsage?: ChatUsage;
+  readonly onTraceViewChange: (view: TraceView) => void;
+  readonly sessionId?: string;
+  readonly traceView: TraceView;
 }) {
   const [eventsBySession, setEventsBySession] = useState<
     ReadonlyMap<string, readonly MessageStreamEvent[]>
@@ -55,6 +48,8 @@ export function SubagentPanel({
   const [mobileOpen, setMobileOpen] = useState(false);
   const traceCloseButton = useRef<HTMLButtonElement>(null);
   const restoreFocusId = useRef<string | undefined>(undefined);
+  const sessions = useMemo(() => collectSubagentSessions(events), [events]);
+  const usage = useChatUsage({ events, initialUsage, sessionId });
   const subscriptionKey = getSubagentSubscriptionKey(sessions);
 
   useEffect(() => {
@@ -89,14 +84,16 @@ export function SubagentPanel({
             signal: controller.signal,
           })) {
             setEventsBySession((current) => {
-              const events = current.get(childSessionId) ?? [];
+              const sessionEvents = current.get(childSessionId) ?? [];
               if (
-                events.some((candidate) => candidate.meta.id === event.meta.id)
+                sessionEvents.some(
+                  (candidate) => candidate.meta.id === event.meta.id
+                )
               ) {
                 return current;
               }
               const next = new Map(current);
-              next.set(childSessionId, [...events, event]);
+              next.set(childSessionId, [...sessionEvents, event]);
               return next;
             });
           }
@@ -175,9 +172,9 @@ export function SubagentPanel({
     ["starting", "working"].includes(status)
   ).length;
   const doneCount = sessions.length - workingCount;
-  const openTask = (sessionId: string) => {
-    restoreFocusId.current = sessionId;
-    setSelectedId(sessionId);
+  const openTask = (childSessionId: string) => {
+    restoreFocusId.current = childSessionId;
+    setSelectedId(childSessionId);
   };
   const closeTask = () => {
     setSelectedId(undefined);
@@ -202,12 +199,12 @@ export function SubagentPanel({
         aria-hidden={selected !== undefined}
         className={cn(
           "relative hidden h-full shrink-0 overflow-hidden transition-[width] duration-200 ease-linear md:block",
-          selected ? "w-0" : "w-112"
+          selected ? "w-0" : "w-80"
         )}
       >
         <div
           className={cn(
-            "absolute inset-y-0 right-0 flex w-112 items-start p-4 transition-[opacity,transform] duration-200",
+            "absolute inset-y-0 right-0 flex w-80 items-start p-3 transition-[opacity,transform] duration-200",
             selected
               ? "pointer-events-none translate-x-6 opacity-0"
               : "translate-x-0 opacity-100"
@@ -294,165 +291,4 @@ export function SubagentPanel({
       </Sheet>
     </>
   );
-}
-
-function ActivityCard({
-  doneCount,
-  eventsBySession,
-  onSelect,
-  onTraceViewChange,
-  sessions,
-  statuses,
-  traceView,
-  usage,
-  workingCount,
-}: {
-  readonly doneCount: number;
-  readonly eventsBySession: ReadonlyMap<string, readonly MessageStreamEvent[]>;
-  readonly onSelect: (sessionId: string) => void;
-  readonly onTraceViewChange: (view: "imessage" | "trace") => void;
-  readonly sessions: readonly SubagentSession[];
-  readonly statuses: ReadonlyMap<string, SubagentStatus>;
-  readonly traceView: "imessage" | "trace";
-  readonly usage: ChatUsage;
-  readonly workingCount: number;
-}) {
-  return (
-    <Card className="max-h-full w-full gap-0 overflow-hidden">
-      <CardContent className="min-h-0 overflow-y-auto pr-6">
-        <p className="type-card-title text-muted-foreground">Activity</p>
-        <Field className="mt-4" orientation="horizontal">
-          <FieldLabel htmlFor="show-full-trace">Show full trace</FieldLabel>
-          <Switch
-            checked={traceView === "trace"}
-            id="show-full-trace"
-            onCheckedChange={(checked) => {
-              onTraceViewChange(checked ? "trace" : "imessage");
-            }}
-          />
-        </Field>
-        <div className="type-supporting-body flex items-center p-2 text-muted-foreground">
-          <span>Usage</span>
-          <span className="ml-auto">{formatChatUsage(usage)}</span>
-        </div>
-
-        <section className="mt-5 border-t pt-5">
-          <h2 className="type-section-title text-muted-foreground">Tasks</h2>
-          {sessions.length === 0 ? (
-            <p className="type-supporting-body mt-4 text-muted-foreground">
-              No tasks yet
-            </p>
-          ) : (
-            <>
-              <div className="mt-3 flex items-center gap-2 pb-2">
-                <Badge variant="information">{workingCount} working</Badge>
-                <Badge className="ml-auto" variant="secondary">
-                  {doneCount} done
-                </Badge>
-              </div>
-              <div>
-                {sessions.map((session) => {
-                  const status =
-                    statuses.get(session.childSessionId) ?? "starting";
-                  const task = getSubagentTask(
-                    eventsBySession.get(session.childSessionId) ?? []
-                  );
-                  return (
-                    <Button
-                      aria-label={`${agentLabel(session.name)} task, ${status}`}
-                      data-task-session={session.childSessionId}
-                      key={session.childSessionId}
-                      onClick={() => {
-                        onSelect(session.childSessionId);
-                      }}
-                      type="button"
-                      variant="surface"
-                    >
-                      <span className="min-w-0 flex-1">
-                        <span className="block truncate type-label">
-                          {agentLabel(session.name)}
-                        </span>
-                        <span className="block truncate type-caption text-muted-foreground">
-                          {task ?? "Waiting for assignment"}
-                        </span>
-                      </span>
-                      <StatusIndicator status={status} />
-                      <ChevronRightIcon className="text-muted-foreground" />
-                    </Button>
-                  );
-                })}
-              </div>
-            </>
-          )}
-        </section>
-      </CardContent>
-    </Card>
-  );
-}
-
-function TracePreview({
-  closeButtonRef,
-  events,
-  onClose,
-  session,
-  status,
-  streamError,
-}: {
-  readonly closeButtonRef?: RefObject<HTMLButtonElement | null>;
-  readonly events: readonly MessageStreamEvent[];
-  readonly onClose: () => void;
-  readonly session: SubagentSession;
-  readonly status: SubagentStatus;
-  readonly streamError?: string;
-}) {
-  return (
-    <div className="flex min-h-0 flex-1 flex-col">
-      <header className="flex h-14 shrink-0 items-center gap-3 border-b px-4">
-        <SparklesIcon className="size-4 text-muted-foreground" />
-        <div className="min-w-0 flex-1">
-          <h2 className="truncate type-card-title">
-            {agentLabel(session.name)}
-          </h2>
-          <p className="truncate type-caption text-muted-foreground">
-            Full task trace
-          </p>
-        </div>
-        <Button
-          aria-label="Close task trace"
-          onClick={onClose}
-          ref={closeButtonRef}
-          size="icon-sm"
-          type="button"
-          variant="ghost"
-        >
-          <XIcon />
-        </Button>
-      </header>
-      <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-6 sm:px-6">
-        <SubagentTrace
-          events={events}
-          status={status}
-          streamError={streamError}
-          target={session}
-        />
-      </div>
-    </div>
-  );
-}
-
-function agentLabel(name: string) {
-  return `${name.charAt(0).toUpperCase()}${name.slice(1)}`;
-}
-
-function StatusIndicator({ status }: { readonly status: SubagentStatus }) {
-  const variant =
-    status === "working" || status === "starting"
-      ? "information"
-      : status === "failed"
-        ? "destructive"
-        : status === "cancelled"
-          ? "secondary"
-          : "success";
-
-  return <Badge variant={variant}>{status}</Badge>;
 }
