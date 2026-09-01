@@ -1,3 +1,4 @@
+import { z } from "zod";
 import { describe, expect, it } from "vitest";
 import {
   emptyUserProfile,
@@ -32,5 +33,14 @@ describe("user profile", () => {
     expect(
       hasUserProfileValues({ ...emptyUserProfile, city: "Brooklyn" })
     ).toBe(true);
+  });
+
+  it("keeps model-facing email validation free of unsupported lookaround", () => {
+    expect(
+      userProfilePatchSchema.safeParse({ email: "not-an-email" }).success
+    ).toBe(false);
+    expect(
+      JSON.stringify(z.toJSONSchema(userProfilePatchSchema))
+    ).not.toContain("(?=");
   });
 });

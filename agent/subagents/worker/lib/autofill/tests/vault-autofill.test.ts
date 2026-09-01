@@ -65,7 +65,13 @@ const credentialsSurface = surface("credentials", [
   "username",
   "current-password",
 ]);
-const contactSurface = surface("contact", ["email", "tel"]);
+const contactSurface = surface("contact", [
+  "email",
+  "tel",
+  "bday-day",
+  "bday-month",
+  "bday-year",
+]);
 const addressSurface = surface("postal-address", [
   "street-address",
   "address-line1",
@@ -285,6 +291,7 @@ describe("vault browser autofill", () => {
     const contactProvider = providerFor(
       contact,
       serializeContactVaultPayload({
+        dateOfBirth: "1815-12-10",
         email: "ada@example.com",
         fullName: "Ada Lovelace",
         kind: "contact",
@@ -296,12 +303,17 @@ describe("vault browser autofill", () => {
       scope,
       contact.id,
       {
-        availableTokens: new Set(["email", "tel"]),
+        availableTokens: new Set(
+          contactSurface.fields.map(({ token }) => token)
+        ),
         origin: "https://merchant.example",
         surface: contactSurface,
       }
     );
     expect(claimValues(contactClaims)).toEqual({
+      "bday-day": "10",
+      "bday-month": "12",
+      "bday-year": "1815",
       email: "ada@example.com",
       tel: "+442079460000",
     });
@@ -419,7 +431,32 @@ describe("vault browser autofill", () => {
     });
   });
 
-  it.each(["address", "payment"])(
+  it("builds Chromium contact and birthdate fields from vault claims", () => {
+    expect(
+      buildNativeAutofillPayload("contact", [
+        claim("name", "Ada Lovelace"),
+        claim("email", "ada@example.com"),
+        claim("tel", "+442079460000"),
+        claim("bday-day", "10"),
+        claim("bday-month", "12"),
+        claim("bday-year", "1815"),
+      ])
+    ).toEqual({
+      address: {
+        fields: [
+          { name: "NAME_FULL", value: "Ada Lovelace" },
+          { name: "EMAIL_ADDRESS", value: "ada@example.com" },
+          { name: "PHONE_HOME_WHOLE_NUMBER", value: "+442079460000" },
+          { name: "BIRTHDATE_DAY", value: "10" },
+          { name: "BIRTHDATE_MONTH", value: "12" },
+          { name: "BIRTHDATE_4_DIGIT_YEAR", value: "1815" },
+        ],
+      },
+    });
+    expect(nativeAutofillTokens.contact).toContain("bday-year");
+  });
+
+  it.each(["address", "contact", "payment"])(
     "marks every %s form control before native autofill",
     () => {
       class FakeInput {

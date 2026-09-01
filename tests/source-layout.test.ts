@@ -27,6 +27,7 @@ const expectedLibFiles = [
   "admin.ts",
   "agent-manifest.ts",
   "application-origin.ts",
+  "browser-activity.ts",
   "browser-artifact.ts",
   "chat.ts",
   "google-workspace.ts",

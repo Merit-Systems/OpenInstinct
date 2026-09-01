@@ -2,6 +2,14 @@ import { z } from "zod";
 
 const nullableText = (maximum: number) =>
   z.string().trim().min(1).max(maximum).nullable();
+const emailAddress = z
+  .string()
+  .trim()
+  .min(3)
+  .max(320)
+  .refine((value) => z.email().safeParse(value).success, {
+    message: "Invalid email address",
+  });
 
 export const userProfileSchema = z.object({
   addressLine1: nullableText(300),
@@ -14,7 +22,7 @@ export const userProfileSchema = z.object({
     .regex(/^[A-Za-z]{2}$/u)
     .nullable(),
   dateOfBirth: z.iso.date().nullable(),
-  email: z.email().max(320).nullable(),
+  email: emailAddress.nullable(),
   firstName: nullableText(200),
   lastName: nullableText(200),
   phone: nullableText(100),
