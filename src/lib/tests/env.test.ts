@@ -87,6 +87,39 @@ describe("environment", () => {
     expect(env.LINQ_PHONE_NUMBER).toBe("+12025550123");
   });
 
+  it("validates Gmail Pub/Sub push configuration", async () => {
+    vi.stubEnv(
+      "GMAIL_PUBSUB_AUDIENCE",
+      "https://example.com/api/automations/gmail"
+    );
+    vi.stubEnv(
+      "GMAIL_PUBSUB_SERVICE_ACCOUNT",
+      "gmail-push@example.iam.gserviceaccount.com"
+    );
+    vi.stubEnv(
+      "GMAIL_PUBSUB_TOPIC",
+      "projects/example/topics/openinstinct-gmail"
+    );
+
+    const { env } = await import("@/env");
+
+    expect(env.GMAIL_PUBSUB_TOPIC).toBe(
+      "projects/example/topics/openinstinct-gmail"
+    );
+  });
+
+  it.each([
+    ["GMAIL_PUBSUB_AUDIENCE", "not-a-url"],
+    ["GMAIL_PUBSUB_SERVICE_ACCOUNT", "not-an-email"],
+    ["GMAIL_PUBSUB_TOPIC", "openinstinct-gmail"],
+  ])("rejects malformed %s", async (name, value) => {
+    vi.stubEnv(name, value);
+
+    await expect(import("@/env")).rejects.toThrow(
+      "Invalid environment variables"
+    );
+  });
+
   it("does not provide local defaults in a Vercel development environment", async () => {
     vi.stubEnv("BETTER_AUTH_SECRET", "");
     vi.stubEnv("BETTER_AUTH_URL", "");

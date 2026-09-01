@@ -5,6 +5,8 @@ import { z } from "zod";
 import {
   account,
   agentSessions,
+  automationRuns,
+  automations,
   browserImageArtifacts,
   browserSessions,
   browserTraceDomains,
@@ -12,6 +14,7 @@ import {
   browserTraces,
   chats,
   encryptedSecrets,
+  gmailWatches,
   session,
   settings,
   user,
@@ -30,6 +33,8 @@ describe("database schema", () => {
         vaultItems,
         settings,
         agentSessions,
+        automationRuns,
+        automations,
         browserImageArtifacts,
         browserSessions,
         browserTraces,
@@ -37,6 +42,7 @@ describe("database schema", () => {
         browserTraceEvents,
         chats,
         encryptedSecrets,
+        gmailWatches,
         user,
         session,
         account,
@@ -48,6 +54,8 @@ describe("database schema", () => {
       "vault_items",
       "settings",
       "agent_sessions",
+      "automation_runs",
+      "automations",
       "browser_image_artifacts",
       "browser_sessions",
       "browser_traces",
@@ -55,6 +63,7 @@ describe("database schema", () => {
       "browser_trace_events",
       "chats",
       "encrypted_secrets",
+      "gmail_watches",
       "user",
       "session",
       "account",
@@ -68,6 +77,7 @@ describe("database schema", () => {
       browserImageArtifacts,
       browserSessions,
       browserTraces,
+      automations,
     ]) {
       const foreignKeys = getTableConfig(table).foreignKeys;
       expect(foreignKeys.map((foreignKey) => foreignKey.getName())).toContain(
@@ -86,6 +96,21 @@ describe("database schema", () => {
         "user_id",
       ]);
     }
+  });
+
+  it("anchors Gmail watches to their workspace member", () => {
+    const membership = getTableConfig(gmailWatches).foreignKeys.find(
+      (foreignKey) => foreignKey.getName() === "gmail_watches_membership_fkey"
+    );
+    const reference = membership?.reference();
+    expect(reference?.columns.map((column) => column.name)).toEqual([
+      "workspace_id",
+      "user_id",
+    ]);
+    expect(reference?.foreignColumns.map((column) => column.name)).toEqual([
+      "workspace_id",
+      "user_id",
+    ]);
   });
 
   it("keeps every workspace-owned table connected to the workspace root", () => {

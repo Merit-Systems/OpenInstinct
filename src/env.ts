@@ -44,6 +44,11 @@ const betterAuthUrlSchema = requiredValue.refine(
   "BETTER_AUTH_URL must be an absolute URL"
 );
 
+const absoluteUrlSchema = requiredValue.refine(
+  (value) => URL.canParse(value),
+  "Must be an absolute URL"
+);
+
 function optionalValueWithLocalDefault<T extends z.ZodType<string, string>>(
   schema: T,
   localDefault: z.util.NoUndefined<z.output<T>>
@@ -83,6 +88,11 @@ export const env = createEnv({
     // Optional
     BLOB_READ_WRITE_TOKEN: requiredValue.optional(),
     BLOB_STORE_ID: requiredValue.optional(),
+    GMAIL_PUBSUB_AUDIENCE: absoluteUrlSchema.optional(),
+    GMAIL_PUBSUB_SERVICE_ACCOUNT: z.email().optional(),
+    GMAIL_PUBSUB_TOPIC: requiredValue
+      .regex(/^projects\/[^/]+\/topics\/[^/]+$/u)
+      .optional(),
     GOOGLE_CONNECTOR_UID: requiredValue.default("google/open-instinct"),
     LINQ_CONNECTOR: requiredValue.optional(),
     LINQ_PHONE_NUMBER: requiredValue

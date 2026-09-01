@@ -1,0 +1,1 @@
+ALTER TABLE "automation_runs" ADD COLUMN "eve_session_id" text;

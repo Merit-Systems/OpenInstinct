@@ -16,6 +16,17 @@ export function applicationOrigin() {
   );
 }
 
+export function internalApplicationOrigin() {
+  if (env.VERCEL_ENV) {
+    const hostname =
+      env.VERCEL_URL ??
+      env.VERCEL_BRANCH_URL ??
+      env.VERCEL_PROJECT_PRODUCTION_URL;
+    if (hostname) return new URL(`https://${hostname}`).origin;
+  }
+  return applicationOrigin();
+}
+
 export function betterAuthBaseURL() {
   const fallback = applicationOrigin();
   if (!env.VERCEL_ENV) return fallback;

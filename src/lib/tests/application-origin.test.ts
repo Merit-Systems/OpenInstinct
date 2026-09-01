@@ -32,10 +32,13 @@ describe("application origin", () => {
     vi.stubEnv("VERCEL_PROJECT_PRODUCTION_URL", "openinstinct.example.com");
     vi.stubEnv("VERCEL_URL", "openinstinct-preview-123.vercel.app");
 
-    const { applicationOrigin, betterAuthBaseURL } =
+    const { applicationOrigin, betterAuthBaseURL, internalApplicationOrigin } =
       await import("@/lib/application-origin");
 
     expect(applicationOrigin()).toBe("https://openinstinct.example.com");
+    expect(internalApplicationOrigin()).toBe(
+      "https://openinstinct-preview-123.vercel.app"
+    );
     expect(betterAuthBaseURL()).toEqual({
       allowedHosts: [
         "*.vercel.app",

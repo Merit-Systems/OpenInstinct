@@ -6,6 +6,11 @@ export async function proxy(request: NextRequest) {
   if (
     pathname === "/sign-in" ||
     pathname.startsWith("/api/auth/") ||
+    pathname === "/api/automations/arm" ||
+    pathname === "/api/automations/gmail" ||
+    ((pathname === "/eve/v1/session" ||
+      pathname.startsWith("/eve/v1/session/")) &&
+      request.headers.get("x-openinstinct-automation-purpose") === "execute") ||
     pathname === "/eve/v1/health"
   ) {
     return NextResponse.next();
@@ -22,5 +27,7 @@ export async function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/((?!_next/static|_next/image|favicon.ico).*)"],
+  matcher: [
+    "/((?!_next/static|_next/image|favicon.ico|.well-known/workflow/).*)",
+  ],
 };

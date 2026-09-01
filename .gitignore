@@ -12,3 +12,4 @@ next-env.d.ts
 dist
 .DS_Store
 *.tsbuildinfo
+/.swc
