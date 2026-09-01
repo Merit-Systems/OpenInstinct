@@ -1501,10 +1501,7 @@ export const PromptInputSubmit = ({
   const button = (
     <InputGroupButton
       aria-label={isGenerating ? "Stop" : "Submit"}
-      className={cn(
-        layout?.compact && "absolute right-1.5 bottom-1.5",
-        className
-      )}
+      className={cn(className)}
       onClick={handleClick}
       size={size}
       type={isGenerating && onStop ? "button" : "submit"}
@@ -1519,7 +1516,17 @@ export const PromptInputSubmit = ({
     return button;
   }
 
-  return <span className="size-8 shrink-0">{button}</span>;
+  return (
+    <span className="size-8 shrink-0">
+      <m.span
+        className="absolute right-1.5 bottom-1.5 inline-flex"
+        layout={layout.animateLayout ? "position" : false}
+        transition={{ layout: promptInputLayoutTransition }}
+      >
+        {button}
+      </m.span>
+    </span>
+  );
 };
 
 export type PromptInputSelectProps = ComponentProps<typeof Select>;
