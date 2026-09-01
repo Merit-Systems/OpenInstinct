@@ -9,7 +9,7 @@ import {
 import {
   resetWorkspaceScopeEnforcementForIntegrationTest,
   setWorkspaceScopeEnforcementForIntegrationTest,
-} from "@/lib/env";
+} from "@/env";
 import * as schema from "../../db/schema";
 
 const databases: PGlite[] = [];

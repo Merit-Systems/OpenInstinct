@@ -1,6 +1,5 @@
 import {
   createCipheriv,
-  createDecipheriv,
   createHmac,
   hkdfSync,
   randomBytes,
@@ -33,14 +32,12 @@ export async function recordVerifiedPhoneIdentity({
 
   for (let attempt = 0; attempt < 2; attempt += 1) {
     try {
-      return await phoneIdentityDependencies.recordVerifiedPhoneIdentityTransaction(
-        {
-          normalizedPhoneNumber,
-          phoneLookupHash,
-          secretEncryptionKey,
-          userId,
-        }
-      );
+      return await recordVerifiedPhoneIdentityTransaction({
+        normalizedPhoneNumber,
+        phoneLookupHash,
+        secretEncryptionKey,
+        userId,
+      });
     } catch (error) {
       if (attempt === 0 && error instanceof Error && isUniqueViolation(error))
         continue;
@@ -49,10 +46,6 @@ export async function recordVerifiedPhoneIdentity({
   }
   throw new Error("Failed to record phone identity.");
 }
-
-export const phoneIdentityDependencies = {
-  recordVerifiedPhoneIdentityTransaction,
-};
 
 async function recordVerifiedPhoneIdentityTransaction({
   normalizedPhoneNumber,
@@ -207,25 +200,6 @@ function encryptPhoneNumber(
     cipher.getAuthTag().toString("base64url"),
     ciphertext.toString("base64url"),
   ].join(".");
-}
-
-export async function decryptPhoneIdentityForTest(id: string, value: string) {
-  const { secretEncryptionKey } = await getInstallationSecrets();
-  const [version, encodedIv, encodedTag, encodedCiphertext] = value.split(".");
-  if (version !== "v1" || !encodedIv || !encodedTag || !encodedCiphertext) {
-    throw new Error("The stored phone identity uses an unsupported format.");
-  }
-  const decipher = createDecipheriv(
-    "aes-256-gcm",
-    derivedKey("phone-identity-aead", secretEncryptionKey),
-    Buffer.from(encodedIv, "base64url")
-  );
-  decipher.setAAD(phoneIdentityAad(id));
-  decipher.setAuthTag(Buffer.from(encodedTag, "base64url"));
-  return Buffer.concat([
-    decipher.update(Buffer.from(encodedCiphertext, "base64url")),
-    decipher.final(),
-  ]).toString("utf8");
 }
 
 function derivedKey(

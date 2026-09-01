@@ -8,7 +8,7 @@ import {
   type WorkspaceMembershipRole,
   type WorkspaceMembershipStatus,
 } from "@/db";
-import { isWorkspaceScopeEnforcementEnabled } from "@/lib/env";
+import { isWorkspaceScopeEnforcementEnabled } from "@/env";
 
 let scopeEnforcementEnabled = isWorkspaceScopeEnforcementEnabled;
 

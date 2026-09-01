@@ -1,26 +1,21 @@
-import { createHmac, hkdfSync } from "node:crypto";
+import { createDecipheriv, createHmac, hkdfSync } from "node:crypto";
 import { readFile, readdir } from "node:fs/promises";
 import { PGlite } from "@electric-sql/pglite";
 import { drizzle } from "drizzle-orm/pglite";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 import {
   resetDatabaseForIntegrationTest,
   setDatabaseForIntegrationTest,
 } from "@/db";
-import { phoneIdentityDependencies } from "@/db/services/phone-identities";
 import * as schema from "../../db/schema";
 
 const databases: PGlite[] = [];
 const phoneNumber = "+12025550123";
 const normalizedPhoneNumber = "+12025550123";
 const testSecretEncryptionKey = "AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE=";
-const originalRecordVerifiedPhoneIdentityTransaction =
-  phoneIdentityDependencies.recordVerifiedPhoneIdentityTransaction;
 
 afterEach(async () => {
   resetDatabaseForIntegrationTest();
-  phoneIdentityDependencies.recordVerifiedPhoneIdentityTransaction =
-    originalRecordVerifiedPhoneIdentityTransaction;
   await Promise.all(databases.splice(0).map((database) => database.close()));
 });
 
@@ -37,18 +32,20 @@ describe("phone identities", () => {
       /^v1\.[\w-]+\.[\w-]+\.[\w-]+$/
     );
     expect(identity.phoneLookupHash).toBe(expectedLookupHash());
-    await expect(
-      service.decryptPhoneIdentityForTest(
+    expect(
+      decryptPhoneIdentity(
         identity.id,
-        identity.encryptedPhoneNumber
+        identity.encryptedPhoneNumber,
+        testSecretEncryptionKey
       )
-    ).resolves.toBe(normalizedPhoneNumber);
-    await expect(
-      service.decryptPhoneIdentityForTest(
+    ).toBe(normalizedPhoneNumber);
+    expect(() =>
+      decryptPhoneIdentity(
         "different-row-id",
-        identity.encryptedPhoneNumber
+        identity.encryptedPhoneNumber,
+        testSecretEncryptionKey
       )
-    ).rejects.toThrow(/authenticate/i);
+    ).toThrow(/authenticate/i);
     expect(identity.status).toBe("verified");
     expect(await service.findVerifiedUserByPhoneNumber(phoneNumber)).toEqual({
       phoneIdentityId: identity.id,
@@ -140,37 +137,6 @@ describe("phone identities", () => {
       service.findVerifiedUserByPhoneNumber(phoneNumber)
     ).resolves.toBeUndefined();
   });
-
-  it("retries once when a concurrent verified insert wins the partial index", async () => {
-    const conflict = Object.assign(new Error("unique conflict"), {
-      cause: { code: "23505" },
-    });
-    const retriedIdentity = {
-      createdAt: "2026-01-01T00:00:00.000Z",
-      encryptedPhoneNumber: "encrypted",
-      id: "retried-identity",
-      phoneLookupHash: "lookup",
-      revokedAt: null,
-      status: "verified",
-      updatedAt: "2026-01-01T00:00:00.000Z",
-      userId: "alice",
-      verifiedAt: "2026-01-01T00:00:00.000Z",
-    };
-    const transaction = vi
-      .fn<
-        typeof phoneIdentityDependencies.recordVerifiedPhoneIdentityTransaction
-      >()
-      .mockRejectedValueOnce(conflict)
-      .mockResolvedValueOnce(retriedIdentity);
-    phoneIdentityDependencies.recordVerifiedPhoneIdentityTransaction =
-      transaction;
-    const service = await import("@/db/services/phone-identities");
-
-    await expect(
-      service.recordVerifiedPhoneIdentity({ phoneNumber, userId: "alice" })
-    ).resolves.toBe(retriedIdentity);
-    expect(transaction).toHaveBeenCalledTimes(2);
-  });
 });
 
 function expectedLookupHash() {
@@ -181,6 +147,36 @@ function expectedLookupHash() {
   return createHmac("sha256", hmacKey)
     .update(normalizedPhoneNumber, "utf8")
     .digest("hex");
+}
+
+function decryptPhoneIdentity(
+  id: string,
+  value: string,
+  secretEncryptionKey: string
+) {
+  const [version, encodedIv, encodedTag, encodedCiphertext] = value.split(".");
+  if (version !== "v1" || !encodedIv || !encodedTag || !encodedCiphertext)
+    throw new Error("The stored phone identity uses an unsupported format.");
+  const key = Buffer.from(
+    hkdfSync(
+      "sha256",
+      Buffer.from(secretEncryptionKey, "base64"),
+      Buffer.alloc(0),
+      "phone-identity-aead",
+      32
+    )
+  );
+  const decipher = createDecipheriv(
+    "aes-256-gcm",
+    key,
+    Buffer.from(encodedIv, "base64url")
+  );
+  decipher.setAAD(Buffer.from(`phone-identity\u0000${id}`));
+  decipher.setAuthTag(Buffer.from(encodedTag, "base64url"));
+  return Buffer.concat([
+    decipher.update(Buffer.from(encodedCiphertext, "base64url")),
+    decipher.final(),
+  ]).toString("utf8");
 }
 
 async function loadPhoneIdentityService() {

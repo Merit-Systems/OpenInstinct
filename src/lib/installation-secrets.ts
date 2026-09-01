@@ -1,16 +1,18 @@
 import { createHash, randomBytes } from "node:crypto";
 import { get, put } from "@vercel/blob";
-import { blobAuthentication } from "@/lib/blob-authentication";
-import { env } from "@/lib/env";
-import {
-  installationSecretsSchema,
-  type InstallationSecrets,
-} from "@/lib/installation-secrets-schema";
+import { z } from "zod";
+import { betterAuthSecretSchema, env, secretEncryptionKeySchema } from "@/env";
+
+const installationSecretsSchema = z.object({
+  betterAuthSecret: betterAuthSecretSchema,
+  secretEncryptionKey: secretEncryptionKeySchema,
+  version: z.literal(1),
+});
+
+export type InstallationSecrets = z.infer<typeof installationSecretsSchema>;
 
 const maximumInstallationSecretsBytes = 1024;
 let installationSecretsPromise: Promise<InstallationSecrets> | undefined;
-
-export const installationSecretsDependencies = { get, put };
 
 export function getInstallationSecrets() {
   installationSecretsPromise ??= resolveInstallationSecretsWithRetry();
@@ -30,15 +32,13 @@ async function resolveInstallationSecrets() {
   const configured = configuredInstallationSecrets();
   if (configured) return configured;
 
-  const authentication = blobAuthentication(
-    {
-      readWriteToken: env.BLOB_READ_WRITE_TOKEN,
-      storeId: env.BLOB_STORE_ID,
-    },
-    "Installation secrets are unavailable. Connect a private Vercel Blob store or set both BETTER_AUTH_SECRET and SECRET_ENCRYPTION_KEY."
-  );
+  if (!env.BLOB_STORE_ID && !env.BLOB_READ_WRITE_TOKEN) {
+    throw new Error(
+      "Installation secrets are unavailable. Connect a private Vercel Blob store or set both BETTER_AUTH_SECRET and SECRET_ENCRYPTION_KEY."
+    );
+  }
   const pathname = installationSecretsPathname();
-  const existing = await readInstallationSecrets(authentication, pathname);
+  const existing = await readInstallationSecrets(pathname);
   if (existing) return existing;
 
   const generated = installationSecretsSchema.parse({
@@ -47,22 +47,17 @@ async function resolveInstallationSecrets() {
     version: 1,
   });
   try {
-    await installationSecretsDependencies.put(
-      pathname,
-      JSON.stringify(generated),
-      {
-        ...authentication,
-        access: "private",
-        addRandomSuffix: false,
-        allowOverwrite: false,
-        cacheControlMaxAge: 365 * 24 * 60 * 60,
-        contentType: "application/json",
-        maximumSizeInBytes: maximumInstallationSecretsBytes,
-      }
-    );
+    await put(pathname, JSON.stringify(generated), {
+      access: "private",
+      addRandomSuffix: false,
+      allowOverwrite: false,
+      cacheControlMaxAge: 365 * 24 * 60 * 60,
+      contentType: "application/json",
+      maximumSizeInBytes: maximumInstallationSecretsBytes,
+    });
     return generated;
   } catch (error) {
-    const winner = await readInstallationSecrets(authentication, pathname);
+    const winner = await readInstallationSecrets(pathname);
     if (winner) return winner;
     throw error;
   }
@@ -84,12 +79,8 @@ function configuredInstallationSecrets() {
   });
 }
 
-async function readInstallationSecrets(
-  authentication: { readonly storeId: string } | { readonly token: string },
-  pathname: string
-) {
-  const result = await installationSecretsDependencies.get(pathname, {
-    ...authentication,
+async function readInstallationSecrets(pathname: string) {
+  const result = await get(pathname, {
     access: "private",
     useCache: false,
   });

@@ -1,10 +1,11 @@
+/* oxlint-disable vitest/require-mock-type-parameters -- The connector mock needs only the token operation exercised here. */
 import { APIError } from "better-auth/api";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 import { phoneOtpErrorMessage } from "@/app/sign-in/phone-auth-form";
-import { linqDeliveryDependencies } from "@/auth/linq";
+const mocks = vi.hoisted(() => ({ getToken: vi.fn() }));
 
-const getTokenMock = vi.spyOn(linqDeliveryDependencies, "getToken");
+vi.mock("@vercel/connect", () => ({ getToken: mocks.getToken }));
 
 const linqApiErrorSchema = z.object({
   code: z.string(),
@@ -30,7 +31,7 @@ describe("Linq phone authentication", () => {
       "0123456789abcdefghijklmnopqrstuvwxyzABCD"
     );
     vi.stubEnv("LINQ_CONNECTOR", "linq/open-instinct");
-    getTokenMock.mockResolvedValue("test-token");
+    mocks.getToken.mockResolvedValue("test-token");
     vi.stubGlobal(
       "fetch",
       vi.fn<typeof fetch>().mockResolvedValue(

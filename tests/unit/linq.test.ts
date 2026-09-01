@@ -1,12 +1,11 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import {
-  LinqDeliveryError,
-  linqDeliveryDependencies,
-  linqOtpFailure,
-  sendLinqText,
-} from "@/auth/linq";
+import { LinqDeliveryError, linqOtpFailure, sendLinqText } from "@/auth/linq";
 
-const getTokenMock = vi.spyOn(linqDeliveryDependencies, "getToken");
+const mocks = vi.hoisted(() => ({
+  getToken: vi.fn<() => Promise<string>>(),
+}));
+
+vi.mock("@vercel/connect", () => ({ getToken: mocks.getToken }));
 
 describe("Linq delivery", () => {
   afterEach(() => {
@@ -15,7 +14,7 @@ describe("Linq delivery", () => {
   });
 
   it("uses the configured connector and sends the OTP", async () => {
-    getTokenMock.mockResolvedValue("test-token");
+    mocks.getToken.mockResolvedValue("test-token");
     const fetchMock = vi
       .fn<typeof fetch>()
       .mockResolvedValue(new Response(null, { status: 202 }));
@@ -28,7 +27,7 @@ describe("Linq delivery", () => {
       to: "+12025550123",
     });
 
-    expect(getTokenMock).toHaveBeenCalledWith("linq/open-instinct", {
+    expect(mocks.getToken).toHaveBeenCalledWith("linq/open-instinct", {
       subject: { type: "app" },
     });
     const [url, init] = fetchMock.mock.calls[0] ?? [];
@@ -41,7 +40,7 @@ describe("Linq delivery", () => {
   });
 
   it("preserves diagnostics from Linq's current error envelope", async () => {
-    getTokenMock.mockResolvedValue("test-token");
+    mocks.getToken.mockResolvedValue("test-token");
     vi.stubGlobal(
       "fetch",
       vi.fn<typeof fetch>().mockResolvedValue(
@@ -71,7 +70,7 @@ describe("Linq delivery", () => {
   });
 
   it("preserves diagnostics from Linq's legacy error envelope", async () => {
-    getTokenMock.mockResolvedValue("test-token");
+    mocks.getToken.mockResolvedValue("test-token");
     vi.stubGlobal(
       "fetch",
       vi.fn<typeof fetch>().mockResolvedValue(
@@ -97,7 +96,7 @@ describe("Linq delivery", () => {
   });
 
   it("falls back to Linq's trace response header", async () => {
-    getTokenMock.mockResolvedValue("test-token");
+    mocks.getToken.mockResolvedValue("test-token");
     vi.stubGlobal(
       "fetch",
       vi.fn<typeof fetch>().mockResolvedValue(

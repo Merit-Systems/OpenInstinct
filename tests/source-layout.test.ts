@@ -11,6 +11,8 @@ const allowedSrcDirectories = [
   "trpc",
 ];
 
+const expectedSrcFiles = ["env.ts", "proxy.ts"];
+
 const disallowedLibDirectories = [
   "browser",
   "browser-images",
@@ -25,12 +27,9 @@ const expectedLibFiles = [
   "admin.ts",
   "agent-manifest.ts",
   "application-origin.ts",
-  "blob-authentication.ts",
   "browser-artifact.ts",
   "chat.ts",
-  "env.ts",
   "google-workspace.ts",
-  "installation-secrets-schema.ts",
   "installation-secrets.ts",
   "kernel.ts",
   "request-scope.ts",
@@ -56,6 +55,7 @@ function files(directory: string) {
 describe("source layout", () => {
   it("keeps src limited to application layers", () => {
     expect(directories("src")).toEqual(allowedSrcDirectories);
+    expect(files("src")).toEqual(expectedSrcFiles);
   });
 
   it("keeps lib limited to shared infrastructure and contracts", () => {

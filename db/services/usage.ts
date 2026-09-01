@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { and, eq, gte, sql } from "drizzle-orm";
 import type { AccessScope } from "@/lib/access-scope";
-import { isWorkspaceScopeEnforcementEnabled } from "@/lib/env";
+import { isWorkspaceScopeEnforcementEnabled } from "@/env";
 import { db, type UsageEventKind, usageEvents, workspaceBudgets } from "@/db";
 import { recordAuditEvent } from "./audit";
 import { assertWorkspaceOperable } from "./scope";

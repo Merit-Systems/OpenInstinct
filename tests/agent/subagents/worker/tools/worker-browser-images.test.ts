@@ -1,4 +1,4 @@
-/* oxlint-disable anti-slop/no-module-mocking, typescript/no-unsafe-type-assertion, vitest/require-mock-type-parameters -- The tool owns Kernel and Blob I/O. These fakes isolate external APIs without adding a production wrapper. */
+/* oxlint-disable typescript/no-unsafe-type-assertion, vitest/require-mock-type-parameters -- The test fixtures implement only the external API surface exercised by the tool. */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { toolContextFor } from "@/tests/helpers/tool-context";
 

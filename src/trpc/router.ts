@@ -31,7 +31,7 @@ import { selectGatewayModel } from "@/db/services/settings";
 import { deleteVaultItem, saveVaultItem } from "@/db/services/vault";
 import type { AccessScope } from "@/lib/access-scope";
 import { saveChatSchema } from "@/lib/chat";
-import { env } from "@/lib/env";
+import { env } from "@/env";
 import {
   googleWorkspaceSubject,
   googleWorkspaceTokenParams,
@@ -51,7 +51,7 @@ import {
   registerWebhookEndpoint,
   rotateWebhookSecret,
 } from "@/db/services/webhooks";
-import { isWorkspaceScopeEnforcementEnabled } from "@/lib/env";
+import { isWorkspaceScopeEnforcementEnabled } from "@/env";
 import { googleWorkspaceScopes } from "@/lib/google-workspace";
 import { vaultCreateItemSchema, vaultImportItemsSchema } from "@/lib/vault";
 import { adminProcedure, createTRPCRouter, protectedProcedure } from "./init";

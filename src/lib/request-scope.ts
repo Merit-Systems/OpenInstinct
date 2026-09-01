@@ -3,7 +3,7 @@ import { cache } from "react";
 import { getAuthSession } from "@/auth/session";
 import { accessScopeForUser, type AccessScope } from "@/lib/access-scope";
 import { verifyScopeAccess } from "@/db/services/scope";
-import { isWorkspaceScopeEnforcementEnabled } from "@/lib/env";
+import { isWorkspaceScopeEnforcementEnabled } from "@/env";
 
 export const requestScopeDependencies = {
   getAuthSession,

@@ -5,7 +5,7 @@ import {
   resolveProfileMemoryBackend,
   resolveProfileMemoryScope,
 } from "../lib/profile-memory";
-import { env } from "@/lib/env";
+import { env } from "@/env";
 
 const backend = resolveProfileMemoryBackend(env);
 const provider =

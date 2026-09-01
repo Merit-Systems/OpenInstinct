@@ -5,7 +5,7 @@ import { isSessionOwned } from "@/db/services/sessions";
 import { verifyScopeAccess } from "@/db/services/scope";
 import { accessScopeForUser, type AccessScope } from "@/lib/access-scope";
 import { getAuthSession } from "@/auth/session";
-import { isWorkspaceScopeEnforcementEnabled } from "@/lib/env";
+import { isWorkspaceScopeEnforcementEnabled } from "@/env";
 
 export const eveChannelDependencies = {
   getAuthSession,

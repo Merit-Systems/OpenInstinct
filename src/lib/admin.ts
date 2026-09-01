@@ -1,7 +1,7 @@
 import { eq } from "drizzle-orm";
 import { normalizeAuthPhoneNumber } from "@/auth/phone-number";
 import { db, user } from "@/db";
-import { env } from "@/lib/env";
+import { env } from "@/env";
 import { requireRequestScope } from "@/lib/request-scope";
 import type { AccessScope } from "./access-scope";
 

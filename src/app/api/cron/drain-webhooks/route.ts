@@ -1,5 +1,5 @@
 import { drainWebhookDeliveries } from "@/db/services/webhooks";
-import { env } from "@/lib/env";
+import { env } from "@/env";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;

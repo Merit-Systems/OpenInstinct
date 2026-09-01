@@ -8,7 +8,7 @@ import {
   assertWorkspaceOperable,
   verifyScopeAccess,
 } from "@/db/services/scope";
-import { isWorkspaceScopeEnforcementEnabled } from "@/lib/env";
+import { isWorkspaceScopeEnforcementEnabled } from "@/env";
 
 interface ApiRequestContext {
   readonly scope: { readonly userId: string; readonly workspaceId: string };

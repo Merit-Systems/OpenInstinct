@@ -1,13 +1,17 @@
+/* oxlint-disable vitest/require-mock-type-parameters -- Session lookup needs a deliberately partial Better Auth fixture. */
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { createGetAuthSession } from "@/auth/session";
-import type { authSessionDependencies } from "@/auth/session";
+import { getAuthSession } from "@/auth/session";
 import { authSessionFor } from "@/tests/helpers/auth-session";
 
-const getSession = vi.fn<typeof authSessionDependencies.getSession>();
-const getAuthSession = createGetAuthSession({ getSession });
+const mocks = vi.hoisted(() => ({ getAuth: vi.fn(), getSession: vi.fn() }));
+
+vi.mock("@/auth", () => ({ getAuth: mocks.getAuth }));
 
 beforeEach(() => {
   vi.clearAllMocks();
+  mocks.getAuth.mockResolvedValue({
+    api: { getSession: mocks.getSession },
+  });
 });
 
 describe("auth session", () => {
@@ -17,7 +21,7 @@ describe("auth session", () => {
       phoneNumber: "+12025550123",
       phoneNumberVerified: true,
     });
-    getSession
+    mocks.getSession
       .mockResolvedValueOnce(verified)
       .mockResolvedValueOnce(
         authSessionFor({
@@ -41,6 +45,8 @@ describe("auth session", () => {
     await expect(getAuthSession(headers)).resolves.toEqual(verified);
     await expect(getAuthSession(headers)).resolves.toBeNull();
     await expect(getAuthSession(headers)).resolves.toBeNull();
+    await expect(getAuthSession(headers)).resolves.toBeNull();
+    mocks.getSession.mockResolvedValueOnce(null);
     await expect(getAuthSession(headers)).resolves.toBeNull();
   });
 });

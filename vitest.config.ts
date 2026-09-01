@@ -11,6 +11,10 @@ const sharedProjectConfig = {
         ),
       },
       {
+        find: "@/env",
+        replacement: fileURLToPath(new URL("src/env.ts", import.meta.url)),
+      },
+      {
         find: /^@\/(app|auth|components|hooks|lib|proxy|trpc)(\/.*)?$/,
         replacement: fileURLToPath(new URL("src/$1$2", import.meta.url)),
       },
