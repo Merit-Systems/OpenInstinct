@@ -41,9 +41,9 @@ describe("automation service", () => {
       idempotencyKey: "session-alice:call-1",
       phoneNumber: "+12125550123",
       sessionId: "session-alice",
-      task: "Check the L train and summarize it.",
+      task: "Summarize unread inbox messages.",
       timezone: "America/New_York",
-      title: "L train status",
+      title: "Unread inbox summary",
       trigger: { at: runAt, kind: "at" } as const,
     };
     const created = await automations.createAutomation(alice, input);
@@ -66,7 +66,7 @@ describe("automation service", () => {
     ).resolves.toBeUndefined();
     await new Promise((resolve) => setTimeout(resolve, 60));
     const completed = await automations.finishAutomationRun({
-      result: "No L train delays.",
+      result: "Three unread inbox messages.",
       runId: firstRun?.runId ?? "missing",
     });
     expect(completed.status).toBe("completed");

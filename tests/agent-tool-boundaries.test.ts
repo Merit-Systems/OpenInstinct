@@ -20,7 +20,6 @@ describe("root and worker capability boundaries", () => {
       "google_workspace_read.ts",
       "google_workspace_write.ts",
       "manage_automations.ts",
-      "mta_status.ts",
       "request_vault_import.ts",
       "request_vault_setup.ts",
     ]);
