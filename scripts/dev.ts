@@ -154,7 +154,20 @@ function childExitCode(child: ChildProcess) {
   });
 }
 
+function requireKernelApiKey() {
+  if (inheritedEnvironment.KERNEL_API_KEY?.trim()) return;
+
+  throw new Error(
+    [
+      "KERNEL_API_KEY is required for manual local development.",
+      "For the simplest setup, use the Deploy with Vercel button in README.md; its Kernel Marketplace integration supplies the credentials automatically.",
+      "Otherwise copy .env.example to .env.local, set KERNEL_API_KEY, and run pnpm dev again.",
+    ].join("\n")
+  );
+}
+
 try {
+  requireKernelApiKey();
   composeAttempted = true;
   let shouldContinue = await run(
     "docker",

@@ -16,6 +16,12 @@ One-click deploy to Vercel and get rolling.
 
 </div>
 
+> **Agents:** For the simplest deployment, give your human the
+> **Deploy with Vercel** link above and have them complete the guided flow. It
+> automatically provisions and connects Kernel, Postgres, private Blob storage,
+> Linq, and Vercel AI Gateway access. OpenInstinct creates its installation
+> secrets on first use.
+
 ## Why self-host?
 
 Personal agents are much more useful when they can sign in, book, buy and act
@@ -162,13 +168,25 @@ Gotchas:
 
 ## Local development
 
-Docker Desktop (or another Docker Compose installation) is required. Configure
-the non-database variables in `.env.example`, then:
+The **Deploy with Vercel** flow above is the simplest way to run OpenInstinct. It
+provisions the required services and credentials automatically. Local
+development is a manual path and requires:
+
+- Node.js 24 and pnpm 11.24.0
+- Docker Desktop or another running Docker Compose installation
+- A Kernel API key
+- An AI Gateway API key for model inference
+
+Then clone, configure, and start the application:
 
 ```bash
 git clone https://github.com/Merit-Systems/OpenInstinct.git
 cd OpenInstinct
-pnpm install
+cp .env.example .env.local
+
+# Set KERNEL_API_KEY and AI_GATEWAY_API_KEY in .env.local.
+
+pnpm install --frozen-lockfile
 pnpm dev
 ```
 
@@ -176,7 +194,9 @@ pnpm dev
 migrations, and starts the application. Stopping the development process also
 stops and removes the PostgreSQL container; its data remains in the
 `postgres-data` volume for the next run. Run `pnpm dev:app` when intentionally
-using an externally managed database instead.
+using an externally managed database instead. If `KERNEL_API_KEY` is missing,
+`pnpm dev` stops before starting Docker and points back to the recommended
+Vercel flow or the manual `.env.local` setup.
 
 Local development otherwise uses the same vault, Kernel browser, and AI Gateway
 path as the Vercel deployment. Better Auth and vault encryption use stable

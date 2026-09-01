@@ -93,7 +93,7 @@
     "deps:check": "taze --no-github-actions --no-node-version --fail-on-outdated",
     "deploy": "turbo run deploy:app",
     "deploy:app": "eve deploy",
-    "dev": "node scripts/dev.ts",
+    "dev": "node --env-file-if-exists=.env.local scripts/dev.ts",
     "dev:app": "next dev",
     "eval": "eve eval",
     "format": "oxfmt .",

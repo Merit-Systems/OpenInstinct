@@ -27,7 +27,9 @@ describe("local development", () => {
       .object({ scripts: z.object({ dev: z.string() }) })
       .parse(JSON.parse(packageManifestSource));
 
-    expect(packageManifest.scripts.dev).toBe("node scripts/dev.ts");
+    expect(packageManifest.scripts.dev).toBe(
+      "node --env-file-if-exists=.env.local scripts/dev.ts"
+    );
     expect(compose).toContain("image: postgres:17-alpine");
     expect(compose).toContain('"127.0.0.1::5432"');
     expect(compose).toContain("postgres-data:/var/lib/postgresql/data");
@@ -60,6 +62,22 @@ describe("local development", () => {
 
     expect(result.code).toBe(0);
     expectIsolatedLifecycle(result.commands);
+  });
+
+  it("rejects a missing Kernel key before starting Docker", async () => {
+    const result = await runWithoutKernelApiKey();
+
+    expect(result.code).toBe(1);
+    expect(result.commands).toBe("");
+    expect(result.stderr).toContain(
+      "KERNEL_API_KEY is required for manual local development."
+    );
+    expect(result.stderr).toContain(
+      "Deploy with Vercel button in README.md; its Kernel Marketplace integration supplies the credentials automatically."
+    );
+    expect(result.stderr).toContain(
+      "copy .env.example to .env.local, set KERNEL_API_KEY"
+    );
   });
 
   it("does not advance when interrupted startup exits cleanly", async () => {
@@ -164,6 +182,7 @@ printf 'pnpm %s\\n' "$*" >> "$DEV_SUPERVISOR_LOG"
     {
       env: {
         DEV_SUPERVISOR_LOG: logPath,
+        KERNEL_API_KEY: "test-kernel-key",
         NODE_ENV: "test",
         PATH: directory,
         ...environment,
@@ -221,6 +240,7 @@ printf 'pnpm %s %s\n' "$*" "$DATABASE_URL" >> "$DEV_SUPERVISOR_LOG"
     {
       env: {
         DEV_SUPERVISOR_LOG: logPath,
+        KERNEL_API_KEY: "test-kernel-key",
         NODE_ENV: "test",
         PATH: directory,
       },
@@ -235,6 +255,48 @@ printf 'pnpm %s %s\n' "$*" "$DATABASE_URL" >> "$DEV_SUPERVISOR_LOG"
   return {
     code: await exitCode,
     commands: await readFile(logPath, "utf8"),
+  };
+}
+
+async function runWithoutKernelApiKey() {
+  const directory = await mkdtemp(join(tmpdir(), "open-instinct-dev-"));
+  temporaryDirectories.push(directory);
+  const logPath = join(directory, "commands.log");
+  const dockerPath = join(directory, "docker");
+  await writeFile(
+    dockerPath,
+    `#!/bin/sh
+printf '%s\n' "$*" >> "$DEV_SUPERVISOR_LOG"
+`
+  );
+  await chmod(dockerPath, 0o755);
+
+  const supervisor = spawn(
+    process.execPath,
+    [new URL("../scripts/dev.ts", import.meta.url).pathname],
+    {
+      env: {
+        DEV_SUPERVISOR_LOG: logPath,
+        NODE_ENV: "test",
+        PATH: directory,
+      },
+      stdio: ["ignore", "ignore", "pipe"],
+    }
+  );
+  supervisor.stderr.setEncoding("utf8");
+  let stderr = "";
+  supervisor.stderr.on("data", (chunk: string) => {
+    stderr += chunk;
+  });
+  const exitCode = new Promise<number | null>((resolve, reject) => {
+    supervisor.once("error", reject);
+    supervisor.once("exit", resolve);
+  });
+
+  return {
+    code: await exitCode,
+    commands: await readFile(logPath, "utf8").catch(() => ""),
+    stderr,
   };
 }
 
