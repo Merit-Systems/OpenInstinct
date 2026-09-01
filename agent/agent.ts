@@ -1,6 +1,6 @@
 import { defineAgent, defineDynamic } from "eve";
+import { getGatewayModel } from "@/db/services/settings";
 import { scopeFromPrincipal } from "@/lib/access-scope";
-import { getModelSettings } from "@/lib/model-config";
 
 export default defineAgent({
   experimental: {
@@ -11,7 +11,7 @@ export default defineAgent({
       "step.started": async (_event, ctx) => {
         const caller = ctx.session.auth.current ?? ctx.session.auth.initiator;
         if (!caller) throw new Error("An authenticated user is required.");
-        return (await getModelSettings(scopeFromPrincipal(caller))).modelId;
+        return getGatewayModel(scopeFromPrincipal(caller));
       },
     },
   }),

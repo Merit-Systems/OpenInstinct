@@ -84,19 +84,16 @@ export async function saveChat(scope: AccessScope, chat: SaveChat) {
     });
     return;
   }
+  const updates: Partial<typeof chats.$inferInsert> = { updatedAt: now };
+  if (chat.title !== undefined) updates.title = chat.title;
+  if (chat.usage !== undefined) {
+    updates.costUsd = chat.usage.costUsd;
+    updates.inputTokens = chat.usage.inputTokens;
+    updates.outputTokens = chat.usage.outputTokens;
+  }
   await db
     .update(chats)
-    .set({
-      ...(chat.title === undefined ? {} : { title: chat.title }),
-      ...(chat.usage === undefined
-        ? {}
-        : {
-            costUsd: chat.usage.costUsd,
-            inputTokens: chat.usage.inputTokens,
-            outputTokens: chat.usage.outputTokens,
-          }),
-      updatedAt: now,
-    })
+    .set(updates)
     .where(
       and(
         eq(chats.workspaceId, scope.workspaceId),

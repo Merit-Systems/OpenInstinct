@@ -13,9 +13,14 @@ import {
   listBrowserSessions,
   withBrowserProfileWriteLock,
 } from "@/db/services/browsers";
+import { recordBrowserTraceDomains } from "@/db/services/browser-traces";
 import { kernel } from "@/lib/kernel";
 import { requireWorkerScope } from "@/agent/subagents/worker/lib/access";
 import { requireOwnedBrowserSession } from "@/agent/subagents/worker/lib/owned-browser";
+import {
+  domainFromUrl,
+  harvestBrowserTraceDomains,
+} from "@/agent/subagents/worker/lib/trace/domains";
 
 const browserTimeoutFloorSeconds = 15 * 60;
 
@@ -37,7 +42,7 @@ const inputSchema = z.object({
   offset: z.number().int().min(0).optional(),
 });
 
-export default defineTool({
+const manageBrowsers = defineTool({
   description:
     'Manage browser sessions backed by the workspace persistent profile. Create read-only browsers by default so tasks can run in parallel. Immediately before a login, replace that task browser with one created using save_changes: true, then delete it after authentication so the session is saved. Only one profile writer may be active. Use "list" or "get" to inspect sessions.',
   inputSchema,
@@ -71,6 +76,10 @@ export default defineTool({
               },
               start_url: input.start_url,
               stealth: true,
+              telemetry: {
+                browser: { page: { enabled: true } },
+                enabled: true,
+              },
               timeout_seconds:
                 input.timeout_seconds ?? browserTimeoutFloorSeconds,
               viewport: browserViewport(input),
@@ -81,12 +90,21 @@ export default defineTool({
             await createBrowserSession(scope, {
               createdAt: browser.created_at,
               sessionId: browser.session_id,
+              workerSessionId: context.session.id,
             });
           } catch (error) {
             await kernel.browsers
               .deleteByID(browser.session_id, { signal })
               .catch(() => undefined);
             throw error;
+          }
+          const startDomain = input.start_url
+            ? domainFromUrl(input.start_url)
+            : undefined;
+          if (startDomain) {
+            await recordBrowserTraceDomains(scope, context.session.id, [
+              startDomain,
+            ]).catch(() => undefined);
           }
           return lifecycleResult(browser);
         };
@@ -149,18 +167,27 @@ export default defineTool({
       }
       case "delete": {
         const sessionId = requireSessionId(input.session_id);
-        await requireOwnedBrowserSession(scope, sessionId);
+        const record = await requireOwnedBrowserSession(scope, sessionId);
+        await harvestBrowserTraceDomains(
+          scope,
+          record.workerSessionId ?? context.session.id,
+          { createdAt: record.createdAt, sessionId: record.sessionId },
+          signal
+        );
         await kernel.browsers
           .deleteByID(sessionId, { signal })
-          .catch((error: unknown) => {
-            if (!isNotFoundError(error)) throw error;
+          .catch((cause: unknown) => {
+            if (!isNotFoundError(cause)) throw cause;
           });
         await deleteBrowserSession(scope, sessionId);
         return "Browser session deleted successfully";
       }
     }
+    throw new Error("Unsupported browser management action.");
   },
 });
+
+export default manageBrowsers;
 
 function requireSessionId(sessionId: string | undefined) {
   if (!sessionId) throw new Error("A browser session ID is required.");
@@ -184,13 +211,8 @@ async function retrieveBrowser(
   }
 }
 
-function isNotFoundError(error: unknown) {
-  return (
-    typeof error === "object" &&
-    error !== null &&
-    "status" in error &&
-    error.status === 404
-  );
+function isNotFoundError(cause: unknown) {
+  return z.object({ status: z.literal(404) }).safeParse(cause).success;
 }
 
 function browserViewport(input: z.infer<typeof inputSchema>) {
@@ -257,7 +279,7 @@ async function ensureWorkspaceProfile(
 
 async function findActiveProfileWriter(
   profileId: string | undefined,
-  signal?: AbortSignal
+  signal: AbortSignal | undefined
 ) {
   if (!profileId) return undefined;
   for await (const browser of kernel.browsers.list(

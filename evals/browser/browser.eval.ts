@@ -1,11 +1,8 @@
 import { defineEval, type EveEvalSession, type EveEvalTurn } from "eve/evals";
 import { includes, satisfies } from "eve/evals/expect";
-import {
-  didCompleteBrowserWorker,
-  didFinishBrowserWorker,
-} from "@/lib/browser/benchmark";
-import { browserBenchmarkTasks } from "@/lib/browser/benchmark-tasks";
+import { didCompleteWorker, didFinishWorker } from "@/lib/worker-events";
 import { browserBenchmarkEnv } from "@/evals/browser/env";
+import { browserBenchmarkTasks } from "@/evals/browser/tasks";
 
 const repetitions = browserBenchmarkEnv.BROWSER_BENCH_REPETITIONS;
 
@@ -26,6 +23,7 @@ export default browserBenchmarkTasks.flatMap((task) =>
         let session: EveEvalSession | typeof t = t;
         let completed: EveEvalTurn | null = null;
         const workerEvents = [...started.events];
+        /* oxlint-disable eslint/no-await-in-loop -- Each watch resumes from the stream index produced by the previous turn. */
         for (let attempt = 0; attempt < 8 && completed === null; attempt += 1) {
           const live = t.target.watchTurn(started.sessionId, {
             startIndex: requireStreamIndex(session),
@@ -33,9 +31,10 @@ export default browserBenchmarkTasks.flatMap((task) =>
           const turn = await live.result();
           turn.expectOk();
           workerEvents.push(...turn.events);
-          if (didFinishBrowserWorker(workerEvents)) completed = turn;
+          if (didFinishWorker(workerEvents)) completed = turn;
           session = live.session;
         }
+        /* oxlint-enable eslint/no-await-in-loop */
 
         await t.require(
           completed,
@@ -45,7 +44,7 @@ export default browserBenchmarkTasks.flatMap((task) =>
           )
         );
         await t.require(
-          didCompleteBrowserWorker(workerEvents),
+          didCompleteWorker(workerEvents),
           satisfies(
             (workerSucceeded) => workerSucceeded === true,
             "the worker completed the browser assignment successfully"

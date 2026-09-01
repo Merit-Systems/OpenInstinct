@@ -13,7 +13,7 @@ const apiKey = "test-parallel-key-must-not-leak";
 const nativeFetch = globalThis.fetch;
 const fetchMock = vi.fn<typeof fetch>();
 const requiredEnvironment = {
-  BETTER_AUTH_SECRET: "test-auth-secret",
+  BETTER_AUTH_SECRET: "test-auth-secret-0123456789abcdefghijklmnop",
   BETTER_AUTH_URL: "https://example.com",
   DATABASE_URL: "postgresql://user:password@example.com/database",
   KERNEL_API_KEY: "test-kernel-key",
@@ -230,6 +230,7 @@ describe("Parallel research", () => {
 
   it("uses explicit continuation only and leaves later questions independent", async () => {
     const first = await research({ query: "Initial question" });
+    if (!("response_id" in first)) throw new Error("Missing follow-up ID.");
     await research({
       query: "Follow up",
       previous_response_id: first.response_id,
@@ -349,17 +350,16 @@ describe("Parallel research", () => {
 
   it("sanitizes malformed JSON and transport failures", async () => {
     fetchMock.mockResolvedValueOnce(new Response(`malformed ${apiKey}`));
-    const malformed = await research({ query: "Public question" }).catch(
-      (error: unknown) => error
+    const sanitized = new Error(
+      "Parallel research could not finish or returned invalid JSON. The request may have been billed; do not retry automatically."
     );
-    expect(malformed).toBeInstanceOf(Error);
-    expect(String(malformed)).not.toContain(apiKey);
+    await expect(research({ query: "Public question" })).rejects.toEqual(
+      sanitized
+    );
     fetchMock.mockRejectedValueOnce(new TypeError(`request failed: ${apiKey}`));
-    const transport = await research({ query: "Public question" }).catch(
-      (error: unknown) => error
+    await expect(research({ query: "Public question" })).rejects.toEqual(
+      sanitized
     );
-    expect(transport).toBeInstanceOf(Error);
-    expect(String(transport)).not.toContain(apiKey);
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
@@ -507,13 +507,18 @@ async function resolveResearch(
   return resolve({ type: event }, resolverContext);
 }
 
-async function research(input: unknown, signal = new AbortController().signal) {
+async function research(
+  input: z.util.JSONType,
+  signal = new AbortController().signal
+) {
   const tool = await resolveResearch();
   if (!tool) {
     throw new Error("Research tool is unavailable.");
   }
+  // SAFETY: The real executor validates this raw JSON, including deliberately invalid test inputs, before HTTP.
   // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- exercise validation of raw runtime input in the real executor, including deliberately invalid cases.
   const raw = input as Parameters<typeof tool.execute>[0];
+  // SAFETY: The proxy supplies abortSignal and throws on every other access to verify ambient context is never read.
   // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- the real executor may access only abortSignal; ambient Eve context is deliberately unavailable.
   const context = new Proxy(
     { abortSignal: signal },
@@ -533,12 +538,9 @@ async function research(input: unknown, signal = new AbortController().signal) {
   return result;
 }
 
-function requestBody(index = 0): unknown {
-  const body = fetchMock.mock.calls[index]?.[1]?.body;
-  if (typeof body !== "string") {
-    throw new Error("Research must send a JSON request body.");
-  }
-  return JSON.parse(body);
+function requestBody(index = 0) {
+  const body = z.string().parse(fetchMock.mock.calls[index]?.[1]?.body);
+  return z.json().parse(JSON.parse(body));
 }
 
 function completedResponse(
@@ -573,9 +575,7 @@ async function withResponseServer(
     server.once("error", reject);
     server.listen(0, "127.0.0.1", resolve);
   });
-  const address = server.address();
-  if (!address || typeof address === "string")
-    throw new Error("Missing loopback address.");
+  const address = z.object({ port: z.number() }).parse(server.address());
   fetchMock.mockImplementation((url, options) => {
     expect(url).toBe(endpoint);
     return nativeFetch(

@@ -1,6 +1,6 @@
 import { defineDynamic, defineTool } from "eve/tools";
 import { z } from "zod";
-import { env } from "@/lib/env";
+import { env } from "@/env";
 
 const responseIdSchema = z.string().min(1).regex(/^\S+$/u);
 
@@ -69,15 +69,8 @@ function requestFailure(signal: AbortSignal) {
   );
 }
 
-function researchResult(value: unknown) {
-  const parsed = responseSchema.safeParse(value);
-  if (!parsed.success) {
-    throw new Error(
-      "Parallel returned an invalid or incomplete research response."
-    );
-  }
-
-  const parts = parsed.data.output
+function researchResult(response: z.infer<typeof responseSchema>) {
+  const parts = response.output
     .filter((item) => item.type === "message")
     .flatMap((item) => {
       if (!item.content)
@@ -108,12 +101,13 @@ function researchResult(value: unknown) {
       if (!sources.has(url)) sources.set(url, { url, title });
     }
   }
-  const id = responseIdSchema.safeParse(parsed.data.id);
-  return {
-    ...(id.success ? { response_id: id.data } : {}),
+  const id = responseIdSchema.safeParse(response.id);
+  const result = {
     answer,
     sources: [...sources.values()],
   };
+  if (id.success) return { ...result, response_id: id.data };
+  return result;
 }
 
 const researchTool = defineTool({
@@ -176,7 +170,13 @@ const researchTool = defineTool({
         `Parallel research failed (HTTP ${String(response.status)}).${hint} This call was not retried.`
       );
     }
-    return researchResult(body);
+    const parsed = responseSchema.safeParse(body);
+    if (!parsed.success) {
+      throw new Error(
+        "Parallel returned an invalid or incomplete research response."
+      );
+    }
+    return researchResult(parsed.data);
   },
 });
 

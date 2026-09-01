@@ -14,7 +14,7 @@
         "NODE_ENV",
         "PARALLEL_API_KEY",
         "SECRET_ENCRYPTION_KEY",
-        "VERCEL_ENV"
+        "VERCEL_*"
       ],
       "outputs": [".next/**", "!.next/cache/**", "next-env.d.ts"]
     },
@@ -30,8 +30,7 @@
         "NODE_ENV",
         "PARALLEL_API_KEY",
         "SECRET_ENCRYPTION_KEY",
-        "VERCEL",
-        "VERCEL_ENV"
+        "VERCEL_*"
       ],
       "outputs": [".next/**", "!.next/cache/**", "next-env.d.ts"]
     },
@@ -52,8 +51,7 @@
         "NODE_ENV",
         "PARALLEL_API_KEY",
         "SECRET_ENCRYPTION_KEY",
-        "VERCEL_ENV",
-        "VERCEL_OIDC_TOKEN"
+        "VERCEL_*"
       ],
       "persistent": true
     },
@@ -81,8 +79,7 @@
         "NODE_ENV",
         "PARALLEL_API_KEY",
         "SECRET_ENCRYPTION_KEY",
-        "VERCEL_ENV",
-        "VERCEL_OIDC_TOKEN"
+        "VERCEL_*"
       ],
       "persistent": true
     },
