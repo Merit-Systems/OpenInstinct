@@ -1,0 +1,101 @@
+import { useEffect, useMemo, useRef } from "react";
+import {
+  PromptInput,
+  PromptInputBody,
+  PromptInputFooter,
+  type PromptInputMessage,
+  PromptInputSubmit,
+  PromptInputTextarea,
+  PromptInputTools,
+} from "@/components/ai-elements/prompt-input";
+import { messageContent } from "../../../_lib/message-input";
+import { hasPendingBackgroundWorker } from "../../_lib/trace-view";
+import { api } from "@/trpc/client";
+import type { ChatAgent } from "../chat-agent";
+
+export function ChatInput({
+  agent,
+  sessionId,
+}: {
+  readonly agent: Pick<
+    ChatAgent,
+    "cancel" | "data" | "events" | "resume" | "send" | "status"
+  >;
+  readonly sessionId?: string;
+}) {
+  const { mutate: saveChat } = api.chats.save.useMutation();
+  const backgroundCatchUp = useRef<Promise<void> | undefined>(undefined);
+  const isBusy = agent.status === "submitted" || agent.status === "streaming";
+  const isRestoring =
+    agent.status === "resuming" && agent.data.messages.length === 0;
+  const hasPendingWorker = useMemo(
+    () => hasPendingBackgroundWorker(agent.events),
+    [agent.events]
+  );
+
+  useEffect(() => {
+    if (sessionId === undefined || !hasPendingWorker) return undefined;
+
+    const interval = window.setInterval(() => {
+      if (agent.status !== "ready" || backgroundCatchUp.current !== undefined) {
+        return;
+      }
+
+      const catchUp = agent.resume().catch(() => undefined);
+      backgroundCatchUp.current = catchUp;
+      void catchUp.finally(() => {
+        if (backgroundCatchUp.current === catchUp) {
+          backgroundCatchUp.current = undefined;
+        }
+      });
+    }, 750);
+
+    return () => {
+      window.clearInterval(interval);
+    };
+  }, [agent, hasPendingWorker, sessionId]);
+
+  const handleSubmit = async (message: PromptInputMessage) => {
+    const text = message.text.trim();
+    if (
+      (text.length === 0 && message.files.length === 0) ||
+      agent.status === "submitted" ||
+      isRestoring
+    ) {
+      return;
+    }
+
+    const catchUp = backgroundCatchUp.current;
+    if (catchUp !== undefined) {
+      await Promise.all([agent.cancel().catch(() => undefined), catchUp]);
+    }
+
+    if (sessionId !== undefined) saveChat({ sessionId });
+    await agent.send(
+      messageContent(message),
+      isBusy || catchUp !== undefined ? { turnPolicy: "steer" } : undefined
+    );
+  };
+
+  return (
+    <div className="absolute bottom-0 left-1/2 z-20 mx-auto w-full max-w-3xl -translate-x-1/2 bg-linear-to-t from-background via-background to-transparent px-4 pt-4 pb-6 sm:px-6">
+      <PromptInput compact onSubmit={handleSubmit}>
+        <PromptInputBody>
+          <PromptInputTextarea
+            className="min-h-0"
+            disabled={agent.status === "submitted"}
+            placeholder="Send a message…"
+          />
+        </PromptInputBody>
+        <PromptInputFooter>
+          <PromptInputTools />
+          <PromptInputSubmit
+            disabled={isRestoring}
+            onStop={() => void agent.cancel()}
+            status={isBusy ? agent.status : undefined}
+          />
+        </PromptInputFooter>
+      </PromptInput>
+    </div>
+  );
+}
