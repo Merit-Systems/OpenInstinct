@@ -1,5 +1,4 @@
 import Link from "next/link";
-import type { CSSProperties } from "react";
 import { Logo } from "@/components/ui/logo";
 import {
   Sidebar,
@@ -7,6 +6,9 @@ import {
   SidebarFooter,
   SidebarHeader,
   SidebarInset,
+  SidebarMenu,
+  SidebarMenuButton,
+  SidebarMenuItem,
   SidebarProvider,
 } from "@/components/ui/sidebar";
 import { requireRequestScope } from "@/lib/request-scope";
@@ -17,10 +19,6 @@ import {
   AuthenticatedNavigation,
 } from "./_components/authenticated-navigation";
 
-const sidebarStyle: CSSProperties & { "--sidebar-width": string } = {
-  "--sidebar-width": "12rem",
-};
-
 export default async function AuthenticatedLayout({
   children,
 }: LayoutProps<"/">) {
@@ -28,17 +26,22 @@ export default async function AuthenticatedLayout({
 
   return (
     <TRPCProvider>
-      <SidebarProvider style={sidebarStyle}>
+      <SidebarProvider>
         <Sidebar>
-          <SidebarHeader className="border-b border-sidebar-border px-4 py-4">
-            <Link aria-label="Workspace" className="w-fit" href="/">
-              <Logo className="size-7" />
-            </Link>
+          <SidebarHeader>
+            <SidebarMenu>
+              <SidebarMenuItem>
+                <SidebarMenuButton render={<Link href="/" />}>
+                  <Logo />
+                  <span>OpenInstinct</span>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+            </SidebarMenu>
           </SidebarHeader>
           <SidebarContent>
             <AuthenticatedNavigation />
           </SidebarContent>
-          <SidebarFooter className="p-0">
+          <SidebarFooter>
             <AuthenticatedAccountControl />
           </SidebarFooter>
         </Sidebar>

@@ -1,5 +1,6 @@
 import { eveChannel } from "eve/channels/eve";
 import { ForbiddenError, UnauthenticatedError } from "eve/channels/auth";
+import { z } from "zod";
 import { isSessionOwned } from "@/db/services/sessions";
 import { accessScopeForUser, type AccessScope } from "@/lib/access-scope";
 import { getAuthSession } from "@/auth/session";
@@ -33,29 +34,32 @@ export default eveChannel({
 
 function sessionIdFromPath(pathname: string) {
   const match = /^\/eve\/v1\/session\/([^/]+)/.exec(pathname);
-  if (!match?.[1]) return;
+  if (!match?.[1]) return undefined;
   try {
     return decodeURIComponent(match[1]);
   } catch {
-    return;
+    return undefined;
   }
 }
 
 async function requestIdentityFromRequest(request: Request) {
   const session = await getAuthSession(request.headers);
-  const phoneNumber = session?.user.phoneNumber;
-  if (!session || typeof phoneNumber !== "string") return;
+  if (!session) return undefined;
+  const phoneNumber = z.string().safeParse(session.user.phoneNumber);
+  if (!phoneNumber.success) return undefined;
 
   return {
-    phoneNumber,
+    phoneNumber: phoneNumber.data,
     scope: accessScopeForUser(`better-auth:${session.user.id}`),
   };
 }
 
 async function waitForSessionOwnership(scope: AccessScope, sessionId: string) {
+  /* oxlint-disable eslint/no-await-in-loop -- Ownership visibility is checked by a bounded sequential retry loop. */
   for (let attempt = 0; attempt < 5; attempt += 1) {
     if (await isSessionOwned(scope, sessionId)) return true;
     await new Promise((resolve) => setTimeout(resolve, 50));
   }
+  /* oxlint-enable eslint/no-await-in-loop */
   return false;
 }

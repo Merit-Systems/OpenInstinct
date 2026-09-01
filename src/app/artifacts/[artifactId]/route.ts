@@ -1,7 +1,9 @@
+import { get } from "@vercel/blob";
 import { z } from "zod";
 import { getAuthSession } from "@/auth/session";
+import { readReadyBrowserImageArtifact } from "@/db/services/browser-images";
 import { accessScopeForUser } from "@/lib/access-scope";
-import { getBrowserImageBlob } from "@/lib/browser-images/server";
+import { env } from "@/env";
 
 export const runtime = "nodejs";
 
@@ -14,7 +16,7 @@ export async function GET(
   if (!session || !parsedId.success) return notFound();
 
   const scope = accessScopeForUser(`better-auth:${session.user.id}`);
-  const opened = await getBrowserImageBlob(scope, parsedId.data, {
+  const opened = await openArtifact(scope, parsedId.data, {
     ifNoneMatch: request.headers.get("if-none-match") ?? undefined,
     signal: request.signal,
   });
@@ -33,6 +35,31 @@ export async function GET(
     contentDisposition(opened.artifact.filename)
   );
   return new Response(opened.result.stream, { headers, status: 200 });
+}
+
+async function openArtifact(
+  scope: ReturnType<typeof accessScopeForUser>,
+  artifactId: string,
+  options: { readonly ifNoneMatch?: string; readonly signal?: AbortSignal }
+) {
+  const artifact = await readReadyBrowserImageArtifact(scope, artifactId);
+  const byteSize = artifact?.byteSize;
+  const filename = artifact?.filename;
+  const mediaType = artifact?.mediaType;
+  if (!artifact || !byteSize || !filename || !mediaType) return undefined;
+  if (!env.BLOB_STORE_ID && !env.BLOB_READ_WRITE_TOKEN) return undefined;
+  const result = await get(artifact.storagePathname, {
+    access: "private",
+    abortSignal: options.signal,
+    ifNoneMatch: options.ifNoneMatch,
+  });
+  if (!result) return undefined;
+  if (
+    result.statusCode === 200 &&
+    (result.blob.size !== byteSize || result.blob.contentType !== mediaType)
+  )
+    return undefined;
+  return { artifact: { ...artifact, byteSize, filename, mediaType }, result };
 }
 
 function notFound() {

@@ -5,6 +5,7 @@ import {
   parseUserProfile,
   userProfilePatchSchema,
   type UserProfile,
+  type UserProfilePatch,
 } from "@/lib/user-profile";
 import { db, userProfiles } from "@/db";
 import { ensureScope } from "./scope";
@@ -42,7 +43,10 @@ export async function replaceUserProfile(
   return profile;
 }
 
-export async function patchUserProfile(scope: AccessScope, input: unknown) {
+export async function patchUserProfile(
+  scope: AccessScope,
+  input: UserProfilePatch
+) {
   const patch = userProfilePatchSchema.parse(input);
   const profile = parseUserProfile({
     ...(await readUserProfile(scope)),

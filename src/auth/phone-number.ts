@@ -7,7 +7,7 @@ export function isE164PhoneNumber(value: string) {
 
 export function normalizeAuthPhoneNumber(value: string) {
   const trimmedValue = value.trim();
-  if (!PHONE_NUMBER_INPUT.test(trimmedValue)) return;
+  if (!PHONE_NUMBER_INPUT.test(trimmedValue)) return undefined;
 
   const digits = trimmedValue.replace(/\D/g, "");
   const normalizedValue = trimmedValue.startsWith("+")

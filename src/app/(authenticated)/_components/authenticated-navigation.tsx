@@ -12,6 +12,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   SidebarGroup,
+  SidebarGroupContent,
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
@@ -28,7 +29,12 @@ const navigation = [
     label: "Personal info",
   },
   { href: "/chat", icon: MessageSquareIcon, id: "chat", label: "Chat" },
-  { href: "/chats", icon: HistoryIcon, id: "chats", label: "All chats" },
+  {
+    href: "/chat/history",
+    icon: HistoryIcon,
+    id: "history",
+    label: "All chats",
+  },
   { href: "/tasks", icon: ListTodoIcon, id: "tasks", label: "Tasks" },
 ] as const;
 
@@ -36,26 +42,28 @@ export function AuthenticatedNavigation() {
   const active = activeRoute(usePathname());
 
   return (
-    <nav aria-label="Primary">
-      <SidebarGroup>
-        <SidebarMenu>
-          {navigation.map((item) => {
-            const Icon = item.icon;
-            return (
-              <SidebarMenuItem key={item.id}>
-                <SidebarMenuButton
-                  isActive={active === item.id}
-                  render={<Link href={item.href} />}
-                >
-                  <Icon />
-                  <span>{item.label}</span>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-            );
-          })}
-        </SidebarMenu>
-      </SidebarGroup>
-    </nav>
+    <SidebarGroup>
+      <SidebarGroupContent>
+        <nav aria-label="Primary">
+          <SidebarMenu>
+            {navigation.map((item) => {
+              const Icon = item.icon;
+              return (
+                <SidebarMenuItem key={item.id}>
+                  <SidebarMenuButton
+                    isActive={active === item.id}
+                    render={<Link href={item.href} />}
+                  >
+                    <Icon />
+                    <span>{item.label}</span>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              );
+            })}
+          </SidebarMenu>
+        </nav>
+      </SidebarGroupContent>
+    </SidebarGroup>
   );
 }
 
@@ -75,7 +83,8 @@ function activeRoute(pathname: string) {
   if (pathname === "/") return "workspace";
   if (pathname.startsWith("/vault")) return "vault";
   if (pathname.startsWith("/personal-info")) return "personal-info";
-  if (pathname.startsWith("/chats")) return "chats";
+  if (pathname.startsWith("/chat/history")) return "history";
   if (pathname.startsWith("/chat")) return "chat";
   if (pathname.startsWith("/tasks")) return "tasks";
+  return undefined;
 }

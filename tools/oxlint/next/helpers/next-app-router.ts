@@ -15,7 +15,11 @@ let nextRouteUtilities: ReturnType<typeof loadNextRouteUtilities> | undefined;
 const getNextRouteUtilities = () =>
   (nextRouteUtilities ??= loadNextRouteUtilities());
 
-type RouteUtilityFunction = (value: string) => unknown;
+type RouteUtilityResult =
+  | boolean
+  | string
+  | { readonly interceptedRoute: string };
+type RouteUtilityFunction = (value: string) => RouteUtilityResult;
 
 const routeUtilityFunctionSchema = z.custom<RouteUtilityFunction>(
   (value) => value instanceof Function,
@@ -97,6 +101,7 @@ export const findAppDirectory = (filename: string): string | undefined => {
     if (path.basename(directory) === "app") return directory;
     directory = path.dirname(directory);
   }
+  return undefined;
 };
 
 export const getAppRoute = (filename: string, appDirectory: string) => {
@@ -128,6 +133,7 @@ export const resolveLocalImport = (
   if (source.startsWith(".")) {
     return normalizePath(path.resolve(path.dirname(filename), source));
   }
+  return undefined;
 };
 
 const resolveImportFile = (target: string): string | undefined => {
@@ -255,7 +261,7 @@ export const getCommonDirectory = (
   const [first, ...rest] = directories.map((directory) =>
     normalizePath(directory).split(path.sep)
   );
-  if (!first) return;
+  if (!first) return undefined;
 
   let length = first.length;
   for (const segments of rest) {

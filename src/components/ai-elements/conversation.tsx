@@ -12,10 +12,20 @@ import {
   useSyncExternalStore,
 } from "react";
 import { StickToBottom, useStickToBottomContext } from "use-stick-to-bottom";
+import { z } from "zod";
 
 export type ConversationProps = ComponentProps<typeof StickToBottom> & {
   scrollRestorationKey?: string;
 };
+type ConversationRenderChild = Extract<
+  NonNullable<ConversationProps["children"]>,
+  (...args: never[]) => React.ReactNode
+>;
+
+const scrollPositionSchema = z.object({
+  atBottom: z.boolean(),
+  scrollTop: z.number(),
+});
 
 export const Conversation = ({
   children,
@@ -23,33 +33,45 @@ export const Conversation = ({
   initial,
   scrollRestorationKey,
   ...props
-}: ConversationProps) => (
-  <StickToBottom
-    className={cn("relative flex-1 overflow-y-hidden", className)}
-    initial={initial ?? (scrollRestorationKey === undefined ? "smooth" : false)}
-    resize="smooth"
-    role="log"
-    {...props}
-  >
-    {typeof children === "function" ? (
-      (context) => (
+}: ConversationProps) => {
+  const parsedRenderer = z
+    .custom<ConversationRenderChild>(
+      (value) => z.function().safeParse(value).success
+    )
+    .safeParse(children);
+  const renderChild = parsedRenderer.success ? parsedRenderer.data : undefined;
+  return (
+    <StickToBottom
+      className={cn("relative flex-1 overflow-y-hidden", className)}
+      initial={
+        initial ?? (scrollRestorationKey === undefined ? "smooth" : false)
+      }
+      resize="smooth"
+      role="log"
+      {...props}
+    >
+      {renderChild ? (
+        (context) => (
+          <>
+            {renderChild(context)}
+            {scrollRestorationKey === undefined ? null : (
+              <ConversationScrollRestoration
+                storageKey={scrollRestorationKey}
+              />
+            )}
+          </>
+        )
+      ) : (
         <>
-          {children(context)}
+          {children}
           {scrollRestorationKey === undefined ? null : (
             <ConversationScrollRestoration storageKey={scrollRestorationKey} />
           )}
         </>
-      )
-    ) : (
-      <>
-        {children}
-        {scrollRestorationKey === undefined ? null : (
-          <ConversationScrollRestoration storageKey={scrollRestorationKey} />
-        )}
-      </>
-    )}
-  </StickToBottom>
-);
+      )}
+    </StickToBottom>
+  );
+};
 
 function ConversationScrollRestoration({
   storageKey,
@@ -61,7 +83,7 @@ function ConversationScrollRestoration({
 
   useLayoutEffect(() => {
     const scrollElement = scrollRef.current;
-    if (scrollElement === null) return;
+    if (scrollElement === null) return undefined;
 
     if (restoredKeyRef.current !== storageKey) {
       const saved = readScrollPosition(sessionStorage.getItem(storageKey));
@@ -72,7 +94,7 @@ function ConversationScrollRestoration({
         });
       } else {
         scrollElement.scrollTop = scrollElement.scrollHeight;
-        scrollToBottom({ animation: "instant", ignoreEscapes: true });
+        void scrollToBottom({ animation: "instant", ignoreEscapes: true });
       }
       restoredKeyRef.current = storageKey;
     }
@@ -115,14 +137,8 @@ function readScrollPosition(value: string | null):
   | undefined {
   if (value === null) return undefined;
   try {
-    const parsed = JSON.parse(value) as {
-      atBottom?: unknown;
-      scrollTop?: unknown;
-    };
-    return typeof parsed.atBottom === "boolean" &&
-      typeof parsed.scrollTop === "number"
-      ? { atBottom: parsed.atBottom, scrollTop: parsed.scrollTop }
-      : undefined;
+    const parsed = scrollPositionSchema.safeParse(JSON.parse(value));
+    return parsed.success ? parsed.data : undefined;
   } catch {
     return undefined;
   }
@@ -179,7 +195,8 @@ export const ConversationEmptyState = ({
 
 export type ConversationScrollButtonProps = ComponentProps<typeof Button>;
 
-const subscribeToHydration = () => () => {};
+const unsubscribeFromHydration = () => undefined;
+const subscribeToHydration = () => unsubscribeFromHydration;
 
 export const ConversationScrollButton = ({
   className,
@@ -193,7 +210,7 @@ export const ConversationScrollButton = ({
   );
 
   const handleScrollToBottom = useCallback(() => {
-    scrollToBottom();
+    void scrollToBottom();
   }, [scrollToBottom]);
 
   return (

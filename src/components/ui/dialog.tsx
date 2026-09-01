@@ -49,6 +49,8 @@ const dialogContentVariants = cva(
       variant: {
         default: null,
         command: "top-1/3 translate-y-0 overflow-hidden rounded-xl! p-0",
+        responsive:
+          "top-auto bottom-0 max-h-[min(32rem,calc(100dvh-0.5rem))] translate-y-0 overscroll-contain rounded-b-none pb-[max(1rem,env(safe-area-inset-bottom))] sm:top-1/2 sm:bottom-auto sm:max-h-[min(32rem,calc(100dvh-2rem))] sm:max-w-2xl sm:-translate-y-1/2 sm:rounded-xl sm:pb-4 [&_[data-slot=dialog-close]]:top-3 [&_[data-slot=dialog-close]]:right-3 [&_[data-slot=dialog-close]]:size-10 sm:[&_[data-slot=dialog-close]]:top-2 sm:[&_[data-slot=dialog-close]]:right-2 sm:[&_[data-slot=dialog-close]]:size-7",
       },
     },
     defaultVariants: { variant: "default" },

@@ -1,9 +1,21 @@
 import { getToken } from "@vercel/connect";
 import { z } from "zod";
+import { isE164PhoneNumber } from "./phone-number";
 
+const LINQ_AVAILABLE_NUMBER_URL =
+  "https://api.linqapp.com/api/partner/v3/available_number";
 const LINQ_MESSAGES_URL = "https://api.linqapp.com/api/partner/v3/messages";
+const linqAvailableNumberSchema = z.object({
+  phone_number: z.string().refine(isE164PhoneNumber),
+});
 const linqErrorResponseSchema = z.object({
   code: z.number().int().optional(),
+  error: z
+    .object({
+      code: z.number().int().optional(),
+      message: z.string().min(1).optional(),
+    })
+    .optional(),
   message: z.string().min(1).optional(),
   trace_id: z.string().min(1).optional(),
 });
@@ -44,12 +56,31 @@ export class LinqDeliveryError extends Error {
 }
 
 export function linqOtpFailure(error: LinqDeliveryError) {
+  if (
+    error.status === 409 &&
+    /no eligible (?:sending )?(?:line|phone number)/i.test(
+      error.linqMessage ?? ""
+    )
+  ) {
+    return {
+      code: "LINQ_SENDING_LINE_UNAVAILABLE",
+      message:
+        "No Linq line is currently eligible to send a code. If this is a new line, complete the first-time sign-in steps above; otherwise review the line's health in Linq and try again.",
+    };
+  }
+
   switch (error.code) {
-    case 2015:
+    case 2006:
       return {
-        code: "LINQ_CONTACT_NOT_ALLOWED",
+        code: "LINQ_SENDING_LINE_NOT_AUTHORIZED",
         message:
-          "This phone number is not in this deployment's Linq Messaging Contacts. Add it in Vercel Connect, then try again.",
+          "Linq has not authorized a sending line for this connector. If this is a new line, complete the first-time sign-in steps above; otherwise confirm the connector's API token can access the active line in Linq.",
+      };
+    case 2008:
+      return {
+        code: "LINQ_RECIPIENT_NOT_VERIFIED",
+        message:
+          "Complete the first-time sign-in steps above: text the deployment's Linq number once from this phone, then request another code.",
       };
     case 2024:
       return {
@@ -69,6 +100,23 @@ export function linqOtpFailure(error: LinqDeliveryError) {
         message:
           "Linq could not send a sign-in code. Check the connector and its sending line, then try again.",
       };
+  }
+}
+
+export async function readLinqOnboardingPhoneNumber(connector: string) {
+  try {
+    const token = await getToken(connector, {
+      subject: { type: "app" },
+    });
+    const response = await fetch(LINQ_AVAILABLE_NUMBER_URL, {
+      headers: { Authorization: `Bearer ${token}` },
+      signal: AbortSignal.timeout(3000),
+    });
+    if (!response.ok) return undefined;
+    const body: unknown = await response.json().catch(() => undefined);
+    return linqAvailableNumberSchema.safeParse(body).data?.phone_number;
+  } catch {
+    return undefined;
   }
 }
 
@@ -103,9 +151,10 @@ export async function sendLinqText({
   const body: unknown = await response.json().catch(() => undefined);
   const linqError = linqErrorResponseSchema.safeParse(body).data;
   throw new LinqDeliveryError({
-    code: linqError?.code,
-    linqMessage: linqError?.message,
+    code: linqError?.error?.code ?? linqError?.code,
+    linqMessage: linqError?.error?.message ?? linqError?.message,
     status: response.status,
-    traceId: linqError?.trace_id,
+    traceId:
+      linqError?.trace_id ?? response.headers.get("x-trace-id") ?? undefined,
   });
 }

@@ -13,10 +13,11 @@ const inputSchema = z.object({
   session_id: z.string().min(1),
 });
 
+const browserResultSchema = z.json();
 const outputSchema = z.object({
   success: z.boolean(),
   error: z.string().optional(),
-  result: z.unknown().optional(),
+  result: browserResultSchema.optional(),
   stderr: z.string().optional(),
   stdout: z.string().optional(),
 });
@@ -41,7 +42,7 @@ export default defineTool({
     );
   },
   toModelOutput(output) {
-    const value: Record<string, unknown> = { success: output.success };
+    const value: z.output<typeof outputSchema> = { success: output.success };
     if (output.error) {
       value.error = truncate(output.error, modelLogCharacterLimit);
     }
@@ -58,7 +59,7 @@ export default defineTool({
   },
 });
 
-function boundedResult(value: unknown) {
+function boundedResult(value: z.infer<typeof browserResultSchema>) {
   const serialized = JSON.stringify(value);
   if (serialized.length <= modelResultCharacterLimit) {
     return value;

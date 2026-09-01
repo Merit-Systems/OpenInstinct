@@ -126,6 +126,7 @@ export default defineTool({
       );
     };
 
+    /* oxlint-disable eslint/no-await-in-loop -- Computer actions must execute in user-specified order and batching is flushed at observation boundaries. */
     for (const action of input.actions) {
       const batchAction = toBatchAction(action);
       if (batchAction) {
@@ -184,6 +185,7 @@ export default defineTool({
           throw new Error(`Computer action ${action.type} was not batched.`);
       }
     }
+    /* oxlint-enable eslint/no-await-in-loop */
     await flushPendingActions();
 
     return outputSchema.parse({
@@ -266,4 +268,5 @@ function toBatchAction(
     case "write_clipboard":
       return null;
   }
+  throw new Error("Unsupported computer action.");
 }

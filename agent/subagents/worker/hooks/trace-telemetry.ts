@@ -5,20 +5,20 @@ import {
   completeBrowserTrace,
   recordBrowserTraceEvents,
 } from "@/db/services/browser-traces";
-import { traceTimelineRows } from "@/agent/subagents/worker/lib/trace-timeline";
+import { traceTimelineRows } from "@/agent/subagents/worker/lib/trace/timeline";
 import { listWorkerBrowserSessions } from "@/db/services/browsers";
 import type { AccessScope } from "@/lib/access-scope";
 import { scopeFromPrincipal } from "@/lib/access-scope";
-import { parseTaskCompletionOutput } from "@/lib/task-completion";
-import { harvestBrowserTraceDomains } from "@/agent/subagents/worker/lib/trace-domains";
+import { taskCompletionOutputSchema } from "@/lib/worker-completion";
+import { harvestBrowserTraceDomains } from "@/agent/subagents/worker/lib/trace/domains";
 
 function traceScope(ctx: HookContext) {
   const initiator = ctx.session.auth.initiator;
   return initiator ? scopeFromPrincipal(initiator) : undefined;
 }
 
-function logTraceFailure(sessionId: string, error: unknown) {
-  console.warn("[browser-trace] telemetry write failed", { error, sessionId });
+function logTraceFailure(sessionId: string, cause: unknown) {
+  console.warn("[browser-trace] telemetry write failed", { cause, sessionId });
 }
 
 async function sweepLiveBrowserDomains(scope: AccessScope, sessionId: string) {
@@ -78,11 +78,13 @@ export default defineHook({
     },
     async "result.completed"(event, ctx) {
       try {
-        const completion = parseTaskCompletionOutput(event.data.result);
-        if (!completion) return;
+        const completion = taskCompletionOutputSchema.safeParse(
+          event.data.result
+        );
+        if (!completion.success) return;
         await finishTrace(ctx, event.meta.at, {
-          resultMessage: completion.message,
-          status: completion.status,
+          resultMessage: completion.data.message,
+          status: completion.data.status,
         });
       } catch (error) {
         logTraceFailure(ctx.session.id, error);

@@ -20,7 +20,7 @@ import { requireOwnedBrowserSession } from "@/agent/subagents/worker/lib/owned-b
 import {
   domainFromUrl,
   harvestBrowserTraceDomains,
-} from "@/agent/subagents/worker/lib/trace-domains";
+} from "@/agent/subagents/worker/lib/trace/domains";
 
 const browserTimeoutFloorSeconds = 15 * 60;
 
@@ -42,7 +42,7 @@ const inputSchema = z.object({
   offset: z.number().int().min(0).optional(),
 });
 
-export default defineTool({
+const manageBrowsers = defineTool({
   description:
     'Manage browser sessions backed by the workspace persistent profile. Create read-only browsers by default so tasks can run in parallel. Immediately before a login, replace that task browser with one created using save_changes: true, then delete it after authentication so the session is saved. Only one profile writer may be active. Use "list" or "get" to inspect sessions.',
   inputSchema,
@@ -176,15 +176,18 @@ export default defineTool({
         );
         await kernel.browsers
           .deleteByID(sessionId, { signal })
-          .catch((error: unknown) => {
-            if (!isNotFoundError(error)) throw error;
+          .catch((cause: unknown) => {
+            if (!isNotFoundError(cause)) throw cause;
           });
         await deleteBrowserSession(scope, sessionId);
         return "Browser session deleted successfully";
       }
     }
+    throw new Error("Unsupported browser management action.");
   },
 });
+
+export default manageBrowsers;
 
 function requireSessionId(sessionId: string | undefined) {
   if (!sessionId) throw new Error("A browser session ID is required.");
@@ -208,13 +211,8 @@ async function retrieveBrowser(
   }
 }
 
-function isNotFoundError(error: unknown) {
-  return (
-    typeof error === "object" &&
-    error !== null &&
-    "status" in error &&
-    error.status === 404
-  );
+function isNotFoundError(cause: unknown) {
+  return z.object({ status: z.literal(404) }).safeParse(cause).success;
 }
 
 function browserViewport(input: z.infer<typeof inputSchema>) {
@@ -281,7 +279,7 @@ async function ensureWorkspaceProfile(
 
 async function findActiveProfileWriter(
   profileId: string | undefined,
-  signal?: AbortSignal
+  signal: AbortSignal | undefined
 ) {
   if (!profileId) return undefined;
   for await (const browser of kernel.browsers.list(
