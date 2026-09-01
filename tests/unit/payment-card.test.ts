@@ -4,7 +4,7 @@ import {
   paymentCardSecretStringSchema,
   paymentCardType,
   serializePaymentCard,
-} from "../../lib/manager/payment-card";
+} from "@/lib/manager/payment-card";
 
 describe("payment card vault values", () => {
   it("serializes a complete structured card secret", () => {

@@ -1,7 +1,7 @@
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import { ChannelsSection } from "../../app/(authenticated)/(manager)/page";
+import { ChannelsSection } from "@/app/(authenticated)/(manager)/page";
 
 describe("workspace Linq channel", () => {
   it("disables iMessage without advertising another deployment's number", () => {

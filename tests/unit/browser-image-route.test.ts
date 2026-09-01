@@ -21,7 +21,7 @@ vi.mock("@/lib/env", () => ({
   isWorkspaceScopeEnforcementEnabled: mocks.scopeEnforcementEnabled,
 }));
 
-import { GET } from "../../app/artifacts/[artifactId]/route";
+import { GET } from "@/app/artifacts/[artifactId]/route";
 
 beforeEach(() => {
   vi.clearAllMocks();

@@ -1,7 +1,7 @@
 import { createEnv } from "@t3-oss/env-nextjs";
 import { z } from "zod";
 import { isE164PhoneNumber } from "../auth/phone-number";
-import { databaseUrlSchema } from "../db/env/utils";
+import { databaseUrlSchema } from "@/db/env/utils";
 
 const localDevelopment =
   process.env.NODE_ENV === "development" &&

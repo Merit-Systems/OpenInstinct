@@ -27,7 +27,7 @@ describe("environment", () => {
 
   it("exports the validated environment", async () => {
     const { env, isWorkspaceScopeEnforcementEnabled } =
-      await import("../../lib/env");
+      await import("@/lib/env");
 
     expect(env).toMatchObject(requiredEnvironment);
     expect(env.CRON_SECRET).toBeUndefined();
@@ -38,8 +38,7 @@ describe("environment", () => {
   it("enables workspace scope enforcement when configured", async () => {
     vi.stubEnv("WORKSPACE_SCOPE_ENFORCEMENT", "enforce");
 
-    const { isWorkspaceScopeEnforcementEnabled } =
-      await import("../../lib/env");
+    const { isWorkspaceScopeEnforcementEnabled } = await import("@/lib/env");
 
     expect(isWorkspaceScopeEnforcementEnabled()).toBe(true);
   });
@@ -47,7 +46,7 @@ describe("environment", () => {
   it("provides the Google connector default without enabling Linq", async () => {
     vi.stubEnv("GOOGLE_CONNECTOR_UID", "");
 
-    const { env } = await import("../../lib/env");
+    const { env } = await import("@/lib/env");
 
     expect(env.GOOGLE_CONNECTOR_UID).toBe("google/open-instinct");
     expect(env.LINQ_CONNECTOR).toBeUndefined();
@@ -61,7 +60,7 @@ describe("environment", () => {
     vi.stubEnv("NODE_ENV", "development");
     vi.stubEnv("VERCEL_ENV", undefined);
 
-    const { env, localPhoneAuthBypassEnabled } = await import("../../lib/env");
+    const { env, localPhoneAuthBypassEnabled } = await import("@/lib/env");
 
     expect(env).toMatchObject({
       BETTER_AUTH_SECRET: "openinstinct-local-auth-development-secret",
@@ -76,7 +75,7 @@ describe("environment", () => {
     vi.stubEnv("LINQ_CONNECTOR", "linq/custom");
     vi.stubEnv("LINQ_PHONE_NUMBER", "+12025550123");
 
-    const { env } = await import("../../lib/env");
+    const { env } = await import("@/lib/env");
 
     expect(env.GOOGLE_CONNECTOR_UID).toBe("google/custom");
     expect(env.LINQ_CONNECTOR).toBe("linq/custom");
@@ -90,7 +89,7 @@ describe("environment", () => {
     vi.stubEnv("NODE_ENV", "development");
     vi.stubEnv("VERCEL_ENV", "development");
 
-    await expect(import("../../lib/env")).rejects.toThrow(
+    await expect(import("@/lib/env")).rejects.toThrow(
       "Invalid environment variables"
     );
   });
@@ -102,7 +101,7 @@ describe("environment", () => {
       vi.stubEnv("NODE_ENV", "development");
       vi.stubEnv("VERCEL_ENV", undefined);
 
-      await expect(import("../../lib/env")).rejects.toThrow(
+      await expect(import("@/lib/env")).rejects.toThrow(
         "Invalid environment variables"
       );
     }
@@ -114,7 +113,7 @@ describe("environment", () => {
   ])("accepts a Node-compatible 32-byte encryption key", async (key) => {
     vi.stubEnv("SECRET_ENCRYPTION_KEY", key);
 
-    const { env } = await import("../../lib/env");
+    const { env } = await import("@/lib/env");
     expect(env.SECRET_ENCRYPTION_KEY).toBe(key);
   });
 
@@ -129,14 +128,14 @@ describe("environment", () => {
     async (name, errorMessage) => {
       vi.stubEnv(name, "");
 
-      await expect(import("../../lib/env")).rejects.toThrow(errorMessage);
+      await expect(import("@/lib/env")).rejects.toThrow(errorMessage);
     }
   );
 
   it("rejects an encryption key that does not decode to 32 bytes", async () => {
     vi.stubEnv("SECRET_ENCRYPTION_KEY", Buffer.alloc(31, 1).toString("base64"));
 
-    await expect(import("../../lib/env")).rejects.toThrow(
+    await expect(import("@/lib/env")).rejects.toThrow(
       "Invalid environment variables"
     );
   });
@@ -144,7 +143,7 @@ describe("environment", () => {
   it("rejects a non-Postgres database URL", async () => {
     vi.stubEnv("DATABASE_URL", "https://example.com/database");
 
-    await expect(import("../../lib/env")).rejects.toThrow(
+    await expect(import("@/lib/env")).rejects.toThrow(
       "Invalid environment variables"
     );
   });
@@ -153,7 +152,7 @@ describe("environment", () => {
     vi.stubEnv("LINQ_CONNECTOR", "linq/open-instinct");
     vi.stubEnv("LINQ_PHONE_NUMBER", "+12025550123");
 
-    const { env } = await import("../../lib/env");
+    const { env } = await import("@/lib/env");
 
     expect(env.LINQ_CONNECTOR).toBe("linq/open-instinct");
     expect(env.LINQ_PHONE_NUMBER).toBe("+12025550123");
@@ -163,7 +162,7 @@ describe("environment", () => {
     vi.stubEnv("BLOB_READ_WRITE_TOKEN", "");
     vi.stubEnv("BLOB_STORE_ID", "store_openinstinct");
 
-    const { env } = await import("../../lib/env");
+    const { env } = await import("@/lib/env");
 
     expect(env.BLOB_READ_WRITE_TOKEN).toBeUndefined();
     expect(env.BLOB_STORE_ID).toBe("store_openinstinct");
@@ -176,7 +175,7 @@ describe("environment", () => {
     vi.stubEnv("LINQ_CONNECTOR", connector);
     vi.stubEnv("LINQ_PHONE_NUMBER", phoneNumber);
 
-    await expect(import("../../lib/env")).rejects.toThrow(
+    await expect(import("@/lib/env")).rejects.toThrow(
       "LINQ_CONNECTOR and LINQ_PHONE_NUMBER must be configured together"
     );
   });
@@ -185,7 +184,7 @@ describe("environment", () => {
     vi.stubEnv("LINQ_CONNECTOR", "linq/open-instinct");
     vi.stubEnv("LINQ_PHONE_NUMBER", "(202) 555-0123");
 
-    await expect(import("../../lib/env")).rejects.toThrow(
+    await expect(import("@/lib/env")).rejects.toThrow(
       "Invalid environment variables"
     );
   });
@@ -203,7 +202,7 @@ describe("environment", () => {
       vi.stubEnv("NODE_ENV", nodeEnv);
       vi.stubEnv("VERCEL_ENV", vercelEnv);
 
-      const { localPhoneAuthBypassEnabled } = await import("../../lib/env");
+      const { localPhoneAuthBypassEnabled } = await import("@/lib/env");
 
       expect(localPhoneAuthBypassEnabled).toBe(expected);
     }

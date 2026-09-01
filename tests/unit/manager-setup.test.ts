@@ -5,14 +5,14 @@ import {
   managerMutationSchema,
   managerSetupRequestSchema,
   parseManagerSetupSearchParams,
-} from "../../lib/manager";
-import { isSameOrigin } from "../../lib/same-origin";
-import { serializePaymentCard } from "../../lib/manager/payment-card";
-import { parseChromePasswordsCsv } from "../../lib/manager/chrome-passwords";
+} from "@/lib/manager";
+import { isSameOrigin } from "@/lib/same-origin";
+import { serializePaymentCard } from "@/lib/manager/payment-card";
+import { parseChromePasswordsCsv } from "@/lib/manager/chrome-passwords";
 import {
   serializeContactVaultPayload,
   serializeLoginVaultPayload,
-} from "../../lib/manager/vault-payload";
+} from "@/lib/manager/vault-payload";
 
 describe("self-hosted manager", () => {
   it("builds a direct Chrome import URL", () => {

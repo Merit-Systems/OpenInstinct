@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 import {
   PhoneAuthForm,
   phoneOtpErrorMessage,
-} from "../../app/sign-in/phone-auth-form";
+} from "@/app/sign-in/phone-auth-form";
 
 describe("phone OTP errors", () => {
   it("shows actionable Linq errors", () => {
