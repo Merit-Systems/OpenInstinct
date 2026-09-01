@@ -1,15 +1,13 @@
 import type { MessageStreamEvent } from "eve/client";
 import type { EveMessage } from "eve/react";
-import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import { getLatestTurnFailure } from "../_lib/turn-failure";
 import {
   backgroundWorkerDeliveryMessageIds,
+  hasPendingBackgroundWorker,
   messagesForTraceView,
-} from "./agent-chat";
-import { AgentMessage } from "./agent-message";
+} from "./trace-view";
 
-describe("agent messages", () => {
+describe("trace view", () => {
   it.each([
     ["update", "update: Checking availability", false],
     ["input", "needs input.", false],
@@ -24,26 +22,12 @@ describe("agent messages", () => {
     "identifies a worker task %s delivery",
     (_label, notification, hidesResponse) => {
       const events = [
-        {
-          data: {
-            backgroundTask: { status: "working", taskId: "task_worker" },
-            callId: "call_worker",
-            output: '{"status":"working","taskId":"task_worker"}',
-            subagentName: "worker",
-          },
-          meta: { at: "2026-08-27T20:00:00.000Z", id: "receipt" },
-          type: "subagent.completed",
-        },
+        workerCompletedReceipt("task_worker"),
         ...(hidesResponse ? [workerCancellationResult("task_worker")] : []),
-        {
-          data: {
-            message: `Background task task_worker (worker) ${notification}`,
-            sequence: 0,
-            turnId: "task-delivery",
-          },
-          meta: { at: "2026-08-27T20:00:01.000Z", id: "delivery" },
-          type: "message.received",
-        },
+        receivedMessage(
+          "task-delivery",
+          `Background task task_worker (worker) ${notification}`
+        ),
       ] satisfies MessageStreamEvent[];
 
       expect(backgroundWorkerDeliveryMessageIds(events)).toEqual(
@@ -111,157 +95,37 @@ describe("agent messages", () => {
     );
   });
 
-  it("renders ordinary assistant text without a delivery tool result", () => {
-    const message = {
-      id: "assistant-message",
-      metadata: { status: "complete" },
-      parts: [
-        {
-          state: "done",
-          text: "Hello from ordinary assistant output.",
-          type: "text",
-        },
-      ],
-      role: "assistant",
-    } satisfies EveMessage;
-
-    const markup = renderToStaticMarkup(
-      <AgentMessage
-        canRespond
-        isStreaming={false}
-        message={message}
-        onInputResponses={() => undefined}
-      />
+  it("tracks a worker only between its receipt and terminal delivery", () => {
+    const receipt = workerActionReceipt("task_worker");
+    const update = receivedMessage(
+      "task-update",
+      "Background task task_worker (worker) update: Still working"
+    );
+    const completed = receivedMessage(
+      "task-completed",
+      'Background task task_worker (worker) is completed.\n\nResult:\n{"message":"Done"}'
     );
 
-    expect(markup).toContain("Hello from ordinary assistant output.");
-  });
-
-  it("renders only Linq-delivered content in the iMessage view", () => {
-    const message = {
-      id: "turn-1:assistant",
-      metadata: { status: "complete", turnId: "turn-1" },
-      parts: [
-        {
-          state: "done",
-          stepIndex: 1,
-          text: "I’ll check that now.",
-          type: "text",
-        },
-        {
-          state: "done",
-          stepIndex: 0,
-          text: "Private reasoning",
-          type: "reasoning",
-        },
-        {
-          input: { query: "example" },
-          output: { result: "internal" },
-          state: "output-available",
-          stepIndex: 0,
-          toolCallId: "call-1",
-          toolName: "web_search",
-          type: "dynamic-tool",
-        },
-        {
-          state: "done",
-          stepIndex: 1,
-          text: "Here’s what I found.",
-          type: "text",
-        },
-      ],
-      role: "assistant",
-    } satisfies EveMessage;
-
-    const markup = renderToStaticMarkup(
-      <AgentMessage
-        canRespond
-        deliveredAssistantMessages={new Map([[1, ["Here’s what I found."]]])}
-        isStreaming={false}
-        message={message}
-        onInputResponses={() => undefined}
-        userVisibleOnly
-      />
+    expect(hasPendingBackgroundWorker([receipt])).toBe(true);
+    expect(hasPendingBackgroundWorker([receipt, update])).toBe(true);
+    expect(hasPendingBackgroundWorker([receipt, update, completed])).toBe(
+      false
     );
-
-    expect(markup).toContain("Here’s what I found.");
-    expect(markup).not.toContain("I’ll check that now.");
-    expect(markup).not.toContain("Private reasoning");
-    expect(markup).not.toContain("web_search");
-  });
-
-  it("shows approval controls without the hidden tool trace", () => {
-    const message = {
-      id: "turn-2:assistant",
-      metadata: { status: "streaming", turnId: "turn-2" },
-      parts: [
-        {
-          approval: { id: "approval-1" },
-          input: { amount: 50, recipient: "Hidden recipient" },
-          state: "approval-requested",
-          stepIndex: 0,
-          toolCallId: "call-2",
-          toolMetadata: {
-            eve: {
-              inputRequest: {
-                kind: "tool-approval",
-                options: [
-                  { id: "approve", label: "Approve", style: "primary" },
-                  { id: "cancel", label: "Cancel", style: "danger" },
-                ],
-                prompt: "Approve this action?",
-                requestId: "approval-1",
-              },
-              kind: "tool-call",
-              name: "send_payment",
-            },
-          },
-          toolName: "send_payment",
-          type: "dynamic-tool",
-        },
-      ],
-      role: "assistant",
-    } satisfies EveMessage;
-
-    const markup = renderToStaticMarkup(
-      <AgentMessage
-        canRespond
-        isStreaming={false}
-        message={message}
-        onInputResponses={() => undefined}
-        userVisibleOnly
-      />
-    );
-
-    expect(markup).toContain("Approve this action?");
-    expect(markup).toContain("Approve");
-    expect(markup).toContain("Cancel");
-    expect(markup).not.toContain("send_payment");
-    expect(markup).not.toContain("Hidden recipient");
-  });
-
-  it("keeps a parked failed child visibly failed", () => {
-    const events = [
-      {
-        data: {
-          code: "CHILD_FAILED",
-          message: "Child failed.",
-          sequence: 1,
-          turnId: "child-turn",
-        },
-        meta: { at: "2026-08-27T20:00:00.000Z", id: "failed" },
-        type: "turn.failed",
-      },
-      {
-        data: { continuationToken: "", wait: "next-user-message" },
-        meta: { at: "2026-08-27T20:00:01.000Z", id: "waiting" },
-        type: "session.waiting",
-      },
-    ] satisfies MessageStreamEvent[];
-
-    expect(getLatestTurnFailure(events)).toBe("Child failed.");
   });
 });
+
+function workerCompletedReceipt(taskId: string): MessageStreamEvent {
+  return {
+    data: {
+      backgroundTask: { status: "working", taskId },
+      callId: "call_worker",
+      output: `{"status":"working","taskId":"${taskId}"}`,
+      subagentName: "worker",
+    },
+    meta: { at: "2026-08-27T20:00:00.000Z", id: "receipt" },
+    type: "subagent.completed",
+  };
+}
 
 function workerActionReceipt(taskId: string): MessageStreamEvent {
   return {

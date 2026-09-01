@@ -1,4 +1,4 @@
-import { AgentChat } from "../_components/agent-chat";
+import { ChatSession } from "./_components/chat-session";
 import { readChat } from "@/db/services/chats";
 import { requireRequestScope } from "@/lib/request-scope";
 
@@ -8,5 +8,5 @@ export default async function ChatSessionPage({
   const { sessionId } = await params;
   const scope = await requireRequestScope();
   const chat = await readChat(scope, sessionId);
-  return <AgentChat initialUsage={chat?.usage} sessionId={sessionId} />;
+  return <ChatSession initialUsage={chat?.usage} sessionId={sessionId} />;
 }
