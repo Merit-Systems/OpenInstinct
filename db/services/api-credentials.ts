@@ -1,5 +1,5 @@
 import { createHash, randomBytes, randomUUID } from "node:crypto";
-import { and, eq, gt, isNull, or } from "drizzle-orm";
+import { and, eq, gt, inArray, isNull, or } from "drizzle-orm";
 import { z } from "zod";
 import type { AccessScope } from "@/lib/access-scope";
 import {
@@ -7,6 +7,7 @@ import {
   apiCredentials,
   db,
   workspaceMemberships,
+  workspaces,
 } from "@/db";
 import { recordAuditEvent } from "./audit";
 import { ensureScope } from "./scope";
@@ -78,17 +79,20 @@ export async function mintApiCredential(
 
 export async function authenticateApiKey(rawKey: string) {
   const now = new Date().toISOString();
-  const [credential] = await db
-    .select()
+  const [row] = await db
+    .select({ credential: apiCredentials })
     .from(apiCredentials)
+    .innerJoin(workspaces, eq(workspaces.id, apiCredentials.workspaceId))
     .where(
       and(
         eq(apiCredentials.keyHash, hashApiKey(rawKey)),
         eq(apiCredentials.status, "active"),
-        or(isNull(apiCredentials.expiresAt), gt(apiCredentials.expiresAt, now))
+        or(isNull(apiCredentials.expiresAt), gt(apiCredentials.expiresAt, now)),
+        inArray(workspaces.lifecycleState, ["trial", "active"])
       )
     )
     .limit(1);
+  const credential = row?.credential;
   if (!credential) return undefined;
   void db
     .update(apiCredentials)

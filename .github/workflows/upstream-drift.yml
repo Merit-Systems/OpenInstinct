@@ -25,10 +25,11 @@ jobs:
           git fetch upstream --quiet
           COUNT=$(git rev-list --count HEAD..upstream/main)
           echo "count=$COUNT" >> "$GITHUB_OUTPUT"
+          DELIM="EOF_$(openssl rand -hex 16)"
           {
-            echo "commits<<EOF"
+            echo "commits<<$DELIM"
             git log --first-parent --oneline HEAD..upstream/main | head -40
-            echo "EOF"
+            echo "$DELIM"
           } >> "$GITHUB_OUTPUT"
 
       - name: Open or update the drift issue

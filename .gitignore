@@ -20,3 +20,6 @@ coverage/
 playwright-report/
 test-results/
 playwright/.auth/
+
+# pnpm local store
+.pnpm-store/

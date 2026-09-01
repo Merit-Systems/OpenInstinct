@@ -1,4 +1,4 @@
-import { readFile } from "node:fs/promises";
+import { readFile, readdir } from "node:fs/promises";
 import { PGlite } from "@electric-sql/pglite";
 import { afterEach, describe, expect, it } from "vitest";
 
@@ -12,21 +12,7 @@ describe("database migrations", () => {
   it("creates a validated schema and keeps adoption migrations idempotent", async () => {
     const database = createDatabase();
 
-    await applyMigration(database, "0000_fluffy_the_spike.sql");
-    await applyMigration(database, "0001_better-auth.sql");
-    await applyMigration(database, "0002_heavy_celestials.sql");
-    await applyMigration(database, "0003_unusual_fabian_cortez.sql");
-    await applyMigration(database, "0004_wide_mysterio.sql");
-    await applyMigration(database, "0005_clammy_kinsey_walden.sql");
-    await applyMigration(database, "0006_sudden_iron_monger.sql");
-    await applyMigration(database, "0007_talented_hammerhead.sql");
-    await applyMigration(database, "0008_naive_doomsday.sql");
-    await applyMigration(database, "0009_dusty_star_brand.sql");
-    await applyMigration(database, "0010_clean_quasimodo.sql");
-    await applyMigration(database, "0011_amused_triathlon.sql");
-    await applyMigration(database, "0012_bright_killmonger.sql");
-    await applyMigration(database, "0013_browser_trace_telemetry.sql");
-    await applyMigration(database, "0014_personal_info.sql");
+    await applyAllMigrations(database);
     await applyMigration(database, "0000_fluffy_the_spike.sql");
     await applyMigration(database, "0001_better-auth.sql");
 
@@ -282,6 +268,15 @@ async function applyMigration(database: PGlite, name: string) {
     if (statement.trim()) await database.exec(statement);
   }
   /* oxlint-enable eslint/no-await-in-loop */
+}
+
+async function applyAllMigrations(database: PGlite) {
+  for (const name of (await readdir(new URL("../migrations/", import.meta.url)))
+    .filter((entry) => entry.endsWith(".sql"))
+    .toSorted()) {
+    // oxlint-disable-next-line eslint/no-await-in-loop -- SQL migrations must execute in committed order.
+    await applyMigration(database, name);
+  }
 }
 
 async function pendingConstraintCount(database: PGlite) {

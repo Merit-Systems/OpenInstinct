@@ -5,6 +5,8 @@ import {
   agentSessions,
   agentRevisions,
   agents,
+  apiCredentials,
+  apiIdempotencyKeys,
   auditEvents,
   browserImageArtifacts,
   browserSessions,
@@ -15,6 +17,7 @@ import {
   db,
   encryptedSecrets,
   settings,
+  userProfiles,
   vaultItems,
   workspaceBudgets,
   workspaceLifecycleStates,
@@ -253,6 +256,8 @@ export async function deleteWorkspaceData(scope: AccessScope) {
       agentRevisions: 0,
       agentSessions: 0,
       agents: 0,
+      apiCredentials: 0,
+      apiIdempotencyKeys: 0,
       browserImageArtifacts: 0,
       browserSessions: 0,
       channelConversations: 0,
@@ -261,6 +266,7 @@ export async function deleteWorkspaceData(scope: AccessScope) {
       connectionInstallations: 0,
       encryptedSecrets: 0,
       settings: 0,
+      userProfiles: 0,
       vaultItems: 0,
       webhookDeliveries: 0,
       webhookEndpoints: 0,
@@ -288,6 +294,24 @@ export async function deleteWorkspaceData(scope: AccessScope) {
         .delete(connectionInstallations)
         .where(eq(connectionInstallations.workspaceId, workspaceId))
         .returning({ id: connectionInstallations.id })
+    ).length;
+    counts.apiIdempotencyKeys = (
+      await transaction
+        .delete(apiIdempotencyKeys)
+        .where(eq(apiIdempotencyKeys.workspaceId, workspaceId))
+        .returning({ id: apiIdempotencyKeys.id })
+    ).length;
+    counts.apiCredentials = (
+      await transaction
+        .delete(apiCredentials)
+        .where(eq(apiCredentials.workspaceId, workspaceId))
+        .returning({ id: apiCredentials.id })
+    ).length;
+    counts.userProfiles = (
+      await transaction
+        .delete(userProfiles)
+        .where(eq(userProfiles.workspaceId, workspaceId))
+        .returning({ workspaceId: userProfiles.workspaceId })
     ).length;
     counts.browserImageArtifacts = (
       await transaction
