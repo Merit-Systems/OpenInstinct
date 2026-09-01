@@ -174,19 +174,39 @@ development is a manual path and requires:
 
 - Node.js 24 and pnpm 11.24.0
 - Docker Desktop or another running Docker Compose installation
-- A Kernel API key
-- An AI Gateway API key for model inference
+- Kernel credentials from a [Kernel API key](https://kernel.sh) or a linked
+  Vercel Marketplace resource
+- AI Gateway access from an API key or a linked Vercel project's OIDC token
 
-Then clone, configure, and start the application:
+First clone and install the application:
 
 ```bash
 git clone https://github.com/Merit-Systems/OpenInstinct.git
 cd OpenInstinct
+pnpm install --frozen-lockfile
+```
+
+For fully manual setup, copy the environment template and add your Kernel and AI
+Gateway keys:
+
+```bash
 cp .env.example .env.local
 
 # Set KERNEL_API_KEY and AI_GATEWAY_API_KEY in .env.local.
+```
 
-pnpm install --frozen-lockfile
+If you already use a Vercel project, link it to pull AI Gateway access. If that
+project does not have Kernel yet, the Marketplace CLI provisions the free
+Developer plan, connects it to the project, and pulls its environment variables:
+
+```bash
+pnpm exec eve link --project <your-vercel-project> --non-interactive
+pnpm exec vercel integration add kernel --plan FREE
+```
+
+Then start OpenInstinct:
+
+```bash
 pnpm dev
 ```
 

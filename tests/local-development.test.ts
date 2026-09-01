@@ -76,8 +76,9 @@ describe("local development", () => {
       "Deploy with Vercel button in README.md; its Kernel Marketplace integration supplies the credentials automatically."
     );
     expect(result.stderr).toContain(
-      "copy .env.example to .env.local, set KERNEL_API_KEY"
+      "pnpm exec vercel integration add kernel --plan FREE"
     );
+    expect(result.stderr).toContain("create a key at https://kernel.sh");
   });
 
   it("does not advance when interrupted startup exits cleanly", async () => {
