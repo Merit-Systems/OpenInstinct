@@ -13,7 +13,7 @@ export async function signInThroughBypass(
     // oxlint-disable-next-line eslint/no-await-in-loop -- Each retry must finish navigation before the next attempt.
     await page.getByLabel("Phone number").fill(phoneNumber);
     // oxlint-disable-next-line eslint/no-await-in-loop -- Each retry must finish navigation before the next attempt.
-    await page.getByRole("button", { name: "Continue locally" }).click();
+    await page.getByRole("button", { name: "Continue", exact: true }).click();
 
     // oxlint-disable-next-line eslint/no-await-in-loop -- Each retry must finish navigation before the next attempt.
     const outcome = await page
