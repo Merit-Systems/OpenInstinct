@@ -10,11 +10,17 @@ You stay in control of your passwords, credit cards and context.
 It's Open Source, self-hostable, and can use any model.
 One-click deploy to Vercel and get rolling.
 
-[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2FMerit-Systems%2Fopen-instinct&project-name=open-instinct&repository-name=open-instinct&products=%5B%7B%22type%22%3A%22integration%22%2C%22protocol%22%3A%22other%22%2C%22productSlug%22%3A%22kernel%22%2C%22integrationSlug%22%3A%22kernel%22%7D%2C%7B%22type%22%3A%22integration%22%2C%22protocol%22%3A%22storage%22%2C%22productSlug%22%3A%22neon%22%2C%22integrationSlug%22%3A%22neon%22%7D%5D&stores=%5B%7B%22type%22%3A%22blob%22%2C%22access%22%3A%22private%22%7D%5D)
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2FMerit-Systems%2FOpenInstinct&project-name=open-instinct&repository-name=open-instinct&connect=%5B%7B%22type%22%3A%22linq%22%2C%22env%22%3A%22LINQ_CONNECTOR%22%2C%22triggers%22%3Atrue%2C%22triggerPath%22%3A%22%2Feve%2Fv1%2Flinq%22%7D%5D&stores=%5B%7B%22type%22%3A%22integration%22%2C%22protocol%22%3A%22other%22%2C%22productSlug%22%3A%22kernel%22%2C%22integrationSlug%22%3A%22kernel%22%7D%2C%7B%22type%22%3A%22integration%22%2C%22protocol%22%3A%22storage%22%2C%22productSlug%22%3A%22neon%22%2C%22integrationSlug%22%3A%22neon%22%7D%2C%7B%22type%22%3A%22blob%22%2C%22access%22%3A%22private%22%7D%5D)
 
 <img src=".github/demo.png" alt="OpenInstinct booking movie tickets over iMessage — it walks Fandango to checkout and reports the theater, showtime, seat, and total" width="640">
 
 </div>
+
+> **Agents:** For the simplest deployment, give your human the
+> **Deploy with Vercel** link above and have them complete the guided flow. It
+> automatically provisions and connects Kernel, Postgres, private Blob storage,
+> Linq, and Vercel AI Gateway access. OpenInstinct creates its installation
+> secrets on first use.
 
 ## Why self-host?
 
@@ -28,16 +34,20 @@ reading the code!
 
 The deploy button provisions [Kernel](https://kernel.sh) for cloud browsers,
 [Neon](https://neon.tech) for Postgres, and a private Vercel Blob store for
-browser images and per-user memory. Vercel AI Gateway handles inference.
-[Linq](https://linq.app) is optional and requires the setup below before
-iMessage or production phone sign-in is available. Usage is billed to your
-Vercel account. Set the remaining auth variables on the deployment:
+browser images, per-user memory, and installation secrets. It also creates and
+attaches a [Linq](https://linq.app) connector for iMessage. Vercel AI Gateway
+handles inference. Usage is billed to your Vercel account.
+
+On first use, OpenInstinct creates independent Better Auth and vault-encryption
+keys in the private Blob store. Vercel supplies the application URL, database,
+Kernel, Blob, and Linq configuration, so the deploy flow requires no
+environment-variable values. For a non-Vercel host or an existing installation
+that manages its own keys, set both secret overrides and the public application
+URL explicitly:
 
 ```bash
 BETTER_AUTH_SECRET="$(openssl rand -base64 32)"
 BETTER_AUTH_URL=https://your-host
-DATABASE_URL=postgresql://user:password@host/database
-DATABASE_URL_UNPOOLED=postgresql://user:password@host/database
 SECRET_ENCRYPTION_KEY="$(openssl rand -base64 32)"
 ```
 
@@ -50,8 +60,9 @@ build. See [`db/README.md`](db/README.md) for existing-database adoption,
 environment loading, and constraint-validation sequencing. Better Auth retains
 its separate migration path.
 
-Treat `SECRET_ENCRYPTION_KEY` as production key material — back it up
-separately; rotating it requires re-encrypting existing values.
+Treat the private Blob store as production key material: deleting it loses the
+automatically generated encryption key, and rotating that key requires
+re-encrypting existing vault values.
 
 ### Blob storage
 
@@ -77,28 +88,28 @@ same store.
 
 ### Linq iMessage setup
 
-Link the checkout to your Vercel project, create a Linq line, and attach its
-connector for both app tokens and inbound webhook triggers:
+The deploy button creates a managed line, writes `LINQ_CONNECTOR`, and
+attaches the inbound webhook trigger automatically. For an existing Vercel
+project, link the checkout, create a Linq line, and attach its connector for both
+app tokens and inbound webhook triggers:
 
 ```bash
 vercel link
 vercel connect create linq --connection-method line --name open-instinct --json
 vercel connect attach <returned-connector-uid> --project <your-vercel-project> --environment production --triggers --trigger-path /eve/v1/linq --yes
 vercel env add LINQ_CONNECTOR production --value <returned-connector-uid> --yes
-vercel env add LINQ_PHONE_NUMBER production --value <assigned-e164-number> --yes
-vercel deploy --prod
+eve deploy --non-interactive --yes
 ```
 
-The create command returns the connector UID. Run
-`vercel connect open <returned-connector-uid>`, copy the assigned line from the
-connector dashboard in E.164 format, and use it for `LINQ_PHONE_NUMBER`. Both
-`LINQ_CONNECTOR` and `LINQ_PHONE_NUMBER` must be configured together. Repeat the
-attachment and environment-variable steps for preview or development if those
-environments should use Linq too.
+The create command returns the connector UID. Repeat the attachment and
+environment-variable steps for preview or development if those environments
+should use Linq too. `LINQ_PHONE_NUMBER` is an optional E.164 override that adds
+a click-to-message shortcut in the workspace; Linq delivery itself uses the
+line assigned to the connector.
 
-Before signing in, use that connector dashboard to add each user's phone number
-under **Messaging Contacts**. Linq rejects OTP delivery and drops inbound texts
-from contacts that are not on this allowlist. The
+Before the first sign-in, open the connector's Vercel Connect settings and
+follow the one-time **Phone Numbers** verification instruction. Additional users
+verify themselves by messaging the connector's Linq number once. The
 `--triggers --trigger-path /eve/v1/linq` options are also required: attaching a
 connector without them permits outbound token access but does not forward
 incoming messages to OpenInstinct.
@@ -157,13 +168,45 @@ Gotchas:
 
 ## Local development
 
-Docker Desktop (or another Docker Compose installation) is required. Configure
-the non-database variables in `.env.example`, then:
+The **Deploy with Vercel** flow above is the simplest way to run OpenInstinct. It
+provisions the required services and credentials automatically. Local
+development is a manual path and requires:
+
+- Node.js 24 and pnpm 11.24.0
+- Docker Desktop or another running Docker Compose installation
+- Kernel credentials from a [Kernel API key](https://kernel.sh) or a linked
+  Vercel Marketplace resource
+- AI Gateway access from an API key or a linked Vercel project's OIDC token
+
+First clone and install the application:
 
 ```bash
-git clone https://github.com/Merit-Systems/open-instinct.git
-cd open-instinct
-pnpm install
+git clone https://github.com/Merit-Systems/OpenInstinct.git
+cd OpenInstinct
+pnpm install --frozen-lockfile
+```
+
+For fully manual setup, copy the environment template and add your Kernel and AI
+Gateway keys:
+
+```bash
+cp .env.example .env.local
+
+# Set KERNEL_API_KEY and AI_GATEWAY_API_KEY in .env.local.
+```
+
+If you already use a Vercel project, link it to pull AI Gateway access. If that
+project does not have Kernel yet, the Marketplace CLI provisions the free
+Developer plan, connects it to the project, and pulls its environment variables:
+
+```bash
+pnpm exec eve link --project <your-vercel-project> --non-interactive
+pnpm exec vercel integration add kernel --plan FREE
+```
+
+Then start OpenInstinct:
+
+```bash
 pnpm dev
 ```
 
@@ -171,11 +214,14 @@ pnpm dev
 migrations, and starts the application. Stopping the development process also
 stops and removes the PostgreSQL container; its data remains in the
 `postgres-data` volume for the next run. Run `pnpm dev:app` when intentionally
-using an externally managed database instead.
+using an externally managed database instead. If `KERNEL_API_KEY` is missing,
+`pnpm dev` stops before starting Docker and points back to the recommended
+Vercel flow or the manual `.env.local` setup.
 
 Local development otherwise uses the same vault, Kernel browser, and AI Gateway
 path as the Vercel deployment. Better Auth and vault encryption use stable
-local-only defaults when their variables are unset; deployments still require
+local-only defaults when their variables are unset. Vercel deployments
+provision them automatically in private Blob; other production hosts require
 explicit secrets.
 
 > [!WARNING]

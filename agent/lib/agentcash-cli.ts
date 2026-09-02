@@ -8,7 +8,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { env } from "@/lib/env";
+import { env } from "@/env";
 import {
   agentcashCliSha256,
   agentcashCliSource,

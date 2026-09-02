@@ -1,6 +1,6 @@
 import type { SessionContext } from "eve/context";
 import type { ApprovalContext, ApprovalStatus } from "eve/tools/approval";
-import { env } from "@/lib/env";
+import { env } from "@/env";
 import { isAgentcashSolanaPrivateKey } from "./agentcash-wallet";
 
 type Session = Pick<SessionContext["session"], "auth">;

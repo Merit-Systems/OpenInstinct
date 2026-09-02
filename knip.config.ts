@@ -4,13 +4,13 @@ export default {
   entry: [
     "agent/channels/**/*.ts",
     "agent/hooks/**/*.ts",
-    "agent/instructions/**/*.ts",
     "agent/memory/**/*.ts",
     "agent/subagents/**/*.ts",
     "agent/tools/**/*.ts",
     "db/drizzle.config.ts",
     "evals/**/*.eval.ts",
     "evals/evals.config.ts",
+    "src/app/**/*.{ts,tsx}",
     "taze.config.ts",
   ],
   ignoreDependencies: [
@@ -30,8 +30,8 @@ export default {
   ignoreIssues: {
     // Eve AI Elements and shadcn registry primitives intentionally expose
     // a reusable component surface wider than this minimal chat consumes.
-    "components/ai-elements/**/*.tsx": ["exports", "files", "types"],
-    "components/ui/**/*.tsx": ["exports", "files", "types"],
+    "src/components/ai-elements/**/*.tsx": ["exports", "files", "types"],
+    "src/components/ui/**/*.tsx": ["exports", "files", "types"],
   },
   project: ["**/*.{ts,tsx,mts,cts,js,jsx,mjs,cjs}"],
 } satisfies KnipConfig;

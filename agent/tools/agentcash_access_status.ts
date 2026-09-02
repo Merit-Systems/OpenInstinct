@@ -6,7 +6,7 @@ import {
   agentcashWalletConfigured,
 } from "../lib/agentcash-access";
 import { isAgentcashSolanaPrivateKey } from "../lib/agentcash-wallet";
-import { env } from "@/lib/env";
+import { env } from "@/env";
 
 export default defineTool({
   description:

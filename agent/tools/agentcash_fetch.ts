@@ -10,7 +10,7 @@ import {
   agentcashFetchSchema,
   enforceAgentcashFetch,
 } from "../lib/agentcash-policy";
-import { env } from "@/lib/env";
+import { env } from "@/env";
 
 export default defineTool({
   description:

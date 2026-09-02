@@ -16,6 +16,8 @@ minimumReleaseAgeExclude:
   - systeminformation
 allowBuilds:
   "@coinbase/coinbase-cli": false
+  "@google/genai": false
   cbor-extract: false
   esbuild: true
+  protobufjs: false
   sharp: true

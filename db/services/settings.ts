@@ -3,8 +3,9 @@ import type { AccessScope } from "@/lib/access-scope";
 import { db, settings } from "@/db";
 
 const gatewayModelKey = "gateway_model";
+const defaultGatewayModel = "openai/gpt-5.6-sol-fast";
 
-export async function readGatewayModel(scope: AccessScope) {
+async function readGatewayModel(scope: AccessScope) {
   const rows = await db
     .select({ value: settings.value })
     .from(settings)
@@ -16,6 +17,10 @@ export async function readGatewayModel(scope: AccessScope) {
     )
     .limit(1);
   return rows[0]?.value;
+}
+
+export async function getGatewayModel(scope: AccessScope) {
+  return (await readGatewayModel(scope)) ?? defaultGatewayModel;
 }
 
 export async function selectGatewayModel(scope: AccessScope, modelId: string) {

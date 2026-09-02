@@ -27,11 +27,3 @@ export async function isSessionOwned(scope: AccessScope, sessionId: string) {
     .limit(1);
   return rows.length > 0;
 }
-
-export async function listOwnedSessionIds(scope: AccessScope) {
-  const rows = await db
-    .select({ sessionId: agentSessions.sessionId })
-    .from(agentSessions)
-    .where(eq(agentSessions.workspaceId, scope.workspaceId));
-  return new Set(rows.map((row) => row.sessionId));
-}

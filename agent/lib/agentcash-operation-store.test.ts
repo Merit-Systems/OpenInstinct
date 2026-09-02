@@ -7,9 +7,6 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock("@vercel/blob", () => ({ get: mocks.get, put: mocks.put }));
-vi.mock("@/lib/browser-images/server", () => ({
-  browserImageBlobAuthentication: () => ({ token: "test-token" }),
-}));
 
 import { executeAgentcashPayment } from "./agentcash-operation-store";
 

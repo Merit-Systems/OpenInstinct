@@ -2,8 +2,6 @@ import { createHash } from "node:crypto";
 import { get, put } from "@vercel/blob";
 import { z } from "zod";
 import type { AccessScope } from "@/lib/access-scope";
-import { browserImageBlobAuthentication } from "@/lib/browser-images/server";
-import { env } from "@/lib/env";
 
 const operationSchema = z.object({
   createdAt: z.iso.datetime(),
@@ -122,7 +120,6 @@ function canonicalValue(value: unknown): unknown {
 async function readOperation(path: string) {
   const result = await get(path, {
     access: "private",
-    ...blobAuthentication(),
   });
   if (result?.statusCode !== 200) return undefined;
   const serialized = await new Response(result.stream).text();
@@ -137,17 +134,9 @@ async function writeOperation(
 ) {
   await put(path, JSON.stringify(operationSchema.parse(operation)), {
     access: "private",
-    ...blobAuthentication(),
     addRandomSuffix: false,
     allowOverwrite,
     contentType: "application/json",
     maximumSizeInBytes: 256_000,
-  });
-}
-
-function blobAuthentication() {
-  return browserImageBlobAuthentication({
-    readWriteToken: env.BLOB_READ_WRITE_TOKEN,
-    storeId: env.BLOB_STORE_ID,
   });
 }

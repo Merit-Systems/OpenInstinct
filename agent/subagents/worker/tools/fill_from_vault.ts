@@ -4,26 +4,30 @@ import { requireOwnedBrowserSession } from "@/agent/subagents/worker/lib/owned-b
 import { requireWorkerScope } from "@/agent/subagents/worker/lib/access";
 import { readVaultItem } from "@/db/services/vault";
 import { kernel } from "@/lib/kernel";
-import { materializeAutofillClaims } from "@/lib/manager/server/vault-autofill";
-import { vaultAutofillProvider } from "@/lib/manager/server/vault-autofill-provider";
 import {
   currentKernelPageOrigin,
   fillWithKernelNativeAutofill,
   nativeAutofillTokens,
-} from "@/lib/manager/server/kernel-native-autofill";
-import { fillFromVaultRequestSchema } from "@/lib/manager/vault-autofill";
+} from "../lib/autofill/native";
+import { vaultAutofillProvider } from "../lib/autofill/provider";
+import { materializeAutofillClaims } from "../lib/autofill/service";
+
+const inputSchema = z.object({
+  browserSessionId: z.string().trim().min(1).max(500),
+  candidateId: z.string().trim().min(1).max(500),
+});
 
 const outputSchema = z.object({
   filledClaims: z.number().int().nonnegative(),
-  kind: z.enum(["address", "login", "payment"]),
+  kind: z.enum(["address", "contact", "login", "payment"]),
   origin: z.string(),
   success: z.literal(true),
 });
 
 export default defineTool({
   description:
-    "Fill a login, card, or address form with an opaque handle returned by list_vault. Focus one control in the intended form first. Never supply vault fields, selectors, origins, or secret values.",
-  inputSchema: fillFromVaultRequestSchema,
+    "Fill a login, card, contact, traveler, or address form with an opaque handle returned by list_vault. Focus one control in the intended form first. Never supply vault fields, selectors, origins, or secret values.",
+  inputSchema,
   outputSchema,
   async execute(input, context) {
     const scope = await requireWorkerScope(context);
@@ -33,11 +37,12 @@ export default defineTool({
     if (!item) throw new Error("The selected vault item was not found.");
     if (
       item.kind !== "address" &&
+      item.kind !== "contact" &&
       item.kind !== "login" &&
       item.kind !== "payment"
     ) {
       throw new Error(
-        "Native browser autofill currently supports only logins, cards, and addresses."
+        "Native browser autofill currently supports only logins, cards, contacts, and addresses."
       );
     }
     if (item.kind === "login") {
@@ -62,7 +67,9 @@ export default defineTool({
         ? "payment-card"
         : item.kind === "login"
           ? "credentials"
-          : "postal-address";
+          : item.kind === "contact"
+            ? "contact"
+            : "postal-address";
     const tokens = nativeAutofillTokens[item.kind];
     const surface = {
       fields: tokens.map((token) => ({ score: 100, token })),
