@@ -52,10 +52,15 @@ async function requestIdentityFromRequest(request: Request) {
   };
 }
 
-async function waitForSessionOwnership(scope: AccessScope, sessionId: string) {
-  for (let attempt = 0; attempt < 5; attempt += 1) {
+export async function waitForSessionOwnership(
+  scope: AccessScope,
+  sessionId: string
+) {
+  for (let attempt = 0; attempt < 51; attempt += 1) {
     if (await isSessionOwned(scope, sessionId)) return true;
-    await new Promise((resolve) => setTimeout(resolve, 50));
+    if (attempt < 50) {
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    }
   }
   return false;
 }

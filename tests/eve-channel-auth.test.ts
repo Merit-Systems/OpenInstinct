@@ -20,7 +20,7 @@ vi.mock("@/db/services/sessions", () => ({
   isSessionOwned: mocks.isSessionOwned,
 }));
 
-import eveChannel from "../agent/channels/eve";
+import eveChannel, { waitForSessionOwnership } from "../agent/channels/eve";
 
 beforeEach(() => {
   vi.useFakeTimers();
@@ -36,6 +36,26 @@ afterEach(() => {
 });
 
 describe("Eve channel authentication", () => {
+  it("allows a session ownership hook to settle after workflow startup", async () => {
+    mocks.isSessionOwned
+      .mockResolvedValueOnce(false)
+      .mockResolvedValueOnce(false)
+      .mockResolvedValueOnce(false)
+      .mockResolvedValue(true);
+
+    const ownership = waitForSessionOwnership(
+      {
+        userId: "better-auth:user-1",
+        workspaceId: "personal:workspace-1",
+      },
+      "session-1"
+    );
+    await vi.runAllTimersAsync();
+
+    await expect(ownership).resolves.toBe(true);
+    expect(mocks.isSessionOwned).toHaveBeenCalledTimes(4);
+  });
+
   it("checks decoded session route ids against workspace ownership", async () => {
     const route = eveChannel.routes.find(
       (candidate) =>
