@@ -12,6 +12,8 @@ import {
   browserTraces,
   chats,
   encryptedSecrets,
+  scheduledAgentJobs,
+  scheduledAgentRuns,
   session,
   settings,
   user,
@@ -36,6 +38,8 @@ describe("database schema", () => {
         browserTraceDomains,
         browserTraceEvents,
         chats,
+        scheduledAgentJobs,
+        scheduledAgentRuns,
         encryptedSecrets,
         user,
         session,
@@ -54,6 +58,8 @@ describe("database schema", () => {
       "browser_trace_domains",
       "browser_trace_events",
       "chats",
+      "scheduled_agent_jobs",
+      "scheduled_agent_runs",
       "encrypted_secrets",
       "user",
       "session",
@@ -68,6 +74,7 @@ describe("database schema", () => {
       browserImageArtifacts,
       browserSessions,
       browserTraces,
+      scheduledAgentJobs,
     ]) {
       const foreignKeys = getTableConfig(table).foreignKeys;
       expect(foreignKeys.map((foreignKey) => foreignKey.getName())).toContain(

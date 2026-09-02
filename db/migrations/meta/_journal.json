@@ -50,6 +50,13 @@
       "when": 1788198215119,
       "tag": "0006_illegal_tattoo",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1788376857525,
+      "tag": "0007_known_fenris",
+      "breakpoints": true
     }
   ]
 }

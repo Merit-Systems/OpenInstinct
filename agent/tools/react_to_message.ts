@@ -5,7 +5,14 @@ export default defineTool({
   description:
     "Add or remove a native iMessage Tapback on the user's current message. Use this instead of send_message when a reaction fully communicates a lightweight acknowledgement and words would add nothing. Supports thumbs_up, thumbs_down, heart, laugh, exclamation (emphasis), and question.",
   inputSchema: reactToMessageOutputSchema,
-  execute(reaction) {
+  execute(reaction, context) {
+    const caller =
+      context.session.auth.current ?? context.session.auth.initiator;
+    if (caller?.authenticator === "scheduled-worker") {
+      throw new Error(
+        "Scheduled workers return a structured outcome instead of reacting to user messages."
+      );
+    }
     return reaction;
   },
   toModelOutput() {

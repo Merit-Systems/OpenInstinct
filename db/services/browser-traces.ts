@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
+import { and, asc, desc, eq, sql } from "drizzle-orm";
 import { z } from "zod";
 import type { AccessScope } from "@/lib/access-scope";
 import {
@@ -8,11 +8,10 @@ import {
   db,
 } from "@/db";
 
-type CompletedBrowserTraceStatus =
-  | "success"
-  | "failure"
-  | "error"
-  | "cancelled";
+type CompletedBrowserTraceStatus = Exclude<
+  typeof browserTraces.$inferSelect.status,
+  "running"
+>;
 
 const traceHistoryPageSize = 25;
 
@@ -37,59 +36,33 @@ function encodeTraceCursor(boundary: z.infer<typeof traceCursorSchema>) {
 
 export async function listBrowserTraces(scope: AccessScope, cursor?: string) {
   const boundary = cursor === undefined ? undefined : decodeTraceCursor(cursor);
-  const rows = await db
-    .select({
-      completedAt: browserTraces.completedAt,
-      durationMs: browserTraces.durationMs,
-      resultMessage: browserTraces.resultMessage,
-      sessionId: browserTraces.sessionId,
-      startedAt: browserTraces.startedAt,
-      status: browserTraces.status,
-      task: browserTraces.task,
-    })
-    .from(browserTraces)
-    .where(
-      and(
-        eq(browserTraces.workspaceId, scope.workspaceId),
-        boundary
-          ? sql`(${browserTraces.startedAt}, ${browserTraces.sessionId}) < (${boundary.startedAt}, ${boundary.sessionId})`
-          : undefined
-      )
-    )
-    .orderBy(desc(browserTraces.startedAt), desc(browserTraces.sessionId))
-    .limit(traceHistoryPageSize + 1);
+  const rows = await db.query.browserTraces.findMany({
+    columns: { createdByUserId: false, workspaceId: false },
+    limit: traceHistoryPageSize + 1,
+    orderBy: [desc(browserTraces.startedAt), desc(browserTraces.sessionId)],
+    where: and(
+      eq(browserTraces.workspaceId, scope.workspaceId),
+      boundary
+        ? sql`(${browserTraces.startedAt}, ${browserTraces.sessionId}) < (${boundary.startedAt}, ${boundary.sessionId})`
+        : undefined
+    ),
+    with: {
+      domains: {
+        columns: { domain: true },
+        orderBy: [asc(browserTraceDomains.domain)],
+      },
+    },
+  });
 
   const page = rows.slice(0, traceHistoryPageSize);
   const last = page.at(-1);
-  const domainRows =
-    page.length > 0
-      ? await db
-          .select({
-            domain: browserTraceDomains.domain,
-            traceSessionId: browserTraceDomains.traceSessionId,
-          })
-          .from(browserTraceDomains)
-          .where(
-            inArray(
-              browserTraceDomains.traceSessionId,
-              page.map((row) => row.sessionId)
-            )
-          )
-          .orderBy(browserTraceDomains.domain)
-      : [];
-  const domainsByTrace = new Map<string, string[]>();
-  for (const row of domainRows) {
-    const domains = domainsByTrace.get(row.traceSessionId) ?? [];
-    domains.push(row.domain);
-    domainsByTrace.set(row.traceSessionId, domains);
-  }
 
   return {
     nextCursor:
       rows.length > page.length && last ? encodeTraceCursor(last) : null,
-    traces: page.map((row) =>
+    traces: page.map(({ domains, ...row }) =>
       Object.assign({}, row, {
-        domains: domainsByTrace.get(row.sessionId) ?? [],
+        domains: domains.map(({ domain }) => domain),
       })
     ),
   };
@@ -98,33 +71,22 @@ export async function listBrowserTraces(scope: AccessScope, cursor?: string) {
 export type BrowserTracePage = Awaited<ReturnType<typeof listBrowserTraces>>;
 
 export async function readBrowserTrace(scope: AccessScope, sessionId: string) {
-  const rows = await db
-    .select({
-      completedAt: browserTraces.completedAt,
-      durationMs: browserTraces.durationMs,
-      resultMessage: browserTraces.resultMessage,
-      sessionId: browserTraces.sessionId,
-      startedAt: browserTraces.startedAt,
-      status: browserTraces.status,
-      task: browserTraces.task,
-    })
-    .from(browserTraces)
-    .where(
-      and(
-        eq(browserTraces.workspaceId, scope.workspaceId),
-        eq(browserTraces.sessionId, sessionId)
-      )
-    )
-    .limit(1);
-  const trace = rows[0];
+  const trace = await db.query.browserTraces.findFirst({
+    columns: { createdByUserId: false, workspaceId: false },
+    where: and(
+      eq(browserTraces.workspaceId, scope.workspaceId),
+      eq(browserTraces.sessionId, sessionId)
+    ),
+    with: {
+      domains: {
+        columns: { domain: true },
+        orderBy: [asc(browserTraceDomains.domain)],
+      },
+    },
+  });
   if (!trace) return undefined;
-
-  const domains = await db
-    .select({ domain: browserTraceDomains.domain })
-    .from(browserTraceDomains)
-    .where(eq(browserTraceDomains.traceSessionId, sessionId))
-    .orderBy(browserTraceDomains.domain);
-  return { ...trace, domains: domains.map((row) => row.domain) };
+  const { domains, ...record } = trace;
+  return { ...record, domains: domains.map(({ domain }) => domain) };
 }
 
 export async function beginBrowserTrace(

@@ -9,12 +9,14 @@ export const browserImageMediaTypeSchema = z.enum([
   "image/webp",
 ]);
 
-export const browserImageSourceKindSchema = z.enum([
+export const browserImageSourceKinds = [
   "element",
   "full_page",
   "image_resource",
   "viewport",
-]);
+] as const;
+
+export const browserImageSourceKindSchema = z.enum(browserImageSourceKinds);
 
 export const browserImageArtifactReferenceSchema = z
   .object({

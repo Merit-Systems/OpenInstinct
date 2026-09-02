@@ -71,6 +71,9 @@ importers:
       '@vercel/connect':
         specifier: ^2.0.0
         version: 2.0.0(8350f980dab3e19566cdcf0033a2348b)
+      '@vercel/oidc':
+        specifier: 3.8.5
+        version: 3.8.5
       ai:
         specifier: ^7.0.79
         version: 7.0.83(zod@4.4.3)

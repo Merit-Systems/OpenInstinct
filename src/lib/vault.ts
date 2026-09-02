@@ -1,7 +1,7 @@
 import creditCardType from "credit-card-type";
 import { z } from "zod";
 
-export const vaultItemKindSchema = z.enum([
+export const vaultItemKinds = [
   "login",
   "payment",
   "address",
@@ -9,7 +9,9 @@ export const vaultItemKindSchema = z.enum([
   "phone",
   "identity",
   "token",
-]);
+] as const;
+
+export const vaultItemKindSchema = z.enum(vaultItemKinds);
 
 const vaultCreateItemKindSchema = vaultItemKindSchema.extract([
   "login",

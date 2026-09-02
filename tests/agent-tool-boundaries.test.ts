@@ -6,9 +6,13 @@ const rootMemory = "agent/memory/profile.ts";
 const workerRoot = "agent/subagents/worker";
 const workerTools = `${workerRoot}/tools`;
 
-function toolFiles(directory: string) {
-  return readdirSync(directory)
-    .filter((file) => file.endsWith(".ts"))
+function toolFiles(directory: string, root = directory): string[] {
+  return readdirSync(directory, { withFileTypes: true })
+    .flatMap((entry) => {
+      const path = `${directory}/${entry.name}`;
+      if (entry.isDirectory()) return toolFiles(path, root);
+      return entry.name.endsWith(".ts") ? path.slice(root.length + 1) : [];
+    })
     .toSorted();
 }
 
@@ -22,6 +26,9 @@ describe("root and worker capability boundaries", () => {
       "react_to_message.ts",
       "request_vault_import.ts",
       "request_vault_setup.ts",
+      "schedules/create.ts",
+      "schedules/list.ts",
+      "schedules/update.ts",
       "send_message.ts",
       "update_user_profile.ts",
     ]);

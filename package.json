@@ -22,6 +22,7 @@
     "@trpc/server": "11.18.0",
     "@vercel/blob": "2.8.0",
     "@vercel/connect": "^2.0.0",
+    "@vercel/oidc": "3.8.5",
     "ai": "^7.0.79",
     "better-auth": "1.7.2",
     "class-variance-authority": "0.7.1",
