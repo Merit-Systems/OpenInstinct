@@ -152,13 +152,10 @@ export default linqChannel({
           return;
         }
 
-        const delivery = await prepareLinqImageArtifactDelivery(
-          requestedText,
-          {
-            rootSessionId: report?.workerSessionId ?? session.session.id,
-            scope: scopeFromPrincipal(caller),
-          }
-        );
+        const delivery = await prepareLinqImageArtifactDelivery(requestedText, {
+          rootSessionId: report?.workerSessionId ?? session.session.id,
+          scope: scopeFromPrincipal(caller),
+        });
         if (delivery.failedArtifactIds.length > 0) {
           console.warn("[linq] browser image delivery failed", {
             artifactIds: delivery.failedArtifactIds,
