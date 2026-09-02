@@ -167,6 +167,8 @@ interface LinqTestMessage {
 describe("Linq message delivery", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    scheduleDeliveryCapture.finalize.mockResolvedValue(true);
+    scheduleDeliveryCapture.release.mockResolvedValue(true);
   });
 
   it("does not register automatic assistant text posting", () => {

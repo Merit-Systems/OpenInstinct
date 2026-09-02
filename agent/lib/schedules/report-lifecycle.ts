@@ -15,7 +15,18 @@ export async function finalizeScheduledReportDelivery(
 ) {
   const report = scheduledReportFromSession(session);
   if (report) {
-    await finalizeScheduledReport(report.runId, report.leaseToken, status);
+    const finalized = await finalizeScheduledReport(
+      report.runId,
+      report.leaseToken,
+      status
+    );
+    if (finalized) {
+      console.info("[scheduled-run] report finalized", {
+        runId: report.runId,
+        sessionId: session.session.id,
+        status,
+      });
+    }
   }
 }
 
@@ -25,6 +36,15 @@ export async function releaseScheduledReportDelivery(
 ) {
   const report = scheduledReportFromSession(session);
   if (report) {
-    await releaseScheduledReport(report.runId, report.leaseToken, errorMessage);
+    const released = await releaseScheduledReport(
+      report.runId,
+      report.leaseToken,
+      errorMessage
+    );
+    console.warn("[scheduled-run] report turn failed", {
+      released,
+      runId: report.runId,
+      sessionId: session.session.id,
+    });
   }
 }

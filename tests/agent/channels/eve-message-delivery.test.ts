@@ -44,6 +44,8 @@ type ActionParameters = Parameters<typeof handleActionResult>;
 describe("Eve scheduled report delivery", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    delivery.finalize.mockResolvedValue(true);
+    delivery.release.mockResolvedValue(true);
   });
 
   it("finalizes a report when send_message completes", async () => {
