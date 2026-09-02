@@ -24,7 +24,7 @@ async function createClient(): Promise<MCPClient> {
       args: [agentcashCliPath, "server"],
       command: process.execPath,
       env: agentcashChildEnvironment(),
-      stderr: "ignore",
+      stderr: "inherit",
     }),
     version: "1.0.0",
   });
