@@ -176,14 +176,14 @@ function scheduledJob(): Awaited<
   ReturnType<typeof listScheduledAgentJobs>
 >[number] {
   return {
-    createdAt: "2026-09-01T12:00:00.000Z",
+    createdAt: new Date("2026-09-01T12:00:00.000Z"),
     createdByUserId: "user-1",
     id: "00000000-0000-4000-8000-000000000001",
     lastError: null,
     lastRunAt: null,
     linqThreadId: "linq:dm:chat-1",
     missedRunPolicy: "run_latest",
-    nextRunAt: "2026-09-02T13:00:00.000Z",
+    nextRunAt: new Date("2026-09-02T13:00:00.000Z"),
     prompt: "Send the morning summary.",
     revision: 0,
     status: "active",
@@ -193,18 +193,18 @@ function scheduledJob(): Awaited<
       localTime: "09:00",
       timezone: "America/New_York",
     },
-    updatedAt: "2026-09-01T12:00:00.000Z",
+    updatedAt: new Date("2026-09-01T12:00:00.000Z"),
     workspaceId: "workspace-1",
   };
 }
 
 function scheduleSummary(job: ReturnType<typeof scheduledJob>) {
   return {
-    createdAt: job.createdAt,
+    createdAt: job.createdAt.toISOString(),
     id: job.id,
     lastError: job.lastError,
-    lastRunAt: job.lastRunAt,
-    nextRunAt: job.nextRunAt,
+    lastRunAt: job.lastRunAt?.toISOString() ?? null,
+    nextRunAt: job.nextRunAt?.toISOString() ?? null,
     prompt: job.prompt,
     status: job.status,
     timing: job.timing,

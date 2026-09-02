@@ -14,11 +14,11 @@ export function scheduleSummary(
   job: Awaited<ReturnType<typeof listScheduledAgentJobs>>[number]
 ) {
   return {
-    createdAt: job.createdAt,
+    createdAt: job.createdAt.toISOString(),
     id: job.id,
     lastError: job.lastError,
-    lastRunAt: job.lastRunAt,
-    nextRunAt: job.nextRunAt,
+    lastRunAt: job.lastRunAt?.toISOString() ?? null,
+    nextRunAt: job.nextRunAt?.toISOString() ?? null,
     prompt: job.prompt,
     status: job.status,
     timing: job.timing,

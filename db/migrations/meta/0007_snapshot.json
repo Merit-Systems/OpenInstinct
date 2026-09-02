@@ -1,5 +1,5 @@
 {
-  "id": "e554beae-2904-4bde-b84a-6d1cdd02165a",
+  "id": "f34132f9-fa81-4c82-84d7-c1365263f310",
   "prevId": "e965f738-3289-4464-b050-25b8d013e259",
   "version": "7",
   "dialect": "postgresql",
@@ -1027,9 +1027,10 @@
       "columns": {
         "id": {
           "name": "id",
-          "type": "text",
+          "type": "uuid",
           "primaryKey": true,
-          "notNull": true
+          "notNull": true,
+          "default": "gen_random_uuid()"
         },
         "workspace_id": {
           "name": "workspace_id",
@@ -1077,13 +1078,13 @@
         },
         "next_run_at": {
           "name": "next_run_at",
-          "type": "text",
+          "type": "timestamp (3) with time zone",
           "primaryKey": false,
           "notNull": false
         },
         "last_run_at": {
           "name": "last_run_at",
-          "type": "text",
+          "type": "timestamp (3) with time zone",
           "primaryKey": false,
           "notNull": false
         },
@@ -1102,15 +1103,17 @@
         },
         "created_at": {
           "name": "created_at",
-          "type": "text",
+          "type": "timestamp (3) with time zone",
           "primaryKey": false,
-          "notNull": true
+          "notNull": true,
+          "default": "now()"
         },
         "updated_at": {
           "name": "updated_at",
-          "type": "text",
+          "type": "timestamp (3) with time zone",
           "primaryKey": false,
-          "notNull": true
+          "notNull": true,
+          "default": "now()"
         }
       },
       "indexes": {
@@ -1199,19 +1202,20 @@
       "columns": {
         "id": {
           "name": "id",
-          "type": "text",
+          "type": "uuid",
           "primaryKey": true,
-          "notNull": true
+          "notNull": true,
+          "default": "gen_random_uuid()"
         },
         "job_id": {
           "name": "job_id",
-          "type": "text",
+          "type": "uuid",
           "primaryKey": false,
           "notNull": true
         },
         "scheduled_for": {
           "name": "scheduled_for",
-          "type": "text",
+          "type": "timestamp (3) with time zone",
           "primaryKey": false,
           "notNull": true
         },
@@ -1250,19 +1254,19 @@
         },
         "retry_at": {
           "name": "retry_at",
-          "type": "text",
+          "type": "timestamp (3) with time zone",
           "primaryKey": false,
           "notNull": false
         },
         "lease_token": {
           "name": "lease_token",
-          "type": "text",
+          "type": "uuid",
           "primaryKey": false,
           "notNull": false
         },
         "lease_expires_at": {
           "name": "lease_expires_at",
-          "type": "text",
+          "type": "timestamp (3) with time zone",
           "primaryKey": false,
           "notNull": false
         },
@@ -1274,27 +1278,29 @@
         },
         "started_at": {
           "name": "started_at",
-          "type": "text",
+          "type": "timestamp (3) with time zone",
           "primaryKey": false,
           "notNull": false
         },
         "completed_at": {
           "name": "completed_at",
-          "type": "text",
+          "type": "timestamp (3) with time zone",
           "primaryKey": false,
           "notNull": false
         },
         "created_at": {
           "name": "created_at",
-          "type": "text",
+          "type": "timestamp (3) with time zone",
           "primaryKey": false,
-          "notNull": true
+          "notNull": true,
+          "default": "now()"
         },
         "updated_at": {
           "name": "updated_at",
-          "type": "text",
+          "type": "timestamp (3) with time zone",
           "primaryKey": false,
-          "notNull": true
+          "notNull": true,
+          "default": "now()"
         }
       },
       "indexes": {
@@ -1363,8 +1369,8 @@
         }
       },
       "foreignKeys": {
-        "scheduled_agent_runs_job_id_fkey": {
-          "name": "scheduled_agent_runs_job_id_fkey",
+        "scheduled_agent_runs_job_id_scheduled_agent_jobs_id_fk": {
+          "name": "scheduled_agent_runs_job_id_scheduled_agent_jobs_id_fk",
           "tableFrom": "scheduled_agent_runs",
           "tableTo": "scheduled_agent_jobs",
           "columnsFrom": ["job_id"],

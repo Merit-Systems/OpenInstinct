@@ -75,7 +75,7 @@ function scheduledRunPrompt(
 ) {
   return [
     "Complete this user-owned scheduled task in an isolated background session.",
-    `Scheduled for: ${claim.run.scheduledFor}`,
+    `Scheduled for: ${claim.run.scheduledFor.toISOString()}`,
     `Task: ${claim.job.prompt}`,
     "Do not communicate with the user and do not call send_message or react_to_message.",
     "Return exactly one structured final outcome. Use nothing_to_report when there is genuinely no useful change. Use result for a useful finding and blocked only when the user must act.",

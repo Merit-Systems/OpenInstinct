@@ -26,7 +26,7 @@ describe("scheduled agent jobs", () => {
       "0004_kind_manta.sql",
       "0005_brave_kang.sql",
       "0006_illegal_tattoo.sql",
-      "0007_overjoyed_forgotten_one.sql",
+      "0007_small_mandarin.sql",
     ]) {
       await applyMigration(client, migration);
     }
@@ -67,7 +67,7 @@ describe("scheduled agent jobs", () => {
     );
     expect(await jobs.listScheduledAgentJobs(alice)).toEqual([
       expect.objectContaining({
-        nextRunAt: "2026-09-01T13:00:00.000Z",
+        nextRunAt: new Date("2026-09-01T13:00:00.000Z"),
         prompt: "Check for a meaningful price change.",
       }),
     ]);
@@ -85,7 +85,7 @@ describe("scheduled agent jobs", () => {
     if (!claim?.run.leaseToken) throw new Error("Expected one leased run.");
     expect(claim).toMatchObject({
       job: { id: created.id, linqThreadId: "linq:chat-alice" },
-      run: { attempts: 1, scheduledFor: dueAt.toISOString() },
+      run: { attempts: 1, scheduledFor: dueAt },
     });
     expect(
       await jobs.claimReadyScheduledAgentRuns({
@@ -165,7 +165,7 @@ describe("scheduled agent jobs", () => {
     if (!currentReportLease) throw new Error("Expected one report lease.");
     await jobs.finalizeScheduledReport(
       claim.run.id,
-      "stale-report-lease",
+      "00000000-0000-4000-8000-000000000099",
       "delivered"
     );
     expect(
@@ -185,7 +185,7 @@ describe("scheduled agent jobs", () => {
     ).toBeUndefined();
     expect(await jobs.listScheduledAgentJobs(alice)).toEqual([
       expect.objectContaining({
-        nextRunAt: "2026-09-01T14:00:00.000Z",
+        nextRunAt: new Date("2026-09-01T14:00:00.000Z"),
         status: "active",
       }),
     ]);

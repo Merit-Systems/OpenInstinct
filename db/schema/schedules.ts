@@ -7,14 +7,16 @@ import {
   jsonb,
   pgTable,
   text,
+  timestamp,
   uniqueIndex,
+  uuid,
 } from "drizzle-orm/pg-core";
 import { workspaceMemberships } from "./workspaces";
 
 export const scheduledAgentJobs = pgTable(
   "scheduled_agent_jobs",
   {
-    id: text("id").primaryKey(),
+    id: uuid("id").defaultRandom().primaryKey(),
     workspaceId: text("workspace_id").notNull(),
     createdByUserId: text("created_by_user_id").notNull(),
     prompt: text("prompt").notNull(),
@@ -22,12 +24,32 @@ export const scheduledAgentJobs = pgTable(
     timing: jsonb("timing").notNull(),
     missedRunPolicy: text("missed_run_policy").notNull().default("run_latest"),
     status: text("status").notNull().default("active"),
-    nextRunAt: text("next_run_at"),
-    lastRunAt: text("last_run_at"),
+    nextRunAt: timestamp("next_run_at", {
+      mode: "date",
+      precision: 3,
+      withTimezone: true,
+    }),
+    lastRunAt: timestamp("last_run_at", {
+      mode: "date",
+      precision: 3,
+      withTimezone: true,
+    }),
     lastError: text("last_error"),
     revision: integer("revision").notNull().default(0),
-    createdAt: text("created_at").notNull(),
-    updatedAt: text("updated_at").notNull(),
+    createdAt: timestamp("created_at", {
+      mode: "date",
+      precision: 3,
+      withTimezone: true,
+    })
+      .defaultNow()
+      .notNull(),
+    updatedAt: timestamp("updated_at", {
+      mode: "date",
+      precision: 3,
+      withTimezone: true,
+    })
+      .defaultNow()
+      .notNull(),
   },
   (table) => [
     foreignKey({
@@ -65,29 +87,58 @@ export const scheduledAgentJobs = pgTable(
 export const scheduledAgentRuns = pgTable(
   "scheduled_agent_runs",
   {
-    id: text("id").primaryKey(),
-    jobId: text("job_id").notNull(),
-    scheduledFor: text("scheduled_for").notNull(),
+    id: uuid("id").defaultRandom().primaryKey(),
+    jobId: uuid("job_id")
+      .notNull()
+      .references(() => scheduledAgentJobs.id, { onDelete: "cascade" }),
+    scheduledFor: timestamp("scheduled_for", {
+      mode: "date",
+      precision: 3,
+      withTimezone: true,
+    }).notNull(),
     status: text("status").notNull().default("queued"),
     workerSessionId: text("worker_session_id"),
     outcome: jsonb("outcome"),
     reportStatus: text("report_status").notNull().default("not_ready"),
     attempts: integer("attempts").notNull().default(0),
-    retryAt: text("retry_at"),
-    leaseToken: text("lease_token"),
-    leaseExpiresAt: text("lease_expires_at"),
+    retryAt: timestamp("retry_at", {
+      mode: "date",
+      precision: 3,
+      withTimezone: true,
+    }),
+    leaseToken: uuid("lease_token"),
+    leaseExpiresAt: timestamp("lease_expires_at", {
+      mode: "date",
+      precision: 3,
+      withTimezone: true,
+    }),
     lastError: text("last_error"),
-    startedAt: text("started_at"),
-    completedAt: text("completed_at"),
-    createdAt: text("created_at").notNull(),
-    updatedAt: text("updated_at").notNull(),
+    startedAt: timestamp("started_at", {
+      mode: "date",
+      precision: 3,
+      withTimezone: true,
+    }),
+    completedAt: timestamp("completed_at", {
+      mode: "date",
+      precision: 3,
+      withTimezone: true,
+    }),
+    createdAt: timestamp("created_at", {
+      mode: "date",
+      precision: 3,
+      withTimezone: true,
+    })
+      .defaultNow()
+      .notNull(),
+    updatedAt: timestamp("updated_at", {
+      mode: "date",
+      precision: 3,
+      withTimezone: true,
+    })
+      .defaultNow()
+      .notNull(),
   },
   (table) => [
-    foreignKey({
-      name: "scheduled_agent_runs_job_id_fkey",
-      columns: [table.jobId],
-      foreignColumns: [scheduledAgentJobs.id],
-    }).onDelete("cascade"),
     check(
       "scheduled_agent_runs_status_check",
       sql`${table.status} IN ('queued', 'running', 'completed', 'dead_letter')`

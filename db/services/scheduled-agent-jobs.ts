@@ -43,20 +43,18 @@ export async function createScheduledAgentJob(
 ) {
   const nextRunAt = computeNextRun(input.timing, now);
   if (!nextRunAt) throw new Error("That schedule has no future occurrence.");
-  const timestamp = now.toISOString();
   const [job] = await db
     .insert(scheduledAgentJobs)
     .values({
-      createdAt: timestamp,
+      createdAt: now,
       createdByUserId: scope.userId,
-      id: randomUUID(),
       linqThreadId: input.linqThreadId,
       missedRunPolicy: input.missedRunPolicy,
-      nextRunAt: nextRunAt.toISOString(),
+      nextRunAt,
       prompt: input.prompt,
       status: "active",
       timing: input.timing,
-      updatedAt: timestamp,
+      updatedAt: now,
       workspaceId: scope.workspaceId,
     })
     .returning();
@@ -103,7 +101,7 @@ export async function updateScheduledAgentJob(
     status !== "active"
       ? null
       : shouldRecompute
-        ? computeNextRun(timing, now)?.toISOString()
+        ? computeNextRun(timing, now)
         : current.nextRunAt;
   if (status === "active" && !nextRunAt) {
     throw new Error("That schedule has no future occurrence.");
@@ -115,7 +113,7 @@ export async function updateScheduledAgentJob(
       nextRunAt,
       revision: sql`${scheduledAgentJobs.revision} + 1`,
       timing,
-      updatedAt: now.toISOString(),
+      updatedAt: now,
     })
     .where(eq(scheduledAgentJobs.id, current.id))
     .returning();
@@ -133,7 +131,7 @@ export async function materializeDueScheduledAgentRuns(options: {
       .where(
         and(
           eq(scheduledAgentJobs.status, "active"),
-          lte(scheduledAgentJobs.nextRunAt, options.now.toISOString())
+          lte(scheduledAgentJobs.nextRunAt, options.now)
         )
       )
       .orderBy(asc(scheduledAgentJobs.nextRunAt))
@@ -146,18 +144,15 @@ export async function materializeDueScheduledAgentRuns(options: {
         const timing = scheduleTimingSchema.parse(job.timing);
         const next = computeNextRun(
           timing,
-          job.missedRunPolicy === "catch_up"
-            ? new Date(scheduledFor)
-            : options.now
+          job.missedRunPolicy === "catch_up" ? scheduledFor : options.now
         );
         const [run] = await transaction
           .insert(scheduledAgentRuns)
           .values({
-            createdAt: options.now.toISOString(),
-            id: randomUUID(),
+            createdAt: options.now,
             jobId: job.id,
             scheduledFor,
-            updatedAt: options.now.toISOString(),
+            updatedAt: options.now,
           })
           .onConflictDoNothing({
             target: [scheduledAgentRuns.jobId, scheduledAgentRuns.scheduledFor],
@@ -167,9 +162,9 @@ export async function materializeDueScheduledAgentRuns(options: {
           .update(scheduledAgentJobs)
           .set({
             lastRunAt: scheduledFor,
-            nextRunAt: next?.toISOString() ?? null,
+            nextRunAt: next,
             status: next ? "active" : "completed",
-            updatedAt: options.now.toISOString(),
+            updatedAt: options.now,
           })
           .where(eq(scheduledAgentJobs.id, job.id));
         return run?.id;
@@ -198,12 +193,12 @@ export async function claimReadyScheduledAgentRuns(options: {
             eq(scheduledAgentRuns.status, "queued"),
             and(
               eq(scheduledAgentRuns.status, "running"),
-              lte(scheduledAgentRuns.leaseExpiresAt, options.now.toISOString())
+              lte(scheduledAgentRuns.leaseExpiresAt, options.now)
             )
           ),
           or(
             isNull(scheduledAgentRuns.retryAt),
-            lte(scheduledAgentRuns.retryAt, options.now.toISOString())
+            lte(scheduledAgentRuns.retryAt, options.now)
           )
         )
       )
@@ -212,9 +207,7 @@ export async function claimReadyScheduledAgentRuns(options: {
       .for("update", { of: scheduledAgentRuns, skipLocked: true });
     if (ready.length === 0) return [];
     const leaseToken = randomUUID();
-    const leaseExpiresAt = new Date(
-      options.now.getTime() + options.leaseForMs
-    ).toISOString();
+    const leaseExpiresAt = new Date(options.now.getTime() + options.leaseForMs);
     const ids = ready.map(({ run }) => run.id);
     await transaction
       .update(scheduledAgentRuns)
@@ -222,9 +215,9 @@ export async function claimReadyScheduledAgentRuns(options: {
         attempts: sql`${scheduledAgentRuns.attempts} + 1`,
         leaseExpiresAt,
         leaseToken,
-        startedAt: options.now.toISOString(),
+        startedAt: options.now,
         status: "running",
-        updatedAt: options.now.toISOString(),
+        updatedAt: options.now,
       })
       .where(inArray(scheduledAgentRuns.id, ids));
     return ready.map(({ job, run }) => ({
@@ -234,7 +227,7 @@ export async function claimReadyScheduledAgentRuns(options: {
         attempts: run.attempts + 1,
         leaseExpiresAt,
         leaseToken,
-        startedAt: options.now.toISOString(),
+        startedAt: options.now,
         status: "running",
       }),
     }));
@@ -248,7 +241,7 @@ export async function setScheduledRunSession(
 ) {
   await db
     .update(scheduledAgentRuns)
-    .set({ workerSessionId, updatedAt: new Date().toISOString() })
+    .set({ workerSessionId, updatedAt: new Date() })
     .where(
       and(
         eq(scheduledAgentRuns.id, runId),
@@ -266,7 +259,7 @@ export async function completeScheduledAgentRun(
   const [run] = await db
     .update(scheduledAgentRuns)
     .set({
-      completedAt: completedAt.toISOString(),
+      completedAt,
       lastError: null,
       leaseExpiresAt: null,
       leaseToken: null,
@@ -274,7 +267,7 @@ export async function completeScheduledAgentRun(
       reportStatus:
         outcome.kind === "nothing_to_report" ? "not_needed" : "pending",
       status: "completed",
-      updatedAt: completedAt.toISOString(),
+      updatedAt: completedAt,
     })
     .where(
       and(
@@ -306,9 +299,9 @@ export async function releaseScheduledAgentRun(
       lastError: errorMessage.slice(0, 2_000),
       leaseExpiresAt: null,
       leaseToken: null,
-      retryAt: dead ? null : new Date(now.getTime() + 5 * 60_000).toISOString(),
+      retryAt: dead ? null : new Date(now.getTime() + 5 * 60_000),
       status: dead ? "dead_letter" : "queued",
-      updatedAt: now.toISOString(),
+      updatedAt: now,
     })
     .where(
       and(
@@ -323,10 +316,10 @@ export async function claimScheduledReport(runId: string, now = new Date()) {
   const [claimed] = await db
     .update(scheduledAgentRuns)
     .set({
-      leaseExpiresAt: new Date(now.getTime() + 5 * 60_000).toISOString(),
+      leaseExpiresAt: new Date(now.getTime() + 5 * 60_000),
       leaseToken,
       reportStatus: "queued",
-      updatedAt: now.toISOString(),
+      updatedAt: now,
     })
     .where(
       and(
@@ -361,7 +354,7 @@ export async function listRecoverableScheduledReports(
             eq(scheduledAgentRuns.reportStatus, "pending"),
             and(
               eq(scheduledAgentRuns.reportStatus, "queued"),
-              lte(scheduledAgentRuns.leaseExpiresAt, now.toISOString())
+              lte(scheduledAgentRuns.leaseExpiresAt, now)
             )
           )
         )
@@ -377,7 +370,7 @@ export async function listRecoverableScheduledReports(
           leaseExpiresAt: null,
           leaseToken: null,
           reportStatus: "pending",
-          updatedAt: now.toISOString(),
+          updatedAt: now,
         })
         .where(
           and(
@@ -386,7 +379,7 @@ export async function listRecoverableScheduledReports(
               stale.map((run) => run.id)
             ),
             eq(scheduledAgentRuns.reportStatus, "queued"),
-            lte(scheduledAgentRuns.leaseExpiresAt, now.toISOString())
+            lte(scheduledAgentRuns.leaseExpiresAt, now)
           )
         );
     }
@@ -406,7 +399,7 @@ export async function releaseScheduledReport(
       leaseExpiresAt: null,
       leaseToken: null,
       reportStatus: "pending",
-      updatedAt: new Date().toISOString(),
+      updatedAt: new Date(),
     })
     .where(
       and(
@@ -427,7 +420,7 @@ export async function finalizeScheduledReport(
       leaseExpiresAt: null,
       leaseToken: null,
       reportStatus,
-      updatedAt: new Date().toISOString(),
+      updatedAt: new Date(),
     })
     .where(
       and(

@@ -55,8 +55,8 @@ describe("scheduled run completion hook", () => {
   it("persists the outcome and immediately wakes report delivery", async () => {
     services.complete.mockResolvedValue({
       attempts: 1,
-      completedAt: "2026-09-01T13:02:00.000Z",
-      createdAt: "2026-09-01T13:00:00.000Z",
+      completedAt: new Date("2026-09-01T13:02:00.000Z"),
+      createdAt: new Date("2026-09-01T13:00:00.000Z"),
       id: runId,
       jobId: "00000000-0000-4000-8000-000000000003",
       lastError: null,
@@ -69,10 +69,10 @@ describe("scheduled run completion hook", () => {
       },
       reportStatus: "pending",
       retryAt: null,
-      scheduledFor: "2026-09-01T13:00:00.000Z",
-      startedAt: "2026-09-01T13:00:00.000Z",
+      scheduledFor: new Date("2026-09-01T13:00:00.000Z"),
+      startedAt: new Date("2026-09-01T13:00:00.000Z"),
       status: "completed",
-      updatedAt: "2026-09-01T13:02:00.000Z",
+      updatedAt: new Date("2026-09-01T13:02:00.000Z"),
       workerSessionId: "worker-session",
     });
     const handler = completionHook.events?.["result.completed"];
