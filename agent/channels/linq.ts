@@ -1,7 +1,6 @@
 import { connectLinqCredentials } from "@vercel/connect/eve";
 import { LinqAPIV3 } from "@linqapp/sdk";
 import type { AdapterPostableMessage } from "chat";
-import type { SessionContext } from "eve/context";
 import {
   defaultLinqAuth,
   linqChannel,
@@ -20,9 +19,10 @@ import {
 } from "../lib/linq-image-artifact/markdown";
 import { env } from "@/env";
 import {
-  finalizeScheduledReport,
-  releaseScheduledReport,
-} from "@/db/services/scheduled-agent-jobs";
+  finalizeScheduledReportDelivery,
+  releaseScheduledReportDelivery,
+  scheduledReportFromSession,
+} from "@/agent/lib/schedules/report-lifecycle";
 
 const verifiedPhoneUserSchema = z.object({
   id: z.string().min(1),
@@ -188,21 +188,13 @@ export default linqChannel({
       if (event.finishReason === "tool-calls") return;
       const report = scheduledReportFromSession(session);
       if (report) {
-        await finalizeScheduledReport(
-          report.runId,
-          report.leaseToken,
-          "suppressed"
-        );
+        await finalizeScheduledReportDelivery(session, "suppressed");
       }
     },
     async "session.completed"(_event, _context, session) {
       const report = scheduledReportFromSession(session);
       if (report) {
-        await finalizeScheduledReport(
-          report.runId,
-          report.leaseToken,
-          "suppressed"
-        );
+        await finalizeScheduledReportDelivery(session, "suppressed");
       }
     },
     async "turn.cancelled"(_event, _context, session) {
@@ -234,12 +226,16 @@ export default linqChannel({
       verifiedUserId && phoneNumber
         ? {
             ...auth.attributes,
+            conversationChannel: "linq",
+            conversationId: context.thread.id,
             linqThreadId: context.thread.id,
             phoneNumber,
             workspaceId: scope.workspaceId,
           }
         : {
             ...auth.attributes,
+            conversationChannel: "linq",
+            conversationId: context.thread.id,
             linqThreadId: context.thread.id,
             workspaceId: scope.workspaceId,
           };
@@ -252,44 +248,6 @@ export default linqChannel({
     };
   },
 });
-
-function scheduledReportFromSession(session: SessionContext) {
-  const caller = session.session.auth.current ?? session.session.auth.initiator;
-  if (caller?.authenticator !== "scheduled-result") return undefined;
-  const parsed = z
-    .object({
-      scheduledReportLeaseToken: z.string().min(1),
-      scheduledReportSequence: z.coerce.number().int().positive(),
-      scheduledRunId: z.uuid(),
-      scheduledRunSessionId: z.string().min(1).optional(),
-    })
-    .safeParse(caller.attributes);
-  return parsed.success
-    ? {
-        leaseToken: parsed.data.scheduledReportLeaseToken,
-        runId: parsed.data.scheduledRunId,
-        sequence: parsed.data.scheduledReportSequence,
-        workerSessionId: parsed.data.scheduledRunSessionId,
-      }
-    : undefined;
-}
-
-async function finalizeScheduledReportDelivery(session: SessionContext) {
-  const report = scheduledReportFromSession(session);
-  if (report) {
-    await finalizeScheduledReport(report.runId, report.leaseToken, "delivered");
-  }
-}
-
-async function releaseScheduledReportDelivery(
-  session: SessionContext,
-  errorMessage: string
-) {
-  const report = scheduledReportFromSession(session);
-  if (report) {
-    await releaseScheduledReport(report.runId, report.leaseToken, errorMessage);
-  }
-}
 
 async function findVerifiedAuthUserIdByPhoneNumber(phoneNumber: string) {
   const auth = await getAuth();

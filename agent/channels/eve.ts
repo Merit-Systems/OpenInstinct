@@ -8,6 +8,12 @@ import { z } from "zod";
 import { isSessionOwned } from "@/db/services/sessions";
 import { accessScopeForUser, type AccessScope } from "@/lib/access-scope";
 import { getAuthSession } from "@/auth/session";
+import { sendMessageToolResultSchema } from "@/agent/lib/send-message";
+import {
+  finalizeScheduledReportDelivery,
+  releaseScheduledReportDelivery,
+  scheduledReportFromSession,
+} from "@/agent/lib/schedules/report-lifecycle";
 
 const authenticateLocalDev = localDev();
 
@@ -24,7 +30,11 @@ export default eveChannel({
       }
 
       return {
-        attributes: { phoneNumber, workspaceId: scope.workspaceId },
+        attributes: {
+          conversationChannel: "eve",
+          phoneNumber,
+          workspaceId: scope.workspaceId,
+        },
         authenticator: "authjs",
         principalId: scope.userId,
         principalType: "user",
@@ -44,6 +54,7 @@ export default eveChannel({
         ...local,
         attributes: {
           ...local.attributes,
+          conversationChannel: "eve",
           phoneNumber: "+15555550100",
           workspaceId: scope.workspaceId,
         },
@@ -58,6 +69,36 @@ export default eveChannel({
       });
     },
   ],
+  events: {
+    async "action.result"(event, _channel, session) {
+      if (
+        event.status === "completed" &&
+        sendMessageToolResultSchema.safeParse(event.result).success
+      ) {
+        await finalizeScheduledReportDelivery(session);
+      }
+    },
+    async "message.completed"(event, _channel, session) {
+      if (event.finishReason === "tool-calls") return;
+      if (scheduledReportFromSession(session)) {
+        await finalizeScheduledReportDelivery(session, "suppressed");
+      }
+    },
+    async "session.completed"(_event, _channel, session) {
+      if (scheduledReportFromSession(session)) {
+        await finalizeScheduledReportDelivery(session, "suppressed");
+      }
+    },
+    async "turn.cancelled"(_event, _channel, session) {
+      await releaseScheduledReportDelivery(
+        session,
+        "Scheduled result reporting was cancelled."
+      );
+    },
+    async "turn.failed"(event, _channel, session) {
+      await releaseScheduledReportDelivery(session, event.message);
+    },
+  },
 });
 
 function sessionIdFromPath(pathname: string) {

@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type {
   claimReadyScheduledAgentRuns,
   claimScheduledReport,
+  finalizeScheduledReport,
   listRecoverableScheduledReports,
   materializeDueScheduledAgentRuns,
   releaseScheduledAgentRun,
@@ -14,16 +15,21 @@ import type {
 const services = vi.hoisted(() => ({
   claimReports: vi.fn<typeof claimScheduledReport>(),
   claimRuns: vi.fn<typeof claimReadyScheduledAgentRuns>(),
+  finalizeReport: vi.fn<typeof finalizeScheduledReport>(),
   listReports: vi.fn<typeof listRecoverableScheduledReports>(),
   materialize: vi.fn<typeof materializeDueScheduledAgentRuns>(),
   releaseReport: vi.fn<typeof releaseScheduledReport>(),
   releaseRun: vi.fn<typeof releaseScheduledAgentRun>(),
   setSession: vi.fn<typeof setScheduledRunSession>(),
 }));
+const requests = vi.hoisted(() => ({
+  report: vi.fn<(runId: string) => Promise<void>>(),
+}));
 
 vi.mock("@/db/services/scheduled-agent-jobs", () => ({
   claimReadyScheduledAgentRuns: services.claimRuns,
   claimScheduledReport: services.claimReports,
+  finalizeScheduledReport: services.finalizeReport,
   listRecoverableScheduledReports: services.listReports,
   materializeDueScheduledAgentRuns: services.materialize,
   releaseScheduledAgentRun: services.releaseRun,
@@ -31,11 +37,15 @@ vi.mock("@/db/services/scheduled-agent-jobs", () => ({
   setScheduledRunSession: services.setSession,
 }));
 vi.mock("@/agent/channels/linq", () => ({ default: { channel: "linq" } }));
+vi.mock("@/agent/lib/schedules/request", () => ({
+  postScheduledReport: requests.report,
+}));
 vi.mock("@/agent/channels/scheduled-run", () => ({
   default: { channel: "scheduled-run" },
 }));
 
 import dynamicSchedule from "@/agent/schedules/dynamic";
+import { dispatchScheduledReport } from "@/agent/lib/schedules/report";
 
 describe("dynamic schedule dispatch", () => {
   beforeEach(() => {
@@ -43,6 +53,7 @@ describe("dynamic schedule dispatch", () => {
     services.materialize.mockResolvedValue([]);
     services.listReports.mockResolvedValue([]);
     services.claimRuns.mockResolvedValue([]);
+    requests.report.mockResolvedValue();
   });
 
   it("starts due work separately without waiting for its lifetime", async () => {
@@ -94,29 +105,95 @@ describe("dynamic schedule dispatch", () => {
     );
   });
 
-  it("recovers a pending report through the main Linq continuation", async () => {
+  it("requests recovery through the report callback", async () => {
     const report = scheduledReport();
     services.listReports.mockResolvedValue([report.run.id]);
-    services.claimReports.mockResolvedValue(report);
     const workerSend = vi.fn<ReturnType<ScheduleToFn>["send"]>();
-    const linqSend = vi
-      .fn<ReturnType<ScheduleToFn>["send"]>()
-      .mockResolvedValue(workerSession("main-session"));
-    const to = vi.fn<ScheduleToFn>((channel) => ({
-      send:
-        "channel" in channel && channel.channel === "scheduled-run"
-          ? workerSend
-          : linqSend,
-    }));
+    const to = vi.fn<ScheduleToFn>(() => ({ send: workerSend }));
 
     await runSchedule(to);
 
     expect(workerSend).not.toHaveBeenCalled();
-    expect(linqSend).toHaveBeenCalledOnce();
-    expect(linqSend.mock.calls[0]?.[1]).toMatchObject({
+    expect(requests.report).toHaveBeenCalledExactlyOnceWith(report.run.id);
+  });
+});
+
+describe("scheduled report delivery", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    services.releaseReport.mockResolvedValue();
+  });
+
+  it("routes Linq reports to the stored conversation", async () => {
+    const report = scheduledReport();
+    services.claimReports.mockResolvedValue(report);
+    const send = vi
+      .fn<ReturnType<ScheduleToFn>["send"]>()
+      .mockResolvedValue(workerSession("main-session"));
+    const to = vi.fn<ScheduleToFn>(() => ({ send }));
+    const attachSession = vi.fn<(sessionId: string) => Session>();
+
+    await dispatchScheduledReport({ attachSession, to }, report.run.id);
+
+    expect(to).toHaveBeenCalledWith(expect.anything(), {
+      adapterName: "linq",
+      threadId: "linq:dm:chat-1",
+    });
+    expect(attachSession).not.toHaveBeenCalled();
+    expect(send.mock.calls[0]?.[1]).toMatchObject({
       auth: { authenticator: "scheduled-result" },
       turnPolicy: "queue",
     });
+  });
+
+  it("routes Eve reports to the stored debug session", async () => {
+    const report = scheduledReport();
+    report.job.conversationChannel = "eve";
+    report.job.conversationId = "web-session";
+    services.claimReports.mockResolvedValue(report);
+    const send = vi.fn<Session["send"]>();
+    const attached = workerSession("web-session", send);
+    send.mockResolvedValue({ sessionId: "web-session", status: "accepted" });
+    const attachSession = vi
+      .fn<(sessionId: string) => Session>()
+      .mockReturnValue(attached);
+    const to = vi.fn<ScheduleToFn>();
+
+    await dispatchScheduledReport({ attachSession, to }, report.run.id);
+
+    expect(attachSession).toHaveBeenCalledExactlyOnceWith("web-session");
+    expect(to).not.toHaveBeenCalled();
+    expect(send.mock.calls[0]?.[0]).toContain(
+      "A background scheduled run has completed."
+    );
+    expect(send.mock.calls[0]?.[1].auth?.authenticator).toBe(
+      "scheduled-result"
+    );
+    expect(send.mock.calls[0]?.[1].turnPolicy).toBe("queue");
+  });
+
+  it("suppresses reports for inactive Eve debug sessions", async () => {
+    const report = scheduledReport();
+    report.job.conversationChannel = "eve";
+    report.job.conversationId = "retired-session";
+    services.claimReports.mockResolvedValue(report);
+    const send = vi
+      .fn<Session["send"]>()
+      .mockResolvedValue({ status: "session_not_active" });
+    const attachSession = vi
+      .fn<(sessionId: string) => Session>()
+      .mockReturnValue(workerSession("retired-session", send));
+
+    await dispatchScheduledReport(
+      { attachSession, to: vi.fn<ScheduleToFn>() },
+      report.run.id
+    );
+
+    expect(services.finalizeReport).toHaveBeenCalledExactlyOnceWith(
+      report.run.id,
+      report.run.leaseToken,
+      "suppressed"
+    );
   });
 });
 
@@ -144,7 +221,10 @@ const resultOutcome = {
   urgency: "normal" as const,
 };
 
-function workerSession(id = "worker-session"): Session {
+function workerSession(
+  id = "worker-session",
+  send = vi.fn<Session["send"]>()
+): Session {
   return {
     cancel: vi.fn<Session["cancel"]>(),
     clear: vi.fn<Session["clear"]>(),
@@ -154,7 +234,7 @@ function workerSession(id = "worker-session"): Session {
     id,
     reset: vi.fn<Session["reset"]>(),
     respond: vi.fn<Session["respond"]>(),
-    send: vi.fn<Session["send"]>(),
+    send,
   };
 }
 
@@ -168,7 +248,8 @@ function scheduledClaim(): Awaited<
       id: "00000000-0000-4000-8000-000000000001",
       lastError: null,
       lastRunAt: new Date("2026-09-02T13:00:00.000Z"),
-      linqThreadId: "linq:dm:chat-1",
+      conversationChannel: "linq",
+      conversationId: "linq:dm:chat-1",
       missedRunPolicy: "run_latest",
       nextRunAt: new Date("2026-09-03T13:00:00.000Z"),
       prompt: "Watch the price.",

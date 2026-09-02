@@ -1,5 +1,5 @@
 import { defineSchedule, type ScheduleToFn } from "eve/schedules";
-import { dispatchScheduledReport } from "@/agent/lib/schedules/report";
+import { postScheduledReport } from "@/agent/lib/schedules/request";
 import {
   claimReadyScheduledAgentRuns,
   listRecoverableScheduledReports,
@@ -31,7 +31,7 @@ async function dispatchDueWork(to: ScheduleToFn) {
   ]);
   await Promise.all([
     ...runs.map((claim) => executeScheduledRun(to, claim)),
-    ...reportRunIds.map((runId) => dispatchScheduledReport(to, runId)),
+    ...reportRunIds.map((runId) => postScheduledReport(runId)),
   ]);
 }
 
@@ -48,7 +48,8 @@ async function executeScheduledRun(
     }).send(scheduledRunPrompt(claim), {
       auth: {
         attributes: {
-          linqThreadId: claim.job.linqThreadId,
+          conversationChannel: claim.job.conversationChannel,
+          conversationId: claim.job.conversationId,
           scheduleId: claim.job.id,
           scheduledRunLeaseToken: leaseToken,
           scheduledRunId: claim.run.id,

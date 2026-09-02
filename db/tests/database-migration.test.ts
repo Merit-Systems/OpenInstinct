@@ -19,7 +19,7 @@ describe("database migrations", () => {
     await applyMigration(database, "0004_kind_manta.sql");
     await applyMigration(database, "0005_brave_kang.sql");
     await applyMigration(database, "0006_illegal_tattoo.sql");
-    await applyMigration(database, "0007_small_mandarin.sql");
+    await applyMigration(database, "0007_known_fenris.sql");
     await applyMigration(database, "0000_fluffy_the_spike.sql");
     await applyMigration(database, "0001_better-auth.sql");
 

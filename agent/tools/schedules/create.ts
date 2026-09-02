@@ -6,7 +6,7 @@ import { createScheduledAgentJob } from "@/db/services/scheduled-agent-jobs";
 
 export default defineTool({
   description:
-    "Create a one-time, fixed-interval, or timezone-aware calendar job for this exact iMessage conversation. Use calendar timing for human wall-clock recurrence so it remains stable across daylight saving time. Summarize the exact requested work in prompt.",
+    "Create a one-time, fixed-interval, or timezone-aware calendar job for this conversation. Use calendar timing for human wall-clock recurrence so it remains stable across daylight saving time. Summarize the exact requested work in prompt.",
   inputSchema: z.object({
     missedRunPolicy: z.enum(["run_latest", "catch_up"]).default("run_latest"),
     prompt: z.string().trim().min(1).max(8_000),
@@ -16,7 +16,7 @@ export default defineTool({
     const owner = scheduleOwner(context);
     return scheduleSummary(
       await createScheduledAgentJob(owner.scope, {
-        linqThreadId: owner.linqThreadId,
+        ...owner.conversation,
         missedRunPolicy: input.missedRunPolicy,
         prompt: input.prompt,
         timing: input.timing,

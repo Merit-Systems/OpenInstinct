@@ -5,11 +5,11 @@ import { listScheduledAgentJobs } from "@/db/services/scheduled-agent-jobs";
 
 export default defineTool({
   description:
-    "List the authenticated user's one-time and recurring jobs for this iMessage conversation. Use this before changing a schedule when the target is ambiguous.",
+    "List the authenticated user's one-time and recurring jobs for this conversation. Use this before changing a schedule when the target is ambiguous.",
   inputSchema: z.object({}),
   async execute(_input, context) {
     const owner = scheduleOwner(context);
-    return (await listScheduledAgentJobs(owner.scope, owner.linqThreadId)).map(
+    return (await listScheduledAgentJobs(owner.scope, owner.conversation)).map(
       scheduleSummary
     );
   },

@@ -14,7 +14,8 @@ import {
 import { db, scheduledAgentJobs, scheduledAgentRuns } from "@/db";
 
 export interface CreateScheduledAgentJob {
-  readonly linqThreadId: string;
+  readonly conversationChannel: "eve" | "linq";
+  readonly conversationId: string;
   readonly missedRunPolicy: "catch_up" | "run_latest";
   readonly prompt: string;
   readonly timing: ScheduleTiming;
@@ -49,7 +50,8 @@ export async function createScheduledAgentJob(
     .values({
       createdAt: now,
       createdByUserId: scope.userId,
-      linqThreadId: input.linqThreadId,
+      conversationChannel: input.conversationChannel,
+      conversationId: input.conversationId,
       missedRunPolicy: input.missedRunPolicy,
       nextRunAt,
       prompt: input.prompt,
@@ -65,14 +67,21 @@ export async function createScheduledAgentJob(
 
 export async function listScheduledAgentJobs(
   scope: AccessScope,
-  linqThreadId: string
+  conversation: Pick<
+    CreateScheduledAgentJob,
+    "conversationChannel" | "conversationId"
+  >
 ) {
   const jobs = await db.query.scheduledAgentJobs.findMany({
     orderBy: asc(scheduledAgentJobs.nextRunAt),
     where: and(
       eq(scheduledAgentJobs.workspaceId, scope.workspaceId),
       eq(scheduledAgentJobs.createdByUserId, scope.userId),
-      eq(scheduledAgentJobs.linqThreadId, linqThreadId),
+      eq(
+        scheduledAgentJobs.conversationChannel,
+        conversation.conversationChannel
+      ),
+      eq(scheduledAgentJobs.conversationId, conversation.conversationId),
       sql`${scheduledAgentJobs.status} <> 'deleted'`
     ),
     with: {
@@ -89,7 +98,10 @@ export async function listScheduledAgentJobs(
 
 export async function updateScheduledAgentJob(
   scope: AccessScope,
-  linqThreadId: string,
+  conversation: Pick<
+    CreateScheduledAgentJob,
+    "conversationChannel" | "conversationId"
+  >,
   id: string,
   patch: UpdateScheduledAgentJob,
   now = new Date()
@@ -99,7 +111,11 @@ export async function updateScheduledAgentJob(
       eq(scheduledAgentJobs.id, id),
       eq(scheduledAgentJobs.workspaceId, scope.workspaceId),
       eq(scheduledAgentJobs.createdByUserId, scope.userId),
-      eq(scheduledAgentJobs.linqThreadId, linqThreadId),
+      eq(
+        scheduledAgentJobs.conversationChannel,
+        conversation.conversationChannel
+      ),
+      eq(scheduledAgentJobs.conversationId, conversation.conversationId),
       sql`${scheduledAgentJobs.status} <> 'deleted'`
     ),
   });

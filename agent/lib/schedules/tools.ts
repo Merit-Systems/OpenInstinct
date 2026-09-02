@@ -8,11 +8,15 @@ export function scheduleOwner(context: ToolContext) {
   if (auth?.principalType !== "user") {
     throw new Error("An authenticated user is required to manage schedules.");
   }
+  const conversationChannel = z
+    .enum(["eve", "linq"])
+    .parse(auth.attributes.conversationChannel);
+  const conversationId =
+    conversationChannel === "eve"
+      ? context.session.id
+      : z.string().startsWith("linq:").parse(auth.attributes.conversationId);
   return {
-    linqThreadId: z
-      .string()
-      .startsWith("linq:")
-      .parse(auth.attributes.linqThreadId),
+    conversation: { conversationChannel, conversationId },
     scope: scopeFromPrincipal(auth),
   };
 }

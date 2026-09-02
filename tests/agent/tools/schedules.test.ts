@@ -56,7 +56,8 @@ describe("schedule tools", () => {
     expect(services.create).toHaveBeenCalledExactlyOnceWith(
       { userId: "user-1", workspaceId: "workspace-1" },
       {
-        linqThreadId: "linq:dm:chat-1",
+        conversationChannel: "linq",
+        conversationId: "linq:dm:chat-1",
         missedRunPolicy: "run_latest",
         prompt: "Send the morning summary.",
         timing: {
@@ -82,7 +83,10 @@ describe("schedule tools", () => {
     expect(inputProperties(listSchedules.inputSchema)).toEqual([]);
     expect(services.list).toHaveBeenCalledExactlyOnceWith(
       { userId: "user-1", workspaceId: "workspace-1" },
-      "linq:dm:chat-1"
+      {
+        conversationChannel: "linq",
+        conversationId: "linq:dm:chat-1",
+      }
     );
     expect(result).toEqual([scheduleSummary(job)]);
   });
@@ -107,7 +111,10 @@ describe("schedule tools", () => {
     ]);
     expect(services.update).toHaveBeenCalledExactlyOnceWith(
       { userId: "user-1", workspaceId: "workspace-1" },
-      "linq:dm:chat-1",
+      {
+        conversationChannel: "linq",
+        conversationId: "linq:dm:chat-1",
+      },
       job.id,
       { status: "paused" }
     );
@@ -128,9 +135,43 @@ describe("schedule tools", () => {
       )
     ).toThrow("Scheduled workers return a structured outcome");
   });
+
+  it("owns web schedules by their Eve session", async () => {
+    const job = scheduledJob({
+      conversationChannel: "eve",
+      conversationId: "session-1",
+    });
+    services.create.mockResolvedValue(job);
+
+    await createSchedule.execute(
+      {
+        missedRunPolicy: "run_latest",
+        prompt: "Send the morning summary.",
+        timing: {
+          frequency: "daily",
+          kind: "calendar",
+          localTime: "09:00",
+          timezone: "America/New_York",
+        },
+      },
+      toolContext("schedules-create", "test", "eve")
+    );
+
+    expect(services.create).toHaveBeenCalledWith(
+      { userId: "user-1", workspaceId: "workspace-1" },
+      expect.objectContaining({
+        conversationChannel: "eve",
+        conversationId: "session-1",
+      })
+    );
+  });
 });
 
-function toolContext(toolName: string, authenticator = "test") {
+function toolContext(
+  toolName: string,
+  authenticator = "test",
+  conversationChannel: "eve" | "linq" = "linq"
+) {
   return {
     abortSignal: new AbortController().signal,
     callId: "call-schedule",
@@ -150,6 +191,8 @@ function toolContext(toolName: string, authenticator = "test") {
       auth: {
         current: {
           attributes: {
+            conversationChannel,
+            conversationId: "linq:dm:chat-1",
             linqThreadId: "linq:dm:chat-1",
             workspaceId: "workspace-1",
           },
@@ -173,16 +216,22 @@ function inputProperties(schema: ToolDefinition["inputSchema"]) {
   return Object.keys(z.toJSONSchema(schema).properties ?? {});
 }
 
-function scheduledJob(): Awaited<
-  ReturnType<typeof listScheduledAgentJobs>
->[number] {
+function scheduledJob(
+  conversation: {
+    conversationChannel: "eve" | "linq";
+    conversationId: string;
+  } = {
+    conversationChannel: "linq",
+    conversationId: "linq:dm:chat-1",
+  }
+): Awaited<ReturnType<typeof listScheduledAgentJobs>>[number] {
   return {
     createdAt: new Date("2026-09-01T12:00:00.000Z"),
     createdByUserId: "user-1",
     id: "00000000-0000-4000-8000-000000000001",
     lastError: null,
     lastRunAt: null,
-    linqThreadId: "linq:dm:chat-1",
+    ...conversation,
     missedRunPolicy: "run_latest",
     nextRunAt: new Date("2026-09-02T13:00:00.000Z"),
     prompt: "Send the morning summary.",

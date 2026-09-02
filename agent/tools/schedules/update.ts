@@ -25,7 +25,7 @@ export default defineTool({
     const owner = scheduleOwner(context);
     const job = await updateScheduledAgentJob(
       owner.scope,
-      owner.linqThreadId,
+      owner.conversation,
       id,
       patch
     );

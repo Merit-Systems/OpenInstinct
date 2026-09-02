@@ -1,4 +1,5 @@
 import { defineChannel, POST } from "eve/channels";
+import { localDev, routeAuth, vercelOidc } from "eve/channels/auth";
 import { z } from "zod";
 import { scheduledRunOutcomeJsonSchema } from "@/agent/lib/schedules/outcome";
 import { dispatchScheduledReport } from "@/agent/lib/schedules/report";
@@ -8,15 +9,20 @@ const targetSchema = z.strictObject({
   runId: z.uuid(),
 });
 const reportSchema = z.strictObject({ runId: z.uuid() });
+const internalRouteAuth = [vercelOidc(), localDev()];
 
 export default defineChannel({
   routes: [
     POST(
       "/internal/scheduled-run/report",
-      async (request, { to, waitUntil }) => {
+      async (request, { attachSession, to, waitUntil }) => {
+        const auth = await routeAuth(request, internalRouteAuth);
+        if (auth instanceof Response) return auth;
         const parsed = reportSchema.safeParse(await request.json());
         if (parsed.success) {
-          waitUntil(dispatchScheduledReport(to, parsed.data.runId));
+          waitUntil(
+            dispatchScheduledReport({ attachSession, to }, parsed.data.runId)
+          );
         }
         return new Response(null, { status: 202 });
       }

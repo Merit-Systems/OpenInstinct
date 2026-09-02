@@ -20,7 +20,10 @@ export const scheduledAgentJobs = pgTable(
     workspaceId: text("workspace_id").notNull(),
     createdByUserId: text("created_by_user_id").notNull(),
     prompt: text("prompt").notNull(),
-    linqThreadId: text("linq_thread_id").notNull(),
+    conversationChannel: text("conversation_channel", {
+      enum: ["eve", "linq"],
+    }).notNull(),
+    conversationId: text("conversation_id").notNull(),
     timing: jsonb("timing").notNull(),
     missedRunPolicy: text("missed_run_policy", {
       enum: ["skip", "run_latest", "catch_up"],
@@ -69,8 +72,12 @@ export const scheduledAgentJobs = pgTable(
       ],
     }).onDelete("cascade"),
     check(
-      "scheduled_agent_jobs_linq_thread_check",
-      sql`${table.linqThreadId} LIKE 'linq:%'`
+      "scheduled_agent_jobs_conversation_channel_check",
+      sql`${table.conversationChannel} IN ('eve', 'linq')`
+    ),
+    check(
+      "scheduled_agent_jobs_conversation_id_check",
+      sql`${table.conversationId} <> ''`
     ),
     check(
       "scheduled_agent_jobs_missed_run_policy_check",
@@ -87,6 +94,8 @@ export const scheduledAgentJobs = pgTable(
     index("scheduled_agent_jobs_owner_idx").on(
       table.workspaceId,
       table.createdByUserId,
+      table.conversationChannel,
+      table.conversationId,
       table.nextRunAt.asc().nullsLast()
     ),
   ]

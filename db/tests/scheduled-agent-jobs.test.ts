@@ -26,7 +26,7 @@ describe("scheduled agent jobs", () => {
       "0004_kind_manta.sql",
       "0005_brave_kang.sql",
       "0006_illegal_tattoo.sql",
-      "0007_small_mandarin.sql",
+      "0007_known_fenris.sql",
     ]) {
       await applyMigration(client, migration);
     }
@@ -39,6 +39,14 @@ describe("scheduled agent jobs", () => {
     const jobs = await import("@/db/services/scheduled-agent-jobs");
     const alice = { userId: "alice", workspaceId: "workspace:alice" };
     const bob = { userId: "bob", workspaceId: "workspace:bob" };
+    const aliceConversation = {
+      conversationChannel: "linq" as const,
+      conversationId: "linq:chat-alice",
+    };
+    const bobConversation = {
+      conversationChannel: "linq" as const,
+      conversationId: "linq:chat-bob",
+    };
     await scope.ensureScope(alice);
     await scope.ensureScope(bob);
 
@@ -46,7 +54,7 @@ describe("scheduled agent jobs", () => {
     const created = await jobs.createScheduledAgentJob(
       alice,
       {
-        linqThreadId: "linq:chat-alice",
+        ...aliceConversation,
         missedRunPolicy: "run_latest",
         prompt: "Check for a material price change.",
         timing: {
@@ -57,23 +65,23 @@ describe("scheduled agent jobs", () => {
       },
       now
     );
-    expect(await jobs.listScheduledAgentJobs(bob, "linq:chat-alice")).toEqual(
+    expect(await jobs.listScheduledAgentJobs(bob, aliceConversation)).toEqual(
       []
     );
-    expect(await jobs.listScheduledAgentJobs(alice, "linq:chat-bob")).toEqual(
+    expect(await jobs.listScheduledAgentJobs(alice, bobConversation)).toEqual(
       []
     );
-    expect(await jobs.listScheduledAgentJobs(alice, "linq:chat-alice")).toEqual(
+    expect(await jobs.listScheduledAgentJobs(alice, aliceConversation)).toEqual(
       [created]
     );
     await jobs.updateScheduledAgentJob(
       alice,
-      "linq:chat-alice",
+      aliceConversation,
       created.id,
       { prompt: "Check for a meaningful price change." },
       new Date("2026-09-01T12:30:00.000Z")
     );
-    expect(await jobs.listScheduledAgentJobs(alice, "linq:chat-alice")).toEqual(
+    expect(await jobs.listScheduledAgentJobs(alice, aliceConversation)).toEqual(
       [
         expect.objectContaining({
           nextRunAt: new Date("2026-09-01T13:00:00.000Z"),
@@ -94,7 +102,7 @@ describe("scheduled agent jobs", () => {
     });
     if (!claim?.run.leaseToken) throw new Error("Expected one leased run.");
     expect(claim).toMatchObject({
-      job: { id: created.id, linqThreadId: "linq:chat-alice" },
+      job: { id: created.id, ...aliceConversation },
       run: { attempts: 1, scheduledFor: dueAt },
     });
     expect(
@@ -191,16 +199,16 @@ describe("scheduled agent jobs", () => {
     expect(await jobs.listRecoverableScheduledReports(dueAt)).toEqual([]);
 
     expect(
-      await jobs.updateScheduledAgentJob(bob, "linq:chat-alice", created.id, {
+      await jobs.updateScheduledAgentJob(bob, aliceConversation, created.id, {
         status: "paused",
       })
     ).toBeUndefined();
     expect(
-      await jobs.updateScheduledAgentJob(alice, "linq:chat-bob", created.id, {
+      await jobs.updateScheduledAgentJob(alice, bobConversation, created.id, {
         status: "paused",
       })
     ).toBeUndefined();
-    expect(await jobs.listScheduledAgentJobs(alice, "linq:chat-alice")).toEqual(
+    expect(await jobs.listScheduledAgentJobs(alice, aliceConversation)).toEqual(
       [
         expect.objectContaining({
           nextRunAt: new Date("2026-09-01T14:00:00.000Z"),
@@ -208,13 +216,13 @@ describe("scheduled agent jobs", () => {
         }),
       ]
     );
-    await jobs.updateScheduledAgentJob(alice, "linq:chat-alice", created.id, {
+    await jobs.updateScheduledAgentJob(alice, aliceConversation, created.id, {
       status: "paused",
     });
     await jobs.createScheduledAgentJob(
       bob,
       {
-        linqThreadId: "linq:chat-bob",
+        ...bobConversation,
         missedRunPolicy: "run_latest",
         prompt: "Check the hourly value.",
         timing: {
@@ -260,12 +268,15 @@ describe("scheduled agent jobs", () => {
       });
     }
 
-    expect(await jobs.listScheduledAgentJobs(bob, "linq:chat-bob")).toEqual([
+    expect(await jobs.listScheduledAgentJobs(bob, bobConversation)).toEqual([
       expect.objectContaining({ lastError: "Source unavailable." }),
     ]);
-    expect(await jobs.listScheduledAgentJobs(bob, "linq:another-chat")).toEqual(
-      []
-    );
+    expect(
+      await jobs.listScheduledAgentJobs(bob, {
+        conversationChannel: "linq",
+        conversationId: "linq:another-chat",
+      })
+    ).toEqual([]);
   }, 20_000);
 });
 

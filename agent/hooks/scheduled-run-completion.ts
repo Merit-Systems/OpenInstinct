@@ -6,7 +6,7 @@ import {
   completeScheduledAgentRun,
   releaseScheduledAgentRun,
 } from "@/db/services/scheduled-agent-jobs";
-import { applicationOrigin } from "@/lib/application-origin";
+import { postScheduledReport } from "@/agent/lib/schedules/request";
 
 const scheduledWorker = "scheduled-worker";
 const scheduledRunIdentitySchema = z.object({
@@ -26,22 +26,6 @@ function scheduledRunIdentity(ctx: HookContext) {
     : undefined;
 }
 
-async function requestImmediateReport(runId: string) {
-  const response = await fetch(
-    new URL("/internal/scheduled-run/report", applicationOrigin()),
-    {
-      body: JSON.stringify({ runId }),
-      headers: { "content-type": "application/json" },
-      method: "POST",
-    }
-  );
-  if (!response.ok) {
-    throw new Error(
-      `Scheduled report callback failed (${String(response.status)}).`
-    );
-  }
-}
-
 export default defineHook({
   events: {
     async "result.completed"(event, ctx) {
@@ -57,7 +41,7 @@ export default defineHook({
       );
       if (completed?.reportStatus !== "pending") return;
       try {
-        await requestImmediateReport(completed.id);
+        await postScheduledReport(completed.id);
       } catch (error) {
         console.warn("[scheduled-run] immediate report callback failed", {
           cause: error,
