@@ -57,20 +57,30 @@ describe("scheduled agent jobs", () => {
       },
       now
     );
-    expect(await jobs.listScheduledAgentJobs(bob)).toEqual([]);
-    expect(await jobs.listScheduledAgentJobs(alice)).toEqual([created]);
+    expect(await jobs.listScheduledAgentJobs(bob, "linq:chat-alice")).toEqual(
+      []
+    );
+    expect(await jobs.listScheduledAgentJobs(alice, "linq:chat-bob")).toEqual(
+      []
+    );
+    expect(await jobs.listScheduledAgentJobs(alice, "linq:chat-alice")).toEqual(
+      [created]
+    );
     await jobs.updateScheduledAgentJob(
       alice,
+      "linq:chat-alice",
       created.id,
       { prompt: "Check for a meaningful price change." },
       new Date("2026-09-01T12:30:00.000Z")
     );
-    expect(await jobs.listScheduledAgentJobs(alice)).toEqual([
-      expect.objectContaining({
-        nextRunAt: new Date("2026-09-01T13:00:00.000Z"),
-        prompt: "Check for a meaningful price change.",
-      }),
-    ]);
+    expect(await jobs.listScheduledAgentJobs(alice, "linq:chat-alice")).toEqual(
+      [
+        expect.objectContaining({
+          nextRunAt: new Date("2026-09-01T13:00:00.000Z"),
+          prompt: "Check for a meaningful price change.",
+        }),
+      ]
+    );
 
     const dueAt = new Date("2026-09-01T13:00:00.000Z");
     await jobs.materializeDueScheduledAgentRuns({ limit: 25, now: dueAt });
@@ -181,15 +191,82 @@ describe("scheduled agent jobs", () => {
     expect(await jobs.listRecoverableScheduledReports(dueAt)).toEqual([]);
 
     expect(
-      await jobs.updateScheduledAgentJob(bob, created.id, { status: "paused" })
+      await jobs.updateScheduledAgentJob(bob, "linq:chat-alice", created.id, {
+        status: "paused",
+      })
     ).toBeUndefined();
-    expect(await jobs.listScheduledAgentJobs(alice)).toEqual([
-      expect.objectContaining({
-        nextRunAt: new Date("2026-09-01T14:00:00.000Z"),
-        status: "active",
-      }),
+    expect(
+      await jobs.updateScheduledAgentJob(alice, "linq:chat-bob", created.id, {
+        status: "paused",
+      })
+    ).toBeUndefined();
+    expect(await jobs.listScheduledAgentJobs(alice, "linq:chat-alice")).toEqual(
+      [
+        expect.objectContaining({
+          nextRunAt: new Date("2026-09-01T14:00:00.000Z"),
+          status: "active",
+        }),
+      ]
+    );
+    await jobs.updateScheduledAgentJob(alice, "linq:chat-alice", created.id, {
+      status: "paused",
+    });
+    await jobs.createScheduledAgentJob(
+      bob,
+      {
+        linqThreadId: "linq:chat-bob",
+        missedRunPolicy: "run_latest",
+        prompt: "Check the hourly value.",
+        timing: {
+          anchoredAt: "2026-09-01T13:00:00.000Z",
+          everyMinutes: 60,
+          kind: "interval",
+        },
+      },
+      now
+    );
+
+    const recoveredAt = new Date("2026-09-08T13:30:00.000Z");
+    await jobs.materializeDueScheduledAgentRuns({
+      limit: 25,
+      now: recoveredAt,
+    });
+    let [latestClaim] = await jobs.claimReadyScheduledAgentRuns({
+      leaseForMs: 21_600_000,
+      limit: 25,
+      now: recoveredAt,
+    });
+
+    expect(latestClaim).toMatchObject({
+      job: { nextRunAt: new Date("2026-09-08T14:00:00.000Z") },
+      run: { scheduledFor: new Date("2026-09-08T13:00:00.000Z") },
+    });
+    let retryAt = recoveredAt;
+    for (let attempt = 1; attempt <= 3; attempt += 1) {
+      if (!latestClaim?.run.leaseToken) {
+        throw new Error("Expected a leased run.");
+      }
+      await jobs.releaseScheduledAgentRun(
+        latestClaim.run.id,
+        latestClaim.run.leaseToken,
+        "Source unavailable.",
+        retryAt
+      );
+      retryAt = new Date(retryAt.getTime() + 5 * 60_000);
+      [latestClaim] = await jobs.claimReadyScheduledAgentRuns({
+        leaseForMs: 21_600_000,
+        limit: 25,
+        now: retryAt,
+      });
+    }
+
+    expect(await jobs.listScheduledAgentJobs(bob, "linq:chat-bob")).toEqual([
+      expect.objectContaining({ lastError: "Source unavailable." }),
     ]);
-  }, 15_000);
+    expect(await jobs.listScheduledAgentJobs(bob, "linq:another-chat")).toEqual(
+      []
+    );
+  }, 20_000);
 });
 
 async function applyMigration(database: PGlite, filename: string) {

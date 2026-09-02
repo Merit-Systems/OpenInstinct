@@ -1245,6 +1245,13 @@
           "notNull": true,
           "default": "'not_ready'"
         },
+        "report_sequence": {
+          "name": "report_sequence",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
         "attempts": {
           "name": "attempts",
           "type": "integer",

@@ -1,10 +1,24 @@
 import { describe, expect, it } from "vitest";
 import {
+  computeLatestRun,
   computeNextRun,
   scheduleTimingSchema,
 } from "@/agent/lib/schedules/timing";
 
 describe("schedule timing", () => {
+  it("finds the latest elapsed interval without walking every occurrence", () => {
+    expect(
+      computeLatestRun(
+        {
+          anchoredAt: "2026-09-01T13:00:00.000Z",
+          everyMinutes: 60,
+          kind: "interval",
+        },
+        new Date("2026-09-08T13:30:00.000Z")
+      )
+    ).toEqual(new Date("2026-09-08T13:00:00.000Z"));
+  });
+
   it("keeps calendar recurrence at the same local time across DST", () => {
     const timing = {
       frequency: "daily" as const,

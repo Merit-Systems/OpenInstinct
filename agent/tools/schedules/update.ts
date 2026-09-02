@@ -23,7 +23,12 @@ export default defineTool({
   inputSchema,
   async execute({ id, ...patch }, context) {
     const owner = scheduleOwner(context);
-    const job = await updateScheduledAgentJob(owner.scope, id, patch);
+    const job = await updateScheduledAgentJob(
+      owner.scope,
+      owner.linqThreadId,
+      id,
+      patch
+    );
     if (!job) throw new Error("Schedule not found.");
     return scheduleSummary(job);
   },

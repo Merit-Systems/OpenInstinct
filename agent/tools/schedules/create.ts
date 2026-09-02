@@ -14,13 +14,9 @@ export default defineTool({
   }),
   async execute(input, context) {
     const owner = scheduleOwner(context);
-    const linqThreadId = z
-      .string()
-      .startsWith("linq:")
-      .parse(owner.auth.attributes.linqThreadId);
     return scheduleSummary(
       await createScheduledAgentJob(owner.scope, {
-        linqThreadId,
+        linqThreadId: owner.linqThreadId,
         missedRunPolicy: input.missedRunPolicy,
         prompt: input.prompt,
         timing: input.timing,

@@ -26,6 +26,7 @@ CREATE TABLE "scheduled_agent_runs" (
 	"worker_session_id" text,
 	"outcome" jsonb,
 	"report_status" text DEFAULT 'not_ready' NOT NULL,
+	"report_sequence" integer DEFAULT 0 NOT NULL,
 	"attempts" integer DEFAULT 0 NOT NULL,
 	"retry_at" timestamp (3) with time zone,
 	"lease_token" uuid,

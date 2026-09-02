@@ -1,5 +1,6 @@
 import { connectLinqCredentials } from "@vercel/connect/eve";
 import { LinqAPIV3 } from "@linqapp/sdk";
+import type { AdapterPostableMessage } from "chat";
 import type { SessionContext } from "eve/context";
 import {
   defaultLinqAuth,
@@ -81,6 +82,16 @@ export default linqChannel({
             "send_message requires an active Linq conversation thread."
           );
         }
+        const report = scheduledReportFromSession(session);
+        const idempotencyKey = report
+          ? `scheduled-report:${report.runId}:${String(report.sequence)}`
+          : undefined;
+        const post = idempotencyKey
+          ? (content: AdapterPostableMessage) =>
+              context.bot
+                .getAdapter("linq")
+                .postMessage(thread.id, content, { idempotencyKey })
+          : (content: AdapterPostableMessage) => thread.post(content);
 
         if (message.data.output.kind === "link") {
           const adapter = context.bot.getAdapter("linq");
@@ -92,11 +103,15 @@ export default linqChannel({
           }
           const apiKey = await credentials.apiKey();
           const client = new LinqAPIV3({ apiKey });
-          await client.chats.messages.send(chatId, {
-            message: {
-              parts: [{ type: "link", value: message.data.output.url }],
+          await client.chats.messages.send(
+            chatId,
+            {
+              message: {
+                parts: [{ type: "link", value: message.data.output.url }],
+              },
             },
-          });
+            idempotencyKey ? { idempotencyKey } : undefined
+          );
           await finalizeScheduledReportDelivery(session);
           return;
         }
@@ -107,7 +122,7 @@ export default linqChannel({
         const { markdown: requestedMarkdown } = message.data.output;
         if (!requestedMarkdown) {
           if (attachments?.length) {
-            await thread.post({ attachments, markdown: "" });
+            await post({ attachments, markdown: "" });
           }
           await finalizeScheduledReportDelivery(session);
           return;
@@ -132,7 +147,7 @@ export default linqChannel({
             { markdown: string }
           > = { markdown };
           if (attachments?.length) outgoing.attachments = attachments;
-          await thread.post(outgoing);
+          await post(outgoing);
           await finalizeScheduledReportDelivery(session);
           return;
         }
@@ -140,7 +155,7 @@ export default linqChannel({
         const delivery = await prepareLinqImageArtifactDelivery(
           requestedMarkdown,
           {
-            rootSessionId: session.session.id,
+            rootSessionId: report?.workerSessionId ?? session.session.id,
             scope: scopeFromPrincipal(caller),
           }
         );
@@ -165,7 +180,7 @@ export default linqChannel({
         > = { markdown };
         if (attachments?.length) outgoing.attachments = attachments;
         if (delivery.files.length > 0) outgoing.files = delivery.files;
-        await thread.post(outgoing);
+        await post(outgoing);
         await finalizeScheduledReportDelivery(session);
       }
     },
@@ -244,13 +259,17 @@ function scheduledReportFromSession(session: SessionContext) {
   const parsed = z
     .object({
       scheduledReportLeaseToken: z.string().min(1),
+      scheduledReportSequence: z.coerce.number().int().positive(),
       scheduledRunId: z.uuid(),
+      scheduledRunSessionId: z.string().min(1).optional(),
     })
     .safeParse(caller.attributes);
   return parsed.success
     ? {
         leaseToken: parsed.data.scheduledReportLeaseToken,
         runId: parsed.data.scheduledRunId,
+        sequence: parsed.data.scheduledReportSequence,
+        workerSessionId: parsed.data.scheduledRunSessionId,
       }
     : undefined;
 }

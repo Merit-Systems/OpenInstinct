@@ -1,8 +1,9 @@
 import { randomUUID } from "node:crypto";
-import { and, asc, eq, inArray, isNull, lte, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNull, lte, or, sql } from "drizzle-orm";
 import type { AccessScope } from "@/lib/access-scope";
 import {
   computeNextRun,
+  computeLatestRun,
   scheduleTimingSchema,
   type ScheduleTiming,
 } from "@/agent/lib/schedules/timing";
@@ -62,23 +63,33 @@ export async function createScheduledAgentJob(
   return parseJob(job);
 }
 
-export async function listScheduledAgentJobs(scope: AccessScope) {
-  const jobs = await db
-    .select()
-    .from(scheduledAgentJobs)
-    .where(
-      and(
-        eq(scheduledAgentJobs.workspaceId, scope.workspaceId),
-        eq(scheduledAgentJobs.createdByUserId, scope.userId),
-        sql`${scheduledAgentJobs.status} <> 'deleted'`
-      )
-    )
-    .orderBy(asc(scheduledAgentJobs.nextRunAt));
-  return jobs.map(parseJob);
+export async function listScheduledAgentJobs(
+  scope: AccessScope,
+  linqThreadId: string
+) {
+  const jobs = await db.query.scheduledAgentJobs.findMany({
+    orderBy: asc(scheduledAgentJobs.nextRunAt),
+    where: and(
+      eq(scheduledAgentJobs.workspaceId, scope.workspaceId),
+      eq(scheduledAgentJobs.createdByUserId, scope.userId),
+      eq(scheduledAgentJobs.linqThreadId, linqThreadId),
+      sql`${scheduledAgentJobs.status} <> 'deleted'`
+    ),
+    with: {
+      runs: {
+        limit: 1,
+        orderBy: desc(scheduledAgentRuns.scheduledFor),
+      },
+    },
+  });
+  return jobs.map(({ runs, ...job }) =>
+    parseJob({ ...job, lastError: runs[0]?.lastError ?? job.lastError })
+  );
 }
 
 export async function updateScheduledAgentJob(
   scope: AccessScope,
+  linqThreadId: string,
   id: string,
   patch: UpdateScheduledAgentJob,
   now = new Date()
@@ -88,6 +99,7 @@ export async function updateScheduledAgentJob(
       eq(scheduledAgentJobs.id, id),
       eq(scheduledAgentJobs.workspaceId, scope.workspaceId),
       eq(scheduledAgentJobs.createdByUserId, scope.userId),
+      eq(scheduledAgentJobs.linqThreadId, linqThreadId),
       sql`${scheduledAgentJobs.status} <> 'deleted'`
     ),
   });
@@ -140,12 +152,12 @@ export async function materializeDueScheduledAgentRuns(options: {
     const createdRunIds = await Promise.all(
       due.map(async (job) => {
         if (!job.nextRunAt) return undefined;
-        const scheduledFor = job.nextRunAt;
         const timing = scheduleTimingSchema.parse(job.timing);
-        const next = computeNextRun(
-          timing,
-          job.missedRunPolicy === "catch_up" ? scheduledFor : options.now
-        );
+        const scheduledFor =
+          job.missedRunPolicy === "catch_up"
+            ? job.nextRunAt
+            : (computeLatestRun(timing, options.now) ?? job.nextRunAt);
+        const next = computeNextRun(timing, scheduledFor);
         const [run] = await transaction
           .insert(scheduledAgentRuns)
           .values({
@@ -264,6 +276,10 @@ export async function completeScheduledAgentRun(
       leaseExpiresAt: null,
       leaseToken: null,
       outcome,
+      reportSequence:
+        outcome.kind === "nothing_to_report"
+          ? scheduledAgentRuns.reportSequence
+          : sql`${scheduledAgentRuns.reportSequence} + 1`,
       reportStatus:
         outcome.kind === "nothing_to_report" ? "not_needed" : "pending",
       status: "completed",

@@ -174,3 +174,48 @@ export function computeNextRun(
   }
   return null;
 }
+
+export function computeLatestRun(
+  timing: ScheduleTiming,
+  at: Date
+): Date | null {
+  if (timing.kind === "once") {
+    const occurrence = new Date(timing.at);
+    return occurrence.getTime() <= at.getTime() ? occurrence : null;
+  }
+
+  if (timing.kind === "interval") {
+    const anchor = Date.parse(timing.anchoredAt);
+    if (anchor > at.getTime()) return null;
+    const interval = timing.everyMinutes * 60_000;
+    return new Date(
+      anchor + Math.floor((at.getTime() - anchor) / interval) * interval
+    );
+  }
+
+  const [hourText, minuteText] = timing.localTime.split(":");
+  const hour = Number(hourText);
+  const minute = Number(minuteText);
+  const start = zonedParts(at.getTime(), timing.timezone);
+  for (let offset = 0; offset <= 14; offset += 1) {
+    const day = new Date(
+      Date.UTC(start.year, start.month - 1, start.day) - offset * 86_400_000
+    );
+    const candidate = fromWallClock(
+      timing.timezone,
+      day.getUTCFullYear(),
+      day.getUTCMonth() + 1,
+      day.getUTCDate(),
+      hour,
+      minute
+    );
+    if (candidate > at.getTime()) continue;
+    const weekday = zonedParts(candidate, timing.timezone).weekday;
+    if (timing.frequency === "weekdays" && (weekday === 0 || weekday === 6)) {
+      continue;
+    }
+    if (timing.frequency === "weekly" && weekday !== timing.weekday) continue;
+    return new Date(candidate);
+  }
+  return null;
+}

@@ -1,4 +1,5 @@
 import type { ToolContext } from "eve/tools";
+import { z } from "zod";
 import type { listScheduledAgentJobs } from "@/db/services/scheduled-agent-jobs";
 import { scopeFromPrincipal } from "@/lib/access-scope";
 
@@ -7,7 +8,13 @@ export function scheduleOwner(context: ToolContext) {
   if (auth?.principalType !== "user") {
     throw new Error("An authenticated user is required to manage schedules.");
   }
-  return { auth, scope: scopeFromPrincipal(auth) };
+  return {
+    linqThreadId: z
+      .string()
+      .startsWith("linq:")
+      .parse(auth.attributes.linqThreadId),
+    scope: scopeFromPrincipal(auth),
+  };
 }
 
 export function scheduleSummary(

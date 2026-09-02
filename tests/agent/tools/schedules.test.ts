@@ -80,10 +80,10 @@ describe("schedule tools", () => {
     );
 
     expect(inputProperties(listSchedules.inputSchema)).toEqual([]);
-    expect(services.list).toHaveBeenCalledExactlyOnceWith({
-      userId: "user-1",
-      workspaceId: "workspace-1",
-    });
+    expect(services.list).toHaveBeenCalledExactlyOnceWith(
+      { userId: "user-1", workspaceId: "workspace-1" },
+      "linq:dm:chat-1"
+    );
     expect(result).toEqual([scheduleSummary(job)]);
   });
 
@@ -107,6 +107,7 @@ describe("schedule tools", () => {
     ]);
     expect(services.update).toHaveBeenCalledExactlyOnceWith(
       { userId: "user-1", workspaceId: "workspace-1" },
+      "linq:dm:chat-1",
       job.id,
       { status: "paused" }
     );

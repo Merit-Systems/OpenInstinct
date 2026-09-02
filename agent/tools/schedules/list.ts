@@ -9,6 +9,8 @@ export default defineTool({
   inputSchema: z.object({}),
   async execute(_input, context) {
     const owner = scheduleOwner(context);
-    return (await listScheduledAgentJobs(owner.scope)).map(scheduleSummary);
+    return (await listScheduledAgentJobs(owner.scope, owner.linqThreadId)).map(
+      scheduleSummary
+    );
   },
 });

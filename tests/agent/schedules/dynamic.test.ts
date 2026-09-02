@@ -194,6 +194,7 @@ function scheduledClaim(): Awaited<
       leaseToken: "00000000-0000-4000-8000-000000000003",
       outcome: null,
       reportStatus: "not_ready",
+      reportSequence: 0,
       retryAt: null,
       scheduledFor: new Date("2026-09-02T13:00:00.000Z"),
       startedAt: new Date("2026-09-02T13:00:00.000Z"),

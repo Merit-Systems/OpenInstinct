@@ -68,6 +68,7 @@ describe("scheduled run completion hook", () => {
         urgency: "normal",
       },
       reportStatus: "pending",
+      reportSequence: 1,
       retryAt: null,
       scheduledFor: new Date("2026-09-01T13:00:00.000Z"),
       startedAt: new Date("2026-09-01T13:00:00.000Z"),

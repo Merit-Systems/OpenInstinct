@@ -123,6 +123,7 @@ export const scheduledAgentRuns = pgTable(
     })
       .notNull()
       .default("not_ready"),
+    reportSequence: integer("report_sequence").notNull().default(0),
     attempts: integer("attempts").notNull().default(0),
     retryAt: timestamp("retry_at", {
       mode: "date",
