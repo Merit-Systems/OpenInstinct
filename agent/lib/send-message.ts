@@ -20,13 +20,13 @@ const messageOutputSchema = z
   .strictObject({
     attachments: z.array(attachmentSchema).min(1).max(4).optional(),
     kind: z.literal("message"),
-    markdown: z.string().trim().min(1).max(20_000).optional(),
+    text: z.string().trim().min(1).max(20_000).optional(),
   })
   .superRefine((message, context) => {
-    if (!message.markdown && !message.attachments) {
+    if (!message.text && !message.attachments) {
       context.addIssue({
         code: "custom",
-        message: "A message must include markdown or at least one attachment.",
+        message: "A message must include text or at least one attachment.",
       });
     }
   });
