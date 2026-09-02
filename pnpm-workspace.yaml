@@ -20,3 +20,5 @@ allowBuilds:
   esbuild: true
   protobufjs: false
   sharp: true
+patchedDependencies:
+  eve@0.49.0: patches/eve@0.49.0.patch

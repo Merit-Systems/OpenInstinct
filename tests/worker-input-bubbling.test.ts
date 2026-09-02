@@ -15,9 +15,6 @@ describe("worker input bubbling", () => {
       "utf8"
     );
 
-    expect(instructions).toContain(
-      "Ask the user directly in ordinary assistant text"
-    );
     expect(instructions).toContain("continue that worker with its `agentId`");
     expect(instructions).toContain(
       "Before surfacing a `Needs user input:` blocker"

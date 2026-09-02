@@ -9,18 +9,18 @@ import type { RespondToAgentInput } from "./types";
 
 export function AgentMessage({
   canRespond,
-  deliveredAssistantMessages,
   isStreaming,
   message,
   onInputResponses,
+  sentMessageParts,
   timestamp,
   userVisibleOnly = false,
 }: {
   readonly canRespond: boolean;
-  readonly deliveredAssistantMessages?: ReadonlyMap<number, readonly string[]>;
   readonly isStreaming: boolean;
   readonly message: EveMessage;
   readonly onInputResponses: RespondToAgentInput;
+  readonly sentMessageParts?: readonly EveMessage["parts"][number][];
   readonly timestamp?: string;
   readonly userVisibleOnly?: boolean;
 }) {
@@ -28,7 +28,7 @@ export function AgentMessage({
   const displayedTimestamp =
     timestamp ?? (message.role === "user" ? optimisticTimestamp : undefined);
   const visibleParts = userVisibleOnly
-    ? userVisibleParts(message, deliveredAssistantMessages)
+    ? userVisibleParts(message, sentMessageParts)
     : message.parts;
   const lastTextIndex = visibleParts.reduce(
     (last, part, index) => (part.type === "text" ? index : last),
@@ -83,7 +83,7 @@ export function AgentMessage({
 
 function userVisibleParts(
   message: EveMessage,
-  deliveredAssistantMessages?: ReadonlyMap<number, readonly string[]>
+  sentMessageParts?: readonly EveMessage["parts"][number][]
 ) {
   if (message.role === "user") {
     return message.parts.filter(
@@ -91,28 +91,7 @@ function userVisibleParts(
     );
   }
 
-  const remainingDeliveries = new Map(
-    [...(deliveredAssistantMessages ?? [])].map(([stepIndex, messages]) => [
-      stepIndex,
-      [...messages],
-    ])
-  );
-
-  return message.parts.filter((part) => {
-    if (part.type === "text" && part.stepIndex !== undefined) {
-      const deliveries = remainingDeliveries.get(part.stepIndex);
-      const deliveryIndex = deliveries?.indexOf(part.text) ?? -1;
-      if (deliveryIndex < 0 || !deliveries) return false;
-      deliveries.splice(deliveryIndex, 1);
-      return true;
-    }
-
-    if (part.type === "authorization") return true;
-    return (
-      part.type === "dynamic-tool" &&
-      part.toolMetadata?.eve?.inputRequest !== undefined
-    );
-  });
+  return sentMessageParts ?? [];
 }
 
 const timestampFormatter = new Intl.DateTimeFormat(undefined, {

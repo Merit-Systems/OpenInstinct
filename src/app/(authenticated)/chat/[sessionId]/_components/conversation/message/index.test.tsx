@@ -69,10 +69,17 @@ describe("agent messages", () => {
     const markup = renderToStaticMarkup(
       <AgentMessage
         canRespond
-        deliveredAssistantMessages={new Map([[1, ["Here’s what I found."]]])}
         isStreaming={false}
         message={message}
         onInputResponses={() => undefined}
+        sentMessageParts={[
+          {
+            state: "done",
+            stepIndex: 1,
+            text: "Here’s what I found.",
+            type: "text",
+          },
+        ]}
         userVisibleOnly
       />
     );
@@ -83,7 +90,7 @@ describe("agent messages", () => {
     expect(markup).not.toContain("web_search");
   });
 
-  it("shows approval controls without the hidden tool trace", () => {
+  it("hides non-send_message controls in the iMessage projection", () => {
     const message = {
       id: "turn-2:assistant",
       metadata: { status: "streaming", turnId: "turn-2" },
@@ -126,9 +133,9 @@ describe("agent messages", () => {
       />
     );
 
-    expect(markup).toContain("Approve this action?");
-    expect(markup).toContain("Approve");
-    expect(markup).toContain("Cancel");
+    expect(markup).not.toContain("Approve this action?");
+    expect(markup).not.toContain("Approve");
+    expect(markup).not.toContain("Cancel");
     expect(markup).not.toContain("send_payment");
     expect(markup).not.toContain("Hidden recipient");
   });
