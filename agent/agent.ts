@@ -1,6 +1,6 @@
 import { defineAgent, defineDynamic } from "eve";
 import { getGatewayModel } from "@/db/services/settings";
-import { scopeFromPrincipal } from "@/lib/access-scope";
+import { scopeFromPrincipal } from "@/agent/lib/principal-scope";
 
 export default defineAgent({
   experimental: {
