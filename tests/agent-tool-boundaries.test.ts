@@ -44,7 +44,7 @@ describe("root and worker capability boundaries", () => {
       "disableTool()"
     );
     const rootInstructions = readFileSync(
-      "agent/instructions/content/interactive.md",
+      "agent/instructions/content/role/interactive.md",
       "utf8"
     );
     expect(rootInstructions).toContain(
@@ -167,7 +167,7 @@ describe("root and worker capability boundaries", () => {
 
   it("requires structured completion for initial and resumed worker calls", () => {
     const rootInstructions = readFileSync(
-      "agent/instructions/content/interactive.md",
+      "agent/instructions/content/role/interactive.md",
       "utf8"
     );
     const workerConfig = readFileSync(`${workerRoot}/agent.ts`, "utf8");

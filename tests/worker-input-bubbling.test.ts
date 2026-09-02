@@ -10,7 +10,7 @@ describe("worker input bubbling", () => {
 
   it("ends the worker turn and routes the answer through its agent id", () => {
     const instructions = readFileSync(
-      "agent/instructions/content/interactive.md",
+      "agent/instructions/content/role/interactive.md",
       "utf8"
     );
     const workerInstructions = readFileSync(
