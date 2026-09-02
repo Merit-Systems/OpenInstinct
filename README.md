@@ -114,6 +114,26 @@ verify themselves by messaging the connector's Linq number once. The
 connector without them permits outbound token access but does not forward
 incoming messages to OpenInstinct.
 
+## Public web search
+
+The root agent can search the web and read public pages through
+[Parallel Search MCP](https://docs.parallel.ai/integrations/mcp/search-mcp).
+The native Eve connection in `agent/connections/parallel.ts` is discovered
+automatically. No Parallel account, API key, OAuth setup, or extra package is
+required. Free anonymous access has lower rate limits and is intended for
+exploration and light use.
+
+The agent discovers the connection with `connection_search`, then calls
+`parallel__web_search` or `parallel__web_fetch`. Only those two tools are
+allowed. Existing gateway search remains available. Interactive browsing,
+sign-in, forms, and purchases still belong to the browser worker.
+
+Search terms and requested URLs are sent to Parallel. Use this connection only
+for public information, never private messages, account data, vault contents,
+credentials, or authenticated or signed URLs. Retrieved pages remain
+untrusted content. Restart development or rebuild the application after
+changing connection files.
+
 ## Google Workspace connection
 
 OpenInstinct can use a user's Gmail, Calendar, and read-only Contacts through a
