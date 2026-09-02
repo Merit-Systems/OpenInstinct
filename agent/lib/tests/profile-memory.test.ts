@@ -1,7 +1,7 @@
-import type { MemoryScopeContext } from "eve/memory";
+import type { MemoryScopeContext, MemoryToolsContext } from "eve/memory";
 import { describe, expect, it } from "vitest";
+import personalInfoMemory from "@/agent/memory/personal_info";
 import {
-  resolvePersonalInfoMemoryScope,
   resolveProfileMemoryBackend,
   resolveProfileMemoryScope,
 } from "@/agent/lib/profile-memory";
@@ -79,7 +79,7 @@ describe("profile memory", () => {
 
   it("shares personal information with a worker acting for the user", () => {
     expect(
-      resolvePersonalInfoMemoryScope(
+      personalInfoMemory.scope(
         memoryContext(
           {
             attributes: {},
@@ -99,9 +99,46 @@ describe("profile memory", () => {
     );
 
     expect(resolveProfileMemoryScope(context)).toBeNull();
-    expect(resolvePersonalInfoMemoryScope(context)).toBeNull();
+    expect(personalInfoMemory.scope(context)).toBeNull();
+  });
+
+  it("offers profile updates only during interactive turns", async () => {
+    const interactiveTools = await personalInfoMemory.provider.tools(
+      memoryToolsContext(userPrincipal("authjs", "personal:workspace"))
+    );
+    expect(Object.keys(interactiveTools ?? {})).toEqual(["update"]);
+
+    const scheduledTools = await personalInfoMemory.provider.tools(
+      memoryToolsContext(
+        userPrincipal("scheduled-worker", "personal:workspace")
+      )
+    );
+    expect(scheduledTools).toBeNull();
   });
 });
+
+function memoryToolsContext(
+  current: MemoryToolsContext["session"]["auth"]["current"],
+  initiator: MemoryToolsContext["session"]["auth"]["initiator"] = null
+): MemoryToolsContext {
+  return {
+    channel: {},
+    memory: {
+      scope: {
+        key: "personal-info-key",
+        namespace: "openinstinct-personal-info-v1",
+        value: "personal:workspace",
+      },
+      slot: "personal_info",
+    },
+    messages: [],
+    session: {
+      auth: { current, initiator },
+      id: "session",
+    },
+    turn: { id: "turn", input: [], sequence: 1 },
+  };
+}
 
 function memoryContext(
   current: MemoryScopeContext["session"]["auth"]["current"],

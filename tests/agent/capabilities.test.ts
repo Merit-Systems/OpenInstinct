@@ -1,15 +1,13 @@
 import type { DynamicResolveContext } from "eve/tools";
 import { describe, expect, it } from "vitest";
+import personalInfoMemory from "@/agent/memory/personal_info";
 import worker from "@/agent/subagents/worker/agent";
 import calendar from "@/agent/tools/calendar";
 import contacts from "@/agent/tools/contacts";
 import gmail from "@/agent/tools/gmail";
 import messaging from "@/agent/tools/messaging";
 import schedules from "@/agent/tools/schedules";
-import updateUserProfile from "@/agent/tools/update_user_profile";
 import vault from "@/agent/tools/vault";
-
-const singletonTools = [["update_user_profile", updateUserProfile]] as const;
 
 const groupedTools = [calendar, contacts, gmail, messaging, schedules, vault];
 
@@ -24,6 +22,7 @@ describe("authored mode capability matrix", () => {
       "gmail-search",
       "gmail-send",
       "gmail-update",
+      "personal_info__update",
       "react_to_message",
       "request_vault_import",
       "request_vault_setup",
@@ -32,7 +31,6 @@ describe("authored mode capability matrix", () => {
       "schedules-list",
       "schedules-update",
       "send_message",
-      "update_user_profile",
       "worker",
     ]);
   });
@@ -61,14 +59,6 @@ async function authoredCapabilities(authenticator: string) {
   const context = dynamicContext(authenticator);
   const capabilities: string[] = [];
 
-  const resolvedSingletons = await Promise.all(
-    singletonTools.map(async ([name, definition]) => {
-      const resolve = definition.events["turn.started"];
-      return resolve && (await resolve({}, context)) ? name : null;
-    })
-  );
-  capabilities.push(...resolvedSingletons.filter((name) => name !== null));
-
   const resolvedGroups = await Promise.all(
     groupedTools.map(async (definition) => {
       const resolve = definition.events["turn.started"];
@@ -77,6 +67,24 @@ async function authoredCapabilities(authenticator: string) {
     })
   );
   capabilities.push(...resolvedGroups.flat());
+
+  const personalInfoTools = await personalInfoMemory.provider.tools({
+    ...context,
+    memory: {
+      scope: {
+        key: "personal-info-key",
+        namespace: "openinstinct-personal-info-v1",
+        value: "personal:workspace",
+      },
+      slot: "personal_info",
+    },
+    turn: { id: "turn-1", input: [], sequence: 1 },
+  });
+  if (personalInfoTools) {
+    capabilities.push(
+      ...Object.keys(personalInfoTools).map((name) => `personal_info__${name}`)
+    );
+  }
 
   const resolveWorker = worker.events["turn.started"];
   if (resolveWorker && (await resolveWorker({}, context))) {
@@ -93,7 +101,7 @@ function dynamicContext(authenticator: string) {
     session: {
       auth: {
         current: {
-          attributes: {},
+          attributes: { workspaceId: "personal:workspace" },
           authenticator,
           principalId: "user-1",
           principalType: "user",
