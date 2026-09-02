@@ -228,10 +228,16 @@ describe("database services", () => {
     );
 
     const { serializeLoginVaultPayload } = await import("@/lib/vault");
+    const delegatedTask = `You are the subagent "worker".
+
+Caller message:
+Task: Order the blue mug
+
+Buy the blue mug on example.com.`;
     await browserTraces.beginBrowserTrace(alice, {
       sessionId: "worker-alice",
       startedAt: "2026-08-31T00:00:00.000Z",
-      task: "Order the blue mug",
+      task: delegatedTask,
     });
     await browserTraces.recordBrowserTraceDomains(alice, "worker-alice", [
       "shop.example.com",
@@ -253,7 +259,7 @@ describe("database services", () => {
       durationMs: 12_500,
       resultMessage: "Ordered.",
       status: "success",
-      task: "Order the blue mug",
+      task: delegatedTask,
     });
     const traceDomains = await pgliteDatabase
       .select()
@@ -298,9 +304,9 @@ describe("database services", () => {
     expect(tracePage.traces[0]).toMatchObject({
       domains: ["shop.example.com"],
       durationMs: 12_500,
+      intent: "Order the blue mug",
       sessionId: "worker-alice",
       status: "success",
-      task: "Order the blue mug",
     });
     expect((await browserTraces.listBrowserTraces(bob)).traces).toEqual([]);
 

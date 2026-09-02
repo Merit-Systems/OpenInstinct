@@ -198,7 +198,15 @@ describe("getSubagentTask", () => {
       {
         type: "message.received",
         data: {
-          message: "Task: First task\n\nFull assignment",
+          message: `You are the subagent "worker".
+Description: Execute browser tasks.
+
+The caller delegated the following task to you.
+
+Caller message:
+Task: First task
+
+Full assignment`,
           sequence: 0,
           turnId: "turn_1",
         },

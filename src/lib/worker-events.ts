@@ -2,7 +2,9 @@ import type { MessageStreamEvent } from "eve/client";
 import { z } from "zod";
 import { taskCompletionOutputSchema } from "@/lib/worker-completion";
 
+const workerIntentPrefix = "Task:";
 const workerTaskNotificationPrefix = /^Background task (\S+) \(worker\) /u;
+export const workerIntentTemplate = `${workerIntentPrefix} <a concise summary of at most 10 words>`;
 const terminalTaskControlSchema = z.object({
   tasks: z.array(
     z.object({
@@ -17,6 +19,16 @@ interface BackgroundWorkerTaskState {
   status?: "cancelled" | "completed" | "failed";
   taskId: string;
   terminalAt?: string;
+}
+
+export function getWorkerIntent(message: string) {
+  for (const line of message.split("\n")) {
+    const trimmedLine = line.trim();
+    if (!trimmedLine.startsWith(workerIntentPrefix)) continue;
+    const intent = trimmedLine.slice(workerIntentPrefix.length).trim();
+    return intent.length ? intent : undefined;
+  }
+  return undefined;
 }
 
 export function measureWorkerTask(

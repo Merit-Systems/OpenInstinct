@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
+import { workerIntentTemplate } from "@/lib/worker-events";
 
 describe("worker input bubbling", () => {
   it("keeps native questions disabled", () => {
@@ -24,6 +25,9 @@ describe("worker input bubbling", () => {
     );
     expect(instructions).toContain(
       "confirm the worker explicitly reported checking compatible vault items"
+    );
+    expect(instructions).toContain(
+      `worker \`message\` with \`${workerIntentTemplate}\``
     );
     expect(workerInstructions).toContain(
       "Before returning `Needs user input:` or `Needs vault setup:`"

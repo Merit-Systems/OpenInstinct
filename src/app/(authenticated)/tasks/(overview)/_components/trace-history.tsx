@@ -120,11 +120,11 @@ export function TraceHistory({
       <Table className="table-fixed">
         <TableHeader>
           <TableRow>
-            <TableHead className="w-[26%]">Task</TableHead>
+            <TableHead className="w-[31%]">Intent</TableHead>
             <TableHead className="w-[9%]">Status</TableHead>
             <TableHead className="w-[8%]">Duration</TableHead>
             <TableHead className="w-[18%]">Domains</TableHead>
-            <TableHead className="w-[25%]">Result</TableHead>
+            <TableHead className="w-[20%]">Result</TableHead>
             <TableHead className="w-[14%]">Started</TableHead>
           </TableRow>
         </TableHeader>
@@ -142,14 +142,14 @@ export function TraceHistory({
               const status = statusLabel(trace.status);
               return (
                 <TableRow key={trace.sessionId}>
-                  <TableCell className="truncate" title={trace.task}>
+                  <TableCell className="truncate" title={trace.intent}>
                     <Button
                       nativeButton={false}
                       render={<Link href={`/tasks/${trace.sessionId}`} />}
                       size="none"
                       variant="link"
                     >
-                      {trace.task}
+                      {trace.intent}
                     </Button>
                   </TableCell>
                   <TableCell>

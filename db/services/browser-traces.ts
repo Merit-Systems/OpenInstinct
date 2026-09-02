@@ -1,6 +1,7 @@
 import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
 import { z } from "zod";
 import type { AccessScope } from "@/lib/access-scope";
+import { getWorkerIntent } from "@/lib/worker-events";
 import {
   browserTraceDomains,
   browserTraceEvents,
@@ -87,9 +88,10 @@ export async function listBrowserTraces(scope: AccessScope, cursor?: string) {
   return {
     nextCursor:
       rows.length > page.length && last ? encodeTraceCursor(last) : null,
-    traces: page.map((row) =>
+    traces: page.map(({ task, ...row }) =>
       Object.assign({}, row, {
         domains: domainsByTrace.get(row.sessionId) ?? [],
+        intent: getWorkerIntent(task) ?? "Browser task",
       })
     ),
   };

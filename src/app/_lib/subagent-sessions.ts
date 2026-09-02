@@ -3,6 +3,7 @@ import type {
   SubagentCalledStreamEvent,
   SubagentCompletedStreamEvent,
 } from "eve/client";
+import { getWorkerIntent } from "@/lib/worker-events";
 
 export type SubagentSession = SubagentCalledStreamEvent["data"] & {
   readonly completion?: SubagentCompletedStreamEvent["data"];
@@ -87,9 +88,5 @@ export function getSubagentStatus(
 export function getSubagentTask(events: readonly MessageStreamEvent[]) {
   const message = events.find((event) => event.type === "message.received")
     ?.data.message;
-  return message
-    ?.split(/\r?\n/u)
-    .map((line) => line.trim())
-    .find(Boolean)
-    ?.replace(/^Task:\s*/iu, "");
+  return message ? getWorkerIntent(message) : undefined;
 }

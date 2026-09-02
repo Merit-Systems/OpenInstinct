@@ -21,8 +21,8 @@ export default async function TasksPage() {
         <div className="max-w-2xl">
           <h1 className="type-page-title">Browser traces</h1>
           <p className="type-supporting-body mt-2 text-muted-foreground">
-            Every browser assignment the agent has run: the task, its verified
-            outcome, how long it took, and the domains it touched.
+            Every browser assignment the agent has run: its intent, verified
+            outcome, duration, and the domains it touched.
           </p>
         </div>
         <Button
