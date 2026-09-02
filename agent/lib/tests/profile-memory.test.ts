@@ -7,17 +7,33 @@ import {
 } from "@/agent/lib/profile-memory";
 
 describe("profile memory", () => {
-  it("uses an explicit Blob backend only for token-backed production outside Vercel", () => {
+  it("uses an explicit Blob backend for an attached store in production", () => {
+    expect(
+      resolveProfileMemoryBackend({
+        BLOB_READ_WRITE_TOKEN: undefined,
+        BLOB_STORE_ID: "store-id",
+        NODE_ENV: "production",
+        VERCEL_ENV: "production",
+      })
+    ).toEqual({
+      kind: "vercel-blob",
+      options: { storeId: "store-id" },
+    });
     expect(
       resolveProfileMemoryBackend({
         BLOB_READ_WRITE_TOKEN: "blob-token",
+        BLOB_STORE_ID: undefined,
         NODE_ENV: "production",
         VERCEL_ENV: undefined,
       })
-    ).toEqual({ kind: "vercel-blob", token: "blob-token" });
+    ).toEqual({
+      kind: "vercel-blob",
+      options: { token: "blob-token" },
+    });
     expect(
       resolveProfileMemoryBackend({
         BLOB_READ_WRITE_TOKEN: "blob-token",
+        BLOB_STORE_ID: undefined,
         NODE_ENV: "production",
         VERCEL_ENV: "production",
       })
@@ -25,6 +41,7 @@ describe("profile memory", () => {
     expect(
       resolveProfileMemoryBackend({
         BLOB_READ_WRITE_TOKEN: "blob-token",
+        BLOB_STORE_ID: "store-id",
         NODE_ENV: "development",
         VERCEL_ENV: undefined,
       })
