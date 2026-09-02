@@ -19,8 +19,8 @@ export default defineDynamic({
   events: {
     "turn.started": (_event, context) =>
       resolveModeValue(context, {
-        interactive: contactsSearch,
-        "scheduled-worker": contactsSearch,
+        interactive: { "contacts-search": contactsSearch },
+        "scheduled-worker": { "contacts-search": contactsSearch },
       }),
   },
 });
