@@ -22,6 +22,13 @@ const services = vi.hoisted(() => ({
 }));
 const requests = vi.hoisted(() => ({
   report: vi.fn<(runId: string) => Promise<void>>(),
+  route:
+    vi.fn<
+      (
+        route: "/internal/scheduled-run/start",
+        body: { leaseToken: string; restart: boolean; runId: string }
+      ) => Promise<Response>
+    >(),
 }));
 
 vi.mock("@/db/services/scheduled-agent-jobs", () => ({
@@ -36,6 +43,7 @@ vi.mock("@/db/services/scheduled-agent-jobs", () => ({
 vi.mock("@/agent/channels/linq", () => ({ default: { channel: "linq" } }));
 vi.mock("@/agent/lib/schedules/request", () => ({
   postScheduledReport: requests.report,
+  postScheduledRunRoute: requests.route,
 }));
 vi.mock("@/agent/channels/scheduled-run", () => ({
   default: { channel: "scheduled-run" },
@@ -51,7 +59,7 @@ describe("dynamic schedule dispatch", () => {
     services.listReports.mockResolvedValue([]);
     services.claimRuns.mockResolvedValue([]);
     requests.report.mockResolvedValue();
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(null)));
+    requests.route.mockResolvedValue(new Response(null));
   });
 
   it("starts due work separately without waiting for its lifetime", async () => {
@@ -62,16 +70,13 @@ describe("dynamic schedule dispatch", () => {
 
     await runSchedule(to);
 
-    expect(fetch).toHaveBeenCalledWith(
-      new URL("https://example.com/internal/scheduled-run/start"),
-      expect.objectContaining({
-        body: JSON.stringify({
-          leaseToken: claim.run.leaseToken,
-          restart: false,
-          runId: claim.run.id,
-        }),
-        method: "POST",
-      })
+    expect(requests.route).toHaveBeenCalledWith(
+      "/internal/scheduled-run/start",
+      {
+        leaseToken: claim.run.leaseToken,
+        restart: false,
+        runId: claim.run.id,
+      }
     );
     expect(linqSend).not.toHaveBeenCalled();
   });
@@ -86,15 +91,13 @@ describe("dynamic schedule dispatch", () => {
 
     await runSchedule(to);
 
-    expect(fetch).toHaveBeenCalledWith(
-      expect.any(URL),
-      expect.objectContaining({
-        body: JSON.stringify({
-          leaseToken: claim.run.leaseToken,
-          restart: true,
-          runId: claim.run.id,
-        }),
-      })
+    expect(requests.route).toHaveBeenCalledWith(
+      "/internal/scheduled-run/start",
+      {
+        leaseToken: claim.run.leaseToken,
+        restart: true,
+        runId: claim.run.id,
+      }
     );
   });
 

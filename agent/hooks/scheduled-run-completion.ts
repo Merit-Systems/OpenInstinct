@@ -2,12 +2,12 @@ import { defineHook } from "eve/hooks";
 import type { HookContext } from "eve/hooks";
 import { z } from "zod";
 import { scheduledRunOutcomeSchema } from "@/agent/lib/schedules/outcome";
+import { postScheduledReport } from "@/agent/lib/schedules/request";
 import {
   completeScheduledAgentRun,
   releaseScheduledAgentRun,
   waitForScheduledAgentRunInput,
 } from "@/db/services/scheduled-agent-jobs";
-import { postScheduledReport } from "@/agent/lib/schedules/request";
 
 const scheduledWorker = "scheduled-worker";
 const scheduledRunIdentitySchema = z.object({
@@ -43,7 +43,7 @@ export default defineHook({
       );
       if (waiting?.reportStatus !== "pending") return;
       try {
-        await requestImmediateReport(waiting.id);
+        await postScheduledReport(waiting.id);
       } catch (error) {
         console.warn("[scheduled-run] input report callback failed", {
           cause: error,

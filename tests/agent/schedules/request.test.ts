@@ -20,9 +20,9 @@ vi.mock("@/lib/application-origin", () => ({
   applicationOrigin: () => "https://example.com",
 }));
 
-import { postScheduledReport } from "@/agent/lib/schedules/request";
+import { postScheduledRunRoute } from "@/agent/lib/schedules/request";
 
-describe("scheduled report requests", () => {
+describe("scheduled run requests", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(null)));
@@ -39,7 +39,9 @@ describe("scheduled report requests", () => {
     mocks.env.VERCEL_ENV = "preview";
     mocks.env.VERCEL_URL = "openinstinct-preview.vercel.app";
 
-    await postScheduledReport("run-1");
+    await postScheduledRunRoute("/internal/scheduled-run/report", {
+      runId: "run-1",
+    });
 
     expect(mocks.getToken).toHaveBeenCalledOnce();
     expect(fetch).toHaveBeenCalledWith(
@@ -53,25 +55,32 @@ describe("scheduled report requests", () => {
       })
     );
     expect(sentHeaders().get("authorization")).toBe("Bearer vercel-oidc-token");
+    expect(sentHeaders().get("content-type")).toBe("application/json");
     expect(sentHeaders().get("x-vercel-trusted-oidc-idp-token")).toBe(
       "vercel-oidc-token"
     );
   });
 
   it("leaves local callbacks to Eve local development authentication", async () => {
-    await postScheduledReport("run-1");
+    await postScheduledRunRoute("/internal/scheduled-run/start", {
+      leaseToken: "lease-1",
+      restart: false,
+      runId: "run-1",
+    });
 
     expect(mocks.getToken).not.toHaveBeenCalled();
     expect(fetch).toHaveBeenCalledWith(
-      new URL("https://example.com/internal/scheduled-run/report"),
+      new URL("https://example.com/internal/scheduled-run/start"),
       expect.objectContaining({ method: "POST", redirect: "error" })
     );
     expect(sentHeaders().get("authorization")).toBeNull();
+    expect(sentHeaders().get("content-type")).toBe("application/json");
+    expect(sentHeaders().get("x-vercel-trusted-oidc-idp-token")).toBeNull();
   });
 });
 
 function sentHeaders() {
   const call = vi.mocked(fetch).mock.calls[0];
-  if (!call) throw new Error("No scheduled report request was sent.");
+  if (!call) throw new Error("No scheduled run request was sent.");
   return new Headers(call[1]?.headers);
 }

@@ -2,12 +2,12 @@ import { defineDynamic, defineTool, type ToolContext } from "eve/tools";
 import { z } from "zod";
 import { resolveModeValue } from "@/agent/lib/mode";
 import { scheduledReportIdentity } from "@/agent/lib/schedules/identity";
+import { postScheduledRunRoute } from "@/agent/lib/schedules/request";
 import { scheduleOwner } from "@/agent/lib/schedules/tools";
 import {
   getScheduledAgentRunInput,
   getScheduledAgentRunInputForReport,
 } from "@/db/services/scheduled-agent-jobs";
-import { applicationOrigin } from "@/lib/application-origin";
 
 export default defineDynamic({
   events: {
@@ -24,16 +24,12 @@ export default defineDynamic({
           if (!pending) {
             throw new Error("That scheduled task is not waiting for input.");
           }
-          const response = await fetch(
-            new URL("/internal/scheduled-run/respond", applicationOrigin()),
+          const response = await postScheduledRunRoute(
+            "/internal/scheduled-run/respond",
             {
-              body: JSON.stringify({
-                answer,
-                leaseToken: pending.leaseToken,
-                runId: pending.runId,
-              }),
-              headers: { "content-type": "application/json" },
-              method: "POST",
+              answer,
+              leaseToken: pending.leaseToken,
+              runId: pending.runId,
             }
           );
           if (!response.ok) {
