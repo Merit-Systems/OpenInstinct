@@ -48,6 +48,9 @@ describe("root and worker capability boundaries", () => {
     expect(readFileSync(`${rootTools}/ask_question.ts`, "utf8")).toContain(
       "disableTool()"
     );
+    expect(readFileSync("agent/lib/agentcash-mcp.ts", "utf8")).toContain(
+      'args: [agentcashCliPath, "server"]'
+    );
     const rootInstructions = readFileSync("agent/instructions.md", "utf8");
     expect(rootInstructions).toContain(
       "Perform public research, source discovery, comparisons, and current-information lookups directly with `web_search`"

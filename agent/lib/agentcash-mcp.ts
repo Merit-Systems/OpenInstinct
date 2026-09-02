@@ -21,7 +21,7 @@ async function createClient(): Promise<MCPClient> {
     initializationOptions: { timeout: initializeTimeoutMs },
     maxRetries: 0,
     transport: new Experimental_StdioMCPTransport({
-      args: [agentcashCliPath],
+      args: [agentcashCliPath, "server"],
       command: process.execPath,
       env: agentcashChildEnvironment(),
       stderr: "ignore",
