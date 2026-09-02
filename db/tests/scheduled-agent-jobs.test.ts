@@ -39,6 +39,7 @@ describe("scheduled agent jobs", () => {
     vi.spyOn(Database, "db", "get").mockReturnValue(pgliteDatabase as never);
     const scope = await import("@/db/services/scope");
     const jobs = await import("@/db/services/scheduled-agent-jobs");
+    const leases = await import("@/db/services/scheduled-agent-run-leases");
     const alice = { userId: "alice", workspaceId: "workspace:alice" };
     const bob = { userId: "bob", workspaceId: "workspace:bob" };
     const aliceConversation = {
@@ -74,7 +75,7 @@ describe("scheduled agent jobs", () => {
       []
     );
     expect(await jobs.listScheduledAgentJobs(alice, aliceConversation)).toEqual(
-      [created]
+      [{ ...created, latestRun: null }]
     );
     await jobs.updateScheduledAgentJob(
       alice,
@@ -105,7 +106,7 @@ describe("scheduled agent jobs", () => {
     if (!claim?.run.leaseToken) throw new Error("Expected one leased run.");
     expect(claim).toMatchObject({
       job: { id: created.id, ...aliceConversation },
-      run: { attempts: 1, scheduledFor: dueAt },
+      run: { attempts: 1, scheduledFor: dueAt, startedAt: null },
     });
     expect(
       await jobs.claimReadyScheduledAgentRuns({
@@ -115,11 +116,58 @@ describe("scheduled agent jobs", () => {
       })
     ).toEqual([]);
 
-    await jobs.setScheduledRunSession(
-      claim.run.id,
-      claim.run.leaseToken,
-      "worker-session"
+    expect(
+      await jobs.setScheduledRunSession(
+        claim.run.id,
+        claim.run.leaseToken,
+        "worker-session"
+      )
+    ).toBe(true);
+    const workerStartedAt = new Date("2026-09-01T13:00:05.000Z");
+    expect(
+      await jobs.markScheduledAgentRunStarted(
+        claim.run.id,
+        claim.run.leaseToken,
+        "worker-session",
+        21_600_000,
+        workerStartedAt
+      )
+    ).toBe(true);
+    expect(
+      await leases.isScheduledAgentRunLeaseActive(
+        claim.run.id,
+        claim.run.leaseToken,
+        new Date("2026-09-01T13:00:06.000Z")
+      )
+    ).toBe(true);
+    expect(
+      await jobs.markScheduledAgentRunStarted(
+        claim.run.id,
+        claim.run.leaseToken,
+        "worker-session",
+        21_600_000,
+        new Date("2026-09-01T13:00:10.000Z")
+      )
+    ).toBe(true);
+    expect(
+      await jobs.markScheduledAgentRunStarted(
+        claim.run.id,
+        "00000000-0000-4000-8000-000000000099",
+        "stale-worker-session",
+        21_600_000,
+        workerStartedAt
+      )
+    ).toBe(false);
+    const [listedJob] = await jobs.listScheduledAgentJobs(
+      alice,
+      aliceConversation
     );
+    expect(listedJob?.latestRun).toMatchObject({
+      id: claim.run.id,
+      startedAt: workerStartedAt,
+      status: "running",
+      workerSessionId: "worker-session",
+    });
     const question = {
       action: {
         callId: "call-question",
@@ -231,19 +279,35 @@ describe("scheduled agent jobs", () => {
       await jobs.claimReadyScheduledAgentRuns({
         leaseForMs: 21_600_000,
         limit: 25,
-        now: new Date("2026-09-01T13:10:00.000Z"),
+        now: new Date("2026-09-01T19:03:00.000Z"),
+      })
+    ).toEqual([]);
+    expect(
+      await jobs.releaseScheduledAgentRun(
+        claim.run.id,
+        claim.run.leaseToken,
+        "Worker failed after resumption.",
+        new Date("2026-09-01T19:03:00.000Z")
+      )
+    ).toBe("queued");
+    expect(
+      await jobs.claimReadyScheduledAgentRuns({
+        leaseForMs: 21_600_000,
+        limit: 25,
+        now: new Date("2026-09-01T19:07:00.000Z"),
       })
     ).toEqual([]);
     const [recoveredWorker] = await jobs.claimReadyScheduledAgentRuns({
       leaseForMs: 21_600_000,
       limit: 25,
-      now: new Date("2026-09-01T19:03:00.000Z"),
+      now: new Date("2026-09-01T19:08:00.000Z"),
     });
     if (!recoveredWorker?.run.leaseToken) {
       throw new Error("Expected the interrupted worker to be reclaimed.");
     }
     expect(recoveredWorker.run).toMatchObject({
       attempts: 2,
+      startedAt: null,
       workerSessionId: "worker-session",
     });
     claim = recoveredWorker;
@@ -387,6 +451,64 @@ describe("scheduled agent jobs", () => {
         conversationId: "linq:another-chat",
       })
     ).toEqual([]);
+
+    const [acceptedRun] = await pgliteDatabase
+      .insert(schema.scheduledAgentRuns)
+      .values({
+        attempts: 1,
+        jobId: created.id,
+        leaseExpiresAt: new Date("2026-09-09T13:05:00.000Z"),
+        leaseToken: "00000000-0000-4000-8000-000000000010",
+        scheduledFor: new Date("2026-09-09T13:00:00.000Z"),
+        startedAt: null,
+        status: "running",
+        workerSessionId: "accepted-worker-session",
+      })
+      .returning();
+    if (!acceptedRun) throw new Error("Expected an accepted worker run.");
+    expect(
+      await jobs.claimReadyScheduledAgentRuns({
+        leaseForMs: 300_000,
+        limit: 25,
+        now: new Date("2026-09-09T13:06:00.000Z"),
+      })
+    ).toEqual([]);
+
+    const [exhaustedRun] = await pgliteDatabase
+      .insert(schema.scheduledAgentRuns)
+      .values({
+        attempts: 3,
+        jobId: created.id,
+        leaseExpiresAt: new Date("2026-09-09T14:05:00.000Z"),
+        leaseToken: "00000000-0000-4000-8000-000000000011",
+        scheduledFor: new Date("2026-09-09T14:00:00.000Z"),
+        status: "running",
+      })
+      .returning();
+    if (!exhaustedRun) throw new Error("Expected an exhausted worker run.");
+    expect(
+      await jobs.claimReadyScheduledAgentRuns({
+        leaseForMs: 300_000,
+        limit: 25,
+        now: new Date("2026-09-09T14:06:00.000Z"),
+      })
+    ).toEqual([]);
+    expect(
+      await jobs.claimScheduledReport(
+        exhaustedRun.id,
+        new Date("2026-09-09T14:06:01.000Z")
+      )
+    ).toMatchObject({
+      run: {
+        outcome: {
+          kind: "blocked",
+          summary:
+            "The scheduled task could not complete after three attempts.",
+        },
+        reportStatus: "queued",
+        status: "dead_letter",
+      },
+    });
   }, 20_000);
 });
 

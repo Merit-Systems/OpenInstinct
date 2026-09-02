@@ -17,6 +17,12 @@ export async function dispatchScheduledReport(
   const claimed = await claimScheduledReport(runId);
   const leaseToken = claimed?.run.reportLeaseToken;
   if (!claimed || !leaseToken) return;
+  console.info("[scheduled-run] dispatching report", {
+    channel: claimed.job.conversationChannel,
+    reportSequence: claimed.run.reportSequence,
+    runId: claimed.run.id,
+    runStatus: claimed.run.status,
+  });
   const reportAttributes = {
     conversationChannel: claimed.job.conversationChannel,
     conversationId: claimed.job.conversationId,
@@ -45,12 +51,18 @@ export async function dispatchScheduledReport(
   try {
     const prompt = scheduledReportPrompt(claimed);
     if (claimed.job.conversationChannel === "linq") {
-      await delivery
+      const session = await delivery
         .to(linq, {
           adapterName: "linq",
           threadId: claimed.job.conversationId,
         })
         .send(prompt, options);
+      console.info("[scheduled-run] report session accepted", {
+        channel: claimed.job.conversationChannel,
+        reportSequence: claimed.run.reportSequence,
+        runId: claimed.run.id,
+        sessionId: session.id,
+      });
       return;
     }
     const result = await delivery
@@ -59,12 +71,24 @@ export async function dispatchScheduledReport(
     if (result.status === "session_not_active") {
       await finalizeScheduledReport(claimed.run.id, leaseToken, "suppressed");
     }
+    console.info("[scheduled-run] report turn accepted", {
+      channel: claimed.job.conversationChannel,
+      reportSequence: claimed.run.reportSequence,
+      resultStatus: result.status,
+      runId: claimed.run.id,
+    });
   } catch (error) {
-    await releaseScheduledReport(
+    const released = await releaseScheduledReport(
       claimed.run.id,
       leaseToken,
       error instanceof Error ? error.message : String(error)
     );
+    console.warn("[scheduled-run] report dispatch failed", {
+      cause: error,
+      released,
+      reportSequence: claimed.run.reportSequence,
+      runId: claimed.run.id,
+    });
   }
 }
 

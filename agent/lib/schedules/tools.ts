@@ -1,6 +1,9 @@
 import type { ToolContext } from "eve/tools";
 import { z } from "zod";
-import type { listScheduledAgentJobs } from "@/db/services/scheduled-agent-jobs";
+import type {
+  createScheduledAgentJob,
+  listScheduledAgentJobs,
+} from "@/db/services/scheduled-agent-jobs";
 import { scopeFromPrincipal } from "@/agent/lib/principal-scope";
 
 export function scheduleOwner(context: ToolContext) {
@@ -22,7 +25,7 @@ export function scheduleOwner(context: ToolContext) {
 }
 
 export function scheduleSummary(
-  job: Awaited<ReturnType<typeof listScheduledAgentJobs>>[number]
+  job: Awaited<ReturnType<typeof createScheduledAgentJob>>
 ) {
   return {
     createdAt: job.createdAt.toISOString(),
@@ -33,5 +36,26 @@ export function scheduleSummary(
     prompt: job.prompt,
     status: job.status,
     timing: job.timing,
+  };
+}
+
+export function scheduleListSummary(
+  job: Awaited<ReturnType<typeof listScheduledAgentJobs>>[number]
+) {
+  const latestRun = job.latestRun;
+  return {
+    ...scheduleSummary(job),
+    latestRun: latestRun
+      ? {
+          completedAt: latestRun.completedAt?.toISOString() ?? null,
+          id: latestRun.id,
+          lastError: latestRun.lastError,
+          reportStatus: latestRun.reportStatus,
+          scheduledFor: latestRun.scheduledFor.toISOString(),
+          sessionId: latestRun.workerSessionId,
+          startedAt: latestRun.startedAt?.toISOString() ?? null,
+          status: latestRun.status,
+        }
+      : null,
   };
 }

@@ -179,7 +179,7 @@ describe("schedule tools", () => {
         conversationId: "linq:dm:chat-1",
       }
     );
-    expect(result).toEqual([scheduleSummary(job)]);
+    expect(result).toEqual([scheduleListSummary(job)]);
   });
 
   it("updates a schedule without carrying an action discriminator", async () => {
@@ -398,6 +398,7 @@ function scheduledJob(
     id: "00000000-0000-4000-8000-000000000001",
     lastError: null,
     lastRunAt: null,
+    latestRun: null,
     ...conversation,
     missedRunPolicy: "run_latest",
     nextRunAt: new Date("2026-09-02T13:00:00.000Z"),
@@ -426,4 +427,8 @@ function scheduleSummary(job: ReturnType<typeof scheduledJob>) {
     status: job.status,
     timing: job.timing,
   };
+}
+
+function scheduleListSummary(job: ReturnType<typeof scheduledJob>) {
+  return { ...scheduleSummary(job), latestRun: null };
 }

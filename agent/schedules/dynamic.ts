@@ -1,65 +1,129 @@
-import { defineSchedule } from "eve/schedules";
-import {
-  postScheduledReport,
-  postScheduledRunRoute,
-} from "@/agent/lib/schedules/request";
+import { defineSchedule, type ScheduleToFn } from "eve/schedules";
+import scheduledRunChannel from "@/agent/channels/scheduled-run";
+import { postScheduledReport } from "@/agent/lib/schedules/request";
 import {
   claimReadyScheduledAgentRuns,
   listRecoverableScheduledReports,
   materializeDueScheduledAgentRuns,
   releaseScheduledAgentRun,
+  setScheduledRunSession,
 } from "@/db/services/scheduled-agent-jobs";
 
-const workerRuntimeLimitMs = 6 * 60 * 60_000;
+const workerStartupLimitMs = 5 * 60_000;
 
 export default defineSchedule({
   cron: "* * * * *",
-  run({ waitUntil }) {
-    waitUntil(dispatchDueWork());
+  run({ to, waitUntil }) {
+    waitUntil(dispatchDueWork(to));
   },
 });
 
-async function dispatchDueWork() {
+async function dispatchDueWork(to: ScheduleToFn) {
   const now = new Date();
-  await materializeDueScheduledAgentRuns({ limit: 25, now });
-  const [runs, reportRunIds] = await Promise.all([
-    claimReadyScheduledAgentRuns({
-      leaseForMs: workerRuntimeLimitMs,
-      limit: 25,
-      now,
-    }),
-    listRecoverableScheduledReports(now, 25),
-  ]);
+  const materializedRunIds = await materializeDueScheduledAgentRuns({
+    limit: 25,
+    now,
+  });
+  const runs = await claimReadyScheduledAgentRuns({
+    leaseForMs: workerStartupLimitMs,
+    limit: 25,
+    now,
+  });
+  const reportRunIds = await listRecoverableScheduledReports(now, 25);
+  if (
+    materializedRunIds.length > 0 ||
+    runs.length > 0 ||
+    reportRunIds.length > 0
+  ) {
+    console.info("[scheduled-run] schedule tick found work", {
+      claimedRunCount: runs.length,
+      materializedRunCount: materializedRunIds.length,
+      recoverableReportCount: reportRunIds.length,
+    });
+  }
   await Promise.all([
-    ...runs.map((claim) => executeScheduledRun(claim)),
+    ...runs.map((claim) => executeScheduledRun(to, claim)),
     ...reportRunIds.map((runId) => postScheduledReport(runId)),
   ]);
 }
 
 async function executeScheduledRun(
+  to: ScheduleToFn,
   claim: Awaited<ReturnType<typeof claimReadyScheduledAgentRuns>>[number]
 ) {
   const leaseToken = claim.run.leaseToken;
   if (!leaseToken) throw new Error("A scheduled run claim requires a lease.");
+  console.info("[scheduled-run] dispatching worker", {
+    attempt: claim.run.attempts,
+    jobId: claim.job.id,
+    runId: claim.run.id,
+    scheduledFor: claim.run.scheduledFor.toISOString(),
+  });
   try {
-    const response = await postScheduledRunRoute(
-      "/internal/scheduled-run/start",
-      {
-        leaseToken,
-        restart: claim.run.workerSessionId !== null,
-        runId: claim.run.id,
-      }
+    const session = await to(scheduledRunChannel, {
+      restart: claim.run.workerSessionId !== null,
+      runId: claim.run.id,
+    }).send(scheduledRunPrompt(claim), {
+      auth: scheduledWorkerAuth(claim),
+    });
+    const persisted = await setScheduledRunSession(
+      claim.run.id,
+      leaseToken,
+      session.id
     );
-    if (!response.ok) {
-      throw new Error(
-        `Scheduled run dispatch failed (${String(response.status)}).`
-      );
+    if (!persisted) {
+      throw new Error("The scheduled run lease expired during dispatch.");
     }
+    console.info("[scheduled-run] worker session accepted", {
+      jobId: claim.job.id,
+      runId: claim.run.id,
+      sessionId: session.id,
+    });
   } catch (error) {
-    await releaseScheduledAgentRun(
+    console.warn("[scheduled-run] worker dispatch failed", {
+      cause: error,
+      jobId: claim.job.id,
+      runId: claim.run.id,
+    });
+    const status = await releaseScheduledAgentRun(
       claim.run.id,
       leaseToken,
       error instanceof Error ? error.message : String(error)
     );
+    if (status === "dead_letter") {
+      await postScheduledReport(claim.run.id);
+    }
   }
+}
+
+function scheduledRunPrompt(
+  claim: Awaited<ReturnType<typeof claimReadyScheduledAgentRuns>>[number]
+) {
+  return [
+    "Complete this user-owned scheduled task in an isolated background session.",
+    `Scheduled for: ${claim.run.scheduledFor.toISOString()}`,
+    `Task: ${claim.job.prompt}`,
+    "Return exactly one structured final outcome.",
+  ].join("\n\n");
+}
+
+function scheduledWorkerAuth(
+  claim: Awaited<ReturnType<typeof claimReadyScheduledAgentRuns>>[number]
+) {
+  const leaseToken = claim.run.leaseToken;
+  if (!leaseToken) throw new Error("A scheduled run claim requires a lease.");
+  return {
+    attributes: {
+      conversationChannel: claim.job.conversationChannel,
+      conversationId: claim.job.conversationId,
+      scheduleId: claim.job.id,
+      scheduledRunLeaseToken: leaseToken,
+      scheduledRunId: claim.run.id,
+      workspaceId: claim.job.workspaceId,
+    },
+    authenticator: "scheduled-worker",
+    issuer: "open-instinct",
+    principalId: claim.job.createdByUserId,
+    principalType: "user" as const,
+  };
 }
