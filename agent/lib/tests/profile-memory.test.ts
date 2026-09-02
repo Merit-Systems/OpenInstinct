@@ -92,6 +92,15 @@ describe("profile memory", () => {
       )
     ).toBe("personal:workspace");
   });
+
+  it("omits user memory from scheduled reporting turns", () => {
+    const context = memoryContext(
+      userPrincipal("scheduled-result", "personal:workspace")
+    );
+
+    expect(resolveProfileMemoryScope(context)).toBeNull();
+    expect(resolvePersonalInfoMemoryScope(context)).toBeNull();
+  });
 });
 
 function memoryContext(

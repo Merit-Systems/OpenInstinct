@@ -1,4 +1,8 @@
-import type { ToolContext, ToolDefinition } from "eve/tools";
+import type {
+  DynamicResolveContext,
+  ToolContext,
+  ToolDefinition,
+} from "eve/tools";
 import { z } from "zod";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type {
@@ -19,11 +23,10 @@ vi.mock("@/db/services/scheduled-agent-jobs", () => ({
   updateScheduledAgentJob: services.update,
 }));
 
-import createSchedule from "@/agent/tools/schedules/create";
-import listSchedules from "@/agent/tools/schedules/list";
-import updateSchedule from "@/agent/tools/schedules/update";
-import reactToMessage from "@/agent/tools/react_to_message";
-import sendMessage from "@/agent/tools/send_message";
+import { createSchedule } from "@/agent/tools/schedules/create";
+import { listSchedules } from "@/agent/tools/schedules/list";
+import { updateSchedule } from "@/agent/tools/schedules/update";
+import messaging from "@/agent/tools/messaging";
 
 describe("schedule tools", () => {
   beforeEach(() => {
@@ -121,19 +124,33 @@ describe("schedule tools", () => {
     expect(result).toEqual(scheduleSummary(job));
   });
 
-  it("prevents an isolated scheduled worker from messaging or reacting", () => {
-    expect(() =>
-      sendMessage.execute(
-        { kind: "message", markdown: "This should not be delivered." },
-        toolContext("send_message", "scheduled-worker")
-      )
-    ).toThrow("Scheduled workers return a structured outcome");
-    expect(() =>
-      reactToMessage.execute(
-        { operation: "add", type: "heart" },
-        toolContext("react_to_message", "scheduled-worker")
-      )
-    ).toThrow("Scheduled workers return a structured outcome");
+  it("omits messaging capabilities outside their valid turns", async () => {
+    const resolveMessaging = messaging.events["turn.started"];
+    expect(resolveMessaging).toBeDefined();
+    if (!resolveMessaging) return;
+
+    expect(
+      await resolveMessaging({}, dynamicContext("scheduled-worker"))
+    ).toBeNull();
+    const reportMessaging = await resolveMessaging(
+      {},
+      dynamicContext("scheduled-result", "channel:linq")
+    );
+    expect(Object.keys(reportMessaging ?? {})).toEqual(["send_message"]);
+
+    const debugMessaging = await resolveMessaging(
+      {},
+      dynamicContext("test", "http")
+    );
+    const interactiveMessaging = await resolveMessaging(
+      {},
+      dynamicContext("test", "channel:linq")
+    );
+    expect(Object.keys(debugMessaging ?? {})).toEqual(["send_message"]);
+    expect(Object.keys(interactiveMessaging ?? {}).toSorted()).toEqual([
+      "react_to_message",
+      "send_message",
+    ]);
   });
 
   it("owns web schedules by their Eve session", async () => {
@@ -166,6 +183,25 @@ describe("schedule tools", () => {
     );
   });
 });
+
+function dynamicContext(authenticator: string, kind = "channel:scheduled-run") {
+  return {
+    channel: { kind, metadata: {} },
+    messages: [],
+    session: {
+      auth: {
+        current: {
+          attributes: {},
+          authenticator,
+          principalId: "user-1",
+          principalType: "user",
+        },
+        initiator: null,
+      },
+      id: "session-1",
+    },
+  } satisfies DynamicResolveContext;
+}
 
 function toolContext(
   toolName: string,

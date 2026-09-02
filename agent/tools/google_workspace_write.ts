@@ -1,4 +1,4 @@
-import { defineTool } from "eve/tools";
+import { defineDynamic, defineTool } from "eve/tools";
 import { z } from "zod";
 import {
   calendarEventSchema,
@@ -10,6 +10,7 @@ import {
   sendGmail,
   updateGmail,
 } from "@/agent/lib/google-workspace/gmail";
+import { resolveModeValue } from "@/agent/lib/mode";
 
 const inputSchema = z.discriminatedUnion("action", [
   z.object({
@@ -29,7 +30,7 @@ export function googleWorkspaceWriteApproval(
   return action === "update_email" ? "not-applicable" : "user-approval";
 }
 
-export default defineTool({
+export const googleWorkspaceWrite = defineTool({
   approval: ({ toolInput }) => googleWorkspaceWriteApproval(toolInput?.action),
   description:
     "Change the authenticated user's Google Workspace. Reversible Gmail label updates act on exact message IDs. Sending email or creating a confirmed calendar event requires user approval. This tool cannot delete mail, change account settings, or edit contacts.",
@@ -61,5 +62,12 @@ export default defineTool({
         };
     }
     throw new Error("Unsupported Google Workspace write action.");
+  },
+});
+
+export default defineDynamic({
+  events: {
+    "turn.started": (_event, context) =>
+      resolveModeValue(context, { interactive: googleWorkspaceWrite }),
   },
 });
