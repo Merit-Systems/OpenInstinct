@@ -21,15 +21,24 @@ describe("root and worker capability boundaries", () => {
     expect(toolFiles(rootTools)).toEqual([
       "agent.ts",
       "ask_question.ts",
+      "bash.ts",
+      "connection_search.ts",
       "google_workspace_read.ts",
       "google_workspace_write.ts",
+      "load_skill.ts",
       "messaging.ts",
+      "read_file.ts",
       "request_vault_import.ts",
       "request_vault_setup.ts",
       "schedules/create.ts",
       "schedules/list.ts",
       "schedules/update.ts",
+      "task_cancel.ts",
+      "todo.ts",
       "update_user_profile.ts",
+      "web_fetch.ts",
+      "web_search.ts",
+      "write_file.ts",
     ]);
     expect(existsSync(`${rootTools}/sendMessage.ts`)).toBe(false);
     expect(existsSync("agent/extensions/kernel/extension.ts")).toBe(false);
@@ -43,6 +52,18 @@ describe("root and worker capability boundaries", () => {
     expect(readFileSync(`${rootTools}/ask_question.ts`, "utf8")).toContain(
       "disableTool()"
     );
+    for (const tool of [
+      "bash",
+      "connection_search",
+      "load_skill",
+      "read_file",
+      "todo",
+      "write_file",
+    ]) {
+      expect(readFileSync(`${rootTools}/${tool}.ts`, "utf8")).toContain(
+        "disableTool()"
+      );
+    }
     const rootInstructions = readFileSync(
       "agent/instructions/content/role/interactive.md",
       "utf8"
@@ -166,22 +187,22 @@ describe("root and worker capability boundaries", () => {
   });
 
   it("requires structured completion for initial and resumed worker calls", () => {
-    const rootInstructions = readFileSync(
-      "agent/instructions/content/role/interactive.md",
+    const workerCoordination = readFileSync(
+      "agent/instructions/content/worker-coordination.md",
       "utf8"
     );
     const workerConfig = readFileSync(`${workerRoot}/agent.ts`, "utf8");
 
-    expect(rootInstructions).toContain(
+    expect(workerCoordination).toContain(
       "Every initial or resumed `worker` call must set `outputSchema`"
     );
-    expect(rootInstructions).toContain(
+    expect(workerCoordination).toContain(
       '"required": ["status", "message", "images"]'
     );
-    expect(rootInstructions).toContain(
+    expect(workerCoordination).toContain(
       "including when passing an existing `agentId`"
     );
-    expect(rootInstructions).toContain(
+    expect(workerCoordination).toContain(
       "calling Eve's native `final_output` tool exactly once"
     );
     expect(workerConfig).toContain("outputSchema: taskCompletionSchema");

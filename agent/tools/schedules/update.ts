@@ -1,5 +1,6 @@
-import { defineTool } from "eve/tools";
+import { defineDynamic, defineTool } from "eve/tools";
 import { z } from "zod";
+import { resolveModeValue } from "@/agent/lib/mode";
 import { scheduleOwner, scheduleSummary } from "@/agent/lib/schedules/tools";
 import { scheduleTimingSchema } from "@/agent/lib/schedules/timing";
 import { updateScheduledAgentJob } from "@/db/services/scheduled-agent-jobs";
@@ -17,7 +18,7 @@ const inputSchema = z
     { message: "Provide at least one schedule change." }
   );
 
-export default defineTool({
+export const updateSchedule = defineTool({
   description:
     "Update, pause, resume, or delete one of the authenticated user's scheduled jobs. Set status paused or active to pause or resume it. List schedules first when the target is ambiguous.",
   inputSchema,
@@ -31,5 +32,12 @@ export default defineTool({
     );
     if (!job) throw new Error("Schedule not found.");
     return scheduleSummary(job);
+  },
+});
+
+export default defineDynamic({
+  events: {
+    "turn.started": (_event, context) =>
+      resolveModeValue(context, { interactive: updateSchedule }),
   },
 });

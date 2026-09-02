@@ -3,6 +3,7 @@ import type { MemoryScopeContext } from "eve/memory";
 import { z } from "zod";
 import type { env } from "@/env";
 import { scopeFromPrincipal, type AccessScope } from "@/lib/access-scope";
+import { resolveModeValue } from "@/agent/lib/mode";
 
 export function resolveProfileMemoryBackend(
   environment: Pick<
@@ -23,14 +24,22 @@ export function resolveProfileMemoryBackend(
 export function resolveProfileMemoryScope(context: MemoryScopeContext) {
   const caller = context.session.auth.current;
   const workspaceId = z.string().safeParse(caller?.attributes.workspaceId);
-
-  return caller?.principalType === "user" && workspaceId.success
-    ? workspaceId.data
-    : null;
+  const scope =
+    caller?.principalType === "user" && workspaceId.success
+      ? workspaceId.data
+      : null;
+  return resolveModeValue(context, {
+    interactive: scope,
+    "scheduled-worker": scope,
+  });
 }
 
 export function resolvePersonalInfoMemoryScope(context: MemoryScopeContext) {
-  return resolvePersonalInfoAccessScope(context)?.workspaceId ?? null;
+  const scope = resolvePersonalInfoAccessScope(context)?.workspaceId ?? null;
+  return resolveModeValue(context, {
+    interactive: scope,
+    "scheduled-worker": scope,
+  });
 }
 
 export function resolvePersonalInfoAccessScope(

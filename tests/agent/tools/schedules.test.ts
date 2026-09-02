@@ -23,9 +23,9 @@ vi.mock("@/db/services/scheduled-agent-jobs", () => ({
   updateScheduledAgentJob: services.update,
 }));
 
-import createSchedule from "@/agent/tools/schedules/create";
-import listSchedules from "@/agent/tools/schedules/list";
-import updateSchedule from "@/agent/tools/schedules/update";
+import { createSchedule } from "@/agent/tools/schedules/create";
+import { listSchedules } from "@/agent/tools/schedules/list";
+import { updateSchedule } from "@/agent/tools/schedules/update";
 import messaging from "@/agent/tools/messaging";
 
 describe("schedule tools", () => {
