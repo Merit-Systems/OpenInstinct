@@ -1,15 +1,23 @@
 import { relations, sql } from "drizzle-orm";
 import {
   check,
+  date,
   foreignKey,
   pgTable,
   primaryKey,
   text,
+  timestamp,
 } from "drizzle-orm/pg-core";
 
 export const workspaces = pgTable("workspaces", {
   id: text("id").primaryKey(),
-  createdAt: text("created_at").notNull(),
+  createdAt: timestamp("created_at", {
+    mode: "date",
+    precision: 3,
+    withTimezone: true,
+  })
+    .defaultNow()
+    .notNull(),
 });
 
 export const userProfiles = pgTable(
@@ -20,14 +28,20 @@ export const userProfiles = pgTable(
     lastName: text("last_name"),
     email: text("email"),
     phone: text("phone"),
-    dateOfBirth: text("date_of_birth"),
+    dateOfBirth: date("date_of_birth", { mode: "string" }),
     addressLine1: text("address_line_1"),
     addressLine2: text("address_line_2"),
     city: text("city"),
     region: text("region"),
     postalCode: text("postal_code"),
     countryCode: text("country_code"),
-    updatedAt: text("updated_at").notNull(),
+    updatedAt: timestamp("updated_at", {
+      mode: "date",
+      precision: 3,
+      withTimezone: true,
+    })
+      .defaultNow()
+      .notNull(),
   },
   (table) => [
     foreignKey({
@@ -48,7 +62,13 @@ export const workspaceMemberships = pgTable(
     workspaceId: text("workspace_id").notNull(),
     userId: text("user_id").notNull(),
     role: text("role", { enum: ["owner"] }).notNull(),
-    createdAt: text("created_at").notNull(),
+    createdAt: timestamp("created_at", {
+      mode: "date",
+      precision: 3,
+      withTimezone: true,
+    })
+      .defaultNow()
+      .notNull(),
   },
   (table) => [
     primaryKey({

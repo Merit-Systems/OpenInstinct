@@ -17,6 +17,7 @@ import {
   session,
   settings,
   user,
+  userProfiles,
   vaultItems,
   verification,
   workspaceMemberships,
@@ -66,6 +67,34 @@ describe("database schema", () => {
       "account",
       "verification",
     ]);
+  });
+
+  it("uses native PostgreSQL types for structured application values", () => {
+    for (const column of [
+      agentSessions.createdAt,
+      browserImageArtifacts.createdAt,
+      browserSessions.createdAt,
+      browserTraceDomains.firstSeenAt,
+      browserTraceEvents.at,
+      browserTraces.startedAt,
+      browserTraces.completedAt,
+      chats.createdAt,
+      chats.updatedAt,
+      encryptedSecrets.updatedAt,
+      userProfiles.updatedAt,
+      vaultItems.createdAt,
+      vaultItems.updatedAt,
+      workspaceMemberships.createdAt,
+      workspaces.createdAt,
+    ]) {
+      expect(column.getSQLType()).toBe("timestamp (3) with time zone");
+    }
+
+    expect(userProfiles.dateOfBirth.getSQLType()).toBe("date");
+    expect(chats.costUsd.getSQLType()).toBe("numeric(16, 8)");
+    expect(browserImageArtifacts.id.getSQLType()).toBe("uuid");
+    expect(encryptedSecrets.id.getSQLType()).toBe("text");
+    expect(vaultItems.id.getSQLType()).toBe("text");
   });
 
   it("anchors session creators to a membership in the same workspace", () => {

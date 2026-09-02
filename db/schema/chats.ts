@@ -1,12 +1,13 @@
 import { relations, sql } from "drizzle-orm";
 import {
   check,
-  doublePrecision,
   foreignKey,
   index,
   integer,
+  numeric,
   pgTable,
   text,
+  timestamp,
 } from "drizzle-orm/pg-core";
 import { workspaces } from "./workspaces";
 
@@ -16,11 +17,27 @@ export const chats = pgTable(
     sessionId: text("session_id").primaryKey(),
     workspaceId: text("workspace_id").notNull(),
     title: text("title").notNull(),
-    createdAt: text("created_at").notNull(),
-    updatedAt: text("updated_at").notNull(),
+    createdAt: timestamp("created_at", {
+      mode: "date",
+      precision: 3,
+      withTimezone: true,
+    })
+      .defaultNow()
+      .notNull(),
+    updatedAt: timestamp("updated_at", {
+      mode: "date",
+      precision: 3,
+      withTimezone: true,
+    })
+      .defaultNow()
+      .notNull(),
     inputTokens: integer("input_tokens").notNull().default(0),
     outputTokens: integer("output_tokens").notNull().default(0),
-    costUsd: doublePrecision("cost_usd"),
+    costUsd: numeric("cost_usd", {
+      mode: "number",
+      precision: 16,
+      scale: 8,
+    }),
   },
   (table) => [
     foreignKey({

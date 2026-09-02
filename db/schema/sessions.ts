@@ -1,5 +1,11 @@
 import { relations } from "drizzle-orm";
-import { foreignKey, index, pgTable, text } from "drizzle-orm/pg-core";
+import {
+  foreignKey,
+  index,
+  pgTable,
+  text,
+  timestamp,
+} from "drizzle-orm/pg-core";
 import { workspaceMemberships } from "./workspaces";
 
 export const agentSessions = pgTable(
@@ -8,7 +14,13 @@ export const agentSessions = pgTable(
     sessionId: text("session_id").primaryKey(),
     workspaceId: text("workspace_id").notNull(),
     createdByUserId: text("created_by_user_id").notNull(),
-    createdAt: text("created_at").notNull(),
+    createdAt: timestamp("created_at", {
+      mode: "date",
+      precision: 3,
+      withTimezone: true,
+    })
+      .defaultNow()
+      .notNull(),
   },
   (table) => [
     foreignKey({

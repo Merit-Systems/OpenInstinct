@@ -57,6 +57,13 @@
       "when": 1788376857525,
       "tag": "0007_known_fenris",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1788360381183,
+      "tag": "0008_black_sandman",
+      "breakpoints": true
     }
   ]
 }
