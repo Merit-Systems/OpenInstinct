@@ -40,7 +40,6 @@ describe("root and worker capability boundaries", () => {
       "schedules/list.ts",
       "schedules/update.ts",
       "todo.ts",
-      "update_user_profile.ts",
       "write_file.ts",
     ]);
     expect(existsSync(`${rootTools}/sendMessage.ts`)).toBe(false);
@@ -93,6 +92,7 @@ describe("root and worker capability boundaries", () => {
       "list_vault.ts",
       "load_skill.ts",
       "manage_browsers.ts",
+      "personal_info.ts",
       "read_file.ts",
       "semantic_browser.ts",
       "todo.ts",
@@ -105,6 +105,9 @@ describe("root and worker capability boundaries", () => {
       false
     );
     expect(readFileSync(`${workerTools}/ask_question.ts`, "utf8")).toContain(
+      "disableTool()"
+    );
+    expect(readFileSync(`${workerTools}/personal_info.ts`, "utf8")).toContain(
       "disableTool()"
     );
     for (const tool of [

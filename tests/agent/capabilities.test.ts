@@ -9,6 +9,7 @@ import gmailReadThreadDefinition from "@/agent/tools/gmail/read-thread";
 import gmailSearchDefinition from "@/agent/tools/gmail/search";
 import gmailSendDefinition from "@/agent/tools/gmail/send";
 import gmailUpdateDefinition from "@/agent/tools/gmail/update";
+import personalInfoMemory from "@/agent/memory/personal_info";
 import messaging from "@/agent/tools/messaging";
 import requestVaultImport from "@/agent/tools/request_vault_import";
 import requestVaultSetup from "@/agent/tools/request_vault_setup";
@@ -16,7 +17,6 @@ import answerSchedule from "@/agent/tools/schedules/answer";
 import createScheduleDefinition from "@/agent/tools/schedules/create";
 import listSchedulesDefinition from "@/agent/tools/schedules/list";
 import updateScheduleDefinition from "@/agent/tools/schedules/update";
-import updateUserProfile from "@/agent/tools/update_user_profile";
 
 const singletonTools = [
   ["calendar-check-availability", calendarCheckAvailabilityDefinition],
@@ -33,7 +33,6 @@ const singletonTools = [
   ["schedules-create", createScheduleDefinition],
   ["schedules-list", listSchedulesDefinition],
   ["schedules-update", updateScheduleDefinition],
-  ["update_user_profile", updateUserProfile],
 ] as const;
 
 describe("authored mode capability matrix", () => {
@@ -47,6 +46,7 @@ describe("authored mode capability matrix", () => {
       "gmail-search",
       "gmail-send",
       "gmail-update",
+      "personal_info__update",
       "react_to_message",
       "request_vault_import",
       "request_vault_setup",
@@ -55,7 +55,6 @@ describe("authored mode capability matrix", () => {
       "schedules-list",
       "schedules-update",
       "send_message",
-      "update_user_profile",
       "worker",
     ]);
   });
@@ -100,6 +99,24 @@ async function authoredCapabilities(authenticator: string) {
     capabilities.push(...Object.keys(resolvedMessaging));
   }
 
+  const personalInfoTools = await personalInfoMemory.provider.tools({
+    ...context,
+    memory: {
+      scope: {
+        key: "personal-info-key",
+        namespace: "openinstinct-personal-info-v1",
+        value: "personal:workspace",
+      },
+      slot: "personal_info",
+    },
+    turn: { id: "turn-1", input: [], sequence: 1 },
+  });
+  if (personalInfoTools) {
+    capabilities.push(
+      ...Object.keys(personalInfoTools).map((name) => `personal_info__${name}`)
+    );
+  }
+
   const resolveWorker = worker.events["turn.started"];
   if (resolveWorker && (await resolveWorker({}, context))) {
     capabilities.push("worker");
@@ -115,7 +132,7 @@ function dynamicContext(authenticator: string) {
     session: {
       auth: {
         current: {
-          attributes: {},
+          attributes: { workspaceId: "personal:workspace" },
           authenticator,
           principalId: "user-1",
           principalType: "user",
