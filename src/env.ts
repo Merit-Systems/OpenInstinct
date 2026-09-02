@@ -86,6 +86,8 @@ export const env = createEnv({
     CRON_SECRET: requiredValue.optional(),
     GOOGLE_CONNECTOR_UID: requiredValue.default("google/open-instinct"),
     LINQ_CONNECTOR: requiredValue.optional(),
+    SQUARE_CONNECTOR_UID: requiredValue.optional(),
+    SQUARE_ENVIRONMENT: z.enum(["sandbox", "production"]).default("sandbox"),
     LINQ_PHONE_NUMBER: requiredValue
       .refine(
         (value) => isE164PhoneNumber(value),

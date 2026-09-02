@@ -34,6 +34,34 @@ describe("environment", () => {
     expect(isWorkspaceScopeEnforcementEnabled()).toBe(false);
   });
 
+  it("defaults Square environment to sandbox and connector uid to unset", async () => {
+    vi.stubEnv("SQUARE_ENVIRONMENT", "");
+    vi.stubEnv("SQUARE_CONNECTOR_UID", "");
+
+    const { env } = await import("@/env");
+
+    expect(env.SQUARE_ENVIRONMENT).toBe("sandbox");
+    expect(env.SQUARE_CONNECTOR_UID).toBeUndefined();
+  });
+
+  it("accepts a Square environment and connector override", async () => {
+    vi.stubEnv("SQUARE_ENVIRONMENT", "production");
+    vi.stubEnv("SQUARE_CONNECTOR_UID", "square/custom");
+
+    const { env } = await import("@/env");
+
+    expect(env.SQUARE_ENVIRONMENT).toBe("production");
+    expect(env.SQUARE_CONNECTOR_UID).toBe("square/custom");
+  });
+
+  it("rejects an invalid Square environment value", async () => {
+    vi.stubEnv("SQUARE_ENVIRONMENT", "staging");
+
+    await expect(import("@/env")).rejects.toThrow(
+      "Invalid environment variables"
+    );
+  });
+
   it("enables workspace scope enforcement when configured", async () => {
     vi.stubEnv("WORKSPACE_SCOPE_ENFORCEMENT", "enforce");
 

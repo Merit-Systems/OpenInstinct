@@ -59,7 +59,11 @@ export const channelParticipantStatuses = ["active", "revoked"] as const;
 export type ChannelParticipantStatus =
   (typeof channelParticipantStatuses)[number];
 
-export const connectionInstallationProviders = ["google", "linq"] as const;
+export const connectionInstallationProviders = [
+  "google",
+  "linq",
+  "square",
+] as const;
 export type ConnectionInstallationProvider =
   (typeof connectionInstallationProviders)[number];
 

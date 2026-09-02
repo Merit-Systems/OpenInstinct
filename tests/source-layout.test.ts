@@ -35,6 +35,7 @@ const expectedLibFiles = [
   "kernel.ts",
   "request-scope.ts",
   "same-origin.ts",
+  "square.ts",
   "user-profile.ts",
   "utils.ts",
   "vault.ts",

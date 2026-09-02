@@ -1,0 +1,2 @@
+ALTER TABLE "connection_installations" DROP CONSTRAINT "connection_installations_provider_check";--> statement-breakpoint
+ALTER TABLE "connection_installations" ADD CONSTRAINT "connection_installations_provider_check" CHECK ("connection_installations"."provider" IN ('google', 'linq', 'square'));

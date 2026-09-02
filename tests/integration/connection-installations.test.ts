@@ -15,6 +15,11 @@ const key = {
   connectorId: "google/test",
   provider: "google" as const,
 };
+const squareKey = {
+  authorizationSubject: "subject:alice",
+  connectorId: "square/test",
+  provider: "square" as const,
+};
 
 afterEach(async () => {
   resetDatabaseForIntegrationTest();
@@ -95,6 +100,19 @@ describe("connection installations", () => {
     );
     expect(installation?.status).toBe("revoked");
     expect(installation?.revokedAt).toEqual(expect.any(String));
+  });
+
+  it("records and finds a square-provider installation", async () => {
+    const service = await loadService();
+    const recorded = await service.installations.recordConnectionInstallation(
+      service.alice,
+      squareKey
+    );
+
+    expect(recorded.provider).toBe("square");
+    await expect(
+      service.installations.findConnectionInstallation(service.alice, squareKey)
+    ).resolves.toMatchObject({ id: recorded.id, provider: "square" });
   });
 
   it("allows a reconnect to replace a revoked installation with an active row", async () => {
