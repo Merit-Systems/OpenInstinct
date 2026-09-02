@@ -1,5 +1,5 @@
 import { defineDynamic } from "eve/instructions";
-import executionSafety from "./content/execution-safety/prompt.md?raw";
+import executionSafety from "./content/execution-safety.md?raw";
 import { resolveModeInstructions } from "./content/mode";
 
 export default defineDynamic({
