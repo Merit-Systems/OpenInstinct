@@ -29,11 +29,12 @@ vi.mock("@/db/services/scheduled-agent-jobs", () => ({
   updateScheduledAgentJob: services.update,
 }));
 
-import { createSchedule } from "@/agent/tools/schedules/create";
-import answerSchedule from "@/agent/tools/schedules/answer";
-import { listSchedules } from "@/agent/tools/schedules/list";
-import { updateSchedule } from "@/agent/tools/schedules/update";
 import messaging from "@/agent/tools/messaging";
+import schedules, {
+  createSchedule,
+  listSchedules,
+  updateSchedule,
+} from "@/agent/tools/schedules";
 
 describe("schedule tools", () => {
   beforeEach(() => {
@@ -42,7 +43,7 @@ describe("schedule tools", () => {
   });
 
   it("lets interactive and reporting turns resume scheduled input", async () => {
-    const resolve = answerSchedule.events["turn.started"];
+    const resolve = schedules.events["turn.started"];
     expect(resolve).toBeDefined();
     if (!resolve) return;
 
@@ -51,8 +52,12 @@ describe("schedule tools", () => {
     expect(
       await resolve({}, dynamicContext("scheduled-result"))
     ).not.toBeNull();
-    const answer = await resolve({}, dynamicContext("linq"));
-    if (!answer || !("execute" in answer)) {
+    const interactiveTools = await resolve({}, dynamicContext("linq"));
+    const answer =
+      interactiveTools && !("execute" in interactiveTools)
+        ? interactiveTools["schedules-answer"]
+        : null;
+    if (!answer) {
       throw new Error("Expected the schedules-answer tool.");
     }
     services.getInput.mockResolvedValue({
@@ -84,8 +89,12 @@ describe("schedule tools", () => {
       leaseToken: "00000000-0000-4000-8000-000000000003",
       runId: "00000000-0000-4000-8000-000000000002",
     });
-    const reportAnswer = await resolve({}, dynamicContext("scheduled-result"));
-    if (!reportAnswer || !("execute" in reportAnswer)) {
+    const reportTools = await resolve({}, dynamicContext("scheduled-result"));
+    const reportAnswer =
+      reportTools && !("execute" in reportTools)
+        ? reportTools["schedules-answer"]
+        : null;
+    if (!reportAnswer) {
       throw new Error("Expected the schedules-answer reporting tool.");
     }
     await reportAnswer.execute(
