@@ -7,7 +7,9 @@ import {
   pgTable,
   primaryKey,
   text,
+  timestamp,
   uniqueIndex,
+  uuid,
 } from "drizzle-orm/pg-core";
 import { browserImageSourceKinds } from "@/lib/browser-artifact";
 import { workspaceMemberships } from "./workspaces";
@@ -18,7 +20,13 @@ export const browserSessions = pgTable(
     sessionId: text("session_id").primaryKey(),
     workspaceId: text("workspace_id").notNull(),
     createdByUserId: text("created_by_user_id").notNull(),
-    createdAt: text("created_at").notNull(),
+    createdAt: timestamp("created_at", {
+      mode: "date",
+      precision: 3,
+      withTimezone: true,
+    })
+      .defaultNow()
+      .notNull(),
     workerSessionId: text("worker_session_id"),
   },
   (table) => [
@@ -52,8 +60,16 @@ export const browserTraces = pgTable(
       enum: ["running", "success", "failure", "error", "cancelled"],
     }).notNull(),
     resultMessage: text("result_message"),
-    startedAt: text("started_at").notNull(),
-    completedAt: text("completed_at"),
+    startedAt: timestamp("started_at", {
+      mode: "date",
+      precision: 3,
+      withTimezone: true,
+    }).notNull(),
+    completedAt: timestamp("completed_at", {
+      mode: "date",
+      precision: 3,
+      withTimezone: true,
+    }),
     durationMs: integer("duration_ms"),
   },
   (table) => [
@@ -85,7 +101,11 @@ export const browserTraceEvents = pgTable(
   {
     id: text("id").primaryKey(),
     traceSessionId: text("trace_session_id").notNull(),
-    at: text("at").notNull(),
+    at: timestamp("at", {
+      mode: "date",
+      precision: 3,
+      withTimezone: true,
+    }).notNull(),
     type: text("type").notNull(),
     label: text("label").notNull(),
     detail: text("detail").notNull(),
@@ -105,7 +125,11 @@ export const browserTraceDomains = pgTable(
   {
     traceSessionId: text("trace_session_id").notNull(),
     domain: text("domain").notNull(),
-    firstSeenAt: text("first_seen_at").notNull(),
+    firstSeenAt: timestamp("first_seen_at", {
+      mode: "date",
+      precision: 3,
+      withTimezone: true,
+    }).notNull(),
   },
   (table) => [
     primaryKey({
@@ -124,7 +148,7 @@ export const browserTraceDomains = pgTable(
 export const browserImageArtifacts = pgTable(
   "browser_image_artifacts",
   {
-    id: text("id").primaryKey(),
+    id: uuid("id").defaultRandom().primaryKey(),
     workspaceId: text("workspace_id").notNull(),
     createdByUserId: text("created_by_user_id").notNull(),
     rootSessionId: text("root_session_id").notNull(),
@@ -141,7 +165,13 @@ export const browserImageArtifacts = pgTable(
       enum: browserImageSourceKinds,
     }).notNull(),
     idempotencyKey: text("idempotency_key").notNull(),
-    createdAt: text("created_at").notNull(),
+    createdAt: timestamp("created_at", {
+      mode: "date",
+      precision: 3,
+      withTimezone: true,
+    })
+      .defaultNow()
+      .notNull(),
   },
   (table) => [
     foreignKey({

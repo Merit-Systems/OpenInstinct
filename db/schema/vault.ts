@@ -6,6 +6,7 @@ import {
   pgTable,
   primaryKey,
   text,
+  timestamp,
 } from "drizzle-orm/pg-core";
 import { vaultItemKinds } from "@/lib/vault";
 import { workspaces } from "./workspaces";
@@ -18,8 +19,20 @@ export const vaultItems = pgTable(
     kind: text("kind", { enum: vaultItemKinds }).notNull(),
     label: text("label").notNull(),
     account: text("account").notNull(),
-    createdAt: text("created_at").notNull(),
-    updatedAt: text("updated_at").notNull(),
+    createdAt: timestamp("created_at", {
+      mode: "date",
+      precision: 3,
+      withTimezone: true,
+    })
+      .defaultNow()
+      .notNull(),
+    updatedAt: timestamp("updated_at", {
+      mode: "date",
+      precision: 3,
+      withTimezone: true,
+    })
+      .defaultNow()
+      .notNull(),
   },
   (table) => [
     foreignKey({
@@ -45,7 +58,13 @@ export const encryptedSecrets = pgTable(
     namespace: text("namespace", { enum: ["vault"] }).notNull(),
     id: text("id").notNull(),
     encryptedValue: text("encrypted_value").notNull(),
-    updatedAt: text("updated_at").notNull(),
+    updatedAt: timestamp("updated_at", {
+      mode: "date",
+      precision: 3,
+      withTimezone: true,
+    })
+      .defaultNow()
+      .notNull(),
   },
   (table) => [
     primaryKey({

@@ -58,7 +58,7 @@ export async function patchUserProfile(
 }
 
 async function writeUserProfile(scope: AccessScope, profile: UserProfile) {
-  const updatedAt = new Date().toISOString();
+  const updatedAt = new Date();
   await db
     .insert(userProfiles)
     .values({ ...profile, updatedAt, workspaceId: scope.workspaceId })

@@ -2,7 +2,7 @@ import type { AccessScope } from "@/lib/access-scope";
 import { db, workspaceMemberships, workspaces } from "@/db";
 
 export async function ensureScope(scope: AccessScope) {
-  const createdAt = new Date().toISOString();
+  const createdAt = new Date();
   await db.transaction(async (transaction) => {
     await transaction
       .insert(workspaces)

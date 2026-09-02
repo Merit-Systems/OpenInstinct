@@ -35,6 +35,7 @@ describe("database migrations", () => {
         '2026-01-01'
       );
     `);
+    await applyMigration(database, "0008_black_sandman.sql");
 
     const tables = await database.query<{ count: number }>(
       `SELECT count(*)::int AS count
@@ -68,7 +69,9 @@ describe("database migrations", () => {
     expect(pendingConstraints).toBe(0);
     await expect(
       database.query("SELECT id FROM vault_items WHERE id = 'contact-1'")
-    ).resolves.toMatchObject({ rows: [{ id: "contact-1" }] });
+    ).resolves.toMatchObject({
+      rows: [{ id: "contact-1" }],
+    });
   }, 15_000);
 
   it("preserves legacy rows while enforcing constraints for new writes", async () => {

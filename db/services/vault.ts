@@ -47,6 +47,8 @@ const selection = {
 async function createVaultRecord(scope: AccessScope, record: VaultRecord) {
   await db.insert(vaultItems).values({
     ...record,
+    createdAt: new Date(record.createdAt),
+    updatedAt: new Date(record.updatedAt),
     workspaceId: scope.workspaceId,
   });
 }
@@ -55,11 +57,13 @@ export async function listVaultItems(scope: AccessScope) {
   return vaultRecordSchema
     .array()
     .parse(
-      await db
-        .select(selection)
-        .from(vaultItems)
-        .where(eq(vaultItems.workspaceId, scope.workspaceId))
-        .orderBy(desc(vaultItems.updatedAt))
+      (
+        await db
+          .select(selection)
+          .from(vaultItems)
+          .where(eq(vaultItems.workspaceId, scope.workspaceId))
+          .orderBy(desc(vaultItems.updatedAt))
+      ).map(serializeVaultRecord)
     );
 }
 
@@ -83,7 +87,9 @@ export async function readVaultItem(scope: AccessScope, id: string) {
       and(eq(vaultItems.workspaceId, scope.workspaceId), eq(vaultItems.id, id))
     )
     .limit(1);
-  return vaultRecordSchema.optional().parse(rows[0]);
+  return vaultRecordSchema
+    .optional()
+    .parse(rows[0] ? serializeVaultRecord(rows[0]) : undefined);
 }
 
 export async function deleteVaultItem(scope: AccessScope, id: string) {
@@ -215,4 +221,14 @@ function decryptVaultSecret(
 
 function vaultSecretAad(scope: AccessScope, id: string) {
   return Buffer.from(`${scope.workspaceId}\u0000vault\u0000${id}`);
+}
+
+function serializeVaultRecord<T extends { createdAt: Date; updatedAt: Date }>(
+  record: T
+) {
+  return {
+    ...record,
+    createdAt: record.createdAt.toISOString(),
+    updatedAt: record.updatedAt.toISOString(),
+  };
 }

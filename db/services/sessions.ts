@@ -6,7 +6,7 @@ export async function claimSession(scope: AccessScope, sessionId: string) {
   await db
     .insert(agentSessions)
     .values({
-      createdAt: new Date().toISOString(),
+      createdAt: new Date(),
       createdByUserId: scope.userId,
       sessionId,
       workspaceId: scope.workspaceId,

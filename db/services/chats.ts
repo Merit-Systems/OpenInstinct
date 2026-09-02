@@ -7,29 +7,32 @@ import { ensureScope } from "./scope";
 
 const chatRowSchema = z.object({
   costUsd: z.number().nonnegative().nullable(),
-  createdAt: z.string(),
+  createdAt: z.coerce.date(),
   inputTokens: z.number().int().nonnegative(),
   outputTokens: z.number().int().nonnegative(),
   sessionId: z.string().min(1),
   title: z.string().min(1),
-  updatedAt: z.string(),
+  updatedAt: z.coerce.date(),
 });
 
 function toChatSummary(row: z.infer<typeof chatRowSchema>): ChatSummary {
-  const { costUsd, inputTokens, outputTokens, ...chat } = row;
+  const { costUsd, createdAt, inputTokens, outputTokens, updatedAt, ...chat } =
+    row;
   return {
     ...chat,
+    createdAt: createdAt.toISOString(),
+    updatedAt: updatedAt.toISOString(),
     usage: { costUsd, inputTokens, outputTokens },
   };
 }
 
 export async function listChats(scope: AccessScope) {
-  const updatedAt = sql<string>`coalesce(${chats.updatedAt}, ${agentSessions.createdAt})`;
+  const updatedAt = sql<Date>`coalesce(${chats.updatedAt}, ${agentSessions.createdAt})`;
   const rows = chatRowSchema.array().parse(
     await db
       .select({
         costUsd: chats.costUsd,
-        createdAt: sql<string>`coalesce(${chats.createdAt}, ${agentSessions.createdAt})`,
+        createdAt: sql<Date>`coalesce(${chats.createdAt}, ${agentSessions.createdAt})`,
         inputTokens: sql<number>`coalesce(${chats.inputTokens}, 0)`,
         outputTokens: sql<number>`coalesce(${chats.outputTokens}, 0)`,
         sessionId: agentSessions.sessionId,
@@ -61,7 +64,7 @@ export async function readChat(scope: AccessScope, sessionId: string) {
 
 export async function saveChat(scope: AccessScope, chat: SaveChat) {
   await ensureScope(scope);
-  const now = new Date().toISOString();
+  const now = new Date();
   const existing = await db
     .select({ sessionId: chats.sessionId })
     .from(chats)

@@ -43,7 +43,7 @@ export async function listBrowserTraces(scope: AccessScope, cursor?: string) {
     where: and(
       eq(browserTraces.workspaceId, scope.workspaceId),
       boundary
-        ? sql`(${browserTraces.startedAt}, ${browserTraces.sessionId}) < (${boundary.startedAt}, ${boundary.sessionId})`
+        ? sql`(${browserTraces.startedAt}, ${browserTraces.sessionId}) < (${new Date(boundary.startedAt)}, ${boundary.sessionId})`
         : undefined
     ),
     with: {
@@ -59,12 +59,13 @@ export async function listBrowserTraces(scope: AccessScope, cursor?: string) {
 
   return {
     nextCursor:
-      rows.length > page.length && last ? encodeTraceCursor(last) : null,
-    traces: page.map(({ domains, ...row }) =>
-      Object.assign({}, row, {
-        domains: domains.map(({ domain }) => domain),
-      })
-    ),
+      rows.length > page.length && last
+        ? encodeTraceCursor({
+            sessionId: last.sessionId,
+            startedAt: last.startedAt.toISOString(),
+          })
+        : null,
+    traces: page.map(serializeBrowserTrace),
   };
 }
 
@@ -85,8 +86,7 @@ export async function readBrowserTrace(scope: AccessScope, sessionId: string) {
     },
   });
   if (!trace) return undefined;
-  const { domains, ...record } = trace;
-  return { ...record, domains: domains.map(({ domain }) => domain) };
+  return serializeBrowserTrace(trace);
 }
 
 export async function beginBrowserTrace(
@@ -98,7 +98,7 @@ export async function beginBrowserTrace(
     .values({
       createdByUserId: scope.userId,
       sessionId: record.sessionId,
-      startedAt: record.startedAt,
+      startedAt: new Date(record.startedAt),
       status: "running",
       task: record.task,
       workspaceId: scope.workspaceId,
@@ -121,8 +121,8 @@ export async function completeBrowserTrace(
   await db
     .update(browserTraces)
     .set({
-      completedAt: outcome.completedAt,
-      durationMs: sql`GREATEST(0, ROUND(EXTRACT(EPOCH FROM (${outcome.completedAt}::timestamptz - ${browserTraces.startedAt}::timestamptz)) * 1000))::int`,
+      completedAt: new Date(outcome.completedAt),
+      durationMs: sql`GREATEST(0, ROUND(EXTRACT(EPOCH FROM (${new Date(outcome.completedAt)} - ${browserTraces.startedAt})) * 1000))::int`,
       resultMessage: outcome.resultMessage,
       status: outcome.status,
     })
@@ -160,7 +160,13 @@ export async function recordBrowserTraceEvents(
 
   await db
     .insert(browserTraceEvents)
-    .values(events.map((event) => ({ ...event, traceSessionId })))
+    .values(
+      events.map((event) => ({
+        ...event,
+        at: new Date(event.at),
+        traceSessionId,
+      }))
+    )
     .onConflictDoNothing({ target: browserTraceEvents.id });
 }
 
@@ -170,7 +176,7 @@ export async function listBrowserTraceEvents(
   scope: AccessScope,
   traceSessionId: string
 ) {
-  return db
+  const events = await db
     .select({
       at: browserTraceEvents.at,
       detail: browserTraceEvents.detail,
@@ -191,6 +197,9 @@ export async function listBrowserTraceEvents(
     )
     .orderBy(asc(browserTraceEvents.id))
     .limit(traceEventReadLimit);
+  return events.map((event) =>
+    Object.assign({}, event, { at: event.at.toISOString() })
+  );
 }
 
 export async function recordBrowserTraceDomains(
@@ -211,7 +220,7 @@ export async function recordBrowserTraceDomains(
     .limit(1);
   if (owned.length === 0) return;
 
-  const firstSeenAt = new Date().toISOString();
+  const firstSeenAt = new Date();
   await db
     .insert(browserTraceDomains)
     .values(
@@ -224,4 +233,19 @@ export async function recordBrowserTraceDomains(
     .onConflictDoNothing({
       target: [browserTraceDomains.traceSessionId, browserTraceDomains.domain],
     });
+}
+
+function serializeBrowserTrace<
+  T extends {
+    completedAt: Date | null;
+    domains: { domain: string }[];
+    startedAt: Date;
+  },
+>({ domains, ...trace }: T) {
+  return {
+    ...trace,
+    completedAt: trace.completedAt?.toISOString() ?? null,
+    domains: domains.map(({ domain }) => domain),
+    startedAt: trace.startedAt.toISOString(),
+  };
 }

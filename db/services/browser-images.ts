@@ -50,7 +50,7 @@ export async function reserveBrowserImageArtifact(
     .insert(browserImageArtifacts)
     .values({
       browserSessionId: input.browserSessionId,
-      createdAt: new Date().toISOString(),
+      createdAt: new Date(),
       createdByUserId: scope.userId,
       id,
       idempotencyKey: input.idempotencyKey,
@@ -108,12 +108,25 @@ export async function finalizeBrowserImageArtifact(
     )
     .returning();
   const row =
-    rows[0] ?? (await readReadyBrowserImageArtifact(scope, reservation.id));
+    rows[0] ?? (await readReadyBrowserImageArtifactRow(scope, reservation.id));
   if (!row) throw new Error("The browser image manifest was not finalized.");
   return { image: toReference(row), storagePathname: row.storagePathname };
 }
 
 export async function readReadyBrowserImageArtifact(
+  scope: AccessScope,
+  artifactId: string,
+  options: { readonly rootSessionId?: string } = {}
+) {
+  const row = await readReadyBrowserImageArtifactRow(
+    scope,
+    artifactId,
+    options
+  );
+  return row ? { ...row, createdAt: row.createdAt.toISOString() } : undefined;
+}
+
+async function readReadyBrowserImageArtifactRow(
   scope: AccessScope,
   artifactId: string,
   options: { readonly rootSessionId?: string } = {}
