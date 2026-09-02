@@ -6,6 +6,7 @@ import { maximumWorkerCompletionImages } from "@/lib/worker-completion";
 
 interface LinqArtifactAttachment {
   readonly name: string;
+  readonly type: "image";
   readonly url: string;
 }
 
@@ -54,6 +55,7 @@ export async function prepareLinqArtifactDelivery(
   const selected = imageArtifacts.slice(0, maximumWorkerCompletionImages);
   const attachments = selected.map((artifact): LinqArtifactAttachment => ({
     name: artifact.title,
+    type: "image",
     url: artifact.sourceUrl,
   }));
   const failedArtifactIds = [

@@ -7,15 +7,25 @@ import { scopeFromPrincipal, type AccessScope } from "@/lib/access-scope";
 export function resolveProfileMemoryBackend(
   environment: Pick<
     typeof env,
-    "BLOB_READ_WRITE_TOKEN" | "NODE_ENV" | "VERCEL_ENV"
+    "BLOB_READ_WRITE_TOKEN" | "BLOB_STORE_ID" | "NODE_ENV" | "VERCEL_ENV"
   >
 ) {
-  return environment.NODE_ENV === "production" &&
-    environment.VERCEL_ENV === undefined &&
+  if (environment.NODE_ENV !== "production") {
+    return { kind: "automatic" as const };
+  }
+
+  if (environment.BLOB_STORE_ID) {
+    return {
+      kind: "vercel-blob" as const,
+      options: { storeId: environment.BLOB_STORE_ID },
+    };
+  }
+
+  return environment.VERCEL_ENV === undefined &&
     environment.BLOB_READ_WRITE_TOKEN
     ? {
         kind: "vercel-blob" as const,
-        token: environment.BLOB_READ_WRITE_TOKEN,
+        options: { token: environment.BLOB_READ_WRITE_TOKEN },
       }
     : { kind: "automatic" as const };
 }
