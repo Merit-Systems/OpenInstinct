@@ -28,6 +28,7 @@ describe("scheduled agent jobs", () => {
       "0006_illegal_tattoo.sql",
       "0007_known_fenris.sql",
       "0008_black_sandman.sql",
+      "0009_cold_power_man.sql",
     ]) {
       await applyMigration(client, migration);
     }
@@ -119,6 +120,113 @@ describe("scheduled agent jobs", () => {
       claim.run.leaseToken,
       "worker-session"
     );
+    const question = {
+      action: {
+        callId: "call-question",
+        input: { prompt: "Which airport should I use?" },
+        kind: "tool-call" as const,
+        toolName: "ask_question",
+      },
+      allowFreeform: true,
+      kind: "question" as const,
+      prompt: "Which airport should I use?",
+      requestId: "request-question",
+    };
+    const waiting = await jobs.waitForScheduledAgentRunInput(
+      claim.run.id,
+      claim.run.leaseToken,
+      [question],
+      new Date("2026-09-01T13:01:00.000Z")
+    );
+    expect(waiting).toMatchObject({
+      pendingInputRequests: [question],
+      reportSequence: 1,
+      reportStatus: "pending",
+      status: "waiting_for_input",
+    });
+    expect(
+      await jobs.claimReadyScheduledAgentRuns({
+        leaseForMs: 21_600_000,
+        limit: 25,
+        now: new Date("2026-09-02T13:00:00.000Z"),
+      })
+    ).toEqual([]);
+    const questionReport = await jobs.claimScheduledReport(
+      claim.run.id,
+      new Date("2026-09-01T13:01:30.000Z")
+    );
+    if (!questionReport?.run.reportLeaseToken) {
+      throw new Error("Expected the pending question to be reportable.");
+    }
+    expect(
+      await jobs.getScheduledAgentRunInputForReport(
+        claim.run.id,
+        questionReport.run.reportLeaseToken
+      )
+    ).toMatchObject({ leaseToken: claim.run.leaseToken });
+    expect(
+      await jobs.getScheduledAgentRunInputForReport(
+        claim.run.id,
+        "00000000-0000-4000-8000-000000000099"
+      )
+    ).toBeUndefined();
+    await jobs.finalizeScheduledReport(
+      claim.run.id,
+      questionReport.run.reportLeaseToken,
+      "suppressed"
+    );
+    expect(
+      await jobs.listRecoverableScheduledReports(
+        new Date("2026-09-01T13:06:00.000Z")
+      )
+    ).toEqual([]);
+    expect(
+      await jobs.listRecoverableScheduledReports(
+        new Date("2026-09-01T13:07:00.000Z")
+      )
+    ).toEqual([claim.run.id]);
+    const retriedQuestionReport = await jobs.claimScheduledReport(
+      claim.run.id,
+      new Date("2026-09-01T13:07:00.000Z")
+    );
+    if (!retriedQuestionReport?.run.reportLeaseToken) {
+      throw new Error(
+        "Expected the unanswered question to be reportable again."
+      );
+    }
+    await jobs.finalizeScheduledReport(
+      claim.run.id,
+      retriedQuestionReport.run.reportLeaseToken,
+      "delivered"
+    );
+    expect(
+      await jobs.getScheduledAgentRunInput(bob, aliceConversation, claim.run.id)
+    ).toBeUndefined();
+    expect(
+      await jobs.getScheduledAgentRunInput(alice, bobConversation, claim.run.id)
+    ).toBeUndefined();
+    expect(
+      await jobs.getScheduledAgentRunInput(
+        alice,
+        aliceConversation,
+        claim.run.id
+      )
+    ).toMatchObject({
+      leaseToken: claim.run.leaseToken,
+    });
+    const resumed = await jobs.claimScheduledAgentRunInput(
+      claim.run.id,
+      claim.run.leaseToken,
+      new Date("2026-09-01T13:02:00.000Z")
+    );
+    expect(resumed).toMatchObject({
+      run: { pendingInputRequests: [question], status: "running" },
+    });
+    await jobs.finishScheduledAgentRunInput(
+      claim.run.id,
+      claim.run.leaseToken,
+      new Date("2026-09-01T13:02:01.000Z")
+    );
     expect(
       await jobs.claimReadyScheduledAgentRuns({
         leaseForMs: 21_600_000,
@@ -129,7 +237,7 @@ describe("scheduled agent jobs", () => {
     const [recoveredWorker] = await jobs.claimReadyScheduledAgentRuns({
       leaseForMs: 21_600_000,
       limit: 25,
-      now: new Date("2026-09-01T19:01:00.000Z"),
+      now: new Date("2026-09-01T19:03:00.000Z"),
     });
     if (!recoveredWorker?.run.leaseToken) {
       throw new Error("Expected the interrupted worker to be reclaimed.");
@@ -155,6 +263,7 @@ describe("scheduled agent jobs", () => {
       new Date("2026-09-01T13:02:00.000Z")
     );
     expect(completed).toMatchObject({
+      reportSequence: 2,
       reportStatus: "pending",
       status: "completed",
       workerSessionId: "replacement-worker-session",
@@ -180,7 +289,7 @@ describe("scheduled agent jobs", () => {
     expect(competingClaims.filter(Boolean)).toHaveLength(1);
     const currentReportLease = competingClaims.find(
       (candidate) => candidate !== undefined
-    )?.run.leaseToken;
+    )?.run.reportLeaseToken;
     if (!currentReportLease) throw new Error("Expected one report lease.");
     await jobs.finalizeScheduledReport(
       claim.run.id,

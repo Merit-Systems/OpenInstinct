@@ -2,11 +2,12 @@ import { defineHook } from "eve/hooks";
 import type { HookContext } from "eve/hooks";
 import { z } from "zod";
 import { scheduledRunOutcomeSchema } from "@/agent/lib/schedules/outcome";
+import { postScheduledReport } from "@/agent/lib/schedules/request";
 import {
   completeScheduledAgentRun,
   releaseScheduledAgentRun,
+  waitForScheduledAgentRunInput,
 } from "@/db/services/scheduled-agent-jobs";
-import { postScheduledReport } from "@/agent/lib/schedules/request";
 
 const scheduledWorker = "scheduled-worker";
 const scheduledRunIdentitySchema = z.object({
@@ -15,7 +16,10 @@ const scheduledRunIdentitySchema = z.object({
 });
 
 function scheduledRunIdentity(ctx: HookContext) {
-  const caller = ctx.session.auth.current ?? ctx.session.auth.initiator;
+  const caller =
+    ctx.session.auth.initiator?.authenticator === scheduledWorker
+      ? ctx.session.auth.initiator
+      : ctx.session.auth.current;
   if (caller?.authenticator !== scheduledWorker) return undefined;
   const identity = scheduledRunIdentitySchema.safeParse(caller.attributes);
   return identity.success
@@ -28,6 +32,25 @@ function scheduledRunIdentity(ctx: HookContext) {
 
 export default defineHook({
   events: {
+    async "input.requested"(event, ctx) {
+      const identity = scheduledRunIdentity(ctx);
+      if (!identity) return;
+      const waiting = await waitForScheduledAgentRunInput(
+        identity.runId,
+        identity.leaseToken,
+        event.data.requests,
+        new Date(event.meta.at)
+      );
+      if (waiting?.reportStatus !== "pending") return;
+      try {
+        await postScheduledReport(waiting.id);
+      } catch (error) {
+        console.warn("[scheduled-run] input report callback failed", {
+          cause: error,
+          runId: waiting.id,
+        });
+      }
+    },
     async "result.completed"(event, ctx) {
       const identity = scheduledRunIdentity(ctx);
       if (!identity) return;

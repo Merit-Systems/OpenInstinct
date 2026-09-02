@@ -19,6 +19,9 @@ const requestVaultSetup = defineTool({
 export default defineDynamic({
   events: {
     "turn.started": (_event, context) =>
-      resolveModeValue(context, { interactive: requestVaultSetup }),
+      resolveModeValue(context, {
+        interactive: requestVaultSetup,
+        "scheduled-report": requestVaultSetup,
+      }),
   },
 });

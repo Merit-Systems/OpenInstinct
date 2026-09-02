@@ -1,4 +1,5 @@
 import { relations, sql } from "drizzle-orm";
+import type { InputRequest } from "eve/client";
 import {
   check,
   foreignKey,
@@ -114,11 +115,20 @@ export const scheduledAgentRuns = pgTable(
       withTimezone: true,
     }).notNull(),
     status: text("status", {
-      enum: ["queued", "running", "completed", "dead_letter"],
+      enum: [
+        "queued",
+        "running",
+        "waiting_for_input",
+        "completed",
+        "dead_letter",
+      ],
     })
       .notNull()
       .default("queued"),
     workerSessionId: text("worker_session_id"),
+    pendingInputRequests: jsonb("pending_input_requests").$type<
+      readonly InputRequest[]
+    >(),
     outcome: jsonb("outcome"),
     reportStatus: text("report_status", {
       enum: [
@@ -141,6 +151,12 @@ export const scheduledAgentRuns = pgTable(
     }),
     leaseToken: uuid("lease_token"),
     leaseExpiresAt: timestamp("lease_expires_at", {
+      mode: "date",
+      precision: 3,
+      withTimezone: true,
+    }),
+    reportLeaseToken: uuid("report_lease_token"),
+    reportLeaseExpiresAt: timestamp("report_lease_expires_at", {
       mode: "date",
       precision: 3,
       withTimezone: true,
@@ -174,7 +190,7 @@ export const scheduledAgentRuns = pgTable(
   (table) => [
     check(
       "scheduled_agent_runs_status_check",
-      sql`${table.status} IN ('queued', 'running', 'completed', 'dead_letter')`
+      sql`${table.status} IN ('queued', 'running', 'waiting_for_input', 'completed', 'dead_letter')`
     ),
     check(
       "scheduled_agent_runs_report_status_check",

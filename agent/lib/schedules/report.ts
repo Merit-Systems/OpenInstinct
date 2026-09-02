@@ -15,8 +15,8 @@ export async function dispatchScheduledReport(
   runId: string
 ) {
   const claimed = await claimScheduledReport(runId);
-  const leaseToken = claimed?.run.leaseToken;
-  if (!claimed || !leaseToken || !claimed.run.outcome) return;
+  const leaseToken = claimed?.run.reportLeaseToken;
+  if (!claimed || !leaseToken) return;
   const reportAttributes = {
     conversationChannel: claimed.job.conversationChannel,
     conversationId: claimed.job.conversationId,
@@ -71,6 +71,19 @@ export async function dispatchScheduledReport(
 function scheduledReportPrompt(
   claimed: NonNullable<Awaited<ReturnType<typeof claimScheduledReport>>>
 ) {
+  if (claimed.run.pendingInputRequests) {
+    return [
+      "A background scheduled run is waiting for the user before it can continue.",
+      `Original task: ${claimed.job.prompt}`,
+      `Scheduled for: ${claimed.run.scheduledFor.toISOString()}`,
+      `Internal run ID: ${claimed.run.id}`,
+      `Pending request: ${JSON.stringify(claimed.run.pendingInputRequests)}`,
+      "First check whether the existing conversation clearly answers the request. If it does, call schedules-answer now. Otherwise ask the user clearly, keeping the internal run ID out of the user-visible message so schedules-answer can resume this run after they reply.",
+    ].join("\n\n");
+  }
+  if (!claimed.run.outcome) {
+    throw new Error("A completed scheduled run requires an outcome.");
+  }
   return [
     "A background scheduled run has completed.",
     `Original task: ${claimed.job.prompt}`,

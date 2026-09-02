@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { and, asc, desc, eq, inArray, isNull, lte, or, sql } from "drizzle-orm";
+import { inputRequestSchema, type InputRequest } from "eve/client";
 import type { AccessScope } from "@/lib/access-scope";
 import {
   computeNextRun,
@@ -34,6 +35,9 @@ function parseJob<T extends typeof scheduledAgentJobs.$inferSelect>(job: T) {
 function parseRun<T extends typeof scheduledAgentRuns.$inferSelect>(run: T) {
   return {
     ...run,
+    pendingInputRequests: run.pendingInputRequests
+      ? inputRequestSchema.array().min(1).parse(run.pendingInputRequests)
+      : null,
     outcome: run.outcome ? scheduledRunOutcomeSchema.parse(run.outcome) : null,
   };
 }
@@ -278,6 +282,189 @@ export async function setScheduledRunSession(
     );
 }
 
+export async function getClaimedScheduledAgentRun(
+  runId: string,
+  leaseToken: string
+) {
+  const claimed = await db.query.scheduledAgentRuns.findFirst({
+    where: and(
+      eq(scheduledAgentRuns.id, runId),
+      eq(scheduledAgentRuns.status, "running"),
+      eq(scheduledAgentRuns.leaseToken, leaseToken)
+    ),
+    with: { job: true },
+  });
+  if (!claimed) return undefined;
+  const { job, ...run } = claimed;
+  return { job: parseJob(job), run: parseRun(run) };
+}
+
+export async function waitForScheduledAgentRunInput(
+  runId: string,
+  leaseToken: string,
+  pendingInputRequests: readonly InputRequest[],
+  now = new Date()
+) {
+  const parsedRequests = inputRequestSchema
+    .array()
+    .min(1)
+    .parse(pendingInputRequests);
+  const [run] = await db
+    .update(scheduledAgentRuns)
+    .set({
+      pendingInputRequests: parsedRequests,
+      leaseExpiresAt: null,
+      reportSequence: sql`${scheduledAgentRuns.reportSequence} + 1`,
+      reportStatus: "pending",
+      status: "waiting_for_input",
+      updatedAt: now,
+    })
+    .where(
+      and(
+        eq(scheduledAgentRuns.id, runId),
+        eq(scheduledAgentRuns.status, "running"),
+        eq(scheduledAgentRuns.leaseToken, leaseToken)
+      )
+    )
+    .returning();
+  return run ? parseRun(run) : undefined;
+}
+
+export async function getScheduledAgentRunInput(
+  scope: AccessScope,
+  conversation: Pick<
+    CreateScheduledAgentJob,
+    "conversationChannel" | "conversationId"
+  >,
+  runId: string
+) {
+  const pending = await db.query.scheduledAgentRuns.findFirst({
+    where: and(
+      eq(scheduledAgentRuns.id, runId),
+      eq(scheduledAgentRuns.status, "waiting_for_input"),
+      eq(scheduledAgentRuns.reportStatus, "delivered")
+    ),
+    with: { job: true },
+  });
+  if (
+    !pending ||
+    pending.job.workspaceId !== scope.workspaceId ||
+    pending.job.createdByUserId !== scope.userId ||
+    pending.job.conversationChannel !== conversation.conversationChannel ||
+    pending.job.conversationId !== conversation.conversationId ||
+    !pending.leaseToken ||
+    !pending.pendingInputRequests ||
+    !pending.workerSessionId
+  ) {
+    return undefined;
+  }
+  return {
+    leaseToken: pending.leaseToken,
+    runId: pending.id,
+  };
+}
+
+export async function getScheduledAgentRunInputForReport(
+  runId: string,
+  reportLeaseToken: string
+) {
+  const pending = await db.query.scheduledAgentRuns.findFirst({
+    where: and(
+      eq(scheduledAgentRuns.id, runId),
+      eq(scheduledAgentRuns.status, "waiting_for_input"),
+      eq(scheduledAgentRuns.reportStatus, "queued"),
+      eq(scheduledAgentRuns.reportLeaseToken, reportLeaseToken)
+    ),
+  });
+  if (
+    !pending?.leaseToken ||
+    !pending.pendingInputRequests ||
+    !pending.workerSessionId
+  ) {
+    return undefined;
+  }
+  return { leaseToken: pending.leaseToken, runId: pending.id };
+}
+
+export async function claimScheduledAgentRunInput(
+  runId: string,
+  leaseToken: string,
+  now = new Date()
+) {
+  const [claimed] = await db
+    .update(scheduledAgentRuns)
+    .set({
+      leaseExpiresAt: new Date(now.getTime() + 6 * 60 * 60_000),
+      status: "running",
+      updatedAt: now,
+    })
+    .where(
+      and(
+        eq(scheduledAgentRuns.id, runId),
+        eq(scheduledAgentRuns.status, "waiting_for_input"),
+        eq(scheduledAgentRuns.leaseToken, leaseToken)
+      )
+    )
+    .returning();
+  if (!claimed?.pendingInputRequests || !claimed.workerSessionId) {
+    return undefined;
+  }
+  const claimedWithJob = await db.query.scheduledAgentRuns.findFirst({
+    where: eq(scheduledAgentRuns.id, claimed.id),
+    with: { job: true },
+  });
+  if (!claimedWithJob) return undefined;
+  const { job, ...run } = claimedWithJob;
+  return { job: parseJob(job), run: parseRun(run) };
+}
+
+export async function restoreScheduledAgentRunInput(
+  runId: string,
+  leaseToken: string,
+  errorMessage: string,
+  now = new Date()
+) {
+  await db
+    .update(scheduledAgentRuns)
+    .set({
+      lastError: errorMessage.slice(0, 2_000),
+      leaseExpiresAt: null,
+      status: "waiting_for_input",
+      updatedAt: now,
+    })
+    .where(
+      and(
+        eq(scheduledAgentRuns.id, runId),
+        eq(scheduledAgentRuns.status, "running"),
+        eq(scheduledAgentRuns.leaseToken, leaseToken)
+      )
+    );
+}
+
+export async function finishScheduledAgentRunInput(
+  runId: string,
+  leaseToken: string,
+  now = new Date()
+) {
+  await db
+    .update(scheduledAgentRuns)
+    .set({
+      pendingInputRequests: null,
+      lastError: null,
+      reportLeaseExpiresAt: null,
+      reportLeaseToken: null,
+      reportStatus: "not_ready",
+      updatedAt: now,
+    })
+    .where(
+      and(
+        eq(scheduledAgentRuns.id, runId),
+        eq(scheduledAgentRuns.status, "running"),
+        eq(scheduledAgentRuns.leaseToken, leaseToken)
+      )
+    );
+}
+
 export async function completeScheduledAgentRun(
   runId: string,
   leaseToken: string,
@@ -288,6 +475,7 @@ export async function completeScheduledAgentRun(
     .update(scheduledAgentRuns)
     .set({
       completedAt,
+      pendingInputRequests: null,
       lastError: null,
       leaseExpiresAt: null,
       leaseToken: null,
@@ -344,19 +532,19 @@ export async function releaseScheduledAgentRun(
 }
 
 export async function claimScheduledReport(runId: string, now = new Date()) {
-  const leaseToken = randomUUID();
+  const reportLeaseToken = randomUUID();
   const [claimed] = await db
     .update(scheduledAgentRuns)
     .set({
-      leaseExpiresAt: new Date(now.getTime() + 5 * 60_000),
-      leaseToken,
+      reportLeaseExpiresAt: new Date(now.getTime() + 5 * 60_000),
+      reportLeaseToken,
       reportStatus: "queued",
       updatedAt: now,
     })
     .where(
       and(
         eq(scheduledAgentRuns.id, runId),
-        eq(scheduledAgentRuns.status, "completed"),
+        inArray(scheduledAgentRuns.status, ["completed", "waiting_for_input"]),
         eq(scheduledAgentRuns.reportStatus, "pending")
       )
     )
@@ -381,12 +569,15 @@ export async function listRecoverableScheduledReports(
       .from(scheduledAgentRuns)
       .where(
         and(
-          eq(scheduledAgentRuns.status, "completed"),
+          inArray(scheduledAgentRuns.status, [
+            "completed",
+            "waiting_for_input",
+          ]),
           or(
             eq(scheduledAgentRuns.reportStatus, "pending"),
             and(
               eq(scheduledAgentRuns.reportStatus, "queued"),
-              lte(scheduledAgentRuns.leaseExpiresAt, now)
+              lte(scheduledAgentRuns.reportLeaseExpiresAt, now)
             )
           )
         )
@@ -399,8 +590,8 @@ export async function listRecoverableScheduledReports(
       await transaction
         .update(scheduledAgentRuns)
         .set({
-          leaseExpiresAt: null,
-          leaseToken: null,
+          reportLeaseExpiresAt: null,
+          reportLeaseToken: null,
           reportStatus: "pending",
           updatedAt: now,
         })
@@ -411,7 +602,7 @@ export async function listRecoverableScheduledReports(
               stale.map((run) => run.id)
             ),
             eq(scheduledAgentRuns.reportStatus, "queued"),
-            lte(scheduledAgentRuns.leaseExpiresAt, now)
+            lte(scheduledAgentRuns.reportLeaseExpiresAt, now)
           )
         );
     }
@@ -428,15 +619,15 @@ export async function releaseScheduledReport(
     .update(scheduledAgentRuns)
     .set({
       lastError: errorMessage.slice(0, 2_000),
-      leaseExpiresAt: null,
-      leaseToken: null,
+      reportLeaseExpiresAt: null,
+      reportLeaseToken: null,
       reportStatus: "pending",
       updatedAt: new Date(),
     })
     .where(
       and(
         eq(scheduledAgentRuns.id, runId),
-        eq(scheduledAgentRuns.leaseToken, leaseToken)
+        eq(scheduledAgentRuns.reportLeaseToken, leaseToken)
       )
     );
 }
@@ -446,19 +637,24 @@ export async function finalizeScheduledReport(
   leaseToken: string,
   reportStatus: "delivered" | "suppressed"
 ) {
+  const reportableRunStatus =
+    reportStatus === "suppressed"
+      ? eq(scheduledAgentRuns.status, "completed")
+      : inArray(scheduledAgentRuns.status, ["completed", "waiting_for_input"]);
   await db
     .update(scheduledAgentRuns)
     .set({
-      leaseExpiresAt: null,
-      leaseToken: null,
+      reportLeaseExpiresAt: null,
+      reportLeaseToken: null,
       reportStatus,
       updatedAt: new Date(),
     })
     .where(
       and(
         eq(scheduledAgentRuns.id, runId),
-        eq(scheduledAgentRuns.leaseToken, leaseToken),
-        eq(scheduledAgentRuns.reportStatus, "queued")
+        eq(scheduledAgentRuns.reportLeaseToken, leaseToken),
+        eq(scheduledAgentRuns.reportStatus, "queued"),
+        reportableRunStatus
       )
     );
 }

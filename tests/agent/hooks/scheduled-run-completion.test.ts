@@ -3,16 +3,19 @@ import type { HookContext } from "eve/hooks";
 import type {
   completeScheduledAgentRun,
   releaseScheduledAgentRun,
+  waitForScheduledAgentRunInput,
 } from "@/db/services/scheduled-agent-jobs";
 
 const services = vi.hoisted(() => ({
   complete: vi.fn<typeof completeScheduledAgentRun>(),
   release: vi.fn<typeof releaseScheduledAgentRun>(),
+  waitForInput: vi.fn<typeof waitForScheduledAgentRunInput>(),
 }));
 
 vi.mock("@/db/services/scheduled-agent-jobs", () => ({
   completeScheduledAgentRun: services.complete,
   releaseScheduledAgentRun: services.release,
+  waitForScheduledAgentRunInput: services.waitForInput,
 }));
 
 import completionHook from "@/agent/hooks/scheduled-run-completion";
@@ -46,6 +49,22 @@ const context = {
   },
 } satisfies HookContext;
 
+const resumedContext = {
+  ...context,
+  session: {
+    ...context.session,
+    auth: {
+      ...context.session.auth,
+      current: {
+        attributes: {},
+        authenticator: "linq",
+        principalId: "user-1",
+        principalType: "user" as const,
+      },
+    },
+  },
+} satisfies HookContext;
+
 beforeEach(() => {
   vi.clearAllMocks();
   vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(null)));
@@ -58,6 +77,7 @@ describe("scheduled run completion hook", () => {
       completedAt: new Date("2026-09-01T13:02:00.000Z"),
       createdAt: new Date("2026-09-01T13:00:00.000Z"),
       id: runId,
+      pendingInputRequests: null,
       jobId: "00000000-0000-4000-8000-000000000003",
       lastError: null,
       leaseExpiresAt: null,
@@ -69,6 +89,8 @@ describe("scheduled run completion hook", () => {
       },
       reportStatus: "pending",
       reportSequence: 1,
+      reportLeaseExpiresAt: null,
+      reportLeaseToken: null,
       retryAt: null,
       scheduledFor: new Date("2026-09-01T13:00:00.000Z"),
       startedAt: new Date("2026-09-01T13:00:00.000Z"),
@@ -111,6 +133,68 @@ describe("scheduled run completion hook", () => {
     );
   });
 
+  it("parks the worker and immediately reports a question", async () => {
+    const request = {
+      action: {
+        callId: "call-1",
+        input: { prompt: "Which airport?" },
+        kind: "tool-call" as const,
+        toolName: "ask_question",
+      },
+      allowFreeform: true,
+      kind: "question" as const,
+      prompt: "Which airport?",
+      requestId: "request-1",
+    };
+    services.waitForInput.mockResolvedValue({
+      attempts: 1,
+      completedAt: null,
+      createdAt: new Date("2026-09-01T13:00:00.000Z"),
+      id: runId,
+      pendingInputRequests: [request],
+      jobId: "00000000-0000-4000-8000-000000000003",
+      lastError: null,
+      leaseExpiresAt: null,
+      leaseToken,
+      outcome: null,
+      reportStatus: "pending",
+      reportSequence: 1,
+      reportLeaseExpiresAt: null,
+      reportLeaseToken: null,
+      retryAt: null,
+      scheduledFor: new Date("2026-09-01T13:00:00.000Z"),
+      startedAt: new Date("2026-09-01T13:00:00.000Z"),
+      status: "waiting_for_input",
+      updatedAt: new Date("2026-09-01T13:01:00.000Z"),
+      workerSessionId: "worker-session",
+    });
+    const handler = completionHook.events?.["input.requested"];
+    await handler?.(
+      {
+        data: {
+          requests: [request],
+          sequence: 0,
+          stepIndex: 0,
+          turnId: "turn-1",
+        },
+        meta: { at: "2026-09-01T13:01:00.000Z", id: "event-input" },
+        type: "input.requested",
+      },
+      context
+    );
+
+    expect(services.waitForInput).toHaveBeenCalledWith(
+      runId,
+      leaseToken,
+      [request],
+      new Date("2026-09-01T13:01:00.000Z")
+    );
+    expect(fetch).toHaveBeenCalledWith(
+      new URL("https://example.com/internal/scheduled-run/report"),
+      expect.objectContaining({ method: "POST" })
+    );
+  });
+
   it("releases a failed worker for retry", async () => {
     const handler = completionHook.events?.["turn.failed"];
     await handler?.(
@@ -132,6 +216,30 @@ describe("scheduled run completion hook", () => {
       leaseToken,
       "Model unavailable.",
       new Date("2026-09-01T13:02:00.000Z")
+    );
+  });
+
+  it("retains the scheduled identity after the user resumes the turn", async () => {
+    const handler = completionHook.events?.["turn.failed"];
+    await handler?.(
+      {
+        data: {
+          code: "model_error",
+          message: "Model unavailable after resumption.",
+          sequence: 1,
+          turnId: "turn-2",
+        },
+        meta: { at: "2026-09-01T13:03:00.000Z", id: "event-3" },
+        type: "turn.failed",
+      },
+      resumedContext
+    );
+
+    expect(services.release).toHaveBeenCalledWith(
+      runId,
+      leaseToken,
+      "Model unavailable after resumption.",
+      new Date("2026-09-01T13:03:00.000Z")
     );
   });
 });

@@ -7,23 +7,30 @@ import { z } from "zod";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type {
   createScheduledAgentJob,
+  getScheduledAgentRunInput,
+  getScheduledAgentRunInputForReport,
   listScheduledAgentJobs,
   updateScheduledAgentJob,
 } from "@/db/services/scheduled-agent-jobs";
 
 const services = vi.hoisted(() => ({
   create: vi.fn<typeof createScheduledAgentJob>(),
+  getInput: vi.fn<typeof getScheduledAgentRunInput>(),
+  getInputForReport: vi.fn<typeof getScheduledAgentRunInputForReport>(),
   list: vi.fn<typeof listScheduledAgentJobs>(),
   update: vi.fn<typeof updateScheduledAgentJob>(),
 }));
 
 vi.mock("@/db/services/scheduled-agent-jobs", () => ({
   createScheduledAgentJob: services.create,
+  getScheduledAgentRunInput: services.getInput,
+  getScheduledAgentRunInputForReport: services.getInputForReport,
   listScheduledAgentJobs: services.list,
   updateScheduledAgentJob: services.update,
 }));
 
 import { createSchedule } from "@/agent/tools/schedules/create";
+import answerSchedule from "@/agent/tools/schedules/answer";
 import { listSchedules } from "@/agent/tools/schedules/list";
 import { updateSchedule } from "@/agent/tools/schedules/update";
 import messaging from "@/agent/tools/messaging";
@@ -31,6 +38,78 @@ import messaging from "@/agent/tools/messaging";
 describe("schedule tools", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(null)));
+  });
+
+  it("lets interactive and reporting turns resume scheduled input", async () => {
+    const resolve = answerSchedule.events["turn.started"];
+    expect(resolve).toBeDefined();
+    if (!resolve) return;
+
+    expect(await resolve({}, dynamicContext("scheduled-worker"))).toBeNull();
+    expect(await resolve({}, resumedWorkerContext())).toBeNull();
+    expect(
+      await resolve({}, dynamicContext("scheduled-result"))
+    ).not.toBeNull();
+    const answer = await resolve({}, dynamicContext("linq"));
+    if (!answer || !("execute" in answer)) {
+      throw new Error("Expected the schedules-answer tool.");
+    }
+    services.getInput.mockResolvedValue({
+      leaseToken: "00000000-0000-4000-8000-000000000003",
+      runId: "00000000-0000-4000-8000-000000000002",
+    });
+    await answer.execute(
+      {
+        answer: "DCA",
+        runId: "00000000-0000-4000-8000-000000000002",
+      },
+      toolContext("schedules-answer", "linq")
+    );
+    expect(services.getInput).toHaveBeenCalledExactlyOnceWith(
+      { userId: "user-1", workspaceId: "workspace-1" },
+      {
+        conversationChannel: "linq",
+        conversationId: "linq:dm:chat-1",
+      },
+      "00000000-0000-4000-8000-000000000002"
+    );
+
+    expect(fetch).toHaveBeenCalledWith(
+      new URL("https://example.com/internal/scheduled-run/respond"),
+      expect.objectContaining({ method: "POST" })
+    );
+
+    services.getInputForReport.mockResolvedValue({
+      leaseToken: "00000000-0000-4000-8000-000000000003",
+      runId: "00000000-0000-4000-8000-000000000002",
+    });
+    const reportAnswer = await resolve({}, dynamicContext("scheduled-result"));
+    if (!reportAnswer || !("execute" in reportAnswer)) {
+      throw new Error("Expected the schedules-answer reporting tool.");
+    }
+    await reportAnswer.execute(
+      {
+        answer: "LGA",
+        runId: "00000000-0000-4000-8000-000000000002",
+      },
+      scheduledReportToolContext()
+    );
+    expect(services.getInputForReport).toHaveBeenCalledExactlyOnceWith(
+      "00000000-0000-4000-8000-000000000002",
+      "00000000-0000-4000-8000-000000000004"
+    );
+
+    await expect(
+      reportAnswer.execute(
+        {
+          answer: "LGA",
+          runId: "00000000-0000-4000-8000-000000000002",
+        },
+        toolContext("schedules-answer", "scheduled-result")
+      )
+    ).rejects.toThrow("This reporting turn cannot resume that run.");
+    expect(services.getInput).toHaveBeenCalledOnce();
   });
 
   it("creates a schedule without a multiplexed action field", async () => {
@@ -132,6 +211,7 @@ describe("schedule tools", () => {
     expect(
       await resolveMessaging({}, dynamicContext("scheduled-worker"))
     ).toBeNull();
+    expect(await resolveMessaging({}, resumedWorkerContext())).toBeNull();
     const reportMessaging = await resolveMessaging(
       {},
       dynamicContext("scheduled-result", "channel:linq")
@@ -203,6 +283,25 @@ function dynamicContext(authenticator: string, kind = "channel:scheduled-run") {
   } satisfies DynamicResolveContext;
 }
 
+function resumedWorkerContext() {
+  const context = dynamicContext("linq");
+  return {
+    ...context,
+    session: {
+      ...context.session,
+      auth: {
+        ...context.session.auth,
+        initiator: {
+          attributes: {},
+          authenticator: "scheduled-worker",
+          principalId: "user-1",
+          principalType: "user" as const,
+        },
+      },
+    },
+  } satisfies DynamicResolveContext;
+}
+
 function toolContext(
   toolName: string,
   authenticator = "test",
@@ -242,6 +341,29 @@ function toolContext(
       turn: { id: "turn-1", sequence: 0 },
     },
     toolName,
+  } satisfies ToolContext;
+}
+
+function scheduledReportToolContext() {
+  const context = toolContext("schedules-answer", "scheduled-result");
+  const current = context.session.auth.current;
+  return {
+    ...context,
+    session: {
+      ...context.session,
+      auth: {
+        ...context.session.auth,
+        current: {
+          ...current,
+          attributes: {
+            ...current.attributes,
+            scheduledReportLeaseToken: "00000000-0000-4000-8000-000000000004",
+            scheduledReportSequence: "1",
+            scheduledRunId: "00000000-0000-4000-8000-000000000002",
+          },
+        },
+      },
+    },
   } satisfies ToolContext;
 }
 
