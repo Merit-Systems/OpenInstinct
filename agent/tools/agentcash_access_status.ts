@@ -5,6 +5,7 @@ import {
   agentcashPrincipalId,
   agentcashWalletConfigured,
 } from "../lib/agentcash-access";
+import { isAgentcashSolanaPrivateKey } from "../lib/agentcash-wallet";
 import { env } from "@/lib/env";
 
 export default defineTool({
@@ -18,7 +19,7 @@ export default defineTool({
       principalId: agentcashPrincipalId(ctx.session),
       supportedWallets: {
         evm: Boolean(env.X402_PRIVATE_KEY),
-        solana: Boolean(env.X402_SOLANA_PRIVATE_KEY),
+        solana: isAgentcashSolanaPrivateKey(env.X402_SOLANA_PRIVATE_KEY),
       },
       walletConfigured: agentcashWalletConfigured(),
       requiredConfiguration: {

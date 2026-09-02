@@ -1,6 +1,7 @@
 import type { SessionContext } from "eve/context";
 import type { ApprovalContext, ApprovalStatus } from "eve/tools/approval";
 import { env } from "@/lib/env";
+import { isAgentcashSolanaPrivateKey } from "./agentcash-wallet";
 
 type Session = Pick<SessionContext["session"], "auth">;
 
@@ -12,7 +13,10 @@ export function agentcashPrincipalId(session: Session) {
 }
 
 export function agentcashWalletConfigured() {
-  return Boolean(env.X402_PRIVATE_KEY ?? env.X402_SOLANA_PRIVATE_KEY);
+  return Boolean(
+    env.X402_PRIVATE_KEY ??
+    isAgentcashSolanaPrivateKey(env.X402_SOLANA_PRIVATE_KEY)
+  );
 }
 
 export function agentcashPrincipalAllowed(session: Session) {

@@ -14,6 +14,7 @@ import {
   agentcashCliSource,
   agentcashCliVersion,
 } from "./agentcash-cli-source.generated";
+import { isAgentcashSolanaPrivateKey } from "./agentcash-wallet";
 
 function materializeAgentcashCli() {
   const directory = join(tmpdir(), "openinstinct-agentcash-runtime");
@@ -59,6 +60,11 @@ function materializeAgentcashCli() {
 export const agentcashCliPath = materializeAgentcashCli();
 
 export function agentcashChildEnvironment(): Record<string, string> {
+  const solanaPrivateKey = isAgentcashSolanaPrivateKey(
+    env.X402_SOLANA_PRIVATE_KEY
+  )
+    ? env.X402_SOLANA_PRIVATE_KEY
+    : undefined;
   return Object.fromEntries(
     Object.entries({
       CI: "1",
@@ -66,7 +72,7 @@ export function agentcashChildEnvironment(): Record<string, string> {
       NODE_ENV: env.NODE_ENV,
       TMPDIR: tmpdir(),
       X402_PRIVATE_KEY: env.X402_PRIVATE_KEY,
-      X402_SOLANA_PRIVATE_KEY: env.X402_SOLANA_PRIVATE_KEY,
+      X402_SOLANA_PRIVATE_KEY: solanaPrivateKey,
     }).filter((entry): entry is [string, string] => entry[1] !== undefined)
   );
 }
