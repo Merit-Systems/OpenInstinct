@@ -31,14 +31,6 @@ function resolvePersonalInfoAccessScope(
   return caller ? scopeFromPrincipal(caller) : null;
 }
 
-export function resolvePersonalInfoMemoryScope(context: MemoryScopeContext) {
-  const scope = resolvePersonalInfoAccessScope(context)?.workspaceId ?? null;
-  return resolveModeValue(context, {
-    interactive: scope,
-    "scheduled-worker": scope,
-  });
-}
-
 async function recallUserProfile(context: MemoryOperationContext) {
   const scope = resolvePersonalInfoAccessScope(context);
   if (!scope) return null;
@@ -61,35 +53,41 @@ async function recallUserProfile(context: MemoryOperationContext) {
   };
 }
 
-const personalInfoMemoryProvider = defineMemoryProvider({
-  recall: {
-    "compaction.completed": recallUserProfile,
-    "turn.started": recallUserProfile,
-  },
-  async tools(context) {
-    const current = context.session.auth.current;
-    const canUpdate =
-      current?.principalType === "user" &&
-      resolveModeValue(context, { interactive: true }) === true;
-    if (!canUpdate) return null;
-
-    const scope = scopeFromPrincipal(current);
-    return {
-      update: defineTool({
-        description:
-          "Update model-readable Personal Info after the user explicitly states or corrects reusable form information. Pass null to remove a field. Never store credentials, payment details, tokens, or one-time codes.",
-        inputSchema: userProfilePatchSchema,
-        outputSchema: userProfileSchema,
-        execute: (input) => patchUserProfile(scope, input),
-      }),
-    };
-  },
-});
-
 export default defineMemory({
   description:
     "Provide the current user's structured, model-readable Personal Info profile.",
   namespace: "openinstinct-personal-info-v1",
-  provider: personalInfoMemoryProvider,
-  scope: resolvePersonalInfoMemoryScope,
+  provider: defineMemoryProvider({
+    recall: {
+      "compaction.completed": recallUserProfile,
+      "turn.started": recallUserProfile,
+    },
+    async tools(context) {
+      const current = context.session.auth.current;
+      if (
+        current?.principalType !== "user" ||
+        resolveModeValue(context, { interactive: true }) !== true
+      ) {
+        return null;
+      }
+
+      const scope = scopeFromPrincipal(current);
+      return {
+        update: defineTool({
+          description:
+            "Update model-readable Personal Info after the user explicitly states or corrects reusable form information. Pass null to remove a field. Never store credentials, payment details, tokens, or one-time codes.",
+          inputSchema: userProfilePatchSchema,
+          outputSchema: userProfileSchema,
+          execute: (input) => patchUserProfile(scope, input),
+        }),
+      };
+    },
+  }),
+  scope(context) {
+    const scope = resolvePersonalInfoAccessScope(context)?.workspaceId ?? null;
+    return resolveModeValue(context, {
+      interactive: scope,
+      "scheduled-worker": scope,
+    });
+  },
 });

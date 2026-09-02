@@ -1,8 +1,6 @@
 import type { MemoryScopeContext, MemoryToolsContext } from "eve/memory";
 import { describe, expect, it } from "vitest";
-import personalInfoMemory, {
-  resolvePersonalInfoMemoryScope,
-} from "@/agent/memory/personal_info";
+import personalInfoMemory from "@/agent/memory/personal_info";
 import {
   resolveProfileMemoryBackend,
   resolveProfileMemoryScope,
@@ -81,7 +79,7 @@ describe("profile memory", () => {
 
   it("shares personal information with a worker acting for the user", () => {
     expect(
-      resolvePersonalInfoMemoryScope(
+      personalInfoMemory.scope(
         memoryContext(
           {
             attributes: {},
@@ -101,7 +99,7 @@ describe("profile memory", () => {
     );
 
     expect(resolveProfileMemoryScope(context)).toBeNull();
-    expect(resolvePersonalInfoMemoryScope(context)).toBeNull();
+    expect(personalInfoMemory.scope(context)).toBeNull();
   });
 
   it("offers profile updates only during interactive turns", async () => {
