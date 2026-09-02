@@ -16,11 +16,6 @@ interface ScheduledRunRequestBodies {
     leaseToken: string;
     runId: string;
   };
-  "/internal/scheduled-run/start": {
-    leaseToken: string;
-    restart: boolean;
-    runId: string;
-  };
 }
 
 export async function postScheduledRunRoute<

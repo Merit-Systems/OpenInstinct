@@ -7,13 +7,10 @@ import { dispatchScheduledReport } from "@/agent/lib/schedules/report";
 import {
   claimScheduledAgentRunInput,
   finishScheduledAgentRunInput,
-  getClaimedScheduledAgentRun,
   restoreScheduledAgentRunInput,
-  setScheduledRunSession,
 } from "@/db/services/scheduled-agent-jobs";
 
-const startSchema = z.strictObject({
-  leaseToken: z.uuid(),
+const scheduledRunTargetSchema = z.strictObject({
   restart: z.boolean().optional(),
   runId: z.uuid(),
 });
@@ -26,30 +23,21 @@ const respondSchema = z.strictObject({
 const internalRouteAuth = [vercelOidc(), localDev()];
 
 export default defineChannel({
-  routes: [
-    POST("/internal/scheduled-run/start", async (request, { from }) => {
-      const auth = await routeAuth(request, internalRouteAuth);
-      if (auth instanceof Response) return auth;
-      const input = startSchema.parse(await request.json());
-      const claimed = await getClaimedScheduledAgentRun(
-        input.runId,
-        input.leaseToken
-      );
-      if (!claimed) return new Response(null, { status: 409 });
-      const source = from(`scheduled-run:${input.runId}`);
-      if (input.restart) {
-        await source.reset({
-          reason: "Scheduled worker exceeded its runtime.",
-        });
-      }
-      const session = await source.send(scheduledRunPrompt(claimed), {
-        auth: scheduledWorkerAuth(claimed),
-        outputSchema: scheduledRunOutcomeJsonSchema,
-        title: `Scheduled run ${input.runId}`,
+  async receive(input, { from }) {
+    const target = scheduledRunTargetSchema.parse(input.target);
+    const source = from(`scheduled-run:${target.runId}`);
+    if (target.restart) {
+      await source.reset({
+        reason: "Scheduled worker exceeded its runtime.",
       });
-      await setScheduledRunSession(input.runId, input.leaseToken, session.id);
-      return Response.json({ sessionId: session.id });
-    }),
+    }
+    return source.send(input.message, {
+      auth: input.auth,
+      outputSchema: scheduledRunOutcomeJsonSchema,
+      title: `Scheduled run ${target.runId}`,
+    });
+  },
+  routes: [
     POST(
       "/internal/scheduled-run/report",
       async (request, { attachSession, to, waitUntil }) => {
@@ -131,35 +119,3 @@ export default defineChannel({
     ),
   ],
 });
-
-function scheduledRunPrompt(
-  claim: NonNullable<Awaited<ReturnType<typeof getClaimedScheduledAgentRun>>>
-) {
-  return [
-    "Complete this user-owned scheduled task in an isolated background session.",
-    `Scheduled for: ${claim.run.scheduledFor.toISOString()}`,
-    `Task: ${claim.job.prompt}`,
-    "Return exactly one structured final outcome.",
-  ].join("\n\n");
-}
-
-function scheduledWorkerAuth(
-  claim: NonNullable<Awaited<ReturnType<typeof getClaimedScheduledAgentRun>>>
-) {
-  const leaseToken = claim.run.leaseToken;
-  if (!leaseToken) throw new Error("A scheduled run claim requires a lease.");
-  return {
-    attributes: {
-      conversationChannel: claim.job.conversationChannel,
-      conversationId: claim.job.conversationId,
-      scheduleId: claim.job.id,
-      scheduledRunLeaseToken: leaseToken,
-      scheduledRunId: claim.run.id,
-      workspaceId: claim.job.workspaceId,
-    },
-    authenticator: "scheduled-worker",
-    issuer: "open-instinct",
-    principalId: claim.job.createdByUserId,
-    principalType: "user" as const,
-  };
-}

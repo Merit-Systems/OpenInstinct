@@ -2,18 +2,21 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { HookContext } from "eve/hooks";
 import type {
   completeScheduledAgentRun,
+  markScheduledAgentRunStarted,
   releaseScheduledAgentRun,
   waitForScheduledAgentRunInput,
 } from "@/db/services/scheduled-agent-jobs";
 
 const services = vi.hoisted(() => ({
   complete: vi.fn<typeof completeScheduledAgentRun>(),
+  markStarted: vi.fn<typeof markScheduledAgentRunStarted>(),
   release: vi.fn<typeof releaseScheduledAgentRun>(),
   waitForInput: vi.fn<typeof waitForScheduledAgentRunInput>(),
 }));
 
 vi.mock("@/db/services/scheduled-agent-jobs", () => ({
   completeScheduledAgentRun: services.complete,
+  markScheduledAgentRunStarted: services.markStarted,
   releaseScheduledAgentRun: services.release,
   waitForScheduledAgentRunInput: services.waitForInput,
 }));
@@ -22,6 +25,7 @@ import completionHook from "@/agent/hooks/scheduled-run-completion";
 
 const runId = "00000000-0000-4000-8000-000000000001";
 const leaseToken = "00000000-0000-4000-8000-000000000002";
+const retryLeaseToken = "00000000-0000-4000-8000-000000000005";
 const context = {
   agent: { name: "test-agent" },
   channel: { continuationToken: `scheduled-run:${runId}` },
@@ -65,12 +69,76 @@ const resumedContext = {
   },
 } satisfies HookContext;
 
+const retriedContext = {
+  ...context,
+  session: {
+    ...context.session,
+    auth: {
+      ...context.session.auth,
+      current: {
+        attributes: {
+          scheduledRunId: runId,
+          scheduledRunLeaseToken: retryLeaseToken,
+        },
+        authenticator: "scheduled-worker",
+        principalId: "user-1",
+        principalType: "user" as const,
+      },
+    },
+  },
+} satisfies HookContext;
+
 beforeEach(() => {
   vi.clearAllMocks();
+  services.markStarted.mockResolvedValue(true);
+  services.release.mockResolvedValue("queued");
   vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(null)));
 });
 
 describe("scheduled run completion hook", () => {
+  it("starts the runtime lease only when the worker turn begins", async () => {
+    const handler = completionHook.events?.["turn.started"];
+    await handler?.(
+      {
+        data: {
+          sequence: 0,
+          turnId: "turn-1",
+        },
+        meta: { at: "2026-09-01T13:00:05.000Z", id: "event-start" },
+        type: "turn.started",
+      },
+      context
+    );
+
+    expect(services.markStarted).toHaveBeenCalledExactlyOnceWith(
+      runId,
+      leaseToken,
+      "worker-session",
+      21_600_000,
+      new Date("2026-09-01T13:00:05.000Z")
+    );
+  });
+
+  it("uses a retry turn's current lease over the original session lease", async () => {
+    const handler = completionHook.events?.["turn.started"];
+    await handler?.(
+      {
+        data: { sequence: 1, turnId: "turn-2" },
+        meta: { at: "2026-09-01T13:05:05.000Z", id: "event-retry" },
+        type: "turn.started",
+      },
+      retriedContext
+    );
+
+    expect(services.markStarted).toHaveBeenCalledExactlyOnceWith(
+      runId,
+      retryLeaseToken,
+      "worker-session",
+      21_600_000,
+      new Date("2026-09-01T13:05:05.000Z")
+    );
+  });
+
   it("persists the outcome and immediately wakes report delivery", async () => {
     services.complete.mockResolvedValue({
       attempts: 1,
