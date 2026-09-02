@@ -161,7 +161,7 @@ interface LinqTestMessage {
     readonly filename: string;
     readonly mimeType: string;
   }[];
-  readonly markdown: string;
+  readonly text: string;
 }
 
 describe("Linq message delivery", () => {
@@ -175,7 +175,7 @@ describe("Linq message delivery", () => {
     );
   });
 
-  it("posts send_message output as native iMessage Markdown", async () => {
+  it("posts send_message output as raw iMessage text", async () => {
     const message = [
       "Still blocked. No order was submitted.",
       "The order remains unchanged:",
@@ -185,19 +185,19 @@ describe("Linq message delivery", () => {
     const { context, post } = handlerContext();
 
     await handleActionResult(
-      sendMessageResult({ kind: "message", markdown: message }),
+      sendMessageResult({ kind: "message", text: message }),
       context,
       sessionContext()
     );
 
-    expect(post).toHaveBeenCalledExactlyOnceWith({ markdown: message });
+    expect(post).toHaveBeenCalledExactlyOnceWith({ raw: message });
   });
 
   it("finalizes a scheduled result after send_message posts it", async () => {
     const { context } = handlerContext();
 
     await handleActionResult(
-      sendMessageResult({ kind: "message", markdown: "The price fell." }),
+      sendMessageResult({ kind: "message", text: "The price fell." }),
       context,
       sessionContext("scheduled-result")
     );
@@ -209,7 +209,7 @@ describe("Linq message delivery", () => {
     );
     expect(linqChannelCapture.postMessage).toHaveBeenCalledExactlyOnceWith(
       "linq:dm:chat-1",
-      { markdown: "The price fell." },
+      { raw: "The price fell." },
       {
         idempotencyKey:
           "scheduled-report:00000000-0000-4000-8000-000000000002:1",
@@ -221,7 +221,7 @@ describe("Linq message delivery", () => {
     const { context } = handlerContext();
     const event = sendMessageResult({
       kind: "message",
-      markdown: "The price fell.",
+      text: "The price fell.",
     });
 
     await handleActionResult(
@@ -291,7 +291,7 @@ describe("Linq message delivery", () => {
     expect(
       sendMessageOutputSchema.safeParse({
         kind: "link",
-        markdown: "Read this",
+        text: "Read this",
         url: "https://example.com/article",
       }).success
     ).toBe(false);
@@ -302,7 +302,7 @@ describe("Linq message delivery", () => {
       sendMessageOutputSchema.safeParse({
         attachments: [{ kind: "image", url: "https://example.com/image.png" }],
         kind: "message",
-        markdown: "A caption",
+        text: "A caption",
       }).success
     ).toBe(true);
     expect(sendMessageOutputSchema.safeParse({ kind: "message" }).success).toBe(
@@ -311,7 +311,7 @@ describe("Linq message delivery", () => {
     expect(
       sendMessageOutputSchema.safeParse({
         kind: "message",
-        markdown: "Read this",
+        text: "Read this",
         url: "https://example.com/article",
       }).success
     ).toBe(false);
@@ -352,14 +352,14 @@ describe("Linq message delivery", () => {
     await handleActionResult(
       sendMessageResult({
         kind: "message",
-        markdown: "Your weekly summary is ready.",
+        text: "Your weekly summary is ready.",
       }),
       context,
       sessionContext()
     );
 
     expect(post).toHaveBeenCalledExactlyOnceWith({
-      markdown: "Your weekly summary is ready.",
+      raw: "Your weekly summary is ready.",
     });
   });
 
@@ -383,7 +383,7 @@ describe("Linq message delivery", () => {
 
     expect(post).toHaveBeenCalledExactlyOnceWith({
       attachments: [{ mimeType, name, type: kind, url }],
-      markdown: "",
+      raw: "",
     });
   });
 
@@ -400,7 +400,7 @@ describe("Linq message delivery", () => {
     await handleActionResult(
       sendMessageResult({
         kind: "message",
-        markdown: `Here it is.\n\n![Product](/artifacts/${artifactId})`,
+        text: `Here it is.\n\n![Product](/artifacts/${artifactId})`,
       }),
       context,
       sessionContext()
@@ -422,7 +422,7 @@ describe("Linq message delivery", () => {
           mimeType: "image/png",
         },
       ],
-      markdown: "Here it is.",
+      raw: "Here it is.",
     });
   });
 
@@ -439,7 +439,7 @@ describe("Linq message delivery", () => {
     await handleActionResult(
       sendMessageResult({
         kind: "message",
-        markdown: `Price changed.\n\n![Product](/artifacts/${artifactId})`,
+        text: `Price changed.\n\n![Product](/artifacts/${artifactId})`,
       }),
       context,
       sessionContext("scheduled-result")
@@ -457,7 +457,7 @@ describe("Linq message delivery", () => {
       "linq:dm:chat-1",
       expect.objectContaining({
         files: [expect.objectContaining({ filename: "scheduled-product.png" })],
-        markdown: "Price changed.",
+        raw: "Price changed.",
       }),
       expect.objectContaining({
         idempotencyKey:
@@ -484,7 +484,7 @@ describe("Linq message delivery", () => {
     await handleActionResult(
       sendMessageResult({
         kind: "message",
-        markdown: [
+        text: [
           "Two good options.",
           `![First](/artifacts/${firstArtifactId})`,
           `![Second](/artifacts/${secondArtifactId})`,
@@ -507,7 +507,7 @@ describe("Linq message delivery", () => {
           mimeType: "image/png",
         },
       ],
-      markdown: "Two good options.",
+      raw: "Two good options.",
     });
   });
 
@@ -524,7 +524,7 @@ describe("Linq message delivery", () => {
     await handleActionResult(
       sendMessageResult({
         kind: "message",
-        markdown: `First thought.\n\nSecond thought.\n\n![Product](/artifacts/${artifactId})`,
+        text: `First thought.\n\nSecond thought.\n\n![Product](/artifacts/${artifactId})`,
       }),
       context,
       sessionContext()
@@ -538,7 +538,7 @@ describe("Linq message delivery", () => {
           mimeType: "image/png",
         },
       ],
-      markdown: "First thought.\n\nSecond thought.",
+      raw: "First thought.\n\nSecond thought.",
     });
   });
 
