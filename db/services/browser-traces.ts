@@ -8,11 +8,10 @@ import {
   db,
 } from "@/db";
 
-type CompletedBrowserTraceStatus =
-  | "success"
-  | "failure"
-  | "error"
-  | "cancelled";
+type CompletedBrowserTraceStatus = Exclude<
+  typeof browserTraces.$inferSelect.status,
+  "running"
+>;
 
 const traceHistoryPageSize = 25;
 

@@ -47,7 +47,7 @@ export const workspaceMemberships = pgTable(
   {
     workspaceId: text("workspace_id").notNull(),
     userId: text("user_id").notNull(),
-    role: text("role").notNull(),
+    role: text("role", { enum: ["owner"] }).notNull(),
     createdAt: text("created_at").notNull(),
   },
   (table) => [
@@ -68,7 +68,7 @@ export const settings = pgTable(
   "settings",
   {
     workspaceId: text("workspace_id").notNull(),
-    key: text("key").notNull(),
+    key: text("key", { enum: ["gateway_model"] }).notNull(),
     value: text("value").notNull(),
   },
   (table) => [

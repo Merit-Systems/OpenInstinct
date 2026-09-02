@@ -9,6 +9,7 @@ import {
   text,
   uniqueIndex,
 } from "drizzle-orm/pg-core";
+import { browserImageSourceKinds } from "@/lib/browser-artifact";
 import { workspaceMemberships } from "./workspaces";
 
 export const browserSessions = pgTable(
@@ -47,7 +48,9 @@ export const browserTraces = pgTable(
     workspaceId: text("workspace_id").notNull(),
     createdByUserId: text("created_by_user_id").notNull(),
     task: text("task").notNull(),
-    status: text("status").notNull(),
+    status: text("status", {
+      enum: ["running", "success", "failure", "error", "cancelled"],
+    }).notNull(),
     resultMessage: text("result_message"),
     startedAt: text("started_at").notNull(),
     completedAt: text("completed_at"),
@@ -127,14 +130,16 @@ export const browserImageArtifacts = pgTable(
     rootSessionId: text("root_session_id").notNull(),
     workerSessionId: text("worker_session_id").notNull(),
     browserSessionId: text("browser_session_id").notNull(),
-    status: text("status").notNull(),
+    status: text("status", { enum: ["pending", "ready"] }).notNull(),
     label: text("label").notNull(),
     filename: text("filename"),
     mediaType: text("media_type"),
     byteSize: integer("byte_size"),
     contentHash: text("content_hash"),
     storagePathname: text("storage_pathname").notNull(),
-    sourceKind: text("source_kind").notNull(),
+    sourceKind: text("source_kind", {
+      enum: browserImageSourceKinds,
+    }).notNull(),
     idempotencyKey: text("idempotency_key").notNull(),
     createdAt: text("created_at").notNull(),
   },

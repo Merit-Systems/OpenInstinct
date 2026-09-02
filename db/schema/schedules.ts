@@ -22,8 +22,16 @@ export const scheduledAgentJobs = pgTable(
     prompt: text("prompt").notNull(),
     linqThreadId: text("linq_thread_id").notNull(),
     timing: jsonb("timing").notNull(),
-    missedRunPolicy: text("missed_run_policy").notNull().default("run_latest"),
-    status: text("status").notNull().default("active"),
+    missedRunPolicy: text("missed_run_policy", {
+      enum: ["skip", "run_latest", "catch_up"],
+    })
+      .notNull()
+      .default("run_latest"),
+    status: text("status", {
+      enum: ["active", "paused", "completed", "deleted"],
+    })
+      .notNull()
+      .default("active"),
     nextRunAt: timestamp("next_run_at", {
       mode: "date",
       precision: 3,
@@ -96,10 +104,25 @@ export const scheduledAgentRuns = pgTable(
       precision: 3,
       withTimezone: true,
     }).notNull(),
-    status: text("status").notNull().default("queued"),
+    status: text("status", {
+      enum: ["queued", "running", "completed", "dead_letter"],
+    })
+      .notNull()
+      .default("queued"),
     workerSessionId: text("worker_session_id"),
     outcome: jsonb("outcome"),
-    reportStatus: text("report_status").notNull().default("not_ready"),
+    reportStatus: text("report_status", {
+      enum: [
+        "not_ready",
+        "not_needed",
+        "pending",
+        "queued",
+        "delivered",
+        "suppressed",
+      ],
+    })
+      .notNull()
+      .default("not_ready"),
     attempts: integer("attempts").notNull().default(0),
     retryAt: timestamp("retry_at", {
       mode: "date",
