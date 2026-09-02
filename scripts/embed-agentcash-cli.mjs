@@ -20,6 +20,9 @@ if (metadata.name !== "agentcash" || typeof metadata.version !== "string") {
   throw new Error("The installed Agentcash package has an unexpected shape.");
 }
 const result = await build({
+  banner: {
+    js: 'import { createRequire as __openinstinctCreateRequire } from "node:module";\nconst require = __openinstinctCreateRequire(import.meta.url);',
+  },
   bundle: true,
   entryPoints: [resolve(packageRoot, "dist", "esm", "index.js")],
   format: "esm",
