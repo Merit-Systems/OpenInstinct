@@ -4,6 +4,7 @@ import {
   ImageIcon,
   MailIcon,
   MessageSquareIcon,
+  StoreIcon,
 } from "lucide-react";
 import Link from "next/link";
 import type { ReactNode } from "react";
@@ -20,14 +21,19 @@ import { getGatewayModel } from "@/db/services/settings";
 import { env } from "@/env";
 import { googleWorkspaceTokenParams } from "@/lib/google-workspace";
 import { requireRequestScope } from "@/lib/request-scope";
+import { squareTokenParams } from "@/lib/square";
 import { GoogleWorkspaceAction } from "./_components/google-workspace-action";
 import { ModelSelector } from "./_components/model-selector";
+import { SquareAction } from "./_components/square-action";
 
 export default async function Page({ searchParams }: PageProps<"/">) {
-  const google = (await searchParams).google;
+  const params = await searchParams;
+  const google = params.google;
+  const square = params.square;
   const scope = await requireRequestScope();
-  const [googleWorkspace, gatewayModel] = await Promise.all([
+  const [googleWorkspace, squareConnection, gatewayModel] = await Promise.all([
     readGoogleWorkspaceConnection(scope.userId),
+    readSquareConnection(scope.userId),
     getGatewayModel(scope),
   ]);
   const browserReady = true;
@@ -49,12 +55,22 @@ export default async function Page({ searchParams }: PageProps<"/">) {
         </Alert>
       ) : null}
 
+      {square === "unavailable" ? (
+        <Alert>
+          <StoreIcon />
+          <AlertTitle>Square unavailable</AlertTitle>
+          <AlertDescription>
+            This deployment does not have a working Square OAuth connector yet.
+          </AlertDescription>
+        </Alert>
+      ) : null}
+
       <ChannelsSection
         browserReady={browserReady}
         linqConfigured={env.LINQ_CONNECTOR !== undefined}
         linqPhoneNumber={env.LINQ_PHONE_NUMBER}
       />
-      <GoogleWorkspaceSection connection={googleWorkspace} />
+      <ConnectionsSection google={googleWorkspace} square={squareConnection} />
 
       <WorkspaceSection headingId="connectors-heading" title="Infrastructure">
         <div className="divide-y divide-border/50 border-y border-border/50">
@@ -90,27 +106,43 @@ export default async function Page({ searchParams }: PageProps<"/">) {
   );
 }
 
-function GoogleWorkspaceSection({
-  connection,
+function ConnectionsSection({
+  google,
+  square,
 }: {
-  readonly connection?: GoogleWorkspaceConnection;
+  readonly google?: GoogleWorkspaceConnection;
+  readonly square?: SquareConnection;
 }) {
-  const state = connection?.state;
-  const description =
-    state === "connected"
-      ? (connection?.accountLabel ?? "Gmail, Calendar, and Contacts connected.")
-      : state === "unavailable"
+  const googleState = google?.state;
+  const googleDescription =
+    googleState === "connected"
+      ? (google?.accountLabel ?? "Gmail, Calendar, and Contacts connected.")
+      : googleState === "unavailable"
         ? "Attach a Vercel Connect Google OAuth connector to enable this."
         : "Gmail, Calendar, and Contacts through your Google account.";
+
+  const squareState = square?.state;
+  const squareDescription =
+    squareState === "connected"
+      ? "Square account connected."
+      : squareState === "unavailable"
+        ? "Attach a Vercel Connect Square OAuth connector to enable this."
+        : "Locations, items, customers, and orders from your Square account.";
 
   return (
     <WorkspaceSection headingId="connections-heading" title="Connections">
       <div className="divide-y divide-border/50 border-y border-border/50">
         <ConnectorRow
-          action={<GoogleWorkspaceAction state={state} />}
-          description={description}
+          action={<GoogleWorkspaceAction state={googleState} />}
+          description={googleDescription}
           icon={<MailIcon />}
           label="Google Workspace"
+        />
+        <ConnectorRow
+          action={<SquareAction state={squareState} />}
+          description={squareDescription}
+          icon={<StoreIcon />}
+          label="Square"
         />
       </div>
     </WorkspaceSection>
@@ -147,6 +179,34 @@ async function readGoogleWorkspaceConnection(
       return { accountLabel: null, state: "disconnected" };
     }
     return { accountLabel: null, state: "unavailable" };
+  }
+}
+
+interface SquareConnection {
+  readonly state: "connected" | "disconnected" | "unavailable";
+}
+
+async function readSquareConnection(userId: string): Promise<SquareConnection> {
+  if (!env.SQUARE_CONNECTOR_UID) {
+    return { state: "unavailable" };
+  }
+  try {
+    await getTokenResponse(
+      env.SQUARE_CONNECTOR_UID,
+      squareTokenParams(userId),
+      {
+        forceRefresh: true,
+      }
+    );
+    return { state: "connected" };
+  } catch (error) {
+    if (
+      error instanceof UserAuthorizationRequiredError ||
+      error instanceof NoValidTokenError
+    ) {
+      return { state: "disconnected" };
+    }
+    return { state: "unavailable" };
   }
 }
 

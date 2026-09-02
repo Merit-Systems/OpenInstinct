@@ -226,6 +226,8 @@ arguments. These commands are operator actions:
 | `BLOB_READ_WRITE_TOKEN`                | Non-Vercel fallback | Private Blob store     | Do not set when the Vercel attachment path is used       |
 | `LINQ_CONNECTOR` + `LINQ_PHONE_NUMBER` | Optional pair       | Linq setup             | Both or neither; production-only by default              |
 | `GOOGLE_CONNECTOR_UID`                 | Optional            | Google Connect setup   | User-scoped grant path                                   |
+| `SQUARE_CONNECTOR_UID`                 | Optional            | Square Connect setup   | User-scoped grant path                                   |
+| `SQUARE_ENVIRONMENT`                   | Optional            | Operator               | `sandbox` or `production`; default `sandbox`             |
 
 Generate new application secrets directly into the Vercel prompt rather than
 copying them through chat or a ticket:
@@ -366,6 +368,46 @@ grant is keyed to the authenticated OpenInstinct user today. It is not an
 installation-to-tenant mapping. For future multi-tenant support, persist and
 audit that mapping only after deciding whether a Google grant is personal or
 shared and how active-tenant authorization works.
+
+## Square connector
+
+Square is optional and Vercel Connect-backed, one grant per user. In the
+Square Developer Dashboard, open the sandbox (or production) application and
+add `https://connect.vercel.com/callback` as an OAuth redirect URL. Copy the
+application id and secret into a temporary credentials file outside the
+repository.
+
+Square's discovery document describes "Sign in with Square" login, not the
+merchant API OAuth endpoints, so Vercel Connect cannot detect them
+automatically. Create the connector by URL and, if the CLI does not pick up
+the endpoints, enter them by hand in the dashboard: authorization
+`https://connect.squareupsandbox.com/oauth2/authorize`, token
+`https://connect.squareupsandbox.com/oauth2/token`, grant types
+`authorization_code` and `refresh_token`, and scopes
+`MERCHANT_PROFILE_READ ITEMS_READ CUSTOMERS_READ ORDERS_READ PAYMENTS_READ INVOICES_READ INVENTORY_READ APPOINTMENTS_READ`.
+Production uses `connect.squareup.com` in place of
+`connect.squareupsandbox.com` throughout.
+
+```bash
+# OPERATOR ACTION: create the Custom OAuth connector from an approved temporary file.
+pnpm exec vercel connect create connect.squareupsandbox.com \
+  --name square-sandbox --data @<temporary-credentials-file>
+
+# OPERATOR ACTION: attach the connector to the intended Vercel environment.
+pnpm exec vercel connect attach <square-connector-uid> --project <vercel-project-name-or-id> \
+  --environment production --yes
+
+# OPERATOR ACTION: enter the connector identifier and environment at the
+# prompts, then redeploy.
+pnpm exec vercel env add SQUARE_CONNECTOR_UID production
+pnpm exec vercel env add SQUARE_ENVIRONMENT production
+pnpm exec eve deploy --non-interactive --yes --project <vercel-project-name-or-id>
+```
+
+Square sandbox OAuth requires the sandbox seller test account to be opened
+from the Developer Dashboard in the same browser before a user clicks
+Connect; otherwise the authorize step fails. Delete the temporary credentials
+file after the connector accepts it.
 
 ## Migration and deployment
 

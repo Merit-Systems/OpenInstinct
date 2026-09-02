@@ -1,5 +1,6 @@
 import { gateway } from "ai";
 import { revokeToken, startAuthorization } from "@vercel/connect";
+import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { and, desc, eq, gte, lt, or, sql } from "drizzle-orm";
 import { adminTransitionWorkspaceLifecycle } from "@/db/services/workspace-lifecycle";
@@ -54,6 +55,7 @@ import {
 } from "@/db/services/webhooks";
 import { isWorkspaceScopeEnforcementEnabled } from "@/env";
 import { googleWorkspaceScopes } from "@/lib/google-workspace";
+import { squareScopes, squareSubject, squareTokenParams } from "@/lib/square";
 import { userProfileSchema } from "@/lib/user-profile";
 import { vaultCreateItemSchema, vaultImportItemsSchema } from "@/lib/vault";
 import { adminProcedure, createTRPCRouter, protectedProcedure } from "./init";
@@ -482,6 +484,50 @@ export const appRouter = createTRPCRouter({
         };
       }),
   },
+  square: {
+    update: protectedProcedure
+      .input(z.enum(["connect", "disconnect"]))
+      .mutation(async ({ ctx, input }) => {
+        if (!env.SQUARE_CONNECTOR_UID) {
+          throw new TRPCError({ code: "PRECONDITION_FAILED" });
+        }
+        const connectorId = env.SQUARE_CONNECTOR_UID;
+
+        if (input === "disconnect") {
+          await revokeToken(connectorId, {
+            subject: squareSubject(ctx.scope.userId),
+          });
+          if (isWorkspaceScopeEnforcementEnabled()) {
+            try {
+              await revokeConnectionInstallation(
+                ctx.scope,
+                squareInstallation(ctx.scope, connectorId)
+              );
+            } catch {
+              console.warn(
+                "[square] connection installation revocation failed"
+              );
+            }
+          }
+          return { redirectTo: "/?square=disconnected" };
+        }
+
+        const callbackUrl = new URL("/", ctx.origin);
+        callbackUrl.searchParams.set("square", "connected");
+        if (isWorkspaceScopeEnforcementEnabled()) {
+          await deleteRevokedConnectionInstallation(
+            ctx.scope,
+            squareInstallation(ctx.scope, connectorId)
+          );
+        }
+        const authorization = await startAuthorization(
+          connectorId,
+          squareTokenParams(ctx.scope.userId),
+          { callbackUrl: callbackUrl.toString(), expiresInMs: 10 * 60_000 }
+        );
+        return { redirectTo: authorization.url };
+      }),
+  },
   settings: {
     selectModel: protectedProcedure
       .input(z.object({ modelId: z.string().trim().min(1).max(300) }))
@@ -581,5 +627,14 @@ function googleWorkspaceInstallation(scope: AccessScope) {
     connectorId: env.GOOGLE_CONNECTOR_UID,
     provider: "google" as const,
     scopes: googleWorkspaceScopes,
+  };
+}
+
+function squareInstallation(scope: AccessScope, connectorId: string) {
+  return {
+    authorizationSubject: JSON.stringify(squareSubject(scope.userId)),
+    connectorId,
+    provider: "square" as const,
+    scopes: [...squareScopes],
   };
 }

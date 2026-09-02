@@ -33,4 +33,12 @@ describe("appRouter", () => {
     ).rejects.toThrow("Too small");
     expect(saveChatMock).not.toHaveBeenCalled();
   });
+
+  it("rejects square.update when no connector is configured", async () => {
+    await expect(
+      appRouter
+        .createCaller({ origin: "https://example.com", scope })
+        .square.update("connect")
+    ).rejects.toMatchObject({ code: "PRECONDITION_FAILED" });
+  });
 });
