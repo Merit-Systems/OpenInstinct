@@ -142,6 +142,32 @@ describe("database schema", () => {
 });
 
 describe("migration deployment policy", () => {
+  it("orders migrations by the timestamps Drizzle uses for deployment", async () => {
+    const journal = z
+      .object({
+        entries: z.array(
+          z.object({ idx: z.number().int(), when: z.number().int() })
+        ),
+      })
+      .parse(
+        JSON.parse(
+          await readFile(
+            new URL("../migrations/meta/_journal.json", import.meta.url),
+            "utf8"
+          )
+        )
+      );
+
+    expect(journal.entries.map(({ idx }) => idx)).toEqual(
+      journal.entries.map((_, index) => index)
+    );
+    const timestamps = journal.entries.map(({ when }) => when);
+    expect(timestamps).toEqual(
+      timestamps.toSorted((left, right) => left - right)
+    );
+    expect(new Set(timestamps)).toHaveLength(timestamps.length);
+  });
+
   it("orchestrates the native migration through Turbo", async () => {
     const packageManifest = z
       .object({

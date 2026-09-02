@@ -1,7 +1,6 @@
 import type { DynamicResolveContext } from "eve/tools";
 import { describe, expect, it } from "vitest";
 import worker from "@/agent/subagents/worker/agent";
-import askQuestion from "@/agent/tools/ask_question";
 import googleWorkspaceReadDefinition from "@/agent/tools/google_workspace_read";
 import googleWorkspaceWriteDefinition from "@/agent/tools/google_workspace_write";
 import messaging from "@/agent/tools/messaging";
@@ -11,13 +10,9 @@ import answerSchedule from "@/agent/tools/schedules/answer";
 import createScheduleDefinition from "@/agent/tools/schedules/create";
 import listSchedulesDefinition from "@/agent/tools/schedules/list";
 import updateScheduleDefinition from "@/agent/tools/schedules/update";
-import taskCancel from "@/agent/tools/task_cancel";
 import updateUserProfile from "@/agent/tools/update_user_profile";
-import webFetch from "@/agent/tools/web_fetch";
-import webSearch from "@/agent/tools/web_search";
 
 const singletonTools = [
-  ["ask_question", askQuestion],
   ["google_workspace_read", googleWorkspaceReadDefinition],
   ["google_workspace_write", googleWorkspaceWriteDefinition],
   ["request_vault_import", requestVaultImport],
@@ -26,15 +21,12 @@ const singletonTools = [
   ["schedules-create", createScheduleDefinition],
   ["schedules-list", listSchedulesDefinition],
   ["schedules-update", updateScheduleDefinition],
-  ["task_cancel", taskCancel],
   ["update_user_profile", updateUserProfile],
-  ["web_fetch", webFetch],
-  ["web_search", webSearch],
 ] as const;
 
-describe("mode capability matrix", () => {
-  it("gives interactive turns the coordinator capabilities", async () => {
-    expect(await effectiveCapabilities("linq-message")).toEqual([
+describe("authored mode capability matrix", () => {
+  it("gives interactive turns the authored coordinator capabilities", async () => {
+    expect(await authoredCapabilities("linq-message")).toEqual([
       "google_workspace_read",
       "google_workspace_write",
       "react_to_message",
@@ -45,27 +37,20 @@ describe("mode capability matrix", () => {
       "schedules-list",
       "schedules-update",
       "send_message",
-      "task_cancel",
       "update_user_profile",
-      "web_fetch",
-      "web_search",
       "worker",
     ]);
   });
 
-  it("gives scheduled workers only read and execution capabilities", async () => {
-    expect(await effectiveCapabilities("scheduled-worker")).toEqual([
-      "ask_question",
+  it("gives scheduled workers only authored read and execution capabilities", async () => {
+    expect(await authoredCapabilities("scheduled-worker")).toEqual([
       "google_workspace_read",
-      "task_cancel",
-      "web_fetch",
-      "web_search",
       "worker",
     ]);
   });
 
-  it("limits scheduled reporting to delivery or resuming its own run", async () => {
-    expect(await effectiveCapabilities("scheduled-result")).toEqual([
+  it("limits authored scheduled reporting tools to delivery or resuming its own run", async () => {
+    expect(await authoredCapabilities("scheduled-result")).toEqual([
       "request_vault_setup",
       "schedules-answer",
       "send_message",
@@ -73,7 +58,7 @@ describe("mode capability matrix", () => {
   });
 });
 
-async function effectiveCapabilities(authenticator: string) {
+async function authoredCapabilities(authenticator: string) {
   const context = dynamicContext(authenticator);
   const capabilities: string[] = [];
 

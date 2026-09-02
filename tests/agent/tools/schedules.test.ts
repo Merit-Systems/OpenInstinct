@@ -33,7 +33,6 @@ import { createSchedule } from "@/agent/tools/schedules/create";
 import answerSchedule from "@/agent/tools/schedules/answer";
 import { listSchedules } from "@/agent/tools/schedules/list";
 import { updateSchedule } from "@/agent/tools/schedules/update";
-import askQuestion from "@/agent/tools/ask_question";
 import messaging from "@/agent/tools/messaging";
 
 describe("schedule tools", () => {
@@ -111,19 +110,6 @@ describe("schedule tools", () => {
       )
     ).rejects.toThrow("This reporting turn cannot resume that run.");
     expect(services.getInput).toHaveBeenCalledOnce();
-  });
-
-  it("exposes native questions only to scheduled workers", async () => {
-    const resolve = askQuestion.events["turn.started"];
-    expect(resolve).toBeDefined();
-    if (!resolve) return;
-
-    expect(await resolve({}, dynamicContext("linq"))).toBeNull();
-    expect(await resolve({}, dynamicContext("scheduled-result"))).toBeNull();
-    expect(
-      await resolve({}, dynamicContext("scheduled-worker"))
-    ).not.toBeNull();
-    expect(await resolve({}, resumedWorkerContext())).not.toBeNull();
   });
 
   it("creates a schedule without a multiplexed action field", async () => {

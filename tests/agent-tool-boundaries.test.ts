@@ -20,7 +20,6 @@ describe("root and worker capability boundaries", () => {
   it("keeps root coordination separate from browser execution", () => {
     expect(toolFiles(rootTools)).toEqual([
       "agent.ts",
-      "ask_question.ts",
       "bash.ts",
       "connection_search.ts",
       "google_workspace_read.ts",
@@ -34,11 +33,8 @@ describe("root and worker capability boundaries", () => {
       "schedules/create.ts",
       "schedules/list.ts",
       "schedules/update.ts",
-      "task_cancel.ts",
       "todo.ts",
       "update_user_profile.ts",
-      "web_fetch.ts",
-      "web_search.ts",
       "write_file.ts",
     ]);
     expect(existsSync(`${rootTools}/sendMessage.ts`)).toBe(false);
@@ -49,9 +45,6 @@ describe("root and worker capability boundaries", () => {
     expect(existsSync("agent/skills/browser-execution/SKILL.md")).toBe(false);
     expect(readFileSync(`${rootTools}/agent.ts`, "utf8")).toContain(
       "disableTool()"
-    );
-    expect(readFileSync(`${rootTools}/ask_question.ts`, "utf8")).toContain(
-      "resolveModeValue"
     );
     for (const tool of [
       "bash",
