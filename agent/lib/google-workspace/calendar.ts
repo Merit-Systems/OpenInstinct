@@ -1,6 +1,5 @@
 import { createHash } from "node:crypto";
 import { calendar, type calendar_v3 } from "@googleapis/calendar";
-import { people } from "@googleapis/people";
 import type { ToolContext } from "eve/tools";
 import { z } from "zod";
 import { googleApiErrorStatus, withGoogleAuth } from "./client";
@@ -122,24 +121,6 @@ export async function createCalendarEvent(
       );
       return data;
     }
-  });
-}
-
-export async function searchGoogleContacts(
-  ctx: ToolContext,
-  query: string,
-  pageSize: number
-) {
-  const readMask = "names,emailAddresses,phoneNumbers,organizations";
-  return withGoogleAuth(ctx, async (auth) => {
-    const client = people({ auth, version: "v1" });
-    const options = { signal: ctx.abortSignal };
-    await client.people.searchContacts({ query: "", readMask }, options);
-    const { data } = await client.people.searchContacts(
-      { pageSize, query, readMask },
-      options
-    );
-    return { contacts: data.results ?? [] };
   });
 }
 
