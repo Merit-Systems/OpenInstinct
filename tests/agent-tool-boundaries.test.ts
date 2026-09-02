@@ -35,6 +35,7 @@ describe("root and worker capability boundaries", () => {
       "read_file.ts",
       "request_vault_import.ts",
       "request_vault_setup.ts",
+      "restaurants/availability.ts",
       "schedules/answer.ts",
       "schedules/create.ts",
       "schedules/list.ts",

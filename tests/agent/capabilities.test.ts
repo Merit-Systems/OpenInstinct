@@ -12,6 +12,7 @@ import gmailUpdateDefinition from "@/agent/tools/gmail/update";
 import messaging from "@/agent/tools/messaging";
 import requestVaultImport from "@/agent/tools/request_vault_import";
 import requestVaultSetup from "@/agent/tools/request_vault_setup";
+import restaurantAvailabilityDefinition from "@/agent/tools/restaurants/availability";
 import answerSchedule from "@/agent/tools/schedules/answer";
 import createScheduleDefinition from "@/agent/tools/schedules/create";
 import listSchedulesDefinition from "@/agent/tools/schedules/list";
@@ -29,6 +30,7 @@ const singletonTools = [
   ["gmail-update", gmailUpdateDefinition],
   ["request_vault_import", requestVaultImport],
   ["request_vault_setup", requestVaultSetup],
+  ["restaurants-availability", restaurantAvailabilityDefinition],
   ["schedules-answer", answerSchedule],
   ["schedules-create", createScheduleDefinition],
   ["schedules-list", listSchedulesDefinition],
@@ -50,6 +52,7 @@ describe("authored mode capability matrix", () => {
       "react_to_message",
       "request_vault_import",
       "request_vault_setup",
+      "restaurants-availability",
       "schedules-answer",
       "schedules-create",
       "schedules-list",
@@ -67,6 +70,7 @@ describe("authored mode capability matrix", () => {
       "contacts-search",
       "gmail-read-thread",
       "gmail-search",
+      "restaurants-availability",
       "worker",
     ]);
   });
