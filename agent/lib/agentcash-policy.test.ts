@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   agentcashFetchSchema,
+  agentcashNoPaymentCeilingUsd,
+  assertAgentcashFreeSiwxEndpoint,
   enforceAgentcashFetch,
   safeAgentcashReadInput,
 } from "./agentcash-policy";
@@ -49,5 +51,66 @@ describe("Agentcash payment policy", () => {
         url: "https://example.com/api",
       })
     ).toThrow(/credential headers/u);
+  });
+
+  it("allows only confirmed free SIWX requests through the approval-free path", () => {
+    const inspection = {
+      results: [
+        {
+          authMode: "siwx",
+          method: "GET",
+          requiresPayment: false,
+        },
+      ],
+      url: "https://example.com/status/1",
+    };
+
+    expect(() => {
+      assertAgentcashFreeSiwxEndpoint(
+        inspection,
+        "https://example.com/status/1"
+      );
+    }).not.toThrow();
+    expect(() => {
+      assertAgentcashFreeSiwxEndpoint(
+        {
+          results: [
+            {
+              authMode: "paid",
+              method: "GET",
+              requiresPayment: true,
+            },
+          ],
+          url: "https://example.com/status/1",
+        },
+        "https://example.com/status/1"
+      );
+    }).toThrow(/not confirmed as a free SIWX endpoint/u);
+    expect(() => {
+      assertAgentcashFreeSiwxEndpoint(
+        {
+          results: [
+            {
+              authMode: "siwx",
+              method: "POST",
+              requiresPayment: false,
+            },
+          ],
+          url: "https://example.com/status/1",
+        },
+        "https://example.com/status/1"
+      );
+    }).toThrow(/not confirmed as a free SIWX endpoint/u);
+    expect(() => {
+      assertAgentcashFreeSiwxEndpoint(
+        inspection,
+        "https://example.com/status/2"
+      );
+    }).toThrow(/not confirmed as a free SIWX endpoint/u);
+  });
+
+  it("uses a positive ceiling below any payable USD amount", () => {
+    expect(agentcashNoPaymentCeilingUsd).toBeGreaterThan(0);
+    expect(agentcashNoPaymentCeilingUsd).toBeLessThan(0.000001);
   });
 });

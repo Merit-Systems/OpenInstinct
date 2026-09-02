@@ -20,6 +20,7 @@ describe("root and worker capability boundaries", () => {
       "agentcash_check_endpoint_schema.ts",
       "agentcash_discover_api_endpoints.ts",
       "agentcash_fetch.ts",
+      "agentcash_fetch_free.ts",
       "agentcash_get_balance.ts",
       "agentcash_get_settings.ts",
       "agentcash_list_accounts.ts",
@@ -55,6 +56,18 @@ describe("root and worker capability boundaries", () => {
     expect(readFileSync("agent/lib/agentcash-cli.ts", "utf8")).toContain(
       "HOME: homeDirectory"
     );
+    expect(readFileSync(`${rootTools}/agentcash_fetch.ts`, "utf8")).toContain(
+      "approval: agentcashPaymentApproval"
+    );
+    expect(
+      readFileSync(`${rootTools}/agentcash_fetch_free.ts`, "utf8")
+    ).not.toContain("approval:");
+    expect(
+      readFileSync(`${rootTools}/agentcash_fetch_free.ts`, "utf8")
+    ).toContain("maxAmount: agentcashNoPaymentCeilingUsd");
+    const agentcashSkill = readFileSync("agent/skills/agentcash.md", "utf8");
+    expect(agentcashSkill).not.toContain("Ask for explicit approval");
+    expect(agentcashSkill).toContain("agentcash_fetch_free");
     const rootInstructions = readFileSync("agent/instructions.md", "utf8");
     expect(rootInstructions).toContain(
       "Perform public research, source discovery, comparisons, and current-information lookups directly with `web_search`"

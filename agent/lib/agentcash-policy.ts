@@ -37,6 +37,28 @@ export const agentcashFetchSchema = z.object({
   url: httpsUrlSchema,
 });
 
+export const agentcashFreeFetchSchema = agentcashFetchSchema.pick({
+  headers: true,
+  paymentNetwork: true,
+  timeout: true,
+  url: true,
+});
+
+const endpointInspectionSchema = z.object({
+  results: z
+    .array(
+      z.object({
+        authMode: z.string(),
+        method: z.string(),
+        requiresPayment: z.boolean(),
+      })
+    )
+    .min(1),
+  url: httpsUrlSchema,
+});
+
+export const agentcashNoPaymentCeilingUsd = Number.MIN_VALUE;
+
 export function enforceAgentcashFetch(
   input: z.infer<typeof agentcashFetchSchema>,
   deploymentMaximumUsd: number
@@ -47,6 +69,27 @@ export function enforceAgentcashFetch(
     );
   }
   return input;
+}
+
+export function assertAgentcashFreeSiwxEndpoint(
+  inspection: unknown,
+  expectedUrl: string
+) {
+  const parsed = endpointInspectionSchema.safeParse(inspection);
+  const isExactFreeGet =
+    parsed.success &&
+    parsed.data.url === expectedUrl &&
+    parsed.data.results.every(
+      (result) =>
+        result.method === "GET" &&
+        result.authMode.toLowerCase() === "siwx" &&
+        !result.requiresPayment
+    );
+  if (!isExactFreeGet) {
+    throw new Error(
+      "Agentcash GET request is not confirmed as a free SIWX endpoint. Use agentcash_fetch with native payment approval instead."
+    );
+  }
 }
 
 export function safeAgentcashReadInput(

@@ -15,6 +15,16 @@ interface BrowserImage {
 }
 
 const linqChannelCapture = vi.hoisted(() => ({
+  artifacts: new Map<
+    string,
+    {
+      description?: string;
+      id: string;
+      kind: "image";
+      sourceUrl: string;
+      title: string;
+    }
+  >(),
   images: new Map<string, BrowserImage>(),
   readImage: vi.fn<
     (
@@ -58,6 +68,14 @@ vi.mock("@/db/services/browser-images", () => ({
     };
   },
 }));
+vi.mock("@/lib/application-origin", () => ({
+  applicationOrigin: () => "https://openinstinct.example",
+}));
+vi.mock("@/lib/artifacts/server", () => ({
+  async readArtifactManifest(_scope: AccessScope, id: string) {
+    return linqChannelCapture.artifacts.get(id);
+  },
+}));
 vi.mock("@vercel/blob", async (importOriginal) => {
   const blob = await importOriginal<typeof Blob>();
   return {
@@ -80,6 +98,10 @@ const deliverCompletedMessage = channelEvents["message.completed"];
 type HandlerParameters = Parameters<typeof deliverCompletedMessage>;
 
 interface LinqTestMessage {
+  readonly attachments?: readonly {
+    readonly name: string;
+    readonly url: string;
+  }[];
   readonly files?: readonly {
     readonly data: Buffer;
     readonly filename: string;
@@ -99,6 +121,7 @@ interface LinqTestState {
 
 describe("Linq message delivery", () => {
   beforeEach(() => {
+    linqChannelCapture.artifacts.clear();
     evlogCapture.info.mockClear();
     evlogCapture.set.mockClear();
     evlogCapture.useLogger.mockReset();
@@ -159,6 +182,60 @@ describe("Linq message delivery", () => {
         },
       ],
       markdown: "Here it is.",
+    });
+  });
+
+  it("replaces published artifact markers with a public URL and image attachment", async () => {
+    const artifactId = "206c3a7e-c0b8-4317-9e34-552cff646673";
+    linqChannelCapture.artifacts.set(artifactId, {
+      description: "A generated image",
+      id: artifactId,
+      kind: "image",
+      sourceUrl: "https://images.example/result.png",
+      title: "Result",
+    });
+    const { context, post } = handlerContext();
+
+    await deliverCompletedMessage(
+      completedEvent({
+        message: `Here it is.\n\n[[artifact:${artifactId}]]`,
+      }),
+      context,
+      sessionContext()
+    );
+
+    expect(post).toHaveBeenCalledTimes(2);
+    expect(post).toHaveBeenNthCalledWith(1, { markdown: "Here it is." });
+    expect(post).toHaveBeenNthCalledWith(2, {
+      attachments: [
+        {
+          name: "Result",
+          url: "https://images.example/result.png",
+        },
+      ],
+      markdown: `https://openinstinct.example/artifacts/published/${artifactId}`,
+    });
+  });
+
+  it("keeps the public artifact URL when the native image cannot be attached", async () => {
+    const artifactId = "206c3a7e-c0b8-4317-9e34-552cff646673";
+    const { context, post } = handlerContext();
+
+    await deliverCompletedMessage(
+      completedEvent({
+        message: `Here it is.\n\n[[artifact:${artifactId}]]`,
+      }),
+      context,
+      sessionContext()
+    );
+
+    expect(post).toHaveBeenCalledTimes(3);
+    expect(post).toHaveBeenNthCalledWith(1, { markdown: "Here it is." });
+    expect(post).toHaveBeenNthCalledWith(2, {
+      markdown: `https://openinstinct.example/artifacts/published/${artifactId}`,
+    });
+    expect(post).toHaveBeenNthCalledWith(3, {
+      markdown: "I couldn't attach one image.",
     });
   });
 

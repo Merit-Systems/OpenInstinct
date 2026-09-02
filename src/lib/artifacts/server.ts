@@ -4,6 +4,7 @@ import { z } from "zod";
 import type { AccessScope } from "@/lib/access-scope";
 import { artifactIdSchema, artifactMarker, artifactUrl } from "@/lib/artifacts";
 
+const maximumArtifactManifestBytes = 512 * 1024;
 const maximumHtmlCharacters = 250_000;
 const httpsUrlSchema = z
   .url()
@@ -51,13 +52,14 @@ export async function publishArtifact(
     id: randomUUID(),
   });
   const serialized = JSON.stringify(manifest);
-  await put(artifactManifestPath(scope, manifest.id), serialized, {
-    ...blobOptions,
-    addRandomSuffix: false,
-    allowOverwrite: false,
-    contentType: "application/json",
-    maximumSizeInBytes: 512 * 1024,
-  });
+  await writeArtifactManifest(
+    artifactManifestPath(scope, manifest.id),
+    serialized
+  );
+  await writeArtifactManifest(
+    publishedArtifactManifestPath(manifest.id),
+    serialized
+  );
 
   return {
     artifactMarker: artifactMarker(manifest.id),
@@ -74,13 +76,35 @@ export async function readArtifactManifest(
   signal?: AbortSignal
 ) {
   const id = artifactIdSchema.parse(artifactId);
-  const result = await get(artifactManifestPath(scope, id), {
+  return readArtifactManifestAtPath(artifactManifestPath(scope, id), signal);
+}
+
+export async function readPublishedArtifactManifest(
+  artifactId: string,
+  signal?: AbortSignal
+) {
+  const id = artifactIdSchema.parse(artifactId);
+  return readArtifactManifestAtPath(publishedArtifactManifestPath(id), signal);
+}
+
+async function writeArtifactManifest(pathname: string, serialized: string) {
+  await put(pathname, serialized, {
     ...blobOptions,
-    abortSignal: signal,
+    addRandomSuffix: false,
+    allowOverwrite: false,
+    contentType: "application/json",
+    maximumSizeInBytes: maximumArtifactManifestBytes,
   });
+}
+
+async function readArtifactManifestAtPath(
+  pathname: string,
+  signal?: AbortSignal
+) {
+  const result = await get(pathname, { ...blobOptions, abortSignal: signal });
   if (result?.statusCode !== 200) return undefined;
   const serialized = await new Response(result.stream).text();
-  if (serialized.length > 512 * 1024) return undefined;
+  if (serialized.length > maximumArtifactManifestBytes) return undefined;
   return artifactManifestSchema.parse(JSON.parse(serialized));
 }
 
@@ -89,4 +113,8 @@ function artifactManifestPath(scope: AccessScope, artifactId: string) {
     .update(`${scope.workspaceId}\0${scope.userId}`)
     .digest("hex");
   return `artifacts/${owner}/${artifactId}/manifest.json`;
+}
+
+function publishedArtifactManifestPath(artifactId: string) {
+  return `published-artifacts/${artifactId}/manifest.json`;
 }

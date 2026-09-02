@@ -46,6 +46,27 @@ describe("Eve channel authentication", () => {
     expect(isSessionOwnedMock).toHaveBeenCalledTimes(4);
   });
 
+  it("checks ownership again at the end of the settling window", async () => {
+    isSessionOwnedMock.mockResolvedValue(false);
+    isSessionOwnedMock.mockResolvedValueOnce(false);
+    for (let attempt = 1; attempt < 50; attempt += 1) {
+      isSessionOwnedMock.mockResolvedValueOnce(false);
+    }
+    isSessionOwnedMock.mockResolvedValueOnce(true);
+
+    const ownership = waitForSessionOwnership(
+      {
+        userId: "better-auth:user-1",
+        workspaceId: "personal:workspace-1",
+      },
+      "session-1"
+    );
+    await vi.runAllTimersAsync();
+
+    await expect(ownership).resolves.toBe(true);
+    expect(isSessionOwnedMock).toHaveBeenCalledTimes(51);
+  });
+
   it("checks decoded session route ids against workspace ownership", async () => {
     const route = eveChannel.routes.find(
       (candidate) =>

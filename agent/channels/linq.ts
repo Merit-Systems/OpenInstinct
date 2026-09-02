@@ -13,6 +13,7 @@ import { getAuth } from "@/auth";
 import { normalizeAuthPhoneNumber } from "@/auth/phone-number";
 import { accessScopeForUser, scopeFromPrincipal } from "@/lib/access-scope";
 import { prepareLinqBrowserImageDelivery } from "../lib/linq-browser-image-delivery";
+import { prepareLinqArtifactDelivery } from "../lib/linq-artifact-delivery";
 import {
   extractBrowserImageMarkdownReferences,
   stripBrowserImageMarkdownReferences,
@@ -39,6 +40,13 @@ const workerCancellationsSchema = z.array(
 );
 const markdownListItemPattern = /^\s*(?:[-+*]|\d+[.)])\s+/u;
 
+type LinqThread = NonNullable<
+  Parameters<
+    NonNullable<NonNullable<LinqChannelConfig["events"]>["message.completed"]>
+  >[1]["thread"]
+>;
+type LinqReplyPayload = Parameters<LinqThread["post"]>[0];
+
 function splitLinqReply(message: string) {
   return message
     .trim()
@@ -54,23 +62,31 @@ function splitLinqReply(message: string) {
 }
 
 async function postLinqReply(
-  thread: NonNullable<
-    Parameters<
-      NonNullable<NonNullable<LinqChannelConfig["events"]>["message.completed"]>
-    >[1]["thread"]
-  >,
+  thread: LinqThread,
   markdown: string,
-  files: readonly unknown[] = []
+  files: readonly unknown[] = [],
+  attachments: readonly unknown[] = []
 ) {
   const bubbles = splitLinqReply(markdown);
   if (bubbles.length === 0) {
-    if (files.length > 0) await thread.post({ files, markdown: "" });
+    if (files.length > 0 || attachments.length > 0) {
+      const payload: LinqReplyPayload = { markdown: "" };
+      if (attachments.length > 0) payload.attachments = attachments;
+      if (files.length > 0) payload.files = files;
+      await thread.post(payload);
+    }
     return;
   }
   /* oxlint-disable eslint/no-await-in-loop -- Reply bubbles must be posted in conversational order. */
   for (const [index, bubble] of bubbles.entries()) {
-    if (index === bubbles.length - 1 && files.length > 0) {
-      await thread.post({ files, markdown: bubble });
+    if (
+      index === bubbles.length - 1 &&
+      (files.length > 0 || attachments.length > 0)
+    ) {
+      const payload: LinqReplyPayload = { markdown: bubble };
+      if (attachments.length > 0) payload.attachments = attachments;
+      if (files.length > 0) payload.files = files;
+      await thread.post(payload);
     } else {
       await thread.post({ markdown: bubble });
     }
@@ -278,26 +294,41 @@ export const linqChannelConfig = {
         await postLinqReply(context.thread, markdown);
         return;
       }
-      const delivery = await prepareLinqBrowserImageDelivery(event.message, {
-        rootSessionId: session.session.id,
-        scope: scopeFromPrincipal(caller),
-      });
+      const scope = scopeFromPrincipal(caller);
+      const [delivery, artifactDelivery] = await Promise.all([
+        prepareLinqBrowserImageDelivery(event.message, {
+          rootSessionId: session.session.id,
+          scope,
+        }),
+        prepareLinqArtifactDelivery(event.message, { scope }),
+      ]);
       if (delivery.failedArtifactIds.length > 0) {
         console.warn("[linq] browser image delivery failed", {
           artifactIds: delivery.failedArtifactIds,
           sessionId: session.session.id,
         });
       }
+      const failedImageCount =
+        delivery.failedArtifactIds.length +
+        artifactDelivery.failedArtifactIds.length;
       const failureMessage =
-        delivery.failedArtifactIds.length === 0
+        failedImageCount === 0
           ? ""
-          : delivery.failedArtifactIds.length === 1
+          : failedImageCount === 1
             ? "I couldn't attach one image."
-            : `I couldn't attach ${String(delivery.failedArtifactIds.length)} images.`;
-      const markdown = [delivery.markdown, failureMessage]
+            : `I couldn't attach ${String(failedImageCount)} images.`;
+      const markdown = [
+        stripBrowserImageMarkdownReferences(artifactDelivery.markdown),
+        failureMessage,
+      ]
         .filter(Boolean)
         .join("\n\n");
-      await postLinqReply(context.thread, markdown, delivery.files);
+      await postLinqReply(
+        context.thread,
+        markdown,
+        delivery.files,
+        artifactDelivery.attachments
+      );
     },
   },
   async onMessage(_context, message) {
