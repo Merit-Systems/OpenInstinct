@@ -1,6 +1,7 @@
 import { unstable_doesMiddlewareMatch } from "next/experimental/testing/server";
+import { NextRequest } from "next/server";
 import { describe, expect, it } from "vitest";
-import { config } from "../../proxy";
+import { config, proxy } from "../../proxy";
 
 describe("auth proxy matcher", () => {
   it("does not match public fonts", () => {
@@ -21,5 +22,16 @@ describe("auth proxy matcher", () => {
         url: "/vault",
       })
     ).toBe(true);
+  });
+
+  it("allows public artifact capabilities without a session", async () => {
+    const response = await proxy(
+      new NextRequest(
+        "https://openinstinct.example/artifacts/published/00000000-0000-4000-8000-000000000000"
+      )
+    );
+
+    expect(response.headers.get("x-middleware-next")).toBe("1");
+    expect(response.headers.get("location")).toBeNull();
   });
 });
