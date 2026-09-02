@@ -120,10 +120,10 @@ export default linqChannel({
         const attachments = message.data.output.attachments?.map(
           ({ kind, ...attachment }) => ({ ...attachment, type: kind })
         );
-        const { markdown: requestedMarkdown } = message.data.output;
-        if (!requestedMarkdown) {
+        const { text: requestedText } = message.data.output;
+        if (!requestedText) {
           if (attachments?.length) {
-            await post({ attachments, markdown: "" });
+            await post({ attachments, raw: "" });
           }
           await finalizeScheduledReportDelivery(session);
           return;
@@ -133,33 +133,30 @@ export default linqChannel({
           session.session.auth.current ?? session.session.auth.initiator;
         if (!caller) {
           const references =
-            extractImageArtifactMarkdownReferences(requestedMarkdown);
-          const markdown =
+            extractImageArtifactMarkdownReferences(requestedText);
+          const text =
             references.length === 0
-              ? requestedMarkdown
+              ? requestedText
               : [
-                  stripImageArtifactMarkdownReferences(requestedMarkdown),
+                  stripImageArtifactMarkdownReferences(requestedText),
                   "I couldn't attach the image.",
                 ]
                   .filter(Boolean)
                   .join("\n\n");
           const outgoing: Extract<
             Parameters<typeof thread.post>[0],
-            { markdown: string }
-          > = { markdown };
+            { raw: string }
+          > = { raw: text };
           if (attachments?.length) outgoing.attachments = attachments;
           await post(outgoing);
           await finalizeScheduledReportDelivery(session);
           return;
         }
 
-        const delivery = await prepareLinqImageArtifactDelivery(
-          requestedMarkdown,
-          {
-            rootSessionId: report?.workerSessionId ?? session.session.id,
-            scope: scopeFromPrincipal(caller),
-          }
-        );
+        const delivery = await prepareLinqImageArtifactDelivery(requestedText, {
+          rootSessionId: report?.workerSessionId ?? session.session.id,
+          scope: scopeFromPrincipal(caller),
+        });
         if (delivery.failedArtifactIds.length > 0) {
           console.warn("[linq] browser image delivery failed", {
             artifactIds: delivery.failedArtifactIds,
@@ -172,13 +169,13 @@ export default linqChannel({
             : delivery.failedArtifactIds.length === 1
               ? "I couldn't attach one image."
               : `I couldn't attach ${String(delivery.failedArtifactIds.length)} images.`;
-        const markdown = [delivery.markdown, failureMessage]
+        const text = [delivery.text, failureMessage]
           .filter(Boolean)
           .join("\n\n");
         const outgoing: Extract<
           Parameters<typeof thread.post>[0],
-          { markdown: string }
-        > = { markdown };
+          { raw: string }
+        > = { raw: text };
         if (attachments?.length) outgoing.attachments = attachments;
         if (delivery.files.length > 0) outgoing.files = delivery.files;
         await post(outgoing);

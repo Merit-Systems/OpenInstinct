@@ -1,5 +1,6 @@
 import type { ToolContext } from "eve/tools";
 import { describe, expect, it, vi } from "vitest";
+import type * as GmailModule from "@/agent/lib/google-workspace/gmail";
 import type { updateGmail } from "@/agent/lib/google-workspace/gmail";
 
 const gmail = vi.hoisted(() => ({
@@ -8,19 +9,12 @@ const gmail = vi.hoisted(() => ({
     .mockResolvedValue({ action: "archive", updatedCount: 2 }),
 }));
 
-vi.mock("@/agent/lib/google-workspace/gmail", () => ({
-  GMAIL_UPDATE_ACTIONS: [
-    "archive",
-    "move_to_inbox",
-    "mark_read",
-    "mark_unread",
-    "star",
-    "unstar",
-  ],
+vi.mock("@/agent/lib/google-workspace/gmail", async (importOriginal) => ({
+  ...(await importOriginal<typeof GmailModule>()),
   updateGmail: gmail.update,
 }));
 
-import { gmailUpdate } from "@/agent/tools/gmail/update";
+import { gmailUpdate } from "@/agent/tools/gmail";
 
 describe("Google Workspace tools", () => {
   it("reports the selected Gmail update without an action discriminator", async () => {

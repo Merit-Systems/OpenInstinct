@@ -1,39 +1,15 @@
 import type { DynamicResolveContext } from "eve/tools";
 import { describe, expect, it } from "vitest";
-import worker from "@/agent/subagents/worker/agent";
-import calendarCheckAvailabilityDefinition from "@/agent/tools/calendar/check-availability";
-import calendarCreateEventDefinition from "@/agent/tools/calendar/create-event";
-import calendarListEventsDefinition from "@/agent/tools/calendar/list-events";
-import contactsSearchDefinition from "@/agent/tools/contacts/search";
-import gmailReadThreadDefinition from "@/agent/tools/gmail/read-thread";
-import gmailSearchDefinition from "@/agent/tools/gmail/search";
-import gmailSendDefinition from "@/agent/tools/gmail/send";
-import gmailUpdateDefinition from "@/agent/tools/gmail/update";
 import personalInfoMemory from "@/agent/memory/personal_info";
+import worker from "@/agent/subagents/worker/agent";
+import calendar from "@/agent/tools/calendar";
+import contacts from "@/agent/tools/contacts";
+import gmail from "@/agent/tools/gmail";
 import messaging from "@/agent/tools/messaging";
-import requestVaultImport from "@/agent/tools/request_vault_import";
-import requestVaultSetup from "@/agent/tools/request_vault_setup";
-import answerSchedule from "@/agent/tools/schedules/answer";
-import createScheduleDefinition from "@/agent/tools/schedules/create";
-import listSchedulesDefinition from "@/agent/tools/schedules/list";
-import updateScheduleDefinition from "@/agent/tools/schedules/update";
+import schedules from "@/agent/tools/schedules";
+import vault from "@/agent/tools/vault";
 
-const singletonTools = [
-  ["calendar-check-availability", calendarCheckAvailabilityDefinition],
-  ["calendar-create-event", calendarCreateEventDefinition],
-  ["calendar-list-events", calendarListEventsDefinition],
-  ["contacts-search", contactsSearchDefinition],
-  ["gmail-read-thread", gmailReadThreadDefinition],
-  ["gmail-search", gmailSearchDefinition],
-  ["gmail-send", gmailSendDefinition],
-  ["gmail-update", gmailUpdateDefinition],
-  ["request_vault_import", requestVaultImport],
-  ["request_vault_setup", requestVaultSetup],
-  ["schedules-answer", answerSchedule],
-  ["schedules-create", createScheduleDefinition],
-  ["schedules-list", listSchedulesDefinition],
-  ["schedules-update", updateScheduleDefinition],
-] as const;
+const groupedTools = [calendar, contacts, gmail, messaging, schedules, vault];
 
 describe("authored mode capability matrix", () => {
   it("gives interactive turns the authored coordinator capabilities", async () => {
@@ -83,21 +59,14 @@ async function authoredCapabilities(authenticator: string) {
   const context = dynamicContext(authenticator);
   const capabilities: string[] = [];
 
-  const resolvedSingletons = await Promise.all(
-    singletonTools.map(async ([name, definition]) => {
+  const resolvedGroups = await Promise.all(
+    groupedTools.map(async (definition) => {
       const resolve = definition.events["turn.started"];
-      return resolve && (await resolve({}, context)) ? name : null;
+      const resolved = resolve ? await resolve({}, context) : null;
+      return resolved && !("execute" in resolved) ? Object.keys(resolved) : [];
     })
   );
-  capabilities.push(...resolvedSingletons.filter((name) => name !== null));
-
-  const resolveMessaging = messaging.events["turn.started"];
-  const resolvedMessaging = resolveMessaging
-    ? await resolveMessaging({}, context)
-    : null;
-  if (resolvedMessaging && !("execute" in resolvedMessaging)) {
-    capabilities.push(...Object.keys(resolvedMessaging));
-  }
+  capabilities.push(...resolvedGroups.flat());
 
   const personalInfoTools = await personalInfoMemory.provider.tools({
     ...context,

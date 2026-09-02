@@ -171,13 +171,13 @@ function delivery(turnId: string, messageText: string): MessageStreamEvent {
   };
 }
 
-function sendMessageResult(markdown: string): MessageStreamEvent {
+function sendMessageResult(text: string): MessageStreamEvent {
   return {
     data: {
       result: {
         callId: "call_send_message",
         kind: "tool-result",
-        output: { kind: "message", markdown },
+        output: { kind: "message", text },
         toolName: "send_message",
       },
       sequence: 1,

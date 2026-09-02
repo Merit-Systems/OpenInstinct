@@ -363,12 +363,14 @@ export function createVaultSetupUrl(
 ) {
   const url = new URL("/vault", baseUrl);
   url.searchParams.set("setup", request.target);
-  if (request.label) url.searchParams.set("label", request.label);
   url.searchParams.set("kind", request.kind);
   if (request.kind === "login") {
     url.searchParams.set("identifier_type", request.identifierType);
     url.searchParams.set("origin", request.origin);
   }
+  // The label goes last: a messaging client that runs following text into the
+  // link only corrupts the editable nickname instead of a validated field.
+  if (request.label) url.searchParams.set("label", request.label);
   return url.toString();
 }
 

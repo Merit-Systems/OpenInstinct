@@ -52,7 +52,7 @@ describe("Eve scheduled report delivery", () => {
         result: {
           callId: "call-send-message",
           kind: "tool-result",
-          output: { kind: "message", markdown: "The price fell." },
+          output: { kind: "message", text: "The price fell." },
           toolName: "send_message",
         },
         sequence: 0,
