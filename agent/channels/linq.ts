@@ -13,6 +13,7 @@ import { sendMessageToolResultSchema } from "@/agent/lib/send-message";
 import { normalizeAuthPhoneNumber } from "@/auth/phone-number";
 import { accessScopeForUser, scopeFromPrincipal } from "@/lib/access-scope";
 import { prepareLinqImageArtifactDelivery } from "../lib/linq-image-artifact/delivery";
+import { formatLinqMarkdown } from "../lib/linq-message/markdown";
 import {
   extractImageArtifactMarkdownReferences,
   stripImageArtifactMarkdownReferences,
@@ -145,7 +146,7 @@ export default linqChannel({
           const outgoing: Extract<
             Parameters<typeof thread.post>[0],
             { markdown: string }
-          > = { markdown };
+          > = { markdown: formatLinqMarkdown(markdown) };
           if (attachments?.length) outgoing.attachments = attachments;
           await post(outgoing);
           await finalizeScheduledReportDelivery(session);
@@ -177,7 +178,7 @@ export default linqChannel({
         const outgoing: Extract<
           Parameters<typeof thread.post>[0],
           { markdown: string }
-        > = { markdown };
+        > = { markdown: formatLinqMarkdown(markdown) };
         if (attachments?.length) outgoing.attachments = attachments;
         if (delivery.files.length > 0) outgoing.files = delivery.files;
         await post(outgoing);

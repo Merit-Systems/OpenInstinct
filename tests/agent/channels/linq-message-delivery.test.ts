@@ -538,7 +538,7 @@ describe("Linq message delivery", () => {
           mimeType: "image/png",
         },
       ],
-      markdown: "First thought.\n\nSecond thought.",
+      markdown: "First thought.\nSecond thought.",
     });
   });
 

@@ -37,6 +37,15 @@ describe("vault setup", () => {
       },
       success: true,
     });
+    expect([...url.searchParams.keys()].at(-1)).toBe("label");
+    expect(
+      parseVaultSetupSearchParams(
+        Object.fromEntries(new URL(`${url.href}Tell me when done`).searchParams)
+      )
+    ).toMatchObject({
+      data: { label: "Personal loginTell me when done" },
+      success: true,
+    });
   });
 
   it("accepts only structured login items in a bulk import", () => {
