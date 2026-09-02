@@ -4,11 +4,9 @@ import * as GmailApi from "@googleapis/gmail";
 import * as PeopleApi from "@googleapis/people";
 import type { ToolContext } from "eve/tools";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import {
-  createCalendarEvent,
-  searchGoogleContacts,
-} from "@/agent/lib/google-workspace/calendar";
+import { createCalendarEvent } from "@/agent/lib/google-workspace/calendar";
 import { withGoogleAuth } from "@/agent/lib/google-workspace/client";
+import { searchGoogleContacts } from "@/agent/lib/google-workspace/contacts";
 import { sendGmail } from "@/agent/lib/google-workspace/gmail";
 
 interface RequestOptions {

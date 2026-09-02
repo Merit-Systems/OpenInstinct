@@ -1,8 +1,14 @@
 import type { DynamicResolveContext } from "eve/tools";
 import { describe, expect, it } from "vitest";
 import worker from "@/agent/subagents/worker/agent";
-import googleWorkspaceReadDefinition from "@/agent/tools/google_workspace_read";
-import googleWorkspaceWriteDefinition from "@/agent/tools/google_workspace_write";
+import calendarCheckAvailabilityDefinition from "@/agent/tools/calendar/check-availability";
+import calendarCreateEventDefinition from "@/agent/tools/calendar/create-event";
+import calendarListEventsDefinition from "@/agent/tools/calendar/list-events";
+import contactsSearchDefinition from "@/agent/tools/contacts/search";
+import gmailReadThreadDefinition from "@/agent/tools/gmail/read-thread";
+import gmailSearchDefinition from "@/agent/tools/gmail/search";
+import gmailSendDefinition from "@/agent/tools/gmail/send";
+import gmailUpdateDefinition from "@/agent/tools/gmail/update";
 import messaging from "@/agent/tools/messaging";
 import requestVaultImport from "@/agent/tools/request_vault_import";
 import requestVaultSetup from "@/agent/tools/request_vault_setup";
@@ -13,8 +19,14 @@ import updateScheduleDefinition from "@/agent/tools/schedules/update";
 import updateUserProfile from "@/agent/tools/update_user_profile";
 
 const singletonTools = [
-  ["google_workspace_read", googleWorkspaceReadDefinition],
-  ["google_workspace_write", googleWorkspaceWriteDefinition],
+  ["calendar-check-availability", calendarCheckAvailabilityDefinition],
+  ["calendar-create-event", calendarCreateEventDefinition],
+  ["calendar-list-events", calendarListEventsDefinition],
+  ["contacts-search", contactsSearchDefinition],
+  ["gmail-read-thread", gmailReadThreadDefinition],
+  ["gmail-search", gmailSearchDefinition],
+  ["gmail-send", gmailSendDefinition],
+  ["gmail-update", gmailUpdateDefinition],
   ["request_vault_import", requestVaultImport],
   ["request_vault_setup", requestVaultSetup],
   ["schedules-answer", answerSchedule],
@@ -27,8 +39,14 @@ const singletonTools = [
 describe("authored mode capability matrix", () => {
   it("gives interactive turns the authored coordinator capabilities", async () => {
     expect(await authoredCapabilities("linq-message")).toEqual([
-      "google_workspace_read",
-      "google_workspace_write",
+      "calendar-check-availability",
+      "calendar-create-event",
+      "calendar-list-events",
+      "contacts-search",
+      "gmail-read-thread",
+      "gmail-search",
+      "gmail-send",
+      "gmail-update",
       "react_to_message",
       "request_vault_import",
       "request_vault_setup",
@@ -44,7 +62,11 @@ describe("authored mode capability matrix", () => {
 
   it("gives scheduled workers only authored read and execution capabilities", async () => {
     expect(await authoredCapabilities("scheduled-worker")).toEqual([
-      "google_workspace_read",
+      "calendar-check-availability",
+      "calendar-list-events",
+      "contacts-search",
+      "gmail-read-thread",
+      "gmail-search",
       "worker",
     ]);
   });
