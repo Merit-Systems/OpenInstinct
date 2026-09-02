@@ -6,8 +6,11 @@ export default {
     "agent/hooks/**/*.ts",
     "agent/memory/**/*.ts",
     "agent/subagents/**/*.ts",
+    "agent/schedules/**/*.ts",
     "agent/tools/**/*.ts",
     "db/drizzle.config.ts",
+    // Drizzle consumes every table and relation exported by this schema barrel.
+    "db/schema/index.ts",
     "evals/**/*.eval.ts",
     "evals/evals.config.ts",
     "src/app/**/*.{ts,tsx}",

@@ -201,6 +201,8 @@ describe("Linq message delivery", () => {
     linqChannelCapture.failedPublications.clear();
     linqChannelCapture.publishedArtifactIds.length = 0;
     linqChannelCapture.publicationSignals.length = 0;
+    scheduleDeliveryCapture.finalize.mockResolvedValue(true);
+    scheduleDeliveryCapture.release.mockResolvedValue(true);
   });
 
   it("does not register automatic assistant text posting", () => {

@@ -9,6 +9,7 @@ import type {
   materializeDueScheduledAgentRuns,
   releaseScheduledAgentRun,
   releaseScheduledReport,
+  setScheduledRunSession,
 } from "@/db/services/scheduled-agent-jobs";
 
 const services = vi.hoisted(() => ({
@@ -19,16 +20,10 @@ const services = vi.hoisted(() => ({
   materialize: vi.fn<typeof materializeDueScheduledAgentRuns>(),
   releaseReport: vi.fn<typeof releaseScheduledReport>(),
   releaseRun: vi.fn<typeof releaseScheduledAgentRun>(),
+  setSession: vi.fn<typeof setScheduledRunSession>(),
 }));
 const requests = vi.hoisted(() => ({
   report: vi.fn<(runId: string) => Promise<void>>(),
-  route:
-    vi.fn<
-      (
-        route: "/internal/scheduled-run/start",
-        body: { leaseToken: string; restart: boolean; runId: string }
-      ) => Promise<Response>
-    >(),
 }));
 
 vi.mock("@/db/services/scheduled-agent-jobs", () => ({
@@ -39,11 +34,11 @@ vi.mock("@/db/services/scheduled-agent-jobs", () => ({
   materializeDueScheduledAgentRuns: services.materialize,
   releaseScheduledAgentRun: services.releaseRun,
   releaseScheduledReport: services.releaseReport,
+  setScheduledRunSession: services.setSession,
 }));
 vi.mock("@/agent/channels/linq", () => ({ default: { channel: "linq" } }));
 vi.mock("@/agent/lib/schedules/request", () => ({
   postScheduledReport: requests.report,
-  postScheduledRunRoute: requests.route,
 }));
 vi.mock("@/agent/channels/scheduled-run", () => ({
   default: { channel: "scheduled-run" },
@@ -58,47 +53,54 @@ describe("dynamic schedule dispatch", () => {
     services.materialize.mockResolvedValue([]);
     services.listReports.mockResolvedValue([]);
     services.claimRuns.mockResolvedValue([]);
+    services.releaseRun.mockResolvedValue("queued");
+    services.setSession.mockResolvedValue(true);
     requests.report.mockResolvedValue();
-    requests.route.mockResolvedValue(new Response(null));
   });
 
-  it("starts due work separately without waiting for its lifetime", async () => {
+  it("hands due work directly to the scheduled-run channel", async () => {
     const claim = scheduledClaim();
     services.claimRuns.mockResolvedValue([claim]);
-    const linqSend = vi.fn<ReturnType<ScheduleToFn>["send"]>();
-    const to = vi.fn<ScheduleToFn>(() => ({ send: linqSend }));
+    const send = vi
+      .fn<ReturnType<ScheduleToFn>["send"]>()
+      .mockResolvedValue(workerSession());
+    const to = vi.fn<ScheduleToFn>(() => ({ send }));
 
     await runSchedule(to);
 
-    expect(requests.route).toHaveBeenCalledWith(
-      "/internal/scheduled-run/start",
-      {
-        leaseToken: claim.run.leaseToken,
-        restart: false,
-        runId: claim.run.id,
-      }
+    expect(to).toHaveBeenCalledWith(expect.anything(), {
+      restart: false,
+      runId: claim.run.id,
+    });
+    expect(send.mock.calls[0]?.[0]).toContain("Task: Watch the price.");
+    expect(send.mock.calls[0]?.[1].auth?.authenticator).toBe(
+      "scheduled-worker"
     );
-    expect(linqSend).not.toHaveBeenCalled();
+    expect(services.setSession).toHaveBeenCalledExactlyOnceWith(
+      claim.run.id,
+      claim.run.leaseToken,
+      "worker-session"
+    );
+    expect(services.claimRuns).toHaveBeenCalledWith(
+      expect.objectContaining({ leaseForMs: 300_000 })
+    );
   });
 
   it("requests a clean restart for a reclaimed interrupted worker", async () => {
     const claim = scheduledClaim();
     claim.run.workerSessionId = "interrupted-worker-session";
     services.claimRuns.mockResolvedValue([claim]);
-    const to = vi.fn<ScheduleToFn>(() => ({
-      send: vi.fn<ReturnType<ScheduleToFn>["send"]>(),
-    }));
+    const send = vi
+      .fn<ReturnType<ScheduleToFn>["send"]>()
+      .mockResolvedValue(workerSession());
+    const to = vi.fn<ScheduleToFn>(() => ({ send }));
 
     await runSchedule(to);
 
-    expect(requests.route).toHaveBeenCalledWith(
-      "/internal/scheduled-run/start",
-      {
-        leaseToken: claim.run.leaseToken,
-        restart: true,
-        runId: claim.run.id,
-      }
-    );
+    expect(to).toHaveBeenCalledWith(expect.anything(), {
+      restart: true,
+      runId: claim.run.id,
+    });
   });
 
   it("requests recovery through the report callback", async () => {
@@ -112,12 +114,31 @@ describe("dynamic schedule dispatch", () => {
     expect(workerSend).not.toHaveBeenCalled();
     expect(requests.report).toHaveBeenCalledExactlyOnceWith(report.run.id);
   });
+
+  it("reports a worker that exhausts its dispatch attempts", async () => {
+    const claim = scheduledClaim();
+    services.claimRuns.mockResolvedValue([claim]);
+    services.releaseRun.mockResolvedValue("dead_letter");
+    const send = vi
+      .fn<ReturnType<ScheduleToFn>["send"]>()
+      .mockRejectedValue(new Error("Workflow did not accept the candidate."));
+    const to = vi.fn<ScheduleToFn>(() => ({ send }));
+
+    await runSchedule(to);
+
+    expect(services.releaseRun).toHaveBeenCalledWith(
+      claim.run.id,
+      claim.run.leaseToken,
+      "Workflow did not accept the candidate."
+    );
+    expect(requests.report).toHaveBeenCalledExactlyOnceWith(claim.run.id);
+  });
 });
 
 describe("scheduled report delivery", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    services.releaseReport.mockResolvedValue();
+    services.releaseReport.mockResolvedValue(true);
   });
 
   it("routes Linq reports to the stored conversation", async () => {
@@ -277,7 +298,7 @@ function scheduledClaim(): Awaited<
       reportLeaseToken: null,
       retryAt: null,
       scheduledFor: new Date("2026-09-02T13:00:00.000Z"),
-      startedAt: new Date("2026-09-02T13:00:00.000Z"),
+      startedAt: null,
       status: "running",
       updatedAt: new Date("2026-09-02T13:00:00.000Z"),
       workerSessionId: null,

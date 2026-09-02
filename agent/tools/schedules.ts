@@ -3,7 +3,11 @@ import { z } from "zod";
 import { resolveModeValue } from "@/agent/lib/mode";
 import { scheduledReportIdentity } from "@/agent/lib/schedules/identity";
 import { postScheduledRunRoute } from "@/agent/lib/schedules/request";
-import { scheduleOwner, scheduleSummary } from "@/agent/lib/schedules/tools";
+import {
+  scheduleListSummary,
+  scheduleOwner,
+  scheduleSummary,
+} from "@/agent/lib/schedules/tools";
 import { scheduleTimingSchema } from "@/agent/lib/schedules/timing";
 import {
   createScheduledAgentJob,
@@ -41,7 +45,7 @@ export const listSchedules = defineTool({
   async execute(_input, context) {
     const owner = scheduleOwner(context);
     return (await listScheduledAgentJobs(owner.scope, owner.conversation)).map(
-      scheduleSummary
+      scheduleListSummary
     );
   },
 });

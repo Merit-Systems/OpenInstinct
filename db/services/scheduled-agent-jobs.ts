@@ -14,6 +14,12 @@ import {
 } from "@/agent/lib/schedules/outcome";
 import { db, scheduledAgentJobs, scheduledAgentRuns } from "@/db";
 
+const exhaustedRunOutcome = {
+  kind: "blocked",
+  summary: "The scheduled task could not complete after three attempts.",
+  userActionNeeded: "Try the task again or update the schedule.",
+} satisfies ScheduledRunOutcome;
+
 export interface CreateScheduledAgentJob {
   readonly conversationChannel: "eve" | "linq";
   readonly conversationId: string;
@@ -95,9 +101,13 @@ export async function listScheduledAgentJobs(
       },
     },
   });
-  return jobs.map(({ runs, ...job }) =>
-    parseJob({ ...job, lastError: runs[0]?.lastError ?? job.lastError })
-  );
+  return jobs.map(({ runs, ...job }) => {
+    const parsed = parseJob(job);
+    parsed.lastError = runs[0]?.lastError ?? parsed.lastError;
+    return Object.assign(parsed, {
+      latestRun: runs[0] ? parseRun(runs[0]) : null,
+    });
+  });
 }
 
 export async function updateScheduledAgentJob(
@@ -225,6 +235,7 @@ export async function claimReadyScheduledAgentRuns(options: {
             eq(scheduledAgentRuns.status, "queued"),
             and(
               eq(scheduledAgentRuns.status, "running"),
+              isNull(scheduledAgentRuns.workerSessionId),
               lte(scheduledAgentRuns.leaseExpiresAt, options.now)
             )
           ),
@@ -238,28 +249,54 @@ export async function claimReadyScheduledAgentRuns(options: {
       .limit(options.limit)
       .for("update", { of: scheduledAgentRuns, skipLocked: true });
     if (ready.length === 0) return [];
+    const exhausted = ready.filter(({ run }) => run.attempts >= 3);
+    if (exhausted.length > 0) {
+      await transaction
+        .update(scheduledAgentRuns)
+        .set({
+          lastError: "Scheduled worker dispatch did not complete.",
+          leaseExpiresAt: null,
+          leaseToken: null,
+          outcome: exhaustedRunOutcome,
+          reportSequence: sql`${scheduledAgentRuns.reportSequence} + 1`,
+          reportStatus: "pending",
+          retryAt: null,
+          status: "dead_letter",
+          updatedAt: options.now,
+        })
+        .where(
+          inArray(
+            scheduledAgentRuns.id,
+            exhausted.map(({ run }) => run.id)
+          )
+        );
+    }
+    const claimable = ready.filter(({ run }) => run.attempts < 3);
+    if (claimable.length === 0) return [];
     const leaseToken = randomUUID();
     const leaseExpiresAt = new Date(options.now.getTime() + options.leaseForMs);
-    const ids = ready.map(({ run }) => run.id);
+    const ids = claimable.map(({ run }) => run.id);
     await transaction
       .update(scheduledAgentRuns)
       .set({
         attempts: sql`${scheduledAgentRuns.attempts} + 1`,
         leaseExpiresAt,
         leaseToken,
-        startedAt: options.now,
+        retryAt: null,
+        startedAt: null,
         status: "running",
         updatedAt: options.now,
       })
       .where(inArray(scheduledAgentRuns.id, ids));
-    return ready.map(({ job, run }) => ({
+    return claimable.map(({ job, run }) => ({
       job: parseJob(job),
       run: parseRun({
         ...run,
         attempts: run.attempts + 1,
         leaseExpiresAt,
         leaseToken,
-        startedAt: options.now,
+        retryAt: null,
+        startedAt: null,
         status: "running",
       }),
     }));
@@ -271,32 +308,49 @@ export async function setScheduledRunSession(
   leaseToken: string,
   workerSessionId: string
 ) {
-  await db
+  const [run] = await db
     .update(scheduledAgentRuns)
     .set({ workerSessionId, updatedAt: new Date() })
     .where(
       and(
         eq(scheduledAgentRuns.id, runId),
+        eq(scheduledAgentRuns.status, "running"),
         eq(scheduledAgentRuns.leaseToken, leaseToken)
       )
-    );
+    )
+    .returning({ id: scheduledAgentRuns.id });
+  if (run) return true;
+  const current = await db.query.scheduledAgentRuns.findFirst({
+    columns: { workerSessionId: true },
+    where: eq(scheduledAgentRuns.id, runId),
+  });
+  return current?.workerSessionId === workerSessionId;
 }
 
-export async function getClaimedScheduledAgentRun(
+export async function markScheduledAgentRunStarted(
   runId: string,
-  leaseToken: string
+  leaseToken: string,
+  workerSessionId: string,
+  leaseForMs: number,
+  now = new Date()
 ) {
-  const claimed = await db.query.scheduledAgentRuns.findFirst({
-    where: and(
-      eq(scheduledAgentRuns.id, runId),
-      eq(scheduledAgentRuns.status, "running"),
-      eq(scheduledAgentRuns.leaseToken, leaseToken)
-    ),
-    with: { job: true },
-  });
-  if (!claimed) return undefined;
-  const { job, ...run } = claimed;
-  return { job: parseJob(job), run: parseRun(run) };
+  const [run] = await db
+    .update(scheduledAgentRuns)
+    .set({
+      leaseExpiresAt: new Date(now.getTime() + leaseForMs),
+      startedAt: sql`coalesce(${scheduledAgentRuns.startedAt}, ${now})`,
+      updatedAt: now,
+      workerSessionId,
+    })
+    .where(
+      and(
+        eq(scheduledAgentRuns.id, runId),
+        eq(scheduledAgentRuns.status, "running"),
+        eq(scheduledAgentRuns.leaseToken, leaseToken)
+      )
+    )
+    .returning({ id: scheduledAgentRuns.id });
+  return run !== undefined;
 }
 
 export async function waitForScheduledAgentRunInput(
@@ -511,14 +565,19 @@ export async function releaseScheduledAgentRun(
       eq(scheduledAgentRuns.leaseToken, leaseToken)
     ),
   });
-  if (!run) return;
+  if (!run) return undefined;
   const dead = run.attempts >= 3;
-  await db
+  const [released] = await db
     .update(scheduledAgentRuns)
     .set({
       lastError: errorMessage.slice(0, 2_000),
       leaseExpiresAt: null,
       leaseToken: null,
+      outcome: dead ? exhaustedRunOutcome : run.outcome,
+      reportSequence: dead
+        ? sql`${scheduledAgentRuns.reportSequence} + 1`
+        : scheduledAgentRuns.reportSequence,
+      reportStatus: dead ? "pending" : run.reportStatus,
       retryAt: dead ? null : new Date(now.getTime() + 5 * 60_000),
       status: dead ? "dead_letter" : "queued",
       updatedAt: now,
@@ -528,7 +587,9 @@ export async function releaseScheduledAgentRun(
         eq(scheduledAgentRuns.id, run.id),
         eq(scheduledAgentRuns.leaseToken, leaseToken)
       )
-    );
+    )
+    .returning({ status: scheduledAgentRuns.status });
+  return released?.status;
 }
 
 export async function claimScheduledReport(runId: string, now = new Date()) {
@@ -544,7 +605,11 @@ export async function claimScheduledReport(runId: string, now = new Date()) {
     .where(
       and(
         eq(scheduledAgentRuns.id, runId),
-        inArray(scheduledAgentRuns.status, ["completed", "waiting_for_input"]),
+        inArray(scheduledAgentRuns.status, [
+          "completed",
+          "dead_letter",
+          "waiting_for_input",
+        ]),
         eq(scheduledAgentRuns.reportStatus, "pending")
       )
     )
@@ -571,6 +636,7 @@ export async function listRecoverableScheduledReports(
         and(
           inArray(scheduledAgentRuns.status, [
             "completed",
+            "dead_letter",
             "waiting_for_input",
           ]),
           or(
@@ -615,7 +681,7 @@ export async function releaseScheduledReport(
   leaseToken: string,
   errorMessage: string
 ) {
-  await db
+  const [run] = await db
     .update(scheduledAgentRuns)
     .set({
       lastError: errorMessage.slice(0, 2_000),
@@ -629,7 +695,9 @@ export async function releaseScheduledReport(
         eq(scheduledAgentRuns.id, runId),
         eq(scheduledAgentRuns.reportLeaseToken, leaseToken)
       )
-    );
+    )
+    .returning({ id: scheduledAgentRuns.id });
+  return run !== undefined;
 }
 
 export async function finalizeScheduledReport(
@@ -639,9 +707,13 @@ export async function finalizeScheduledReport(
 ) {
   const reportableRunStatus =
     reportStatus === "suppressed"
-      ? eq(scheduledAgentRuns.status, "completed")
-      : inArray(scheduledAgentRuns.status, ["completed", "waiting_for_input"]);
-  await db
+      ? inArray(scheduledAgentRuns.status, ["completed", "dead_letter"])
+      : inArray(scheduledAgentRuns.status, [
+          "completed",
+          "dead_letter",
+          "waiting_for_input",
+        ]);
+  const [run] = await db
     .update(scheduledAgentRuns)
     .set({
       reportLeaseExpiresAt: null,
@@ -656,5 +728,7 @@ export async function finalizeScheduledReport(
         eq(scheduledAgentRuns.reportStatus, "queued"),
         reportableRunStatus
       )
-    );
+    )
+    .returning({ id: scheduledAgentRuns.id });
+  return run !== undefined;
 }

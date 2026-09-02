@@ -7,6 +7,27 @@ const scheduledReportIdentitySchema = z.object({
   scheduledRunId: z.uuid(),
   scheduledRunSessionId: z.string().min(1).optional(),
 });
+const scheduledRunIdentitySchema = z.object({
+  scheduledRunId: z.uuid(),
+  scheduledRunLeaseToken: z.uuid(),
+});
+
+export function scheduledRunIdentity(auth: SessionContext["session"]["auth"]) {
+  const caller =
+    auth.current?.authenticator === "scheduled-worker"
+      ? auth.current
+      : auth.initiator?.authenticator === "scheduled-worker"
+        ? auth.initiator
+        : undefined;
+  if (caller?.authenticator !== "scheduled-worker") return undefined;
+  const identity = scheduledRunIdentitySchema.safeParse(caller.attributes);
+  return identity.success
+    ? {
+        leaseToken: identity.data.scheduledRunLeaseToken,
+        runId: identity.data.scheduledRunId,
+      }
+    : undefined;
+}
 
 export function scheduledReportIdentity(
   auth: SessionContext["session"]["auth"]

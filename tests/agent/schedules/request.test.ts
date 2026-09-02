@@ -77,15 +77,15 @@ describe("scheduled run requests", () => {
   });
 
   it("leaves local callbacks to Eve local development authentication", async () => {
-    await postScheduledRunRoute("/internal/scheduled-run/start", {
+    await postScheduledRunRoute("/internal/scheduled-run/respond", {
+      answer: "Logan",
       leaseToken: "lease-1",
-      restart: false,
       runId: "run-1",
     });
 
     expect(mocks.getToken).not.toHaveBeenCalled();
     expect(fetch).toHaveBeenCalledWith(
-      new URL("http://127.0.0.1:51829/internal/scheduled-run/start"),
+      new URL("http://127.0.0.1:51829/internal/scheduled-run/respond"),
       expect.objectContaining({ method: "POST", redirect: "error" })
     );
     expect(sentHeaders().get("authorization")).toBeNull();
