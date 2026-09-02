@@ -70,13 +70,33 @@ export async function publishArtifact(
   };
 }
 
-export async function readArtifactManifest(
+async function readArtifactManifest(
   scope: AccessScope,
   artifactId: string,
   signal?: AbortSignal
 ) {
   const id = artifactIdSchema.parse(artifactId);
   return readArtifactManifestAtPath(artifactManifestPath(scope, id), signal);
+}
+
+export async function publishArtifactForSharing(
+  scope: AccessScope,
+  artifactId: string,
+  signal?: AbortSignal
+) {
+  const manifest = await readArtifactManifest(scope, artifactId, signal);
+  if (!manifest) return undefined;
+
+  const published = await readPublishedArtifactManifest(artifactId, signal);
+  if (!published) {
+    await writeArtifactManifest(
+      publishedArtifactManifestPath(manifest.id),
+      JSON.stringify(manifest),
+      { allowOverwrite: true, signal }
+    );
+  }
+
+  return manifest;
 }
 
 export async function readPublishedArtifactManifest(
@@ -87,11 +107,19 @@ export async function readPublishedArtifactManifest(
   return readArtifactManifestAtPath(publishedArtifactManifestPath(id), signal);
 }
 
-async function writeArtifactManifest(pathname: string, serialized: string) {
+async function writeArtifactManifest(
+  pathname: string,
+  serialized: string,
+  options: {
+    readonly allowOverwrite?: boolean;
+    readonly signal?: AbortSignal;
+  } = {}
+) {
   await put(pathname, serialized, {
     ...blobOptions,
     addRandomSuffix: false,
-    allowOverwrite: false,
+    abortSignal: options.signal,
+    allowOverwrite: options.allowOverwrite ?? false,
     contentType: "application/json",
     maximumSizeInBytes: maximumArtifactManifestBytes,
   });

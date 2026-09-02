@@ -1,13 +1,15 @@
 import type { AccessScope } from "@/lib/access-scope";
 import { applicationOrigin } from "@/lib/application-origin";
 import { parseArtifactMessage } from "@/lib/artifacts";
-import { readArtifactManifest } from "@/lib/artifacts/server";
+import { publishArtifactForSharing } from "@/lib/artifacts/server";
 import { maximumWorkerCompletionImages } from "@/lib/worker-completion";
 
 interface LinqArtifactAttachment {
   readonly name: string;
   readonly url: string;
 }
+
+const artifactPublicationTimeoutMs = 10_000;
 
 export async function prepareLinqArtifactDelivery(
   message: string,
@@ -22,12 +24,17 @@ export async function prepareLinqArtifactDelivery(
     return { attachments: [], failedArtifactIds: [], markdown: message };
   }
 
+  const timeoutSignal = AbortSignal.timeout(artifactPublicationTimeoutMs);
+  const publicationSignal = input.signal
+    ? AbortSignal.any([input.signal, timeoutSignal])
+    : timeoutSignal;
+
   const loaded = await Promise.all(
     references.map(async (reference) => ({
-      artifact: await readArtifactManifest(
+      artifact: await publishArtifactForSharing(
         input.scope,
         reference.id,
-        input.signal
+        publicationSignal
       ).catch(() => undefined),
       reference,
     }))
@@ -57,13 +64,19 @@ export async function prepareLinqArtifactDelivery(
       .slice(maximumWorkerCompletionImages)
       .map((item) => item.id),
   ];
+  const publishedArtifactIds = new Set(
+    loaded.flatMap((item) => (item.artifact ? [item.reference.id] : []))
+  );
   const origin = applicationOrigin();
   const markdown = segments
     .map((segment) =>
       segment.type === "text"
         ? segment.text
-        : new URL(segment.url, origin).toString()
+        : publishedArtifactIds.has(segment.id)
+          ? new URL(segment.url, origin).toString()
+          : ""
     )
+    .filter(Boolean)
     .join("\n\n")
     .trim();
 

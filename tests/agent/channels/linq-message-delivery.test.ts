@@ -26,6 +26,9 @@ const linqChannelCapture = vi.hoisted(() => ({
     }
   >(),
   images: new Map<string, BrowserImage>(),
+  failedPublications: new Set<string>(),
+  publishedArtifactIds: Array<string>(),
+  publicationSignals: Array<AbortSignal | undefined>(),
   readImage: vi.fn<
     (
       scope: AccessScope,
@@ -72,7 +75,16 @@ vi.mock("@/lib/application-origin", () => ({
   applicationOrigin: () => "https://openinstinct.example",
 }));
 vi.mock("@/lib/artifacts/server", () => ({
-  async readArtifactManifest(_scope: AccessScope, id: string) {
+  async publishArtifactForSharing(
+    _scope: AccessScope,
+    id: string,
+    signal?: AbortSignal
+  ) {
+    linqChannelCapture.publishedArtifactIds.push(id);
+    linqChannelCapture.publicationSignals.push(signal);
+    if (linqChannelCapture.failedPublications.has(id)) {
+      throw new Error("Blob write failed");
+    }
     return linqChannelCapture.artifacts.get(id);
   },
 }));
@@ -122,6 +134,9 @@ interface LinqTestState {
 describe("Linq message delivery", () => {
   beforeEach(() => {
     linqChannelCapture.artifacts.clear();
+    linqChannelCapture.failedPublications.clear();
+    linqChannelCapture.publishedArtifactIds.length = 0;
+    linqChannelCapture.publicationSignals.length = 0;
     evlogCapture.info.mockClear();
     evlogCapture.set.mockClear();
     evlogCapture.useLogger.mockReset();
@@ -205,6 +220,10 @@ describe("Linq message delivery", () => {
     );
 
     expect(post).toHaveBeenCalledTimes(2);
+    expect(linqChannelCapture.publishedArtifactIds).toEqual([artifactId]);
+    expect(linqChannelCapture.publicationSignals[0]).toBeInstanceOf(
+      AbortSignal
+    );
     expect(post).toHaveBeenNthCalledWith(1, { markdown: "Here it is." });
     expect(post).toHaveBeenNthCalledWith(2, {
       attachments: [
@@ -217,8 +236,16 @@ describe("Linq message delivery", () => {
     });
   });
 
-  it("keeps the public artifact URL when the native image cannot be attached", async () => {
+  it("does not send a broken URL when the artifact cannot be published", async () => {
     const artifactId = "206c3a7e-c0b8-4317-9e34-552cff646673";
+    linqChannelCapture.artifacts.set(artifactId, {
+      id: artifactId,
+      kind: "image",
+      sourceUrl: "https://images.example/result.png",
+      title: "Result",
+    });
+    linqChannelCapture.failedPublications.add(artifactId);
+    const consoleWarn = vi.spyOn(console, "warn").mockReturnValue(undefined);
     const { context, post } = handlerContext();
 
     await deliverCompletedMessage(
@@ -229,14 +256,19 @@ describe("Linq message delivery", () => {
       sessionContext()
     );
 
-    expect(post).toHaveBeenCalledTimes(3);
+    expect(post).toHaveBeenCalledTimes(2);
     expect(post).toHaveBeenNthCalledWith(1, { markdown: "Here it is." });
     expect(post).toHaveBeenNthCalledWith(2, {
-      markdown: `https://openinstinct.example/artifacts/published/${artifactId}`,
-    });
-    expect(post).toHaveBeenNthCalledWith(3, {
       markdown: "I couldn't attach one image.",
     });
+    expect(consoleWarn).toHaveBeenCalledWith(
+      "[linq] artifact delivery failed",
+      {
+        artifactIds: [artifactId],
+        sessionId: "session-1",
+      }
+    );
+    consoleWarn.mockRestore();
   });
 
   it("sends multiple artifact images as one native attachment gallery", async () => {

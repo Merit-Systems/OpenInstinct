@@ -308,6 +308,12 @@ export const linqChannelConfig = {
           sessionId: session.session.id,
         });
       }
+      if (artifactDelivery.failedArtifactIds.length > 0) {
+        console.warn("[linq] artifact delivery failed", {
+          artifactIds: artifactDelivery.failedArtifactIds,
+          sessionId: session.session.id,
+        });
+      }
       const failedImageCount =
         delivery.failedArtifactIds.length +
         artifactDelivery.failedArtifactIds.length;
