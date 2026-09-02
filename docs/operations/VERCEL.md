@@ -397,8 +397,10 @@ pnpm exec vercel connect create connect.squareupsandbox.com \
 pnpm exec vercel connect attach <square-connector-uid> --project <vercel-project-name-or-id> \
   --environment production --yes
 
-# OPERATOR ACTION: enter the connector identifier and environment at the
-# prompts, then redeploy.
+# OPERATOR ACTION: enter the connector identifier at the prompt. "production"
+# names the Vercel environment. When prompted for the SQUARE_ENVIRONMENT value,
+# enter "sandbox" for the sandbox connector or "production" for the production
+# connector. Then redeploy.
 pnpm exec vercel env add SQUARE_CONNECTOR_UID production
 pnpm exec vercel env add SQUARE_ENVIRONMENT production
 pnpm exec eve deploy --non-interactive --yes --project <vercel-project-name-or-id>
