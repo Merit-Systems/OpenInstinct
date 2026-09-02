@@ -26,7 +26,10 @@ describe("agent instructions", () => {
 
     const selected = await resolve({}, dynamicContext("scheduled-result"));
     expect(selected?.content).toContain(
-      "Never invoke another agent, alter a schedule or profile, access an account"
+      "Never invoke another agent, alter a schedule or profile, read or change vault contents, access an account"
+    );
+    expect(selected?.content).toContain(
+      "call `request_vault_setup` with only the safe metadata"
     );
   });
 

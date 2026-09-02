@@ -66,6 +66,7 @@ describe("mode capability matrix", () => {
 
   it("limits scheduled reporting to delivery or resuming its own run", async () => {
     expect(await effectiveCapabilities("scheduled-result")).toEqual([
+      "request_vault_setup",
       "schedules-answer",
       "send_message",
     ]);
