@@ -474,7 +474,7 @@ describe("Linq message delivery", () => {
     await handleActionResult(
       sendMessageResult({
         kind: "message",
-        markdown: `Here it is.\n\n[[artifact:${artifactId}]]`,
+        text: `Here it is.\n\n[[artifact:${artifactId}]]`,
       }),
       context,
       sessionContext()
@@ -492,7 +492,7 @@ describe("Linq message delivery", () => {
           url: "https://images.example/result.png",
         },
       ],
-      markdown: `Here it is.\n\nhttps://openinstinct.example/artifacts/published/${artifactId}`,
+      raw: `Here it is.\n\nhttps://openinstinct.example/artifacts/published/${artifactId}`,
     });
   });
 
@@ -508,14 +508,14 @@ describe("Linq message delivery", () => {
     await handleActionResult(
       sendMessageResult({
         kind: "message",
-        markdown: `Report ready.\n\n[[artifact:${artifactId}]]`,
+        text: `Report ready.\n\n[[artifact:${artifactId}]]`,
       }),
       context,
       sessionContext()
     );
 
     expect(post).toHaveBeenCalledExactlyOnceWith({
-      markdown: `Report ready.\n\nhttps://openinstinct.example/artifacts/published/${artifactId}`,
+      raw: `Report ready.\n\nhttps://openinstinct.example/artifacts/published/${artifactId}`,
     });
   });
 
@@ -528,14 +528,14 @@ describe("Linq message delivery", () => {
     await handleActionResult(
       sendMessageResult({
         kind: "message",
-        markdown: `Here it is.\n\n[[artifact:${artifactId}]]`,
+        text: `Here it is.\n\n[[artifact:${artifactId}]]`,
       }),
       context,
       sessionContext()
     );
 
     expect(post).toHaveBeenCalledExactlyOnceWith({
-      markdown: "Here it is.\n\nI couldn't publish one artifact.",
+      raw: "Here it is.\n\nI couldn't publish one artifact.",
     });
     expect(consoleWarn).toHaveBeenCalledWith(
       "[linq] artifact delivery failed",

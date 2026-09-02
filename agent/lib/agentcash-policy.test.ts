@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { agentcashApprovalResponderAllowed } from "./agentcash-access";
 import {
   agentcashFetchSchema,
   agentcashNoPaymentCeilingUsd,
@@ -8,6 +9,24 @@ import {
 } from "./agentcash-policy";
 
 describe("Agentcash payment policy", () => {
+  it("accepts payment approval only from the allowlisted request owner", () => {
+    const allowed = new Set(["user-1", "user-2"]);
+    expect(
+      agentcashApprovalResponderAllowed(
+        { principalId: "user-1", principalType: "user" },
+        { principalId: "user-1", principalType: "user" },
+        allowed
+      )
+    ).toBe(true);
+    expect(
+      agentcashApprovalResponderAllowed(
+        { principalId: "user-2", principalType: "user" },
+        { principalId: "user-1", principalType: "user" },
+        allowed
+      )
+    ).toBe(false);
+  });
+
   it("requires HTTPS and a caller-visible payment ceiling", () => {
     expect(() =>
       agentcashFetchSchema.parse({
@@ -18,6 +37,17 @@ describe("Agentcash payment policy", () => {
     expect(() =>
       agentcashFetchSchema.parse({ url: "https://example.com/api" })
     ).toThrow(/Invalid input/u);
+    for (const url of [
+      "https://localhost/api",
+      "https://127.0.0.1/api",
+      "https://169.254.169.254/latest/meta-data",
+      "https://10.0.0.1/api",
+      "https://service.internal/api",
+    ]) {
+      expect(() => agentcashFetchSchema.parse({ maxAmount: 1, url })).toThrow(
+        /public internet host/u
+      );
+    }
   });
 
   it("enforces the deployment ceiling and removes no payment detail", () => {

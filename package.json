@@ -4,7 +4,7 @@
   "dependencies": {
     "@ai-sdk/mcp": "^2.0.40",
     "@base-ui/react": "^1.7.0",
-    "@coinbase/coinbase-cli": "0.0.6",
+    "@coinbase/coinbase-cli": "0.0.7",
     "@googleapis/calendar": "^16.0.0",
     "@googleapis/gmail": "^18.0.0",
     "@googleapis/people": "^8.0.0",

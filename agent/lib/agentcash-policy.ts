@@ -1,10 +1,46 @@
+import { isIP } from "node:net";
 import { z } from "zod";
 
 const httpsUrlSchema = z
   .url()
   .refine((value) => new URL(value).protocol === "https:", {
     message: "Agentcash endpoints must use HTTPS.",
+  })
+  .refine((value) => publicEndpointHostname(new URL(value).hostname), {
+    message: "Agentcash endpoints must use a public internet host.",
   });
+
+function publicEndpointHostname(hostname: string) {
+  const normalized = hostname.toLowerCase().replace(/\.$/u, "");
+  if (
+    normalized === "localhost" ||
+    normalized.endsWith(".localhost") ||
+    normalized.endsWith(".local") ||
+    normalized.endsWith(".internal")
+  ) {
+    return false;
+  }
+  if (isIP(normalized) === 4) {
+    const [first = 0, second = 0] = normalized
+      .split(".")
+      .map((part) => Number(part));
+    return !(
+      first === 0 ||
+      first === 10 ||
+      first === 127 ||
+      (first === 169 && second === 254) ||
+      (first === 172 && second >= 16 && second <= 31) ||
+      (first === 192 && second === 168) ||
+      first >= 224
+    );
+  }
+  if (isIP(normalized) === 6) {
+    return !/^(?:::|::1|f[cd][0-9a-f]*:|fe[89ab][0-9a-f]*:|ff[0-9a-f]*:|::ffff:(?:0\.|10\.|127\.|169\.254\.|172\.(?:1[6-9]|2\d|3[01])\.|192\.168\.))/iu.test(
+      normalized
+    );
+  }
+  return true;
+}
 
 const safeHeadersSchema = z
   .record(z.string(), z.string())

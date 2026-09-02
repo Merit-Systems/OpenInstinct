@@ -37,20 +37,9 @@ export async function executeAgentcashPayment(input: {
     );
   }
 
+  let result: unknown;
   try {
-    const result = await input.operation();
-    await writeOperation(
-      path,
-      {
-        createdAt: now,
-        inputHash,
-        result,
-        state: "succeeded",
-        updatedAt: new Date().toISOString(),
-      },
-      true
-    );
-    return result;
+    result = await input.operation();
   } catch (error) {
     await writeOperation(
       path,
@@ -64,6 +53,25 @@ export async function executeAgentcashPayment(input: {
     ).catch(() => undefined);
     throw error;
   }
+
+  try {
+    await writeOperation(
+      path,
+      {
+        createdAt: now,
+        inputHash,
+        result,
+        state: "succeeded",
+        updatedAt: new Date().toISOString(),
+      },
+      true
+    );
+  } catch {
+    console.warn(
+      "Agentcash completed a payment but could not persist its success receipt; do not retry this call automatically."
+    );
+  }
+  return result;
 }
 
 function existingResult(

@@ -1,19 +1,11 @@
-import {
-  createMCPClient,
-  type ListToolsResult,
-  type MCPClient,
-} from "@ai-sdk/mcp";
+import { createMCPClient, type MCPClient } from "@ai-sdk/mcp";
 import { Experimental_StdioMCPTransport } from "@ai-sdk/mcp/mcp-stdio";
 import { agentcashChildEnvironment, agentcashCliPath } from "./agentcash-cli";
 
 const initializeTimeoutMs = 15_000;
 const toolTimeoutMs = 180_000;
 const maximumResultCharacters = 120_000;
-
-export type AgentcashMcpToolDefinition = Pick<
-  ListToolsResult["tools"][number],
-  "description" | "inputSchema" | "name"
->;
+const maximumStoredResultBytes = 100_000;
 
 async function createClient(): Promise<MCPClient> {
   return createMCPClient({
@@ -28,22 +20,6 @@ async function createClient(): Promise<MCPClient> {
     }),
     version: "1.0.0",
   });
-}
-
-export async function listAgentcashMcpTools() {
-  const client = await createClient();
-  try {
-    const page = await client.listTools({
-      options: { timeout: initializeTimeoutMs },
-    });
-    return page.tools.map((tool): AgentcashMcpToolDefinition => ({
-      ...(tool.description ? { description: tool.description } : {}),
-      inputSchema: tool.inputSchema,
-      name: tool.name,
-    }));
-  } finally {
-    await client.close().catch(() => undefined);
-  }
 }
 
 export async function callAgentcashMcpTool(
@@ -65,17 +41,33 @@ export async function callAgentcashMcpTool(
     if (result.isError) {
       throw new Error(safeResultText(selected));
     }
-    const safe = redactSensitiveFields(selected);
-    const serialized = safe === undefined ? "" : JSON.stringify(safe);
-    if (serialized.length > maximumResultCharacters) {
-      throw new Error(
-        "Agentcash returned too much data. Retry with a narrower query or endpoint."
-      );
-    }
-    return safe;
+    return boundedAgentcashResult(redactSensitiveFields(selected));
   } finally {
     await client.close().catch(() => undefined);
   }
+}
+
+function boundedAgentcashResult(value: unknown) {
+  if (value === undefined) return value;
+  const serialized = JSON.stringify(value);
+  if (
+    serialized.length <= maximumResultCharacters &&
+    Buffer.byteLength(serialized) <= maximumStoredResultBytes
+  ) {
+    return value;
+  }
+  return {
+    note: "The paid response completed but was truncated for safe delivery. Do not repay or retry automatically.",
+    originalBytes: Buffer.byteLength(serialized),
+    preview: truncateUtf8(serialized, maximumStoredResultBytes),
+    truncated: true,
+  };
+}
+
+function truncateUtf8(value: string, maximumBytes: number) {
+  const buffer = Buffer.from(value);
+  if (buffer.byteLength <= maximumBytes) return value;
+  return buffer.subarray(0, maximumBytes).toString("utf8");
 }
 
 function parseTextResult(content: unknown) {

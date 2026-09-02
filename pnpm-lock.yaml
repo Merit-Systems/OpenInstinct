@@ -18,8 +18,8 @@ importers:
         specifier: ^1.7.0
         version: 1.7.0(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
       '@coinbase/coinbase-cli':
-        specifier: 0.0.6
-        version: 0.0.6
+        specifier: 0.0.7
+        version: 0.0.7
       '@googleapis/calendar':
         specifier: ^16.0.0
         version: 16.0.0
@@ -641,8 +641,8 @@ packages:
   '@clack/prompts@0.11.0':
     resolution: {integrity: sha512-pMN5FcrEw9hUkZA4f+zLlzivQSeQf5dRGJjSUbvVYDLvpKCdQx5OaknvKzgbtXOizhP+SJJJjqEbOe55uKKfAw==}
 
-  '@coinbase/coinbase-cli@0.0.6':
-    resolution: {integrity: sha512-uQeqJ0UkPwMSh+jWTvZ+YQhhp9htQszgN5FiT5jNju/Pwz+vJh9v7MxE9c9ATNeE9lDeK7MuTYJMtZ01OG/Hkw==}
+  '@coinbase/coinbase-cli@0.0.7':
+    resolution: {integrity: sha512-DsDQbL16py6Ot+g90PmT957GelzvFNHD9P3gyM37y2vMaUT1j5QJ/jo5a58AAIKVUd2G1fj6lfQ7SHFRv5gUFA==}
     engines: {node: '>=22'}
     hasBin: true
 
@@ -8683,7 +8683,7 @@ snapshots:
       picocolors: 1.1.1
       sisteransi: 1.0.5
 
-  '@coinbase/coinbase-cli@0.0.6': {}
+  '@coinbase/coinbase-cli@0.0.7': {}
 
   '@dotenvx/dotenvx@1.75.1':
     dependencies:

@@ -28,11 +28,11 @@ describe("root and worker capability boundaries", () => {
       "agentcash_get_balance.ts",
       "agentcash_get_settings.ts",
       "agentcash_list_accounts.ts",
-      "agentcash_mcp.ts",
       "agentcash_search.ts",
       "bash.ts",
       "calendar.ts",
       "coinbase_access_status.ts",
+      "coinbase_create_equity_order.ts",
       "coinbase_create_order.ts",
       "coinbase_mcp.ts",
       "coinbase_preview_order.ts",
@@ -80,8 +80,17 @@ describe("root and worker capability boundaries", () => {
     expect(readFileSync("agent/lib/agentcash-cli.ts", "utf8")).toContain(
       "HOME: homeDirectory"
     );
+    const embeddedAgentcash = readFileSync(
+      "agent/lib/agentcash-cli-source.generated.ts",
+      "utf8"
+    );
+    expect(embeddedAgentcash).toContain("__openinstinctPublicAddress");
+    expect(embeddedAgentcash).toContain('redirect: "error"');
     expect(readFileSync(`${rootTools}/agentcash_fetch.ts`, "utf8")).toContain(
-      "approval: agentcashPaymentApproval"
+      "approval: agentcashPaymentApprovalPolicy"
+    );
+    expect(readFileSync(`${rootTools}/coinbase_mcp.ts`, "utf8")).toContain(
+      '"session.started"'
     );
     expect(
       readFileSync(`${rootTools}/agentcash_fetch_free.ts`, "utf8")
@@ -89,6 +98,9 @@ describe("root and worker capability boundaries", () => {
     expect(
       readFileSync(`${rootTools}/agentcash_fetch_free.ts`, "utf8")
     ).toContain("maxAmount: agentcashNoPaymentCeilingUsd");
+    expect(
+      readFileSync(`${rootTools}/agentcash_fetch_free.ts`, "utf8")
+    ).toContain('paymentProtocol: "x402"');
     const agentcashSkill = readFileSync("agent/skills/agentcash.md", "utf8");
     expect(agentcashSkill).not.toContain("Ask for explicit approval");
     expect(agentcashSkill).toContain("agentcash_fetch_free");

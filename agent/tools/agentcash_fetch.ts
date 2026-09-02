@@ -1,7 +1,7 @@
 import { defineTool } from "eve/tools";
 import { scopeFromPrincipal } from "@/lib/access-scope";
 import {
-  agentcashPaymentApproval,
+  agentcashPaymentApprovalPolicy,
   requireAgentcashAccess,
 } from "../lib/agentcash-access";
 import { callAgentcashMcpTool } from "../lib/agentcash-mcp";
@@ -16,7 +16,7 @@ export default defineTool({
   description:
     "Call one HTTPS API through Agentcash with automatic SIWX and x402/MPP payment. Requires a caller-visible per-request USD ceiling and explicit user approval. Call agentcash_check_endpoint_schema first for a new endpoint.",
   inputSchema: agentcashFetchSchema,
-  approval: agentcashPaymentApproval,
+  approval: agentcashPaymentApprovalPolicy,
   async execute(input, ctx) {
     requireAgentcashAccess(ctx);
     const caller = ctx.session.auth.current ?? ctx.session.auth.initiator;

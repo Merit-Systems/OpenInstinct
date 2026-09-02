@@ -72,7 +72,7 @@ export async function callCoinbaseMcpTool(
       Reflect.get(result, "structuredContent") ??
       Reflect.get(result, "toolResult") ??
       parseTextResult(result.content);
-    const safe = redactSensitiveFields(selected);
+    const safe = redactCoinbaseResult(selected);
     const serialized = safe === undefined ? "" : JSON.stringify(safe);
     if (serialized.length > maximumResultCharacters) {
       throw new Error(
@@ -112,7 +112,7 @@ function textContent(part: unknown) {
   return type === "text" && typeof text === "string" ? text : undefined;
 }
 
-function redactSensitiveFields(value: unknown, key?: string): unknown {
+export function redactCoinbaseResult(value: unknown, key?: string): unknown {
   const normalized = key?.replaceAll(/[-_]/gu, "").toLowerCase();
   if (
     normalized &&
@@ -124,13 +124,13 @@ function redactSensitiveFields(value: unknown, key?: string): unknown {
     return "[credential omitted]";
   }
   if (Array.isArray(value)) {
-    return value.map((entry) => redactSensitiveFields(entry));
+    return value.map((entry) => redactCoinbaseResult(entry));
   }
   if (value && typeof value === "object") {
     return Object.fromEntries(
       Object.entries(value).map(([entryKey, entry]) => [
         entryKey,
-        redactSensitiveFields(entry, entryKey),
+        redactCoinbaseResult(entry, entryKey),
       ])
     );
   }

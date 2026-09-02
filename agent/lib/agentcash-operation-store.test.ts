@@ -82,4 +82,22 @@ describe("Agentcash payment receipts", () => {
     ).rejects.toThrow(/already attempted/u);
     expect(operation).toHaveBeenCalledTimes(1);
   });
+
+  it("returns a paid result when only success-receipt persistence fails", async () => {
+    mocks.put
+      .mockResolvedValueOnce({ pathname: "agentcash-operation" })
+      .mockRejectedValueOnce(new Error("blob unavailable"));
+    const operation = vi.fn(async () => ({ answer: 42 }));
+
+    await expect(
+      executeAgentcashPayment({
+        callId: "call-3",
+        operation,
+        scope,
+        toolInput,
+      })
+    ).resolves.toEqual({ answer: 42 });
+    expect(operation).toHaveBeenCalledTimes(1);
+    expect(mocks.put).toHaveBeenCalledTimes(2);
+  });
 });

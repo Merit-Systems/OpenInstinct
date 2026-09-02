@@ -22,117 +22,168 @@ const productIdSchema = z
   .trim()
   .transform((value) => value.toUpperCase())
   .pipe(
-    z.string().regex(/^[A-Z0-9]{1,20}-[A-Z0-9]{1,20}$/u, {
-      message: "Use a spot product such as BTC-USD or ETH-USDC.",
-    })
+    z
+      .string()
+      .max(80)
+      .regex(/^[A-Z0-9]+(?:-[A-Z0-9]+)+$/u, {
+        message:
+          "Use an exact Coinbase product ID such as BTC-USD or AAPL-USD.",
+      })
   );
 
-const orderShape = {
-  baseSize: decimalSchema.optional(),
-  limitPrice: decimalSchema.optional(),
-  productId: productIdSchema,
-  quoteSize: decimalSchema.optional(),
+const equityTradingSessionSchema = z.enum([
+  "NORMAL",
+  "PRE_MARKET",
+  "AFTER_HOURS",
+  "OVERNIGHT",
+  "MULTI_SESSION",
+]);
+
+const forbiddenOrderField = z.never().optional();
+const baseSizeSchema = decimalSchema.describe(
+  "Base-asset amount. Use this for market sells, futures contracts, and limit or stop-limit orders."
+);
+const quoteSizeSchema = decimalSchema.describe(
+  "Quote-currency amount to spend. Use this for a spot market buy such as $1 of BTC."
+);
+const sharedOrderShape = {
+  endTime: z.iso.datetime({ offset: true }).optional(),
+  portfolioId: z.string().trim().min(1).max(200).optional(),
+  productId: productIdSchema.describe(
+    "Exact Coinbase product ID, for example BTC-USD."
+  ),
+  reduceOnly: z.boolean().optional(),
   side: z.enum(["BUY", "SELL"]),
-  stopDirection: z.enum(["up", "down"]).optional(),
-  stopPrice: decimalSchema.optional(),
-  type: z.enum(["market", "limit", "stop_limit"]),
+  timeInForce: z.enum(["GTC", "IOC", "FOK", "GTD"]).optional(),
+} as const;
+
+const marketQuoteOrderShape = {
+  ...sharedOrderShape,
+  baseSize: forbiddenOrderField,
+  limitPrice: forbiddenOrderField,
+  postOnly: forbiddenOrderField,
+  quoteSize: quoteSizeSchema,
+  stopDirection: forbiddenOrderField,
+  stopPrice: forbiddenOrderField,
+  type: z.literal("market"),
+} as const;
+
+const marketBaseOrderShape = {
+  ...sharedOrderShape,
+  baseSize: baseSizeSchema,
+  limitPrice: forbiddenOrderField,
+  postOnly: forbiddenOrderField,
+  quoteSize: forbiddenOrderField,
+  stopDirection: forbiddenOrderField,
+  stopPrice: forbiddenOrderField,
+  type: z.literal("market"),
+} as const;
+
+const limitOrderShape = {
+  ...sharedOrderShape,
+  baseSize: baseSizeSchema,
+  limitPrice: decimalSchema,
+  postOnly: z.boolean().optional(),
+  quoteSize: forbiddenOrderField,
+  stopDirection: forbiddenOrderField,
+  stopPrice: forbiddenOrderField,
+  type: z.literal("limit"),
+} as const;
+
+const stopLimitOrderShape = {
+  ...sharedOrderShape,
+  baseSize: baseSizeSchema,
+  limitPrice: decimalSchema,
+  postOnly: z.boolean().optional(),
+  quoteSize: forbiddenOrderField,
+  stopDirection: z.enum(["up", "down"]),
+  stopPrice: decimalSchema,
+  type: z.literal("stop_limit"),
 } as const;
 
 function validateOrder(
   value: {
     baseSize?: string;
-    limitPrice?: string;
-    quoteSize?: string;
-    side: "BUY" | "SELL";
-    stopDirection?: "down" | "up";
-    stopPrice?: string;
+    endTime?: string;
+    equityTradingSession?: z.infer<typeof equityTradingSessionSchema>;
+    timeInForce?: "FOK" | "GTC" | "GTD" | "IOC";
     type: "limit" | "market" | "stop_limit";
   },
   ctx: z.RefinementCtx
 ) {
-  if (value.baseSize && value.quoteSize) {
+  if (value.timeInForce === "GTD" && !value.endTime) {
     ctx.addIssue({
       code: "custom",
-      message: "Use exactly one size field.",
-      path: ["quoteSize"],
+      message: "A GTD order requires endTime.",
+      path: ["endTime"],
     });
   }
-  if (value.type === "market") {
-    const validSize =
-      value.side === "BUY"
-        ? Boolean(value.quoteSize && !value.baseSize)
-        : Boolean(value.baseSize && !value.quoteSize);
-    if (!validSize) {
-      ctx.addIssue({
-        code: "custom",
-        message:
-          value.side === "BUY"
-            ? "A market BUY requires quoteSize only."
-            : "A market SELL requires baseSize only.",
-        path: [value.side === "BUY" ? "quoteSize" : "baseSize"],
-      });
-    }
-    if (value.limitPrice || value.stopPrice || value.stopDirection) {
-      ctx.addIssue({
-        code: "custom",
-        message: "Market orders cannot include limit or stop fields.",
-        path: ["type"],
-      });
-    }
-    return;
-  }
-  if (!value.baseSize || value.quoteSize) {
+  if (value.endTime && value.timeInForce !== "GTD") {
     ctx.addIssue({
       code: "custom",
-      message: "Limit and stop-limit orders require baseSize only.",
-      path: ["baseSize"],
+      message: "endTime is only valid with GTD timeInForce.",
+      path: ["endTime"],
     });
   }
-  if (!value.limitPrice) {
+  if (
+    value.equityTradingSession &&
+    value.equityTradingSession !== "NORMAL" &&
+    (value.type !== "limit" ||
+      !value.baseSize ||
+      !Number.isInteger(Number(value.baseSize)))
+  ) {
     ctx.addIssue({
       code: "custom",
-      message: "Limit and stop-limit orders require limitPrice.",
-      path: ["limitPrice"],
-    });
-  }
-  if (value.type === "stop_limit") {
-    if (!value.stopPrice) {
-      ctx.addIssue({
-        code: "custom",
-        message: "A stop-limit order requires stopPrice.",
-        path: ["stopPrice"],
-      });
-    }
-    if (!value.stopDirection) {
-      ctx.addIssue({
-        code: "custom",
-        message: "A stop-limit order requires stopDirection.",
-        path: ["stopDirection"],
-      });
-    }
-  } else if (value.stopPrice || value.stopDirection) {
-    ctx.addIssue({
-      code: "custom",
-      message: "A limit order cannot include stop fields.",
-      path: ["type"],
+      message:
+        "Extended-hours equity sessions require a whole-share limit order.",
+      path: ["equityTradingSession"],
     });
   }
 }
 
 export const coinbaseOrderSchema = z
-  .object(orderShape)
-  .strict()
+  .union([
+    z.object(marketQuoteOrderShape).strict(),
+    z.object(marketBaseOrderShape).strict(),
+    z.object(limitOrderShape).strict(),
+    z.object(stopLimitOrderShape).strict(),
+  ])
   .superRefine(validateOrder);
 
+const previewTokenSchema = z.string().min(40).max(4_096);
+
 export const coinbaseCreateOrderSchema = z
-  .object({
-    ...orderShape,
-    previewToken: z.string().min(40).max(4_096),
-  })
-  .strict()
+  .union([
+    z
+      .object({ ...marketQuoteOrderShape, previewToken: previewTokenSchema })
+      .strict(),
+    z
+      .object({ ...marketBaseOrderShape, previewToken: previewTokenSchema })
+      .strict(),
+    z.object({ ...limitOrderShape, previewToken: previewTokenSchema }).strict(),
+    z
+      .object({ ...stopLimitOrderShape, previewToken: previewTokenSchema })
+      .strict(),
+  ])
   .superRefine(validateOrder);
 
 export type CoinbaseOrder = z.infer<typeof coinbaseOrderSchema>;
+
+const equityOrderFields = {
+  equityOrderDate: z.iso.date().optional(),
+  equityTradingSession: equityTradingSessionSchema,
+  reduceOnly: forbiddenOrderField,
+} as const;
+
+export const coinbaseEquityOrderSchema = z
+  .union([
+    z.object({ ...marketQuoteOrderShape, ...equityOrderFields }).strict(),
+    z.object({ ...marketBaseOrderShape, ...equityOrderFields }).strict(),
+    z.object({ ...limitOrderShape, ...equityOrderFields }).strict(),
+  ])
+  .superRefine(validateOrder);
+
+export type CoinbaseEquityOrder = z.infer<typeof coinbaseEquityOrderSchema>;
 
 const previewPayloadSchema = z.object({
   expiresAtMs: z.number().int().positive(),
@@ -142,7 +193,7 @@ const previewPayloadSchema = z.object({
   version: z.literal(1),
 });
 
-function canonicalOrder(order: CoinbaseOrder): CoinbaseOrder {
+function canonicalOrder(order: CoinbaseOrder): Record<string, unknown> {
   return {
     productId: order.productId,
     side: order.side,
@@ -152,6 +203,11 @@ function canonicalOrder(order: CoinbaseOrder): CoinbaseOrder {
     ...(order.limitPrice ? { limitPrice: order.limitPrice } : {}),
     ...(order.stopPrice ? { stopPrice: order.stopPrice } : {}),
     ...(order.stopDirection ? { stopDirection: order.stopDirection } : {}),
+    ...(order.postOnly === undefined ? {} : { postOnly: order.postOnly }),
+    ...(order.timeInForce ? { timeInForce: order.timeInForce } : {}),
+    ...(order.endTime ? { endTime: order.endTime } : {}),
+    ...(order.reduceOnly === undefined ? {} : { reduceOnly: order.reduceOnly }),
+    ...(order.portfolioId ? { portfolioId: order.portfolioId } : {}),
   };
 }
 
@@ -174,7 +230,7 @@ export function createOrderPreviewToken(
   principalId: string,
   signingSecret: string
 ) {
-  const expiresAtMs = Date.now() + 5 * 60_000;
+  const expiresAtMs = Date.now() + 30 * 60_000;
   const encoded = Buffer.from(
     JSON.stringify({
       expiresAtMs,
@@ -237,9 +293,17 @@ export function verifyOrderPreviewToken(
 }
 
 export function clientOrderIdForPreview(token: string) {
+  return deterministicClientOrderId("preview", token);
+}
+
+export function clientOrderIdForCall(callId: string, principalId: string) {
+  return deterministicClientOrderId("call", `${principalId}\0${callId}`);
+}
+
+function deterministicClientOrderId(domain: string, value: string) {
   const bytes = createHash("sha256")
-    .update("openinstinct-coinbase-order\0")
-    .update(token)
+    .update(`openinstinct-coinbase-order-${domain}\0`)
+    .update(value)
     .digest()
     .subarray(0, 16);
   bytes[6] = (bytes.readUInt8(6) & 0x0f) | 0x40;
@@ -255,8 +319,30 @@ export function clientOrderIdForPreview(token: string) {
 }
 
 export function orderMcpInput(
-  order: CoinbaseOrder,
+  order: CoinbaseEquityOrder | CoinbaseOrder,
   clientOrderId?: string
+): Record<string, unknown> {
+  return {
+    ...orderPreviewMcpInput(order),
+    ...(order.postOnly === undefined ? {} : { post_only: order.postOnly }),
+    ...(order.timeInForce ? { time_in_force: order.timeInForce } : {}),
+    ...(order.endTime ? { end_time: order.endTime } : {}),
+    ...(order.reduceOnly === undefined
+      ? {}
+      : { reduce_only: order.reduceOnly }),
+    ...(order.portfolioId ? { portfolio_id: order.portfolioId } : {}),
+    ...("equityTradingSession" in order
+      ? { equity_trading_session: order.equityTradingSession }
+      : {}),
+    ...("equityOrderDate" in order && order.equityOrderDate
+      ? { equity_order_date: order.equityOrderDate }
+      : {}),
+    ...(clientOrderId ? { client_order_id: clientOrderId } : {}),
+  };
+}
+
+export function orderPreviewMcpInput(
+  order: CoinbaseEquityOrder | CoinbaseOrder
 ): Record<string, unknown> {
   return {
     product_id: order.productId,
@@ -267,6 +353,5 @@ export function orderMcpInput(
     ...(order.limitPrice ? { limit_price: order.limitPrice } : {}),
     ...(order.stopPrice ? { stop_price: order.stopPrice } : {}),
     ...(order.stopDirection ? { stop_direction: order.stopDirection } : {}),
-    ...(clientOrderId ? { client_order_id: clientOrderId } : {}),
   };
 }

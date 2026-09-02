@@ -1,5 +1,9 @@
 import type { SessionContext } from "eve/context";
-import type { ApprovalContext, ApprovalStatus } from "eve/tools/approval";
+import type {
+  Approval,
+  ApprovalContext,
+  ApprovalStatus,
+} from "eve/tools/approval";
 import { env } from "@/env";
 import { isAgentcashSolanaPrivateKey } from "./agentcash-wallet";
 
@@ -21,14 +25,15 @@ export function agentcashWalletConfigured() {
 
 export function agentcashPrincipalAllowed(session: Session) {
   const principalId = agentcashPrincipalId(session);
-  const allowed = new Set(
-    (env.AGENTCASH_ALLOWED_USER_IDS ?? "")
-      .split(/[\n,]/u)
-      .map((value) => value.trim())
-      .filter(Boolean)
-  );
-  return principalId !== undefined && allowed.has(principalId);
+  return principalId !== undefined && allowedUserIds.has(principalId);
 }
+
+const allowedUserIds = new Set(
+  (env.AGENTCASH_ALLOWED_USER_IDS ?? "")
+    .split(/[\n,]/u)
+    .map((value) => value.trim())
+    .filter(Boolean)
+);
 
 export function requireAgentcashAccess(ctx: SessionContext) {
   const principalId = agentcashPrincipalId(ctx.session);
@@ -47,7 +52,7 @@ export function requireAgentcashAccess(ctx: SessionContext) {
   return principalId;
 }
 
-export function agentcashPaymentApproval(ctx: ApprovalContext): ApprovalStatus {
+function agentcashPaymentApproval(ctx: ApprovalContext): ApprovalStatus {
   if (!agentcashPrincipalAllowed(ctx.session)) {
     return {
       type: "denied",
@@ -62,3 +67,28 @@ export function agentcashPaymentApproval(ctx: ApprovalContext): ApprovalStatus {
   }
   return "user-approval";
 }
+
+export function agentcashApprovalResponderAllowed(
+  responder: { principalId: string; principalType: string },
+  initiator: { principalId: string; principalType: string } | null,
+  allowed = allowedUserIds
+) {
+  return (
+    responder.principalType === "user" &&
+    initiator?.principalType === "user" &&
+    responder.principalId === initiator.principalId &&
+    allowed.has(responder.principalId)
+  );
+}
+
+export const agentcashPaymentApprovalPolicy: Approval = {
+  request: agentcashPaymentApproval,
+  response: ({ responder, session }) =>
+    agentcashApprovalResponderAllowed(responder, session.initiator)
+      ? { status: "allowed" }
+      : {
+          status: "rejected",
+          reason:
+            "Only the allowlisted user who requested this Agentcash payment may approve it.",
+        },
+};

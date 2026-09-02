@@ -21,7 +21,27 @@ if (metadata.name !== "agentcash" || typeof metadata.version !== "string") {
 }
 const result = await build({
   banner: {
-    js: 'import { createRequire as __openinstinctCreateRequire } from "node:module";\nconst require = __openinstinctCreateRequire(import.meta.url);',
+    js: `import { createRequire as __openinstinctCreateRequire } from "node:module";
+import { lookup as __openinstinctLookup } from "node:dns/promises";
+import { isIP as __openinstinctIsIP } from "node:net";
+const require = __openinstinctCreateRequire(import.meta.url);
+const __openinstinctNativeFetch = globalThis.fetch.bind(globalThis);
+function __openinstinctPublicAddress(address) {
+  if (__openinstinctIsIP(address) === 4) {
+    const [first = 0, second = 0] = address.split(".").map(Number);
+    return !(first === 0 || first === 10 || first === 127 || (first === 169 && second === 254) || (first === 172 && second >= 16 && second <= 31) || (first === 192 && second === 168) || first >= 224);
+  }
+  const normalized = address.toLowerCase();
+  return !/^(?:::|::1|f[cd][0-9a-f]*:|fe[89ab][0-9a-f]*:|ff[0-9a-f]*:|::ffff:(?:0\\.|10\\.|127\\.|169\\.254\\.|172\\.(?:1[6-9]|2\\d|3[01])\\.|192\\.168\\.))/iu.test(normalized);
+}
+globalThis.fetch = async (input, init) => {
+  const target = new URL(input instanceof Request ? input.url : String(input));
+  const hostname = target.hostname.toLowerCase().replace(/\\.$/u, "");
+  if (hostname === "localhost" || hostname.endsWith(".localhost") || hostname.endsWith(".local") || hostname.endsWith(".internal")) throw new Error("Agentcash blocked a private-network destination.");
+  const addresses = __openinstinctIsIP(hostname) ? [{ address: hostname }] : await __openinstinctLookup(hostname, { all: true, verbatim: true });
+  if (addresses.length === 0 || addresses.some(({ address }) => !__openinstinctPublicAddress(address))) throw new Error("Agentcash blocked a private-network destination.");
+  return __openinstinctNativeFetch(input, { ...init, redirect: "error" });
+};`,
   },
   bundle: true,
   entryPoints: [resolve(packageRoot, "dist", "esm", "index.js")],

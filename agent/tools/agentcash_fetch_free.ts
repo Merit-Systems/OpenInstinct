@@ -32,6 +32,7 @@ export default defineTool({
         maxAmount: agentcashNoPaymentCeilingUsd,
         method: "GET",
         paymentNetwork: input.paymentNetwork,
+        paymentProtocol: "x402",
         timeout: input.timeout,
         url: input.url,
       },

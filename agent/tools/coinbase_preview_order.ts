@@ -5,12 +5,12 @@ import { callCoinbaseMcpTool } from "../lib/coinbase-mcp";
 import {
   coinbaseOrderSchema,
   createOrderPreviewToken,
-  orderMcpInput,
+  orderPreviewMcpInput,
 } from "../lib/coinbase-order";
 
 export default defineTool({
   description:
-    "Preview one exact Coinbase spot order without executing it. Returns Coinbase's estimate plus a five-minute token required by coinbase_create_order.",
+    "Preview one exact Coinbase spot or US futures order without executing it. Returns Coinbase's estimate plus a thirty-minute token required by coinbase_create_order. Equities do not support preview; use coinbase_create_equity_order instead.",
   inputSchema: coinbaseOrderSchema,
   async execute(input, ctx) {
     const principalId = requireCoinbaseAccess(ctx);
@@ -19,10 +19,10 @@ export default defineTool({
       { product_id: input.productId },
       ctx.abortSignal
     );
-    assertTradableSpotProduct(product);
+    assertTradableProduct(product, input);
     const preview = await callCoinbaseMcpTool(
       "coinbase_orders_preview",
-      orderMcpInput(input),
+      orderPreviewMcpInput(input),
       ctx.abortSignal
     );
     const authorization = createOrderPreviewToken(
@@ -36,21 +36,40 @@ export default defineTool({
         previewToken: authorization.token,
       },
       nextStep:
-        "Show this exact preview to the user. Call coinbase_create_order only after explicit approval of the unchanged order.",
+        "Show this exact preview to the user. Call coinbase_create_order with the unchanged fields; its durable approval control is the user's authorization.",
       order: input,
       preview,
     };
   },
 });
 
-function assertTradableSpotProduct(value: unknown) {
+function assertTradableProduct(
+  value: unknown,
+  order: Parameters<typeof orderPreviewMcpInput>[0]
+) {
   const productType = nestedString(value, "product_type")?.toUpperCase();
   const status = nestedString(value, "status")?.toUpperCase();
-  if (productType !== "SPOT") {
-    throw new Error("OpenInstinct is restricted to Coinbase spot products.");
+  if (!productType || !["SPOT", "FUTURE", "EQUITY"].includes(productType)) {
+    throw new Error("Coinbase returned an unsupported product type.");
+  }
+  if (productType === "EQUITY") {
+    throw new Error(
+      "Coinbase does not support equity previews. Use coinbase_create_equity_order, whose durable approval shows the exact order."
+    );
   }
   if (status && status !== "ONLINE") {
-    throw new Error("The requested Coinbase spot product is not online.");
+    throw new Error("The requested Coinbase product is not online.");
+  }
+  if (productType === "SPOT" && order.type === "market") {
+    if (order.side === "BUY" && !order.quoteSize) {
+      throw new Error("A spot market BUY requires quoteSize.");
+    }
+    if (order.side === "SELL" && !order.baseSize) {
+      throw new Error("A spot market SELL requires baseSize.");
+    }
+  }
+  if (productType === "FUTURE" && order.type === "market" && !order.baseSize) {
+    throw new Error("A futures market order requires baseSize in contracts.");
   }
 }
 

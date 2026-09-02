@@ -1,5 +1,9 @@
 import type { SessionContext } from "eve/context";
-import type { ApprovalContext, ApprovalStatus } from "eve/tools/approval";
+import type {
+  Approval,
+  ApprovalContext,
+  ApprovalStatus,
+} from "eve/tools/approval";
 import { env } from "@/env";
 
 type Session = Pick<SessionContext["session"], "auth">;
@@ -11,18 +15,16 @@ export function coinbasePrincipalId(session: Session) {
     : undefined;
 }
 
-function allowedUserIds() {
-  return new Set(
-    (env.COINBASE_ALLOWED_USER_IDS ?? "")
-      .split(/[\n,]/u)
-      .map((value) => value.trim())
-      .filter(Boolean)
-  );
-}
+const allowedUserIds = new Set(
+  (env.COINBASE_ALLOWED_USER_IDS ?? "")
+    .split(/[\n,]/u)
+    .map((value) => value.trim())
+    .filter(Boolean)
+);
 
 export function coinbasePrincipalAllowed(session: Session) {
   const principalId = coinbasePrincipalId(session);
-  return principalId !== undefined && allowedUserIds().has(principalId);
+  return principalId !== undefined && allowedUserIds.has(principalId);
 }
 
 export function requireCoinbaseAccess(ctx: SessionContext) {
@@ -37,7 +39,7 @@ export function requireCoinbaseAccess(ctx: SessionContext) {
   return principalId;
 }
 
-export function coinbaseApproval(
+function coinbaseApproval(
   ctx: ApprovalContext,
   requiresUserApproval: boolean
 ): ApprovalStatus {
@@ -48,4 +50,33 @@ export function coinbaseApproval(
     };
   }
   return requiresUserApproval ? "user-approval" : "not-applicable";
+}
+
+export function coinbaseApprovalResponderAllowed(
+  responder: { principalId: string; principalType: string },
+  initiator: { principalId: string; principalType: string } | null,
+  allowed = allowedUserIds
+) {
+  return (
+    responder.principalType === "user" &&
+    initiator?.principalType === "user" &&
+    responder.principalId === initiator.principalId &&
+    allowed.has(responder.principalId)
+  );
+}
+
+export function coinbaseApprovalPolicy<TInput extends Record<string, unknown>>(
+  requiresUserApproval: boolean
+): Approval<TInput> {
+  return {
+    request: (ctx) => coinbaseApproval(ctx, requiresUserApproval),
+    response: ({ responder, session }) =>
+      coinbaseApprovalResponderAllowed(responder, session.initiator)
+        ? { status: "allowed" }
+        : {
+            status: "rejected",
+            reason:
+              "Only the allowlisted user who requested this Coinbase action may approve it.",
+          },
+  };
 }
