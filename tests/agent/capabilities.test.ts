@@ -1,11 +1,13 @@
 import type { DynamicResolveContext } from "eve/tools";
 import { describe, expect, it } from "vitest";
 import worker from "@/agent/subagents/worker/agent";
+import askQuestion from "@/agent/tools/ask_question";
 import googleWorkspaceReadDefinition from "@/agent/tools/google_workspace_read";
 import googleWorkspaceWriteDefinition from "@/agent/tools/google_workspace_write";
 import messaging from "@/agent/tools/messaging";
 import requestVaultImport from "@/agent/tools/request_vault_import";
 import requestVaultSetup from "@/agent/tools/request_vault_setup";
+import answerSchedule from "@/agent/tools/schedules/answer";
 import createScheduleDefinition from "@/agent/tools/schedules/create";
 import listSchedulesDefinition from "@/agent/tools/schedules/list";
 import updateScheduleDefinition from "@/agent/tools/schedules/update";
@@ -15,10 +17,12 @@ import webFetch from "@/agent/tools/web_fetch";
 import webSearch from "@/agent/tools/web_search";
 
 const singletonTools = [
+  ["ask_question", askQuestion],
   ["google_workspace_read", googleWorkspaceReadDefinition],
   ["google_workspace_write", googleWorkspaceWriteDefinition],
   ["request_vault_import", requestVaultImport],
   ["request_vault_setup", requestVaultSetup],
+  ["schedules-answer", answerSchedule],
   ["schedules-create", createScheduleDefinition],
   ["schedules-list", listSchedulesDefinition],
   ["schedules-update", updateScheduleDefinition],
@@ -36,6 +40,7 @@ describe("mode capability matrix", () => {
       "react_to_message",
       "request_vault_import",
       "request_vault_setup",
+      "schedules-answer",
       "schedules-create",
       "schedules-list",
       "schedules-update",
@@ -50,6 +55,7 @@ describe("mode capability matrix", () => {
 
   it("gives scheduled workers only read and execution capabilities", async () => {
     expect(await effectiveCapabilities("scheduled-worker")).toEqual([
+      "ask_question",
       "google_workspace_read",
       "task_cancel",
       "web_fetch",
@@ -58,8 +64,9 @@ describe("mode capability matrix", () => {
     ]);
   });
 
-  it("gives scheduled reporting turns only message delivery", async () => {
+  it("limits scheduled reporting to delivery or resuming its own run", async () => {
     expect(await effectiveCapabilities("scheduled-result")).toEqual([
+      "schedules-answer",
       "send_message",
     ]);
   });

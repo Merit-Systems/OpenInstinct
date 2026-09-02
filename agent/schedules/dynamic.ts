@@ -5,9 +5,8 @@ import {
   listRecoverableScheduledReports,
   materializeDueScheduledAgentRuns,
   releaseScheduledAgentRun,
-  setScheduledRunSession,
 } from "@/db/services/scheduled-agent-jobs";
-import scheduledRun from "../channels/scheduled-run";
+import { applicationOrigin } from "@/lib/application-origin";
 
 const workerRuntimeLimitMs = 6 * 60 * 60_000;
 
@@ -42,26 +41,23 @@ async function executeScheduledRun(
   const leaseToken = claim.run.leaseToken;
   if (!leaseToken) throw new Error("A scheduled run claim requires a lease.");
   try {
-    const session = await to(scheduledRun, {
-      restart: claim.run.workerSessionId !== null,
-      runId: claim.run.id,
-    }).send(scheduledRunPrompt(claim), {
-      auth: {
-        attributes: {
-          conversationChannel: claim.job.conversationChannel,
-          conversationId: claim.job.conversationId,
-          scheduleId: claim.job.id,
-          scheduledRunLeaseToken: leaseToken,
-          scheduledRunId: claim.run.id,
-          workspaceId: claim.job.workspaceId,
-        },
-        authenticator: "scheduled-worker",
-        issuer: "open-instinct",
-        principalId: claim.job.createdByUserId,
-        principalType: "user",
-      },
-    });
-    await setScheduledRunSession(claim.run.id, leaseToken, session.id);
+    const response = await fetch(
+      new URL("/internal/scheduled-run/start", applicationOrigin()),
+      {
+        body: JSON.stringify({
+          leaseToken,
+          restart: claim.run.workerSessionId !== null,
+          runId: claim.run.id,
+        }),
+        headers: { "content-type": "application/json" },
+        method: "POST",
+      }
+    );
+    if (!response.ok) {
+      throw new Error(
+        `Scheduled run dispatch failed (${String(response.status)}).`
+      );
+    }
   } catch (error) {
     await releaseScheduledAgentRun(
       claim.run.id,
@@ -69,15 +65,4 @@ async function executeScheduledRun(
       error instanceof Error ? error.message : String(error)
     );
   }
-}
-
-function scheduledRunPrompt(
-  claim: Awaited<ReturnType<typeof claimReadyScheduledAgentRuns>>[number]
-) {
-  return [
-    "Complete this user-owned scheduled task in an isolated background session.",
-    `Scheduled for: ${claim.run.scheduledFor.toISOString()}`,
-    `Task: ${claim.job.prompt}`,
-    "Return exactly one structured final outcome.",
-  ].join("\n\n");
 }

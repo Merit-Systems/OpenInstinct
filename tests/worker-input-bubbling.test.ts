@@ -2,8 +2,11 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 describe("worker input bubbling", () => {
-  it("keeps native questions disabled", () => {
-    const askQuestionTool = readFileSync("agent/tools/ask_question.ts", "utf8");
+  it("keeps native questions disabled inside browser workers", () => {
+    const askQuestionTool = readFileSync(
+      "agent/subagents/worker/tools/ask_question.ts",
+      "utf8"
+    );
 
     expect(askQuestionTool).toMatch(/disableTool\(\)/);
   });

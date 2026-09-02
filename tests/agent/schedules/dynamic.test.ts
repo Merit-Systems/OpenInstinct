@@ -9,7 +9,6 @@ import type {
   materializeDueScheduledAgentRuns,
   releaseScheduledAgentRun,
   releaseScheduledReport,
-  setScheduledRunSession,
 } from "@/db/services/scheduled-agent-jobs";
 
 const services = vi.hoisted(() => ({
@@ -20,7 +19,6 @@ const services = vi.hoisted(() => ({
   materialize: vi.fn<typeof materializeDueScheduledAgentRuns>(),
   releaseReport: vi.fn<typeof releaseScheduledReport>(),
   releaseRun: vi.fn<typeof releaseScheduledAgentRun>(),
-  setSession: vi.fn<typeof setScheduledRunSession>(),
 }));
 const requests = vi.hoisted(() => ({
   report: vi.fn<(runId: string) => Promise<void>>(),
@@ -34,7 +32,6 @@ vi.mock("@/db/services/scheduled-agent-jobs", () => ({
   materializeDueScheduledAgentRuns: services.materialize,
   releaseScheduledAgentRun: services.releaseRun,
   releaseScheduledReport: services.releaseReport,
-  setScheduledRunSession: services.setSession,
 }));
 vi.mock("@/agent/channels/linq", () => ({ default: { channel: "linq" } }));
 vi.mock("@/agent/lib/schedules/request", () => ({
@@ -54,37 +51,27 @@ describe("dynamic schedule dispatch", () => {
     services.listReports.mockResolvedValue([]);
     services.claimRuns.mockResolvedValue([]);
     requests.report.mockResolvedValue();
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(null)));
   });
 
   it("starts due work separately without waiting for its lifetime", async () => {
     const claim = scheduledClaim();
     services.claimRuns.mockResolvedValue([claim]);
-    const workerSend = vi
-      .fn<ReturnType<ScheduleToFn>["send"]>()
-      .mockResolvedValue(workerSession());
     const linqSend = vi.fn<ReturnType<ScheduleToFn>["send"]>();
-    const to = vi.fn<ScheduleToFn>((channel) => ({
-      send:
-        "channel" in channel && channel.channel === "scheduled-run"
-          ? workerSend
-          : linqSend,
-    }));
+    const to = vi.fn<ScheduleToFn>(() => ({ send: linqSend }));
 
     await runSchedule(to);
 
-    expect(workerSend).toHaveBeenCalledOnce();
-    expect(workerSend.mock.calls[0]?.[0]).toContain(
-      "Return exactly one structured final outcome"
-    );
-    expect(workerSend.mock.calls[0]?.[0]).not.toContain("send_message");
-    expect(services.setSession).toHaveBeenCalledWith(
-      claim.run.id,
-      claim.run.leaseToken,
-      "worker-session"
-    );
-    expect(to).toHaveBeenCalledWith(
-      expect.anything(),
-      expect.objectContaining({ restart: false, runId: claim.run.id })
+    expect(fetch).toHaveBeenCalledWith(
+      new URL("https://example.com/internal/scheduled-run/start"),
+      expect.objectContaining({
+        body: JSON.stringify({
+          leaseToken: claim.run.leaseToken,
+          restart: false,
+          runId: claim.run.id,
+        }),
+        method: "POST",
+      })
     );
     expect(linqSend).not.toHaveBeenCalled();
   });
@@ -93,16 +80,21 @@ describe("dynamic schedule dispatch", () => {
     const claim = scheduledClaim();
     claim.run.workerSessionId = "interrupted-worker-session";
     services.claimRuns.mockResolvedValue([claim]);
-    const workerSend = vi
-      .fn<ReturnType<ScheduleToFn>["send"]>()
-      .mockResolvedValue(workerSession("replacement-worker-session"));
-    const to = vi.fn<ScheduleToFn>(() => ({ send: workerSend }));
+    const to = vi.fn<ScheduleToFn>(() => ({
+      send: vi.fn<ReturnType<ScheduleToFn>["send"]>(),
+    }));
 
     await runSchedule(to);
 
-    expect(to).toHaveBeenCalledWith(
-      expect.anything(),
-      expect.objectContaining({ restart: true, runId: claim.run.id })
+    expect(fetch).toHaveBeenCalledWith(
+      expect.any(URL),
+      expect.objectContaining({
+        body: JSON.stringify({
+          leaseToken: claim.run.leaseToken,
+          restart: true,
+          runId: claim.run.id,
+        }),
+      })
     );
   });
 
@@ -270,6 +262,7 @@ function scheduledClaim(): Awaited<
       completedAt: null,
       createdAt: new Date("2026-09-02T13:00:00.000Z"),
       id: "00000000-0000-4000-8000-000000000002",
+      pendingInputRequests: null,
       jobId: "00000000-0000-4000-8000-000000000001",
       lastError: null,
       leaseExpiresAt: new Date("2026-09-02T13:05:00.000Z"),
@@ -277,6 +270,8 @@ function scheduledClaim(): Awaited<
       outcome: null,
       reportStatus: "not_ready",
       reportSequence: 0,
+      reportLeaseExpiresAt: null,
+      reportLeaseToken: null,
       retryAt: null,
       scheduledFor: new Date("2026-09-02T13:00:00.000Z"),
       startedAt: new Date("2026-09-02T13:00:00.000Z"),
@@ -296,7 +291,9 @@ function scheduledReport(): NonNullable<
     run: {
       ...claim.run,
       outcome: resultOutcome,
+      reportSequence: 1,
       reportStatus: "queued",
+      reportLeaseToken: "00000000-0000-4000-8000-000000000004",
       status: "completed",
     },
   };

@@ -204,7 +204,7 @@ describe("Linq message delivery", () => {
 
     expect(scheduleDeliveryCapture.finalize).toHaveBeenCalledWith(
       "00000000-0000-4000-8000-000000000002",
-      "lease-report",
+      "00000000-0000-4000-8000-000000000004",
       "delivered"
     );
     expect(linqChannelCapture.postMessage).toHaveBeenCalledExactlyOnceWith(
@@ -676,7 +676,7 @@ function sessionContext(authenticator = "test") {
   const attributes: Record<string, string | readonly string[]> =
     authenticator === "scheduled-result"
       ? {
-          scheduledReportLeaseToken: "lease-report",
+          scheduledReportLeaseToken: "00000000-0000-4000-8000-000000000004",
           scheduledReportSequence: "1",
           scheduledRunId: "00000000-0000-4000-8000-000000000002",
           scheduledRunSessionId: "scheduled-run-session",

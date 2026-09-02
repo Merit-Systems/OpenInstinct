@@ -1,29 +1,12 @@
 import type { SessionContext } from "eve/context";
-import { z } from "zod";
 import {
   finalizeScheduledReport,
   releaseScheduledReport,
 } from "@/db/services/scheduled-agent-jobs";
+import { scheduledReportIdentity } from "@/agent/lib/schedules/identity";
 
 export function scheduledReportFromSession(session: SessionContext) {
-  const caller = session.session.auth.current ?? session.session.auth.initiator;
-  if (caller?.authenticator !== "scheduled-result") return undefined;
-  const parsed = z
-    .object({
-      scheduledReportLeaseToken: z.string().min(1),
-      scheduledReportSequence: z.coerce.number().int().positive(),
-      scheduledRunId: z.uuid(),
-      scheduledRunSessionId: z.string().min(1).optional(),
-    })
-    .safeParse(caller.attributes);
-  return parsed.success
-    ? {
-        leaseToken: parsed.data.scheduledReportLeaseToken,
-        runId: parsed.data.scheduledRunId,
-        sequence: parsed.data.scheduledReportSequence,
-        workerSessionId: parsed.data.scheduledRunSessionId,
-      }
-    : undefined;
+  return scheduledReportIdentity(session.session.auth);
 }
 
 export async function finalizeScheduledReportDelivery(

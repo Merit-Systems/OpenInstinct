@@ -64,6 +64,13 @@
       "when": 1788360381183,
       "tag": "0008_black_sandman",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1788370208348,
+      "tag": "0009_cold_power_man",
+      "breakpoints": true
     }
   ]
 }

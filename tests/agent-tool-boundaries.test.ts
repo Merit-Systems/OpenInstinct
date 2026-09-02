@@ -30,6 +30,7 @@ describe("root and worker capability boundaries", () => {
       "read_file.ts",
       "request_vault_import.ts",
       "request_vault_setup.ts",
+      "schedules/answer.ts",
       "schedules/create.ts",
       "schedules/list.ts",
       "schedules/update.ts",
@@ -50,7 +51,7 @@ describe("root and worker capability boundaries", () => {
       "disableTool()"
     );
     expect(readFileSync(`${rootTools}/ask_question.ts`, "utf8")).toContain(
-      "disableTool()"
+      "resolveModeValue"
     );
     for (const tool of [
       "bash",
