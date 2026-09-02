@@ -76,6 +76,12 @@ export async function sendPhoneCode({
     });
   } catch (error) {
     if (error instanceof LinqDeliveryError) {
+      console.error("Linq OTP delivery failed", {
+        code: error.code,
+        message: error.linqMessage,
+        status: error.status,
+        traceId: error.traceId,
+      });
       const failure = linqOtpFailure(error);
       throw new APIError("BAD_GATEWAY", {
         code: failure.code,

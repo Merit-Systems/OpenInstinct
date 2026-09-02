@@ -37,9 +37,12 @@ describe("Linq phone authentication", () => {
       vi.fn<typeof fetch>().mockResolvedValue(
         Response.json(
           {
-            code: 2015,
-            message: "no eligible sending line available",
-            trace_id: "trace-123",
+            error: {
+              code: 2015,
+              message: "no eligible sending line available",
+              trace_id: "trace-123",
+            },
+            success: false,
           },
           { status: 409 }
         )
@@ -66,5 +69,17 @@ describe("Linq phone authentication", () => {
       },
     });
     expect(phoneOtpErrorMessage(body)).toContain("Messaging Contacts");
+
+    const fetchCall = vi.mocked(fetch).mock.calls[0];
+    expect(fetchCall?.[1]?.headers).not.toHaveProperty("Idempotency-Key");
+    const requestBody = fetchCall?.[1]?.body;
+    if (typeof requestBody !== "string") {
+      throw new TypeError("Expected a JSON request body");
+    }
+    const parsedRequestBody: unknown = JSON.parse(requestBody);
+    const validatedRequestBody = z
+      .object({ message: z.object({ idempotency_key: z.string() }) })
+      .parse(parsedRequestBody);
+    expect(validatedRequestBody.message.idempotency_key).toMatch(/^auth-otp-/);
   });
 });

@@ -31,7 +31,14 @@ describe("Linq delivery", () => {
     expect(url).toBe("https://api.linqapp.com/api/partner/v3/messages");
     expect(init?.headers).toMatchObject({
       Authorization: "Bearer test-token",
-      "Idempotency-Key": "otp-idempotency-key",
+    });
+    const requestBody = init?.body;
+    if (typeof requestBody !== "string") {
+      throw new TypeError("Expected a JSON request body");
+    }
+    const parsedRequestBody: unknown = JSON.parse(requestBody);
+    expect(parsedRequestBody).toMatchObject({
+      message: { idempotency_key: "otp-idempotency-key" },
     });
     expect(init?.method).toBe("POST");
   });

@@ -2,11 +2,15 @@ import { getToken } from "@vercel/connect";
 import { z } from "zod";
 
 const LINQ_MESSAGES_URL = "https://api.linqapp.com/api/partner/v3/messages";
-const linqErrorResponseSchema = z.object({
+const linqErrorSchema = z.object({
   code: z.number().int().optional(),
   message: z.string().min(1).optional(),
   trace_id: z.string().min(1).optional(),
 });
+const linqErrorResponseSchema = z.union([
+  z.object({ error: linqErrorSchema }),
+  linqErrorSchema,
+]);
 
 export class LinqDeliveryError extends Error {
   readonly code: number | undefined;
@@ -88,20 +92,24 @@ export async function sendLinqText({
   });
   const response = await fetch(LINQ_MESSAGES_URL, {
     body: JSON.stringify({
-      message: { parts: [{ type: "text", value: message }] },
+      message: {
+        idempotency_key: idempotencyKey,
+        parts: [{ type: "text", value: message }],
+      },
       to: [to],
     }),
     headers: {
       Authorization: `Bearer ${token}`,
       "Content-Type": "application/json",
-      "Idempotency-Key": idempotencyKey,
     },
     method: "POST",
   });
   if (response.ok) return;
 
   const body: unknown = await response.json().catch(() => undefined);
-  const linqError = linqErrorResponseSchema.safeParse(body).data;
+  const parsedError = linqErrorResponseSchema.safeParse(body).data;
+  const linqError =
+    parsedError && "error" in parsedError ? parsedError.error : parsedError;
   throw new LinqDeliveryError({
     code: linqError?.code,
     linqMessage: linqError?.message,
