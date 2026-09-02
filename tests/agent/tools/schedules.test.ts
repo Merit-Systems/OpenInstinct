@@ -69,7 +69,10 @@ describe("schedule tools", () => {
     );
     expect(services.getInput).toHaveBeenCalledExactlyOnceWith(
       { userId: "user-1", workspaceId: "workspace-1" },
-      "linq:dm:chat-1",
+      {
+        conversationChannel: "linq",
+        conversationId: "linq:dm:chat-1",
+      },
       "00000000-0000-4000-8000-000000000002"
     );
 

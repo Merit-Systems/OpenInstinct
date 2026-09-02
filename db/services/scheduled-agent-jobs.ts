@@ -332,7 +332,10 @@ export async function waitForScheduledAgentRunInput(
 
 export async function getScheduledAgentRunInput(
   scope: AccessScope,
-  linqThreadId: string,
+  conversation: Pick<
+    CreateScheduledAgentJob,
+    "conversationChannel" | "conversationId"
+  >,
   runId: string
 ) {
   const pending = await db.query.scheduledAgentRuns.findFirst({
@@ -347,7 +350,8 @@ export async function getScheduledAgentRunInput(
     !pending ||
     pending.job.workspaceId !== scope.workspaceId ||
     pending.job.createdByUserId !== scope.userId ||
-    pending.job.linqThreadId !== linqThreadId ||
+    pending.job.conversationChannel !== conversation.conversationChannel ||
+    pending.job.conversationId !== conversation.conversationId ||
     !pending.leaseToken ||
     !pending.pendingInputRequests ||
     !pending.workerSessionId

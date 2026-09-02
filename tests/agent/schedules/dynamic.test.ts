@@ -187,7 +187,7 @@ describe("scheduled report delivery", () => {
 
     expect(services.finalizeReport).toHaveBeenCalledExactlyOnceWith(
       report.run.id,
-      report.run.leaseToken,
+      report.run.reportLeaseToken,
       "suppressed"
     );
   });

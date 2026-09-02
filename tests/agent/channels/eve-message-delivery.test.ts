@@ -66,7 +66,7 @@ describe("Eve scheduled report delivery", () => {
 
     expect(delivery.finalize).toHaveBeenCalledExactlyOnceWith(
       "00000000-0000-4000-8000-000000000002",
-      "lease-report",
+      "00000000-0000-4000-8000-000000000004",
       "delivered"
     );
   });
@@ -86,7 +86,7 @@ describe("Eve scheduled report delivery", () => {
 
     expect(delivery.finalize).toHaveBeenCalledExactlyOnceWith(
       "00000000-0000-4000-8000-000000000002",
-      "lease-report",
+      "00000000-0000-4000-8000-000000000004",
       "suppressed"
     );
   });
@@ -104,7 +104,7 @@ function scheduledReportSession() {
       auth: {
         current: {
           attributes: {
-            scheduledReportLeaseToken: "lease-report",
+            scheduledReportLeaseToken: "00000000-0000-4000-8000-000000000004",
             scheduledReportSequence: "1",
             scheduledRunId: "00000000-0000-4000-8000-000000000002",
           },

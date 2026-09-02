@@ -200,15 +200,15 @@ describe("scheduled agent jobs", () => {
       "delivered"
     );
     expect(
-      await jobs.getScheduledAgentRunInput(bob, "linq:chat-alice", claim.run.id)
+      await jobs.getScheduledAgentRunInput(bob, aliceConversation, claim.run.id)
     ).toBeUndefined();
     expect(
-      await jobs.getScheduledAgentRunInput(alice, "linq:chat-bob", claim.run.id)
+      await jobs.getScheduledAgentRunInput(alice, bobConversation, claim.run.id)
     ).toBeUndefined();
     expect(
       await jobs.getScheduledAgentRunInput(
         alice,
-        "linq:chat-alice",
+        aliceConversation,
         claim.run.id
       )
     ).toMatchObject({
