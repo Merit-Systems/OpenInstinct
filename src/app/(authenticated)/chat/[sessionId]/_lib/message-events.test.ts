@@ -27,7 +27,7 @@ describe("iMessage event projection", () => {
             },
           ],
           kind: "message",
-          markdown: "Here is the user-visible result.",
+          text: "Here is the user-visible result.",
         },
         2,
         "2026-09-01T12:00:02.000Z"
@@ -96,11 +96,30 @@ describe("iMessage event projection", () => {
     ]);
   });
 
+  it("keeps plain-text line breaks visible in the chat view", () => {
+    const events = [
+      toolResult(
+        "send_message",
+        { kind: "message", text: "line one\nline two" },
+        1,
+        "2026-09-01T12:00:01.000Z",
+        "completed",
+        "call-lines"
+      ),
+    ];
+
+    expect(sentMessages(events).get("turn-1:assistant")).toEqual([
+      expect.objectContaining({
+        parts: [expect.objectContaining({ text: "line one  \nline two" })],
+      }),
+    ]);
+  });
+
   it("keeps consecutive sends in the same turn as separate messages", () => {
     const events = [
       toolResult(
         "send_message",
-        { kind: "message", markdown: "The useful result." },
+        { kind: "message", text: "The useful result." },
         1,
         "2026-09-01T12:00:01.000Z",
         "completed",
@@ -108,7 +127,7 @@ describe("iMessage event projection", () => {
       ),
       toolResult(
         "send_message",
-        { kind: "message", markdown: "Want me to book it?" },
+        { kind: "message", text: "Want me to book it?" },
         2,
         "2026-09-01T12:00:02.000Z",
         "completed",
@@ -134,7 +153,7 @@ describe("iMessage event projection", () => {
       const events = [
         toolResult(
           "send_message",
-          { kind: "message", markdown: "This was not delivered." },
+          { kind: "message", text: "This was not delivered." },
           0,
           "2026-09-01T12:00:01.000Z",
           status

@@ -26,7 +26,7 @@ export async function prepareLinqImageArtifactDelivery(
 ) {
   const references = extractImageArtifactMarkdownReferences(message);
   if (references.length === 0) {
-    return { failedArtifactIds: [], files: [], markdown: message };
+    return { failedArtifactIds: [], files: [], text: message };
   }
 
   const selected = references.slice(0, maximumWorkerCompletionImages);
@@ -62,7 +62,7 @@ export async function prepareLinqImageArtifactDelivery(
   return {
     failedArtifactIds,
     files,
-    markdown: stripImageArtifactMarkdownReferences(message),
+    text: stripImageArtifactMarkdownReferences(message),
   };
 }
 

@@ -120,10 +120,10 @@ export default linqChannel({
         const attachments = message.data.output.attachments?.map(
           ({ kind, ...attachment }) => ({ ...attachment, type: kind })
         );
-        const { markdown: requestedMarkdown } = message.data.output;
-        if (!requestedMarkdown) {
+        const { text: requestedText } = message.data.output;
+        if (!requestedText) {
           if (attachments?.length) {
-            await post({ attachments, markdown: "" });
+            await post({ attachments, raw: "" });
           }
           await finalizeScheduledReportDelivery(session);
           return;
@@ -133,20 +133,20 @@ export default linqChannel({
           session.session.auth.current ?? session.session.auth.initiator;
         if (!caller) {
           const references =
-            extractImageArtifactMarkdownReferences(requestedMarkdown);
-          const markdown =
+            extractImageArtifactMarkdownReferences(requestedText);
+          const text =
             references.length === 0
-              ? requestedMarkdown
+              ? requestedText
               : [
-                  stripImageArtifactMarkdownReferences(requestedMarkdown),
+                  stripImageArtifactMarkdownReferences(requestedText),
                   "I couldn't attach the image.",
                 ]
                   .filter(Boolean)
                   .join("\n\n");
           const outgoing: Extract<
             Parameters<typeof thread.post>[0],
-            { markdown: string }
-          > = { markdown };
+            { raw: string }
+          > = { raw: text };
           if (attachments?.length) outgoing.attachments = attachments;
           await post(outgoing);
           await finalizeScheduledReportDelivery(session);
@@ -155,7 +155,7 @@ export default linqChannel({
 
         const scope = scopeFromPrincipal(caller);
         const artifactDelivery = await prepareLinqArtifactDelivery(
-          requestedMarkdown,
+          requestedText,
           { scope }
         );
         const imageDelivery = await prepareLinqImageArtifactDelivery(
@@ -191,8 +191,8 @@ export default linqChannel({
             : failedArtifactCount === 1
               ? "I couldn't publish one artifact."
               : `I couldn't publish ${String(failedArtifactCount)} artifacts.`;
-        const markdown = [
-          imageDelivery.markdown,
+        const text = [
+          imageDelivery.text,
           imageFailureMessage,
           artifactFailureMessage,
         ]
@@ -200,8 +200,8 @@ export default linqChannel({
           .join("\n\n");
         const outgoing: Extract<
           Parameters<typeof thread.post>[0],
-          { markdown: string }
-        > = { markdown };
+          { raw: string }
+        > = { raw: text };
         const outgoingAttachments = [
           ...(attachments ?? []),
           ...artifactDelivery.attachments,

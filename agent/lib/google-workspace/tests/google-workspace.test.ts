@@ -2,9 +2,8 @@ import { describe, expect, it } from "vitest";
 import { parseCalendarAvailability } from "@/agent/lib/google-workspace/calendar";
 import { googleWorkspaceAuthOptions } from "@/agent/lib/google-workspace/client";
 import { gmailUpdateLabels } from "@/agent/lib/google-workspace/gmail";
-import { calendarCreateEvent } from "@/agent/tools/calendar/create-event";
-import { gmailSend } from "@/agent/tools/gmail/send";
-import { gmailUpdate } from "@/agent/tools/gmail/update";
+import { calendarCreateEvent } from "@/agent/tools/calendar";
+import { gmailSend, gmailUpdate } from "@/agent/tools/gmail";
 import {
   googleWorkspaceScopes,
   googleWorkspaceSubject,

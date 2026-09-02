@@ -47,7 +47,12 @@ export function sentMessages(events: readonly MessageStreamEvent[]) {
     const turnMessageId = `${event.data.turnId}:assistant`;
     const parts: EveMessagePart[] = [];
     const { output } = delivery;
-    const text = output.kind === "link" ? output.url : output.markdown;
+    // Delivered text is plain and reaches the phone verbatim. The chat view
+    // renders text parts as Markdown, so keep every line break as a hard break.
+    const text =
+      output.kind === "link"
+        ? output.url
+        : output.text?.replaceAll("\n", "  \n");
     if (text) {
       parts.push({
         state: "done",

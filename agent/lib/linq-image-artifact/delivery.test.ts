@@ -57,7 +57,7 @@ describe("Linq image artifact delivery", () => {
       rootSessionId: "root-session",
       signal: undefined,
     });
-    expect(result.markdown).toBe("Here is the product.");
+    expect(result.text).toBe("Here is the product.");
     expect(result.files).toEqual([
       {
         data: Buffer.from([1, 2, 3]),
@@ -79,7 +79,7 @@ describe("Linq image artifact delivery", () => {
 
     expect(result.files).toHaveLength(1);
     expect(result.failedArtifactIds).toEqual([secondId]);
-    expect(result.markdown).toBe("");
+    expect(result.text).toBe("");
   });
 
   it("leaves ordinary markdown untouched without storage reads", async () => {
@@ -93,7 +93,7 @@ describe("Linq image artifact delivery", () => {
     expect(result).toEqual({
       failedArtifactIds: [],
       files: [],
-      markdown,
+      text: markdown,
     });
     expect(mocks.readArtifact).not.toHaveBeenCalled();
   });
