@@ -1,6 +1,6 @@
 import { defineDynamic } from "eve/instructions";
 import messageStyle from "./content/message-style/prompt.md?raw";
-import { resolveModeInstructions } from "./content/role/mode";
+import { resolveModeInstructions } from "./content/mode";
 
 export default defineDynamic({
   events: {
