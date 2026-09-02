@@ -23,13 +23,12 @@ describe("root and worker capability boundaries", () => {
       "ask_question.ts",
       "google_workspace_read.ts",
       "google_workspace_write.ts",
-      "react_to_message.ts",
+      "messaging.ts",
       "request_vault_import.ts",
       "request_vault_setup.ts",
       "schedules/create.ts",
       "schedules/list.ts",
       "schedules/update.ts",
-      "send_message.ts",
       "update_user_profile.ts",
     ]);
     expect(existsSync(`${rootTools}/sendMessage.ts`)).toBe(false);
@@ -44,7 +43,10 @@ describe("root and worker capability boundaries", () => {
     expect(readFileSync(`${rootTools}/ask_question.ts`, "utf8")).toContain(
       "disableTool()"
     );
-    const rootInstructions = readFileSync("agent/instructions.md", "utf8");
+    const rootInstructions = readFileSync(
+      "prompts/instructions/interactive.md",
+      "utf8"
+    );
     expect(rootInstructions).toContain(
       "Perform public research, source discovery, comparisons, and current-information lookups directly with `web_search`"
     );
@@ -164,7 +166,10 @@ describe("root and worker capability boundaries", () => {
   });
 
   it("requires structured completion for initial and resumed worker calls", () => {
-    const rootInstructions = readFileSync("agent/instructions.md", "utf8");
+    const rootInstructions = readFileSync(
+      "prompts/instructions/interactive.md",
+      "utf8"
+    );
     const workerConfig = readFileSync(`${workerRoot}/agent.ts`, "utf8");
 
     expect(rootInstructions).toContain(

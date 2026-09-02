@@ -74,8 +74,9 @@ describe("dynamic schedule dispatch", () => {
 
     expect(workerSend).toHaveBeenCalledOnce();
     expect(workerSend.mock.calls[0]?.[0]).toContain(
-      "Do not communicate with the user"
+      "Return exactly one structured final outcome"
     );
+    expect(workerSend.mock.calls[0]?.[0]).not.toContain("send_message");
     expect(services.setSession).toHaveBeenCalledWith(
       claim.run.id,
       claim.run.leaseToken,
