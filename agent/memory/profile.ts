@@ -11,7 +11,7 @@ const backend = resolveProfileMemoryBackend(env);
 const provider =
   backend.kind === "vercel-blob"
     ? fileMemory({
-        backend: vercelBlob({ token: backend.token }),
+        backend: vercelBlob(backend.options),
       })
     : fileMemory();
 
