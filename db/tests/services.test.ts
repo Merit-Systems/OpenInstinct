@@ -26,6 +26,8 @@ describe("database services", () => {
     await applyBrowserImageMigration(client);
     await applyBrowserTraceMigration(client);
     await applyBrowserTraceEventMigration(client);
+    await applySchemaAdoptionMigration(client);
+    await applyNativeTypesMigration(client);
 
     const pgliteDatabase = drizzle(client, { schema });
     // SAFETY: PGlite implements the query-builder surface exercised by these services despite using a different Drizzle driver.
@@ -113,11 +115,14 @@ describe("database services", () => {
         }
       )
     ).resolves.toEqual(finalized);
-    expect(
-      await browserImages.readReadyBrowserImageArtifact(alice, image.id, {
-        rootSessionId: "session-alice",
-      })
-    ).toBeDefined();
+    const storedImage = await browserImages.readReadyBrowserImageArtifact(
+      alice,
+      image.id,
+      { rootSessionId: "session-alice" }
+    );
+    expect(storedImage?.createdAt).toMatch(
+      /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/u
+    );
     expect(
       await browserImages.readReadyBrowserImageArtifact(bob, image.id)
     ).toBeUndefined();
@@ -328,19 +333,24 @@ describe("database services", () => {
       await vault.deleteVaultItem(bob, aliceVaultItem?.id ?? "vault-alice")
     ).toBe(false);
 
-    await secrets.writeEncryptedSecret(alice, "shared-id", "ciphertext-alice");
-    await secrets.writeEncryptedSecret(bob, "shared-id", "ciphertext-bob");
-    expect(await secrets.readEncryptedSecret(alice, "shared-id")).toBe(
+    const sharedSecretId = "00000000-0000-4000-8000-000000000099";
+    await secrets.writeEncryptedSecret(
+      alice,
+      sharedSecretId,
       "ciphertext-alice"
     );
-    expect(await secrets.readEncryptedSecret(bob, "shared-id")).toBe(
+    await secrets.writeEncryptedSecret(bob, sharedSecretId, "ciphertext-bob");
+    expect(await secrets.readEncryptedSecret(alice, sharedSecretId)).toBe(
+      "ciphertext-alice"
+    );
+    expect(await secrets.readEncryptedSecret(bob, sharedSecretId)).toBe(
       "ciphertext-bob"
     );
-    await secrets.deleteEncryptedSecret(alice, "shared-id");
+    await secrets.deleteEncryptedSecret(alice, sharedSecretId);
     expect(
-      await secrets.readEncryptedSecret(alice, "shared-id")
+      await secrets.readEncryptedSecret(alice, sharedSecretId)
     ).toBeUndefined();
-    expect(await secrets.readEncryptedSecret(bob, "shared-id")).toBe(
+    expect(await secrets.readEncryptedSecret(bob, sharedSecretId)).toBe(
       "ciphertext-bob"
     );
 
@@ -389,6 +399,30 @@ async function applyBrowserTraceMigration(database: PGlite) {
 async function applyBrowserTraceEventMigration(database: PGlite) {
   const migration = await readFile(
     new URL("../migrations/0005_brave_kang.sql", import.meta.url),
+    "utf8"
+  );
+  /* oxlint-disable eslint/no-await-in-loop -- SQL migration statements must execute in file order. */
+  for (const statement of migration.split("--> statement-breakpoint")) {
+    if (statement.trim()) await database.exec(statement);
+  }
+  /* oxlint-enable eslint/no-await-in-loop */
+}
+
+async function applySchemaAdoptionMigration(database: PGlite) {
+  const migration = await readFile(
+    new URL("../migrations/0006_illegal_tattoo.sql", import.meta.url),
+    "utf8"
+  );
+  /* oxlint-disable eslint/no-await-in-loop -- SQL migration statements must execute in file order. */
+  for (const statement of migration.split("--> statement-breakpoint")) {
+    if (statement.trim()) await database.exec(statement);
+  }
+  /* oxlint-enable eslint/no-await-in-loop */
+}
+
+async function applyNativeTypesMigration(database: PGlite) {
+  const migration = await readFile(
+    new URL("../migrations/0008_black_sandman.sql", import.meta.url),
     "utf8"
   );
   /* oxlint-disable eslint/no-await-in-loop -- SQL migration statements must execute in file order. */

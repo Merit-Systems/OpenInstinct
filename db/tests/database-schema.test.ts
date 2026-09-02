@@ -12,9 +12,12 @@ import {
   browserTraces,
   chats,
   encryptedSecrets,
+  scheduledAgentJobs,
+  scheduledAgentRuns,
   session,
   settings,
   user,
+  userProfiles,
   vaultItems,
   verification,
   workspaceMemberships,
@@ -36,6 +39,8 @@ describe("database schema", () => {
         browserTraceDomains,
         browserTraceEvents,
         chats,
+        scheduledAgentJobs,
+        scheduledAgentRuns,
         encryptedSecrets,
         user,
         session,
@@ -54,6 +59,8 @@ describe("database schema", () => {
       "browser_trace_domains",
       "browser_trace_events",
       "chats",
+      "scheduled_agent_jobs",
+      "scheduled_agent_runs",
       "encrypted_secrets",
       "user",
       "session",
@@ -62,12 +69,41 @@ describe("database schema", () => {
     ]);
   });
 
+  it("uses native PostgreSQL types for structured application values", () => {
+    for (const column of [
+      agentSessions.createdAt,
+      browserImageArtifacts.createdAt,
+      browserSessions.createdAt,
+      browserTraceDomains.firstSeenAt,
+      browserTraceEvents.at,
+      browserTraces.startedAt,
+      browserTraces.completedAt,
+      chats.createdAt,
+      chats.updatedAt,
+      encryptedSecrets.updatedAt,
+      userProfiles.updatedAt,
+      vaultItems.createdAt,
+      vaultItems.updatedAt,
+      workspaceMemberships.createdAt,
+      workspaces.createdAt,
+    ]) {
+      expect(column.getSQLType()).toBe("timestamp (3) with time zone");
+    }
+
+    expect(userProfiles.dateOfBirth.getSQLType()).toBe("date");
+    expect(chats.costUsd.getSQLType()).toBe("numeric(16, 8)");
+    expect(browserImageArtifacts.id.getSQLType()).toBe("uuid");
+    expect(encryptedSecrets.id.getSQLType()).toBe("text");
+    expect(vaultItems.id.getSQLType()).toBe("text");
+  });
+
   it("anchors session creators to a membership in the same workspace", () => {
     for (const table of [
       agentSessions,
       browserImageArtifacts,
       browserSessions,
       browserTraces,
+      scheduledAgentJobs,
     ]) {
       const foreignKeys = getTableConfig(table).foreignKeys;
       expect(foreignKeys.map((foreignKey) => foreignKey.getName())).toContain(
@@ -106,6 +142,32 @@ describe("database schema", () => {
 });
 
 describe("migration deployment policy", () => {
+  it("orders migrations by the timestamps Drizzle uses for deployment", async () => {
+    const journal = z
+      .object({
+        entries: z.array(
+          z.object({ idx: z.number().int(), when: z.number().int() })
+        ),
+      })
+      .parse(
+        JSON.parse(
+          await readFile(
+            new URL("../migrations/meta/_journal.json", import.meta.url),
+            "utf8"
+          )
+        )
+      );
+
+    expect(journal.entries.map(({ idx }) => idx)).toEqual(
+      journal.entries.map((_, index) => index)
+    );
+    const timestamps = journal.entries.map(({ when }) => when);
+    expect(timestamps).toEqual(
+      timestamps.toSorted((left, right) => left - right)
+    );
+    expect(new Set(timestamps)).toHaveLength(timestamps.length);
+  });
+
   it("orchestrates the native migration through Turbo", async () => {
     const packageManifest = z
       .object({

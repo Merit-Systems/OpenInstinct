@@ -6,9 +6,13 @@ const rootMemory = "agent/memory/profile.ts";
 const workerRoot = "agent/subagents/worker";
 const workerTools = `${workerRoot}/tools`;
 
-function toolFiles(directory: string) {
-  return readdirSync(directory)
-    .filter((file) => file.endsWith(".ts"))
+function toolFiles(directory: string, root = directory): string[] {
+  return readdirSync(directory, { withFileTypes: true })
+    .flatMap((entry) => {
+      const path = `${directory}/${entry.name}`;
+      if (entry.isDirectory()) return toolFiles(path, root);
+      return entry.name.endsWith(".ts") ? path.slice(root.length + 1) : [];
+    })
     .toSorted();
 }
 
@@ -26,19 +30,33 @@ describe("root and worker capability boundaries", () => {
       "agentcash_list_accounts.ts",
       "agentcash_mcp.ts",
       "agentcash_search.ts",
-      "ask_question.ts",
+      "bash.ts",
+      "calendar/check-availability.ts",
+      "calendar/create-event.ts",
+      "calendar/list-events.ts",
       "coinbase_access_status.ts",
       "coinbase_create_order.ts",
       "coinbase_mcp.ts",
       "coinbase_preview_order.ts",
-      "google_workspace_read.ts",
-      "google_workspace_write.ts",
+      "connection_search.ts",
+      "contacts/search.ts",
+      "gmail/read-thread.ts",
+      "gmail/search.ts",
+      "gmail/send.ts",
+      "gmail/update.ts",
+      "load_skill.ts",
+      "messaging.ts",
       "publish_artifact.ts",
-      "react_to_message.ts",
+      "read_file.ts",
       "request_vault_import.ts",
       "request_vault_setup.ts",
-      "send_message.ts",
+      "schedules/answer.ts",
+      "schedules/create.ts",
+      "schedules/list.ts",
+      "schedules/update.ts",
+      "todo.ts",
       "update_user_profile.ts",
+      "write_file.ts",
     ]);
     expect(existsSync(`${rootTools}/sendMessage.ts`)).toBe(false);
     expect(existsSync("agent/extensions/kernel/extension.ts")).toBe(false);
@@ -49,8 +67,21 @@ describe("root and worker capability boundaries", () => {
     expect(readFileSync(`${rootTools}/agent.ts`, "utf8")).toContain(
       "disableTool()"
     );
-    expect(readFileSync(`${rootTools}/ask_question.ts`, "utf8")).toContain(
-      "disableTool()"
+    for (const tool of [
+      "bash",
+      "connection_search",
+      "load_skill",
+      "read_file",
+      "todo",
+      "write_file",
+    ]) {
+      expect(readFileSync(`${rootTools}/${tool}.ts`, "utf8")).toContain(
+        "disableTool()"
+      );
+    }
+    const rootInstructions = readFileSync(
+      "agent/instructions/content/role/interactive.md",
+      "utf8"
     );
     expect(readFileSync("agent/lib/agentcash-mcp.ts", "utf8")).toContain(
       'args: [agentcashCliPath, "server"]'
@@ -70,7 +101,6 @@ describe("root and worker capability boundaries", () => {
     const agentcashSkill = readFileSync("agent/skills/agentcash.md", "utf8");
     expect(agentcashSkill).not.toContain("Ask for explicit approval");
     expect(agentcashSkill).toContain("agentcash_fetch_free");
-    const rootInstructions = readFileSync("agent/instructions.md", "utf8");
     expect(rootInstructions).toContain(
       "Perform public research, source discovery, comparisons, and current-information lookups directly with `web_search`"
     );
@@ -190,19 +220,22 @@ describe("root and worker capability boundaries", () => {
   });
 
   it("requires structured completion for initial and resumed worker calls", () => {
-    const rootInstructions = readFileSync("agent/instructions.md", "utf8");
+    const workerCoordination = readFileSync(
+      "agent/instructions/content/worker-coordination.md",
+      "utf8"
+    );
     const workerConfig = readFileSync(`${workerRoot}/agent.ts`, "utf8");
 
-    expect(rootInstructions).toContain(
+    expect(workerCoordination).toContain(
       "Every initial or resumed `worker` call must set `outputSchema`"
     );
-    expect(rootInstructions).toContain(
+    expect(workerCoordination).toContain(
       '"required": ["status", "message", "images"]'
     );
-    expect(rootInstructions).toContain(
+    expect(workerCoordination).toContain(
       "including when passing an existing `agentId`"
     );
-    expect(rootInstructions).toContain(
+    expect(workerCoordination).toContain(
       "calling Eve's native `final_output` tool exactly once"
     );
     expect(workerConfig).toContain("outputSchema: taskCompletionSchema");

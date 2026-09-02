@@ -1,5 +1,6 @@
 import { connectLinqCredentials } from "@vercel/connect/eve";
 import { LinqAPIV3 } from "@linqapp/sdk";
+import type { AdapterPostableMessage } from "chat";
 import {
   defaultLinqAuth,
   linqChannel,
@@ -18,6 +19,11 @@ import {
   stripImageArtifactMarkdownReferences,
 } from "../lib/linq-image-artifact/markdown";
 import { env } from "@/env";
+import {
+  finalizeScheduledReportDelivery,
+  releaseScheduledReportDelivery,
+  scheduledReportFromSession,
+} from "@/agent/lib/schedules/report-lifecycle";
 
 const verifiedPhoneUserSchema = z.object({
   id: z.string().min(1),
@@ -65,6 +71,7 @@ export default linqChannel({
             reaction.data.output.type
           );
         }
+        await finalizeScheduledReportDelivery(session);
         return;
       }
 
@@ -76,6 +83,16 @@ export default linqChannel({
             "send_message requires an active Linq conversation thread."
           );
         }
+        const report = scheduledReportFromSession(session);
+        const idempotencyKey = report
+          ? `scheduled-report:${report.runId}:${String(report.sequence)}`
+          : undefined;
+        const post = idempotencyKey
+          ? (content: AdapterPostableMessage) =>
+              context.bot
+                .getAdapter("linq")
+                .postMessage(thread.id, content, { idempotencyKey })
+          : (content: AdapterPostableMessage) => thread.post(content);
 
         if (message.data.output.kind === "link") {
           const adapter = context.bot.getAdapter("linq");
@@ -87,11 +104,16 @@ export default linqChannel({
           }
           const apiKey = await credentials.apiKey();
           const client = new LinqAPIV3({ apiKey });
-          await client.chats.messages.send(chatId, {
-            message: {
-              parts: [{ type: "link", value: message.data.output.url }],
+          await client.chats.messages.send(
+            chatId,
+            {
+              message: {
+                parts: [{ type: "link", value: message.data.output.url }],
+              },
             },
-          });
+            idempotencyKey ? { idempotencyKey } : undefined
+          );
+          await finalizeScheduledReportDelivery(session);
           return;
         }
 
@@ -101,8 +123,9 @@ export default linqChannel({
         const { markdown: requestedMarkdown } = message.data.output;
         if (!requestedMarkdown) {
           if (attachments?.length) {
-            await thread.post({ attachments, markdown: "" });
+            await post({ attachments, markdown: "" });
           }
+          await finalizeScheduledReportDelivery(session);
           return;
         }
 
@@ -125,7 +148,8 @@ export default linqChannel({
             { markdown: string }
           > = { markdown };
           if (attachments?.length) outgoing.attachments = attachments;
-          await thread.post(outgoing);
+          await post(outgoing);
+          await finalizeScheduledReportDelivery(session);
           return;
         }
 
@@ -137,7 +161,7 @@ export default linqChannel({
         const imageDelivery = await prepareLinqImageArtifactDelivery(
           artifactDelivery.markdown,
           {
-            rootSessionId: session.session.id,
+            rootSessionId: report?.workerSessionId ?? session.session.id,
             scope,
           }
         );
@@ -187,8 +211,31 @@ export default linqChannel({
         }
         if (imageDelivery.files.length > 0)
           outgoing.files = imageDelivery.files;
-        await thread.post(outgoing);
+        await post(outgoing);
+        await finalizeScheduledReportDelivery(session);
       }
+    },
+    async "message.completed"(event, _context, session) {
+      if (event.finishReason === "tool-calls") return;
+      const report = scheduledReportFromSession(session);
+      if (report) {
+        await finalizeScheduledReportDelivery(session, "suppressed");
+      }
+    },
+    async "session.completed"(_event, _context, session) {
+      const report = scheduledReportFromSession(session);
+      if (report) {
+        await finalizeScheduledReportDelivery(session, "suppressed");
+      }
+    },
+    async "turn.cancelled"(_event, _context, session) {
+      await releaseScheduledReportDelivery(
+        session,
+        "Scheduled result reporting was cancelled."
+      );
+    },
+    async "turn.failed"(event, _context, session) {
+      await releaseScheduledReportDelivery(session, event.message);
     },
   },
   async onMessage(context, message) {
@@ -210,12 +257,16 @@ export default linqChannel({
       verifiedUserId && phoneNumber
         ? {
             ...auth.attributes,
+            conversationChannel: "linq",
+            conversationId: context.thread.id,
             linqThreadId: context.thread.id,
             phoneNumber,
             workspaceId: scope.workspaceId,
           }
         : {
             ...auth.attributes,
+            conversationChannel: "linq",
+            conversationId: context.thread.id,
             linqThreadId: context.thread.id,
             workspaceId: scope.workspaceId,
           };

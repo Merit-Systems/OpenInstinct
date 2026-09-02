@@ -7,7 +7,7 @@ export async function writeEncryptedSecret(
   id: string,
   encryptedValue: string
 ) {
-  const updatedAt = new Date().toISOString();
+  const updatedAt = new Date();
   await db
     .insert(encryptedSecrets)
     .values({

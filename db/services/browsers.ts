@@ -2,17 +2,18 @@ import { and, desc, eq, sql } from "drizzle-orm";
 import type { AccessScope } from "@/lib/access-scope";
 import { browserSessions, db } from "@/db";
 
-type BrowserSessionRecord = Pick<
-  typeof browserSessions.$inferSelect,
-  "createdAt" | "sessionId" | "workerSessionId"
->;
+interface BrowserSessionRecord {
+  readonly createdAt: string;
+  readonly sessionId: string;
+  readonly workerSessionId: string | null;
+}
 
 export async function createBrowserSession(
   scope: AccessScope,
   record: BrowserSessionRecord
 ) {
   await db.insert(browserSessions).values({
-    createdAt: record.createdAt,
+    createdAt: new Date(record.createdAt),
     createdByUserId: scope.userId,
     sessionId: record.sessionId,
     workerSessionId: record.workerSessionId,
@@ -24,7 +25,7 @@ export async function listWorkerBrowserSessions(
   scope: AccessScope,
   workerSessionId: string
 ) {
-  return db
+  const rows = await db
     .select({
       createdAt: browserSessions.createdAt,
       sessionId: browserSessions.sessionId,
@@ -37,10 +38,11 @@ export async function listWorkerBrowserSessions(
       )
     )
     .orderBy(desc(browserSessions.createdAt));
+  return rows.map(serializeBrowserSession);
 }
 
 export async function listBrowserSessions(scope: AccessScope) {
-  return db
+  const rows = await db
     .select({
       createdAt: browserSessions.createdAt,
       sessionId: browserSessions.sessionId,
@@ -48,6 +50,7 @@ export async function listBrowserSessions(scope: AccessScope) {
     .from(browserSessions)
     .where(eq(browserSessions.workspaceId, scope.workspaceId))
     .orderBy(desc(browserSessions.createdAt));
+  return rows.map(serializeBrowserSession);
 }
 
 export async function readBrowserSession(
@@ -68,7 +71,12 @@ export async function readBrowserSession(
       )
     )
     .limit(1);
-  return rows[0];
+  return rows[0] ? serializeBrowserSession(rows[0]) : undefined;
+}
+
+function serializeBrowserSession<T extends { createdAt: Date }>(record: T) {
+  const { createdAt, ...session } = record;
+  return { ...session, createdAt: createdAt.toISOString() };
 }
 
 export async function deleteBrowserSession(

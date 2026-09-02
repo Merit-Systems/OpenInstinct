@@ -22,3 +22,24 @@ index f01145b7cd5942afe13e8d40f0005eb37c08dff0..a0211ce15ddc2922e8a1ce277cb5d7f3
  import { Root, List, Content, Blockquote, Code, Emphasis, InlineCode, Delete, Link, ListItem, Paragraph, Strong, TableCell, Table as Table$1, TableRow, Text } from './_mdast.js';
  export { Blockquote, Code, Content, Delete, Emphasis, InlineCode, Link, List, ListItem, Table as MdastTable, Nodes, Paragraph, Root, Strong, TableCell, TableRow, Text } from './_mdast.js';
  import { C as CardElement, a as CardChild, b as ChartElement, A as ActionsComponent, B as ButtonComponent, c as CardComponent, d as CardLinkComponent, T as TextComponent, e as ChartComponent, D as DividerComponent, E as ExternalSelectComponent, F as FieldComponent, f as FieldsComponent, I as ImageComponent, L as LinkButtonComponent, M as ModalComponent, R as RadioSelectComponent, S as SectionComponent, g as SelectComponent, h as SelectOptionComponent, i as Table$2, j as TextInputComponent, k as cardChildToFallbackText$1, l as fromReactElement$1, m as fromReactModalElement$1, n as isCardElement$1, o as isJSX$1, p as isModalElement$1, t as toCardElement$1, q as toModalElement$1 } from './jsx-runtime-_JEEAotp.js';
+diff --git a/package.json b/package.json
+index 52dfd013c9d79a31999dd32d8562477e6749131b..942abe3d4c3a7767a0285478060b0f716e764715 100644
+--- a/package.json
++++ b/package.json
+@@ -126,6 +126,16 @@
+       "import": "./dist/src/public/tools/sleep.js",
+       "default": "./dist/src/public/tools/sleep.js"
+     },
++    "./tools/ask_question": {
++      "types": "./dist/src/tools/framework/ask-question.d.ts",
++      "import": "./dist/src/tools/framework/ask-question.js",
++      "default": "./dist/src/tools/framework/ask-question.js"
++    },
++    "./tools/task_cancel": {
++      "types": "./dist/src/tools/framework/task-cancel.d.ts",
++      "import": "./dist/src/tools/framework/task-cancel.js",
++      "default": "./dist/src/tools/framework/task-cancel.js"
++    },
+     "./tools": {
+       "types": "./dist/src/public/tools/index.d.ts",
+       "import": "./dist/src/public/tools/index.js",
