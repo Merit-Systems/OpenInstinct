@@ -166,6 +166,37 @@ Gotchas:
 - Sending email and creating confirmed calendar events always require approval.
   Calendar events with attendees send Google invitations.
 
+## Optional Parallel web research
+
+Set `PARALLEL_API_KEY` on the server to enable `web_research`, a tool that uses
+the [Parallel Responses API](https://docs.parallel.ai/responses-api/responses-quickstart)
+to return a researched answer with source links. Leave it unset to keep the
+tool disabled. Existing search tools and the browser worker are unchanged.
+
+Get a key from [Parallel](https://platform.parallel.ai), add it to `.env.local`
+and restart local development. For Vercel, set it separately in each environment
+that should use research and redeploy. This is a paid API using the operator's
+account for all authenticated users, separate from the free Search MCP service.
+Never put the key in chat or a `NEXT_PUBLIC_` variable.
+
+Give the tool a complete public-web question in `query`, up to 20,000 characters.
+`effort` defaults to `low`; `medium` and `high` allow more extensive research.
+Only the explicit question, chosen effort and optional follow-up ID are sent,
+not conversation history, files, screenshots, vault contents or Google data.
+Anything included in the question is sent to Parallel, so keep private data out.
+Answers include a `sources` list when citations are available.
+
+To continue the same investigation, pass its returned `response_id` as
+`previous_response_id`. Omit that argument for independent research. Saved
+context is best-effort and can become unavailable; Zero Data Retention (ZDR)
+accounts cannot continue by ID. Failed follow-ups are not silently restarted
+without context. Retention follows the Parallel account's policy.
+
+Calls wait up to 120 seconds and the integration does not retry them. Cancelling
+stops local waiting, but work already accepted by Parallel may still complete
+and be billed. Eve can rerun a step interrupted before its result is saved, so
+this does not guarantee exactly-once billing after a process failure.
+
 ## Local development
 
 The **Deploy with Vercel** flow above is the simplest way to run OpenInstinct. It

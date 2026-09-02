@@ -31,6 +31,7 @@ describe("root and worker capability boundaries", () => {
       "schedules/update.ts",
       "send_message.ts",
       "update_user_profile.ts",
+      "web_research.ts",
     ]);
     expect(existsSync(`${rootTools}/sendMessage.ts`)).toBe(false);
     expect(existsSync("agent/extensions/kernel/extension.ts")).toBe(false);

@@ -17,6 +17,7 @@ describe("environment", () => {
       vi.stubEnv(name, value);
     }
     vi.stubEnv("LINQ_CONNECTOR", "");
+    vi.stubEnv("PARALLEL_API_KEY", "");
     vi.stubEnv("LINQ_PHONE_NUMBER", "");
   });
 
@@ -56,6 +57,27 @@ describe("environment", () => {
       SECRET_ENCRYPTION_KEY: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
     });
     expect(localPhoneAuthBypassEnabled).toBe(true);
+  });
+
+  it("keeps Parallel research disabled without an API key", async () => {
+    const { env } = await import("@/env");
+
+    expect(env.PARALLEL_API_KEY).toBeUndefined();
+  });
+
+  it("accepts an optional server-side Parallel API key", async () => {
+    vi.stubEnv("PARALLEL_API_KEY", "test-parallel-key");
+    const { env } = await import("@/env");
+
+    expect(env.PARALLEL_API_KEY).toBe("test-parallel-key");
+  });
+
+  it("rejects whitespace-only Parallel credentials", async () => {
+    vi.stubEnv("PARALLEL_API_KEY", "   ");
+
+    await expect(import("@/env")).rejects.toThrow(
+      "Invalid environment variables"
+    );
   });
 
   it.each([
