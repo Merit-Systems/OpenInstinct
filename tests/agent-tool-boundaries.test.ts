@@ -51,6 +51,9 @@ describe("root and worker capability boundaries", () => {
     expect(readFileSync("agent/lib/agentcash-mcp.ts", "utf8")).toContain(
       'args: [agentcashCliPath, "server"]'
     );
+    expect(readFileSync("agent/lib/agentcash-cli.ts", "utf8")).toContain(
+      "HOME: homeDirectory"
+    );
     const rootInstructions = readFileSync("agent/instructions.md", "utf8");
     expect(rootInstructions).toContain(
       "Perform public research, source discovery, comparisons, and current-information lookups directly with `web_search`"

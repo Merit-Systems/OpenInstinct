@@ -60,6 +60,8 @@ function materializeAgentcashCli() {
 export const agentcashCliPath = materializeAgentcashCli();
 
 export function agentcashChildEnvironment(): Record<string, string> {
+  const homeDirectory = join(tmpdir(), "openinstinct-agentcash-home");
+  mkdirSync(homeDirectory, { mode: 0o700, recursive: true });
   const solanaPrivateKey = isAgentcashSolanaPrivateKey(
     env.X402_SOLANA_PRIVATE_KEY
   )
@@ -68,6 +70,7 @@ export function agentcashChildEnvironment(): Record<string, string> {
   return Object.fromEntries(
     Object.entries({
       CI: "1",
+      HOME: homeDirectory,
       LANG: "C.UTF-8",
       NODE_ENV: env.NODE_ENV,
       TMPDIR: tmpdir(),
