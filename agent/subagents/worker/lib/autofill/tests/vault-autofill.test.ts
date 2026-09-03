@@ -11,6 +11,8 @@ import {
 } from "@/lib/vault";
 import {
   classifyNativeLoginControl,
+  frameOriginExpression,
+  nativeLoginFillFunctionDeclaration,
   selectNativeLoginFills,
   type NativeLoginControlDescriptor,
 } from "@/agent/subagents/worker/lib/autofill/login";
@@ -500,6 +502,67 @@ describe("vault browser autofill", () => {
       ]);
     }
   );
+
+  it("writes login values only into a document served from the saved origin", () => {
+    class FakeInput {
+      readonly dataset: Record<string, string> = {};
+      #value = "";
+
+      get value() {
+        return this.#value;
+      }
+
+      set value(next: string) {
+        this.#value = next;
+      }
+
+      click() {
+        this.dataset.clicked = "true";
+      }
+
+      focus() {
+        this.dataset.focused = "true";
+      }
+
+      dispatchEvent() {
+        return true;
+      }
+    }
+    class FakeEvent {
+      readonly bubbles = true;
+    }
+    const fill = (documentOrigin: string, expectedOrigin: string) => {
+      const input = new FakeInput();
+      const accepted = z.boolean().parse(
+        runInNewContext(
+          `(${nativeLoginFillFunctionDeclaration}).call(input, "hunter2", expectedOrigin)`,
+          {
+            Event: FakeEvent,
+            expectedOrigin,
+            HTMLInputElement: FakeInput,
+            InputEvent: FakeEvent,
+            input,
+            self: { origin: documentOrigin },
+          }
+        )
+      );
+      return { accepted, value: input.value };
+    };
+
+    expect(
+      fill("https://www.bank.example", "https://www.bank.example")
+    ).toEqual({ accepted: true, value: "hunter2" });
+    expect(
+      fill("https://widget.bank.example", "https://www.bank.example")
+    ).toEqual({ accepted: false, value: "" });
+    expect(fill("null", "https://www.bank.example")).toEqual({
+      accepted: false,
+      value: "",
+    });
+    expect(
+      runInNewContext(frameOriginExpression, { self: { origin: "null" } })
+    ).toBe("null");
+  });
 
   it("builds a Chromium address from the current free-form vault value", () => {
     expect(

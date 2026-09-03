@@ -6,6 +6,7 @@ import {
   linqChannel,
   type LinqChannelCredentials,
 } from "eve/channels/linq";
+import { vercelOidc } from "eve/channels/auth";
 import { z } from "zod";
 import { getAuth } from "@/auth";
 import { reactToMessageToolResultSchema } from "@/agent/lib/react-to-message";
@@ -30,15 +31,28 @@ const verifiedPhoneUserSchema = z.object({
   phoneNumberVerified: z.literal(true),
 });
 
+const trustedForwarder = vercelOidc();
+
+// The Linq adapter only rejects a webhook when the verifier returns `false`,
+// while eve's OIDC verifier reports failure as `null`. Translate explicitly so
+// an unverified forwarder can never reach message dispatch.
+export const linqWebhookVerifier: NonNullable<
+  LinqChannelCredentials["webhookVerifier"]
+> = async (request) => (await trustedForwarder(request)) ?? false;
+
 const credentials = (
   env.LINQ_CONNECTOR
-    ? connectLinqCredentials(env.LINQ_CONNECTOR)
+    ? {
+        ...connectLinqCredentials(env.LINQ_CONNECTOR),
+        webhookVerifier: linqWebhookVerifier,
+      }
     : {
         apiKey() {
           throw new Error(
             "LINQ_CONNECTOR is not configured for this deployment."
           );
         },
+        webhookVerifier: () => false,
       }
 ) satisfies LinqChannelCredentials;
 
@@ -216,31 +230,28 @@ export default linqChannel({
     const verifiedUserId = phoneNumber
       ? await findVerifiedAuthUserIdByPhoneNumber(phoneNumber)
       : undefined;
-    const principalId = verifiedUserId
-      ? `better-auth:${verifiedUserId}`
-      : auth.principalId;
+    if (!verifiedUserId || !phoneNumber) {
+      // Phone possession is the only sign-in factor, so a handle that is not
+      // linked to a verified user is unauthenticated: never mint a principal
+      // or a workspace for it.
+      console.warn("[linq] ignoring message from an unlinked handle", {
+        threadId: context.thread.id,
+      });
+      return null;
+    }
+    const principalId = `better-auth:${verifiedUserId}`;
     const scope = accessScopeForUser(principalId);
-    const attributes =
-      verifiedUserId && phoneNumber
-        ? {
-            ...auth.attributes,
-            conversationChannel: "linq",
-            conversationId: context.thread.id,
-            linqThreadId: context.thread.id,
-            phoneNumber,
-            workspaceId: scope.workspaceId,
-          }
-        : {
-            ...auth.attributes,
-            conversationChannel: "linq",
-            conversationId: context.thread.id,
-            linqThreadId: context.thread.id,
-            workspaceId: scope.workspaceId,
-          };
     return {
       auth: {
         ...auth,
-        attributes,
+        attributes: {
+          ...auth.attributes,
+          conversationChannel: "linq",
+          conversationId: context.thread.id,
+          linqThreadId: context.thread.id,
+          phoneNumber,
+          workspaceId: scope.workspaceId,
+        },
         principalId,
       },
     };

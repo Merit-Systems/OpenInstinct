@@ -103,6 +103,13 @@ export function ChatConversation({
                     userVisibleOnly
                   />
                 ))}
+                <AgentMessage
+                  canRespond={!isBusy && agent.status !== "resuming"}
+                  isStreaming={false}
+                  message={message}
+                  onInputResponses={(responses) => agent.respond(responses)}
+                  userVisibleOnly
+                />
               </Fragment>
             );
           }

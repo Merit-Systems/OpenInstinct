@@ -141,7 +141,12 @@ export const nativeLoginControlInspectionExpression = `(() => {
   });
 })()`;
 
-export const nativeLoginFillFunctionDeclaration = `function(value) {
+// Evaluated inside a frame's isolated world. `self.origin` is the origin of the
+// document that would receive a value, so it also rejects sandboxed documents.
+export const frameOriginExpression = "self.origin";
+
+export const nativeLoginFillFunctionDeclaration = `function(value, expectedOrigin) {
+  if (self.origin !== expectedOrigin) return false;
   if (!(this instanceof HTMLInputElement)) return false;
   this.dataset.vaultSecret = "true";
   this.click();

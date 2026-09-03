@@ -34,13 +34,30 @@ export const gmailReadThread = defineTool({
   },
 });
 
+const gmailUpdateSchema = z.object({
+  messageIds: z.array(z.string().min(1).max(200)).min(1).max(100),
+  update: z.enum(GMAIL_UPDATE_ACTIONS),
+});
+
+// Archiving or marking read silently hides inbox signals such as security
+// alerts, so anything beyond a single message asks the user first.
+export function gmailUpdateApproval(
+  input: z.infer<typeof gmailUpdateSchema> | undefined
+) {
+  if (!input) return "user-approval";
+  const suppressesInbox =
+    input.update === "archive" || input.update === "mark_read";
+  return input.messageIds.length > 10 ||
+    (suppressesInbox && input.messageIds.length > 1)
+    ? "user-approval"
+    : "not-applicable";
+}
+
 export const gmailUpdate = defineTool({
+  approval: ({ toolInput }) => gmailUpdateApproval(toolInput),
   description:
-    "Apply one reversible Gmail state change to exact message IDs: archive, move to inbox, mark read or unread, or star or unstar.",
-  inputSchema: z.object({
-    messageIds: z.array(z.string().min(1).max(200)).min(1).max(100),
-    update: z.enum(GMAIL_UPDATE_ACTIONS),
-  }),
+    "Apply one reversible Gmail state change to exact message IDs: archive, move to inbox, mark read or unread, or star or unstar. Bulk changes and hiding more than one message from the inbox require user approval.",
+  inputSchema: gmailUpdateSchema,
   async execute(input, ctx) {
     const updated = await updateGmail(ctx, input.messageIds, input.update);
     return {

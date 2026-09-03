@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   PromptInput,
   PromptInputBody,
@@ -8,7 +8,12 @@ import {
   PromptInputTextarea,
   PromptInputTools,
 } from "@/components/ai-elements/prompt-input";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { messageContent } from "../../../_lib/message-input";
+import {
+  matchesApprovalOption,
+  pendingApprovalRequests,
+} from "../../_lib/pending-approvals";
 import { hasPendingBackgroundWorker } from "../../_lib/trace-view";
 import { api } from "@/trpc/client";
 import type { ChatAgent } from "../chat-agent";
@@ -32,6 +37,7 @@ export function ChatInput({
     () => hasPendingBackgroundWorker(agent.events),
     [agent.events]
   );
+  const [approvalNotice, setApprovalNotice] = useState<string>();
 
   useEffect(() => {
     if (sessionId === undefined || !hasPendingWorker) return undefined;
@@ -65,6 +71,16 @@ export function ChatInput({
       return;
     }
 
+    if (
+      matchesApprovalOption(text, pendingApprovalRequests(agent.data.messages))
+    ) {
+      setApprovalNotice(
+        "Use the Approve or Cancel button on the pending request instead of typing a reply."
+      );
+      return;
+    }
+    setApprovalNotice(undefined);
+
     const catchUp = backgroundCatchUp.current;
     if (catchUp !== undefined) {
       await Promise.all([agent.cancel().catch(() => undefined), catchUp]);
@@ -79,6 +95,11 @@ export function ChatInput({
 
   return (
     <div className="absolute bottom-0 left-1/2 z-20 mx-auto w-full max-w-3xl -translate-x-1/2 bg-linear-to-t from-background via-background to-transparent px-4 pt-4 pb-6 sm:px-6">
+      {approvalNotice ? (
+        <Alert className="mb-2" variant="warning">
+          <AlertDescription>{approvalNotice}</AlertDescription>
+        </Alert>
+      ) : null}
       <PromptInput compact onSubmit={handleSubmit}>
         <PromptInputBody>
           <PromptInputTextarea

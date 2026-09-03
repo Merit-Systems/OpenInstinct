@@ -90,7 +90,7 @@ describe("agent messages", () => {
     expect(markup).not.toContain("web_search");
   });
 
-  it("hides non-send_message controls in the iMessage projection", () => {
+  it("renders approval controls with their parameters in the iMessage projection", () => {
     const message = {
       id: "turn-2:assistant",
       metadata: { status: "streaming", turnId: "turn-2" },
@@ -133,10 +133,58 @@ describe("agent messages", () => {
       />
     );
 
-    expect(markup).not.toContain("Approve this action?");
-    expect(markup).not.toContain("Approve");
-    expect(markup).not.toContain("Cancel");
-    expect(markup).not.toContain("send_payment");
-    expect(markup).not.toContain("Hidden recipient");
+    expect(markup).toContain("Approve this action?");
+    expect(markup).toContain("Approve");
+    expect(markup).toContain("Cancel");
+    expect(markup).toContain("Hidden recipient");
+  });
+
+  it("renders different cards for approvals that differ only by recipient", () => {
+    const [first, second] = ["first@example.com", "second@example.com"].map(
+      (recipient) =>
+        renderToStaticMarkup(
+          <AgentMessage
+            canRespond
+            isStreaming={false}
+            message={{
+              id: "turn-3:assistant",
+              metadata: { status: "streaming", turnId: "turn-3" },
+              parts: [
+                {
+                  approval: { id: "approval-2" },
+                  input: { body: "Hello", subject: "Report", to: [recipient] },
+                  state: "approval-requested",
+                  stepIndex: 0,
+                  toolCallId: "call-3",
+                  toolMetadata: {
+                    eve: {
+                      inputRequest: {
+                        kind: "tool-approval",
+                        options: [
+                          { id: "approve", label: "Approve" },
+                          { id: "cancel", label: "Cancel" },
+                        ],
+                        prompt: "Approve tool call: gmail-send",
+                        requestId: "approval-2",
+                      },
+                      kind: "tool-call",
+                      name: "gmail-send",
+                    },
+                  },
+                  toolName: "gmail-send",
+                  type: "dynamic-tool",
+                },
+              ],
+              role: "assistant",
+            }}
+            onInputResponses={() => undefined}
+            userVisibleOnly
+          />
+        )
+    );
+
+    expect(first).not.toEqual(second);
+    expect(first).toContain("Send email to first@example.com");
+    expect(first).toContain("Report");
   });
 });

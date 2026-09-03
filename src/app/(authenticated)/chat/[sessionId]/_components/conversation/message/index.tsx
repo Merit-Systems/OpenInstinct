@@ -90,8 +90,15 @@ function userVisibleParts(
       (part) => part.type === "text" || part.type === "file"
     );
   }
+  if (sentMessageParts) return sentMessageParts;
 
-  return sentMessageParts ?? [];
+  // Approval prompts are the only control over side effects, so they stay
+  // visible together with what they authorize even outside the full trace.
+  return message.parts.filter(
+    (part) =>
+      part.type === "dynamic-tool" &&
+      part.toolMetadata?.eve?.inputRequest !== undefined
+  );
 }
 
 const timestampFormatter = new Intl.DateTimeFormat(undefined, {

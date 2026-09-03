@@ -5,6 +5,9 @@ import {
   resolveProfileMemoryBackend,
   resolveProfileMemoryScope,
 } from "@/agent/lib/profile-memory";
+import { accessScopeForUser } from "@/lib/access-scope";
+
+const derivedWorkspaceId = accessScopeForUser("better-auth:user").workspaceId;
 
 describe("profile memory", () => {
   it("uses an explicit Blob backend for an attached store in production", () => {
@@ -49,7 +52,7 @@ describe("profile memory", () => {
   });
 
   it("shares the canonical workspace across verified authenticators", () => {
-    const workspaceId = "personal:workspace";
+    const workspaceId = derivedWorkspaceId;
     expect(
       resolveProfileMemoryScope(
         memoryContext(userPrincipal("authjs", workspaceId))
@@ -67,7 +70,7 @@ describe("profile memory", () => {
     expect(
       resolveProfileMemoryScope(
         memoryContext({
-          ...userPrincipal("runtime", "personal:workspace"),
+          ...userPrincipal("runtime", derivedWorkspaceId),
           principalType: "runtime",
         })
       )
@@ -87,15 +90,15 @@ describe("profile memory", () => {
             principalId: "worker",
             principalType: "runtime",
           },
-          userPrincipal("authjs", "personal:workspace")
+          userPrincipal("authjs", derivedWorkspaceId)
         )
       )
-    ).toBe("personal:workspace");
+    ).toBe(derivedWorkspaceId);
   });
 
   it("omits user memory from scheduled reporting turns", () => {
     const context = memoryContext(
-      userPrincipal("scheduled-result", "personal:workspace")
+      userPrincipal("scheduled-result", derivedWorkspaceId)
     );
 
     expect(resolveProfileMemoryScope(context)).toBeNull();
@@ -104,14 +107,12 @@ describe("profile memory", () => {
 
   it("offers profile updates only during interactive turns", async () => {
     const interactiveTools = await personalInfoMemory.provider.tools(
-      memoryToolsContext(userPrincipal("authjs", "personal:workspace"))
+      memoryToolsContext(userPrincipal("authjs", derivedWorkspaceId))
     );
     expect(Object.keys(interactiveTools ?? {})).toEqual(["update"]);
 
     const scheduledTools = await personalInfoMemory.provider.tools(
-      memoryToolsContext(
-        userPrincipal("scheduled-worker", "personal:workspace")
-      )
+      memoryToolsContext(userPrincipal("scheduled-worker", derivedWorkspaceId))
     );
     expect(scheduledTools).toBeNull();
   });
@@ -127,7 +128,7 @@ function memoryToolsContext(
       scope: {
         key: "personal-info-key",
         namespace: "openinstinct-personal-info-v1",
-        value: "personal:workspace",
+        value: derivedWorkspaceId,
       },
       slot: "personal_info",
     },

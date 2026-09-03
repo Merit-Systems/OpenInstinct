@@ -43,7 +43,7 @@ describe("Google Workspace", () => {
       addLabelIds: ["UNREAD"],
       removeLabelIds: [],
     });
-    expect(gmailUpdate.approval).toBeUndefined();
+    expect(gmailUpdate.approval).toBeTypeOf("function");
     expect(gmailSend.approval).toBeTypeOf("function");
     expect(calendarCreateEvent.approval).toBeTypeOf("function");
   });

@@ -14,7 +14,7 @@ vi.mock("@/agent/lib/google-workspace/gmail", async (importOriginal) => ({
   updateGmail: gmail.update,
 }));
 
-import { gmailUpdate } from "@/agent/tools/gmail";
+import { gmailUpdate, gmailUpdateApproval } from "@/agent/tools/gmail";
 
 describe("Google Workspace tools", () => {
   it("reports the selected Gmail update without an action discriminator", async () => {
@@ -30,6 +30,28 @@ describe("Google Workspace tools", () => {
       "archive"
     );
     expect(result).toEqual({ update: "archive", updatedCount: 2 });
+  });
+
+  it("requires approval before hiding more than one message from the inbox", () => {
+    expect(gmailUpdateApproval({ messageIds: ["m1"], update: "archive" })).toBe(
+      "not-applicable"
+    );
+    expect(
+      gmailUpdateApproval({ messageIds: ["m1", "m2"], update: "mark_read" })
+    ).toBe("user-approval");
+    expect(
+      gmailUpdateApproval({ messageIds: ["m1", "m2", "m3"], update: "star" })
+    ).toBe("not-applicable");
+    expect(
+      gmailUpdateApproval({
+        messageIds: Array.from(
+          { length: 11 },
+          (_, index) => `m${String(index)}`
+        ),
+        update: "star",
+      })
+    ).toBe("user-approval");
+    expect(gmailUpdateApproval(undefined)).toBe("user-approval");
   });
 });
 

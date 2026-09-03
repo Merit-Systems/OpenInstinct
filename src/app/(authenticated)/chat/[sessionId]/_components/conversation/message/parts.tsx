@@ -69,6 +69,7 @@ export function AgentMessagePart({
             canRespond={canRespond}
             part={part}
             onInputResponses={onInputResponses}
+            showParameters
           />
         );
       }
