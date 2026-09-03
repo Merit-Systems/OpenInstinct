@@ -1,7 +1,5 @@
 import { z } from "zod";
 
-export const chatChannels = ["eve", "linq"] as const;
-
 const chatUsageSchema = z.object({
   costUsd: z.number().nonnegative().nullable(),
   inputTokens: z.number().int().nonnegative(),
@@ -9,7 +7,7 @@ const chatUsageSchema = z.object({
 });
 
 const chatSummarySchema = z.object({
-  channel: z.enum(chatChannels).nullable(),
+  channel: z.string().min(1).nullable(),
   createdAt: z.string(),
   sessionId: z.string().min(1),
   title: z.string().min(1),
@@ -26,6 +24,5 @@ export const saveChatSchema = z.object({
 });
 
 export type ChatUsage = z.infer<typeof chatUsageSchema>;
-export type ChatChannel = (typeof chatChannels)[number];
 export type ChatSummary = z.infer<typeof chatSummarySchema>;
 export type SaveChat = z.infer<typeof saveChatSchema>;

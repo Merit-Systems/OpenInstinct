@@ -59,7 +59,7 @@ describe("session ownership hook", () => {
     await handler?.(event, context);
 
     expect(mocks.saveChat).toHaveBeenCalledWith(scope, {
-      channel: "linq",
+      channel: "channel:linq",
       sessionId: "session-1",
     });
   });
@@ -80,7 +80,7 @@ describe("session ownership hook", () => {
     });
 
     expect(mocks.saveChat).toHaveBeenCalledWith(scope, {
-      channel: "eve",
+      channel: "http",
       sessionId: "session-1",
     });
   });

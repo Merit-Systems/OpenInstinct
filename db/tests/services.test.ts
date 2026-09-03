@@ -150,7 +150,7 @@ describe("database services", () => {
     expect(await sessions.isSessionOwned(bob, "session-alice")).toBe(false);
 
     await chats.saveChat(alice, {
-      channel: "eve",
+      channel: "http",
       sessionId: "session-alice",
       title: "Initial title",
       usage: { costUsd: 0.25, inputTokens: 10, outputTokens: 4 },
@@ -160,13 +160,13 @@ describe("database services", () => {
       title: "Updated title",
     });
     await chats.saveChat(alice, {
-      channel: "linq",
+      channel: "channel:linq",
       sessionId: "session-imessage",
     });
 
     const aliceChat = await chats.readChat(alice, "session-alice");
     expect(aliceChat?.title).toBe("Updated title");
-    expect(aliceChat?.channel).toBe("eve");
+    expect(aliceChat?.channel).toBe("http");
     expect(aliceChat?.usage).toEqual({
       costUsd: 0.25,
       inputTokens: 10,
@@ -180,7 +180,7 @@ describe("database services", () => {
     ).toEqual(aliceChat);
     expect(
       indexedChats.find((chat) => chat.sessionId === "session-imessage")
-    ).toMatchObject({ channel: "linq", title: "New chat" });
+    ).toMatchObject({ channel: "channel:linq", title: "New chat" });
     expect(await chats.listChats(bob)).toEqual([]);
 
     await chats.saveChat(bob, {

@@ -1,19 +1,13 @@
 import { and, desc, eq } from "drizzle-orm";
 import { z } from "zod";
 import type { AccessScope } from "@/lib/access-scope";
-import {
-  chatChannels,
-  chatListSchema,
-  type ChatChannel,
-  type ChatSummary,
-  type SaveChat,
-} from "@/lib/chat";
+import { chatListSchema, type ChatSummary, type SaveChat } from "@/lib/chat";
 import { chats, db } from "@/db";
 import { ensureScope } from "./scope";
 import { waitForSessionOwnership } from "./sessions";
 
 const chatRowSchema = z.object({
-  channel: z.enum(chatChannels).nullable(),
+  channel: z.string().min(1).nullable(),
   costUsd: z.number().nonnegative().nullable(),
   createdAt: z.coerce.date(),
   inputTokens: z.number().int().nonnegative(),
@@ -64,7 +58,7 @@ export async function readChat(scope: AccessScope, sessionId: string) {
 
 export async function saveChat(
   scope: AccessScope,
-  chat: SaveChat & { readonly channel?: ChatChannel }
+  chat: SaveChat & { readonly channel?: string }
 ) {
   // A session outside this workspace is indistinguishable from an unknown one.
   if (!(await waitForSessionOwnership(scope, chat.sessionId))) return;
