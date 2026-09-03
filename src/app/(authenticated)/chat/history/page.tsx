@@ -8,7 +8,6 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { listChats } from "@/db/services/chats";
-import type { ChatSummary } from "@/lib/chat";
 import { requireRequestScope } from "@/lib/request-scope";
 
 export const dynamic = "force-dynamic";
@@ -17,7 +16,9 @@ export default async function AllChatsPage() {
   const scope = await requireRequestScope();
   const chats = await listChats(scope);
   const totalUsage = combineChatUsage(chats.map((chat) => chat.usage));
-  const imessageSessionId = mainImessageSessionId(chats);
+  const imessageSessionId = chats.find(
+    (chat) => chat.channel === "linq"
+  )?.sessionId;
 
   return (
     <div className="mx-auto w-full max-w-4xl space-y-8 px-4 py-6 sm:px-6 sm:py-8">
@@ -79,17 +80,6 @@ export default async function AllChatsPage() {
       </section>
     </div>
   );
-}
-
-function mainImessageSessionId(chats: readonly ChatSummary[]) {
-  const indexed = chats.find((chat) => chat.channel === "linq");
-  if (indexed) return indexed.sessionId;
-
-  // iMessage chats created before channel provenance was persisted used the
-  // server-side fallback title. Web chats replace it with the first prompt.
-  return chats.find(
-    (chat) => chat.channel === null && chat.title === "New chat"
-  )?.sessionId;
 }
 
 function formatChatDate(value: string) {
