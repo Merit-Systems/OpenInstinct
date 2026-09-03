@@ -2,9 +2,9 @@ import { createHash, randomUUID } from "node:crypto";
 import { del, put } from "@vercel/blob";
 import { defineTool, toolOutput } from "eve/tools";
 import { z } from "zod";
-import { requireWorkerScope } from "@/agent/subagents/worker/lib/access";
-import { requireOwnedBrowserSession } from "@/agent/subagents/worker/lib/owned-browser";
-import { withVaultScreenshotMask } from "@/agent/subagents/worker/lib/vault-screenshot-mask";
+import { requireWorkerScope } from "@/agent/subagents/browser-agent/lib/access";
+import { requireOwnedBrowserSession } from "@/agent/subagents/browser-agent/lib/owned-browser";
+import { withVaultScreenshotMask } from "@/agent/subagents/browser-agent/lib/vault-screenshot-mask";
 import {
   finalizeBrowserImageArtifact,
   reserveBrowserImageArtifact,

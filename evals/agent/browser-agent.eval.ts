@@ -7,14 +7,17 @@ import {
 
 export default defineEval({
   description: "Delegates browser work and cancels it through task steering",
-  tags: [...agentEvalTags, "worker", "orchestration"],
+  tags: [...agentEvalTags, "browser-agent", "orchestration"],
   async test(t) {
     const delegated = await t.send(
-      "Use the browser worker to visually inspect https://example.com and report the exact primary heading. Do not use web_fetch because this specifically requires browser interaction."
+      "Use the browser-agent subagent to visually inspect https://example.com and report the exact primary heading. Do not use web_fetch because this specifically requires browser interaction."
     );
     delegated.expectOk();
     delegated.succeeded();
-    delegated.calledSubagent("worker", { status: "completed", count: 1 });
+    delegated.calledSubagent("browser-agent", {
+      status: "completed",
+      count: 1,
+    });
     const acknowledgement = await requireDeliveredText(t, delegated);
     assertPlainTextDelivery(t, acknowledgement);
 

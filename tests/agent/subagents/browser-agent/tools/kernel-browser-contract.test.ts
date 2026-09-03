@@ -8,15 +8,15 @@ import type {
   withBrowserProfileWriteLock,
 } from "@/db/services/browsers";
 import type { recordBrowserTraceDomains } from "@/db/services/browser-traces";
-import type { requireWorkerScope } from "@/agent/subagents/worker/lib/access";
-import type { requireOwnedBrowserSession } from "@/agent/subagents/worker/lib/owned-browser";
-import type * as TraceDomainsModule from "@/agent/subagents/worker/lib/trace/domains";
-import type { harvestBrowserTraceDomains } from "@/agent/subagents/worker/lib/trace/domains";
+import type { requireWorkerScope } from "@/agent/subagents/browser-agent/lib/access";
+import type { requireOwnedBrowserSession } from "@/agent/subagents/browser-agent/lib/owned-browser";
+import type * as TraceDomainsModule from "@/agent/subagents/browser-agent/lib/trace/domains";
+import type { harvestBrowserTraceDomains } from "@/agent/subagents/browser-agent/lib/trace/domains";
 import { kernel } from "@/lib/kernel";
 import { toolContextFor } from "@/tests/helpers/tool-context";
 import manageBrowsers, {
   kernelProfileNameForWorkspace,
-} from "@/agent/subagents/worker/tools/manage_browsers";
+} from "@/agent/subagents/browser-agent/tools/manage_browsers";
 
 const serviceMocks = vi.hoisted(() => ({
   createBrowserSession: vi.fn<typeof createBrowserSession>(),
@@ -38,14 +38,14 @@ vi.mock("@/db/services/browsers", () => ({
 vi.mock("@/db/services/browser-traces", () => ({
   recordBrowserTraceDomains: serviceMocks.recordBrowserTraceDomains,
 }));
-vi.mock("@/agent/subagents/worker/lib/access", () => ({
+vi.mock("@/agent/subagents/browser-agent/lib/access", () => ({
   requireWorkerScope: serviceMocks.requireWorkerScope,
 }));
-vi.mock("@/agent/subagents/worker/lib/owned-browser", () => ({
+vi.mock("@/agent/subagents/browser-agent/lib/owned-browser", () => ({
   requireOwnedBrowserSession: serviceMocks.requireOwnedBrowserSession,
 }));
 vi.mock(
-  "@/agent/subagents/worker/lib/trace/domains",
+  "@/agent/subagents/browser-agent/lib/trace/domains",
   async (importOriginal) => ({
     ...(await importOriginal<typeof TraceDomainsModule>()),
     harvestBrowserTraceDomains: serviceMocks.harvestBrowserTraceDomains,

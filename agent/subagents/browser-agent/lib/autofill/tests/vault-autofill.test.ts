@@ -15,18 +15,18 @@ import {
   nativeLoginFillFunctionDeclaration,
   selectNativeLoginFills,
   type NativeLoginControlDescriptor,
-} from "@/agent/subagents/worker/lib/autofill/login";
+} from "@/agent/subagents/browser-agent/lib/autofill/login";
 import {
   buildNativeAutofillPayload,
   nativeAutofillSecretMarkingExpression,
   nativeAutofillTokens,
-} from "@/agent/subagents/worker/lib/autofill/native";
+} from "@/agent/subagents/browser-agent/lib/autofill/native";
 import {
   listAutofillSuggestions,
   materializeAutofillClaims,
   type AutofillVaultAdapter,
-} from "@/agent/subagents/worker/lib/autofill/service";
-import { vaultAutofillProvider } from "@/agent/subagents/worker/lib/autofill/provider";
+} from "@/agent/subagents/browser-agent/lib/autofill/service";
+import { vaultAutofillProvider } from "@/agent/subagents/browser-agent/lib/autofill/provider";
 
 interface VaultStore {
   items: { id: string }[];

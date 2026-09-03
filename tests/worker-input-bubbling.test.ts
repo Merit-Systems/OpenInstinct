@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 describe("worker input bubbling", () => {
   it("keeps native questions disabled inside browser workers", () => {
     const askQuestionTool = readFileSync(
-      "agent/subagents/worker/tools/ask_question.ts",
+      "agent/subagents/browser-agent/tools/ask_question.ts",
       "utf8"
     );
 
@@ -17,7 +17,7 @@ describe("worker input bubbling", () => {
       "utf8"
     );
     const workerInstructions = readFileSync(
-      "agent/subagents/worker/instructions.md",
+      "agent/subagents/browser-agent/instructions.md",
       "utf8"
     );
 

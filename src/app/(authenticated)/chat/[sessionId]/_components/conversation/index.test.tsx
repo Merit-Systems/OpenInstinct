@@ -53,7 +53,7 @@ describe("chat conversation", () => {
 
   it("keeps the previous visible message while a filtered assistant shell is pending", () => {
     const cancellationText =
-      "Background task task_worker (worker) is cancelled.";
+      "Background task task_worker (browser-agent) is cancelled.";
     const visibleMessage = message("visible-turn:user", "Keep this visible");
     const hiddenDelivery = message("task-delivery:user", cancellationText);
     const hiddenShell = {
@@ -124,7 +124,7 @@ function workerReceipt(taskId: string): MessageStreamEvent {
       backgroundTask: { status: "working", taskId },
       callId: "call_worker",
       output: `{"status":"working","taskId":"${taskId}"}`,
-      subagentName: "worker",
+      subagentName: "browser-agent",
     },
     meta: { at: "2026-08-27T20:00:00.000Z", id: "receipt" },
     type: "subagent.completed",
@@ -144,7 +144,7 @@ function workerCancellation(taskId: string): MessageStreamEvent {
                 agentId: "agent_worker",
                 kind: "subagent",
                 mode: "local",
-                name: "worker",
+                name: "browser-agent",
               },
               status: "cancelled",
               taskId,

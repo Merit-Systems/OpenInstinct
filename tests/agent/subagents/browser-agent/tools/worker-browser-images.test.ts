@@ -29,13 +29,13 @@ const mocks = vi.hoisted(() => ({
   requireWorkerScope: vi.fn(),
 }));
 
-vi.mock("@/agent/subagents/worker/lib/access", () => ({
+vi.mock("@/agent/subagents/browser-agent/lib/access", () => ({
   requireWorkerScope: mocks.requireWorkerScope,
 }));
-vi.mock("@/agent/subagents/worker/lib/owned-browser", () => ({
+vi.mock("@/agent/subagents/browser-agent/lib/owned-browser", () => ({
   requireOwnedBrowserSession: mocks.requireOwnedBrowserSession,
 }));
-vi.mock("@/agent/subagents/worker/lib/vault-screenshot-mask", () => ({
+vi.mock("@/agent/subagents/browser-agent/lib/vault-screenshot-mask", () => ({
   withVaultScreenshotMask: mocks.mask,
 }));
 vi.mock("@/db/services/browser-images", () => ({
@@ -58,7 +58,7 @@ vi.mock("@/lib/kernel", () => ({
   },
 }));
 
-import captureBrowserImage from "@/agent/subagents/worker/tools/capture_browser_image";
+import captureBrowserImage from "@/agent/subagents/browser-agent/tools/capture_browser_image";
 
 const scope = { userId: "user-1", workspaceId: "workspace-1" };
 const reservation = {
