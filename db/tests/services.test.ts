@@ -201,14 +201,15 @@ describe("database services", () => {
     );
     expect(await chats.listChats(bob)).toEqual([]);
 
-    await expect(
-      chats.saveChat(bob, {
-        sessionId: "session-alice",
-        title: "Bob's title",
-      })
-    ).rejects.toThrow(/Failed query: insert into "chats"/);
+    await chats.saveChat(bob, {
+      sessionId: "session-alice",
+      title: "Bob's title",
+    });
+    await chats.saveChat(bob, { sessionId: "session-unknown", title: "Probe" });
     expect(await chats.readChat(alice, "session-alice")).toEqual(aliceChat);
     expect(await chats.readChat(bob, "session-alice")).toBeUndefined();
+    expect(await chats.readChat(bob, "session-unknown")).toBeUndefined();
+    expect(await chats.listChats(bob)).toEqual([]);
 
     await browsers.createBrowserSession(alice, {
       createdAt: new Date().toISOString(),

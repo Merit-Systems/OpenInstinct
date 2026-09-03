@@ -1,7 +1,7 @@
 import type { ConnectionPrincipal } from "eve/connections";
 import type { SessionAuthContext } from "eve/context";
 import { z } from "zod";
-import type { AccessScope } from "@/lib/access-scope";
+import { accessScopeForUser, type AccessScope } from "@/lib/access-scope";
 
 const principalScopeSchema = z.object({
   attributes: z.object({
@@ -19,9 +19,13 @@ export function scopeFromPrincipal(
   if (!userId) {
     throw new Error("An authenticated workspace user is required.");
   }
+  const { workspaceId } = principal.attributes;
+  if (
+    userId.startsWith("better-auth:") &&
+    accessScopeForUser(userId).workspaceId !== workspaceId
+  ) {
+    throw new Error("The workspace does not belong to the authenticated user.");
+  }
 
-  return {
-    userId,
-    workspaceId: principal.attributes.workspaceId,
-  } satisfies AccessScope;
+  return { userId, workspaceId } satisfies AccessScope;
 }

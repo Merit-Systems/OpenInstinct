@@ -4,6 +4,7 @@ import type { AccessScope } from "@/lib/access-scope";
 import { chatListSchema, type ChatSummary, type SaveChat } from "@/lib/chat";
 import { agentSessions, chats, db } from "@/db";
 import { ensureScope } from "./scope";
+import { waitForSessionOwnership } from "./sessions";
 
 const chatRowSchema = z.object({
   costUsd: z.number().nonnegative().nullable(),
@@ -63,6 +64,8 @@ export async function readChat(scope: AccessScope, sessionId: string) {
 }
 
 export async function saveChat(scope: AccessScope, chat: SaveChat) {
+  // A session outside this workspace is indistinguishable from an unknown one.
+  if (!(await waitForSessionOwnership(scope, chat.sessionId))) return;
   await ensureScope(scope);
   const now = new Date();
   const existing = await db
