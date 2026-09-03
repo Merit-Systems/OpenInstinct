@@ -103,15 +103,36 @@ describe("dynamic schedule dispatch", () => {
     });
   });
 
-  it("requests recovery through the report callback", async () => {
+  it("delivers recoverable Linq reports through the schedule channel handle", async () => {
     const report = scheduledReport();
-    services.listReports.mockResolvedValue([report.run.id]);
-    const workerSend = vi.fn<ReturnType<ScheduleToFn>["send"]>();
-    const to = vi.fn<ScheduleToFn>(() => ({ send: workerSend }));
+    services.listReports.mockResolvedValue([
+      { conversationChannel: "linq", runId: report.run.id },
+    ]);
+    services.claimReports.mockResolvedValue(report);
+    const send = vi
+      .fn<ReturnType<ScheduleToFn>["send"]>()
+      .mockResolvedValue(workerSession("main-session"));
+    const to = vi.fn<ScheduleToFn>(() => ({ send }));
 
     await runSchedule(to);
 
-    expect(workerSend).not.toHaveBeenCalled();
+    expect(requests.report).not.toHaveBeenCalled();
+    expect(send.mock.calls[0]?.[1]).toMatchObject({
+      auth: { authenticator: "scheduled-result" },
+      turnPolicy: "queue",
+    });
+  });
+
+  it("keeps Eve debug reports on its active-session callback", async () => {
+    const report = scheduledReport();
+    services.listReports.mockResolvedValue([
+      { conversationChannel: "eve", runId: report.run.id },
+    ]);
+    const to = vi.fn<ScheduleToFn>();
+
+    await runSchedule(to);
+
+    expect(to).not.toHaveBeenCalled();
     expect(requests.report).toHaveBeenCalledExactlyOnceWith(report.run.id);
   });
 
@@ -119,6 +140,14 @@ describe("dynamic schedule dispatch", () => {
     const claim = scheduledClaim();
     services.claimRuns.mockResolvedValue([claim]);
     services.releaseRun.mockResolvedValue("dead_letter");
+    services.claimReports.mockResolvedValue({
+      ...scheduledReport(),
+      job: claim.job,
+      run: {
+        ...scheduledReport().run,
+        id: claim.run.id,
+      },
+    });
     const send = vi
       .fn<ReturnType<ScheduleToFn>["send"]>()
       .mockRejectedValue(new Error("Workflow did not accept the candidate."));
@@ -131,7 +160,8 @@ describe("dynamic schedule dispatch", () => {
       claim.run.leaseToken,
       "Workflow did not accept the candidate."
     );
-    expect(requests.report).toHaveBeenCalledExactlyOnceWith(claim.run.id);
+    expect(requests.report).not.toHaveBeenCalled();
+    expect(services.claimReports).toHaveBeenCalledExactlyOnceWith(claim.run.id);
   });
 });
 
@@ -285,6 +315,7 @@ function scheduledClaim(): Awaited<
       attempts: 1,
       completedAt: null,
       createdAt: new Date("2026-09-02T13:00:00.000Z"),
+      deferredCompletionTurnId: null,
       id: "00000000-0000-4000-8000-000000000002",
       pendingInputRequests: null,
       jobId: "00000000-0000-4000-8000-000000000001",

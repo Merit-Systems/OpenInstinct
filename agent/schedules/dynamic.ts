@@ -1,5 +1,6 @@
 import { defineSchedule, type ScheduleToFn } from "eve/schedules";
 import scheduledRunChannel from "@/agent/channels/scheduled-run";
+import { dispatchScheduledReport } from "@/agent/lib/schedules/report";
 import { postScheduledReport } from "@/agent/lib/schedules/request";
 import {
   claimReadyScheduledAgentRuns,
@@ -29,21 +30,17 @@ async function dispatchDueWork(to: ScheduleToFn) {
     limit: 25,
     now,
   });
-  const reportRunIds = await listRecoverableScheduledReports(now, 25);
-  if (
-    materializedRunIds.length > 0 ||
-    runs.length > 0 ||
-    reportRunIds.length > 0
-  ) {
+  const reports = await listRecoverableScheduledReports(now, 25);
+  if (materializedRunIds.length > 0 || runs.length > 0 || reports.length > 0) {
     console.info("[scheduled-run] schedule tick found work", {
       claimedRunCount: runs.length,
       materializedRunCount: materializedRunIds.length,
-      recoverableReportCount: reportRunIds.length,
+      recoverableReportCount: reports.length,
     });
   }
   await Promise.all([
     ...runs.map((claim) => executeScheduledRun(to, claim)),
-    ...reportRunIds.map((runId) => postScheduledReport(runId)),
+    ...reports.map((report) => dispatchRecoverableReport(to, report)),
   ]);
 }
 
@@ -91,9 +88,21 @@ async function executeScheduledRun(
       error instanceof Error ? error.message : String(error)
     );
     if (status === "dead_letter") {
-      await postScheduledReport(claim.run.id);
+      await dispatchRecoverableReport(to, {
+        conversationChannel: claim.job.conversationChannel,
+        runId: claim.run.id,
+      });
     }
   }
+}
+
+function dispatchRecoverableReport(
+  to: ScheduleToFn,
+  report: Awaited<ReturnType<typeof listRecoverableScheduledReports>>[number]
+) {
+  return report.conversationChannel === "linq"
+    ? dispatchScheduledReport({ to }, report.runId)
+    : postScheduledReport(report.runId);
 }
 
 function scheduledRunPrompt(
@@ -103,7 +112,6 @@ function scheduledRunPrompt(
     "Complete this user-owned scheduled task in an isolated background session.",
     `Scheduled for: ${claim.run.scheduledFor.toISOString()}`,
     `Task: ${claim.job.prompt}`,
-    "Return exactly one structured final outcome.",
   ].join("\n\n");
 }
 
