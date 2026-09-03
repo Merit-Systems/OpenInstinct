@@ -5,8 +5,10 @@ import {
   formatChatUsage,
 } from "@/app/(authenticated)/chat/_lib/chat-usage";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { listChats } from "@/db/services/chats";
+import type { ChatSummary } from "@/lib/chat";
 import { requireRequestScope } from "@/lib/request-scope";
 
 export const dynamic = "force-dynamic";
@@ -15,6 +17,7 @@ export default async function AllChatsPage() {
   const scope = await requireRequestScope();
   const chats = await listChats(scope);
   const totalUsage = combineChatUsage(chats.map((chat) => chat.usage));
+  const imessageSessionId = mainImessageSessionId(chats);
 
   return (
     <div className="mx-auto w-full max-w-4xl space-y-8 px-4 py-6 sm:px-6 sm:py-8">
@@ -48,8 +51,19 @@ export default async function AllChatsPage() {
               }
               variant="surface"
             >
-              <MessageSquareIcon className="size-4 shrink-0 text-muted-foreground" />
-              <span className="min-w-0 flex-1 truncate">{chat.title}</span>
+              <MessageSquareIcon
+                className={
+                  chat.sessionId === imessageSessionId
+                    ? "size-4 shrink-0 text-information"
+                    : "size-4 shrink-0 text-muted-foreground"
+                }
+              />
+              <span className="min-w-0 flex-1 truncate">
+                {chat.sessionId === imessageSessionId ? "iMessage" : chat.title}
+              </span>
+              {chat.sessionId === imessageSessionId ? (
+                <Badge variant="information">Main thread</Badge>
+              ) : null}
               <span className="shrink-0 type-label text-muted-foreground">
                 {formatChatUsage(chat.usage)}
               </span>
@@ -65,6 +79,17 @@ export default async function AllChatsPage() {
       </section>
     </div>
   );
+}
+
+function mainImessageSessionId(chats: readonly ChatSummary[]) {
+  const indexed = chats.find((chat) => chat.channel === "linq");
+  if (indexed) return indexed.sessionId;
+
+  // iMessage chats created before channel provenance was persisted used the
+  // server-side fallback title. Web chats replace it with the first prompt.
+  return chats.find(
+    (chat) => chat.channel === null && chat.title === "New chat"
+  )?.sessionId;
 }
 
 function formatChatDate(value: string) {

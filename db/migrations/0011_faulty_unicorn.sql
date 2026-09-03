@@ -1,0 +1,2 @@
+ALTER TABLE "chats" ADD COLUMN "channel" text;--> statement-breakpoint
+ALTER TABLE "chats" ADD CONSTRAINT "chats_channel_check" CHECK ("chats"."channel" IS NULL OR "chats"."channel" IN ('eve', 'linq'));

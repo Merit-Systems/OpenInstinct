@@ -9,6 +9,7 @@ import {
   text,
   timestamp,
 } from "drizzle-orm/pg-core";
+import { chatChannels } from "@/lib/chat";
 import { workspaces } from "./workspaces";
 
 export const chats = pgTable(
@@ -16,6 +17,7 @@ export const chats = pgTable(
   {
     sessionId: text("session_id").primaryKey(),
     workspaceId: text("workspace_id").notNull(),
+    channel: text("channel", { enum: chatChannels }),
     title: text("title").notNull(),
     createdAt: timestamp("created_at", {
       mode: "date",
@@ -50,6 +52,10 @@ export const chats = pgTable(
     check(
       "chats_cost_usd_check",
       sql`${table.costUsd} IS NULL OR ${table.costUsd} >= 0`
+    ),
+    check(
+      "chats_channel_check",
+      sql`${table.channel} IS NULL OR ${table.channel} IN ('eve', 'linq')`
     ),
     index("chats_workspace_updated_idx").on(
       table.workspaceId,

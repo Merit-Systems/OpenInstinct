@@ -1,4 +1,5 @@
 import { defineHook } from "eve/hooks";
+import type { ChatChannel } from "@/lib/chat";
 import { saveChat } from "@/db/services/chats";
 import { ensureScope } from "@/db/services/scope";
 import { claimSession } from "@/db/services/sessions";
@@ -19,8 +20,15 @@ export default defineHook({
       if (!initiator) return;
 
       await saveChat(scopeFromPrincipal(initiator), {
+        channel: chatChannel(ctx.channel.kind),
         sessionId: ctx.session.id,
       });
     },
   },
 });
+
+function chatChannel(kind: string | undefined): ChatChannel | undefined {
+  if (kind === "channel:linq") return "linq";
+  if (kind === "http") return "eve";
+  return undefined;
+}
