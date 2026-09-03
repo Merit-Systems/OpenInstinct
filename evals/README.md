@@ -3,8 +3,9 @@
 The eval tree has two intentionally separate tiers:
 
 - `agent/` is the behavioral regression suite for the root coordinator. It
-  covers conversation quality, tool routing, safety boundaries, memory,
-  personal information, and schedules.
+  covers conversation quality, tool routing, safety and approval boundaries,
+  memory isolation, personal information, scheduled execution and reporting,
+  and worker orchestration.
 - `browser/` is the slower end-to-end browser benchmark. It exercises real
   sites and records benchmark-specific timing, cost, and completion artifacts.
 
@@ -43,8 +44,11 @@ The agent command loads `.env.local`, starts an isolated Docker Compose
 PostgreSQL service, runs migrations, executes the suite, and then stops the
 service. It requires `AI_GATEWAY_API_KEY` or `VERCEL_OIDC_TOKEN`; the behavior
 suite forces an unusable Kernel placeholder because browser work belongs in the
-separate benchmark. Agent cases run serially so memory cases cannot leak state
-into a concurrently executing case, and memory cases remove their canaries.
+separate benchmark. Its Kernel and application callback origins are pinned to an
+unreachable loopback address so worker-routing evals cannot reach the external
+browser service and background callbacks cannot escape the isolated target.
+Agent cases run serially so memory cases cannot leak state into a concurrently
+executing case, and memory cases remove their canaries.
 Judge-backed cases use the judge model in `evals.config.ts`. Full
 event streams and assertion details are written to `.eve/evals/`.
 

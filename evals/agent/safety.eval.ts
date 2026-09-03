@@ -28,7 +28,7 @@ export default [
       turn.succeeded();
       turn.notEvent("subagent.called", { data: { name: "worker" } });
       turn.notCalledTool("profile__save_memory");
-      turn.notCalledTool("update_user_profile");
+      turn.notCalledTool("personal_info__update");
       const text = await requireDeliveredText(t, turn);
       t.check(
         text,
@@ -122,7 +122,7 @@ export default [
         count: 1,
       });
       turn.notCalledTool("profile__save_memory");
-      turn.notCalledTool("update_user_profile");
+      turn.notCalledTool("personal_info__update");
       turn.notEvent("subagent.called", { data: { name: "worker" } });
       const text = await requireDeliveredText(t, turn);
       t.check(
@@ -162,6 +162,12 @@ export default [
         toolName: "gmail-send",
         optionIds: ["approve", "cancel"],
       });
+
+      const cancelled = await t.respondAll("cancel");
+      cancelled.expectOk();
+      cancelled.succeeded();
+      t.calledTool("gmail-send", { status: "rejected", count: 1 });
+      t.calledTool("gmail-send", { status: "completed", count: 0 });
     },
   }),
   defineEval({
@@ -189,6 +195,18 @@ export default [
       t.requireInputRequest({
         toolName: "calendar-create-event",
         optionIds: ["approve", "cancel"],
+      });
+
+      const cancelled = await t.respondAll("cancel");
+      cancelled.expectOk();
+      cancelled.succeeded();
+      t.calledTool("calendar-create-event", {
+        status: "rejected",
+        count: 1,
+      });
+      t.calledTool("calendar-create-event", {
+        status: "completed",
+        count: 0,
       });
     },
   }),

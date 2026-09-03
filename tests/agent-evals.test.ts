@@ -27,8 +27,8 @@ describe("agent eval supervisor", () => {
     expect(lines).toEqual([
       `compose --project-name ${project} up --detach --wait postgres`,
       `compose --project-name ${project} port postgres 5432`,
-      "pnpm db:migrate postgresql://postgres:postgres@127.0.0.1:49152/open_instinct development unused-by-agent-evals",
-      "pnpm exec eve eval agent --strict --max-concurrency 1 --tag smoke postgresql://postgres:postgres@127.0.0.1:49152/open_instinct development unused-by-agent-evals",
+      "pnpm db:migrate postgresql://postgres:postgres@127.0.0.1:49152/open_instinct development unused-by-agent-evals http://127.0.0.1:9 http://127.0.0.1:9",
+      "pnpm exec eve eval agent --strict --max-concurrency 1 --tag smoke postgresql://postgres:postgres@127.0.0.1:49152/open_instinct development unused-by-agent-evals http://127.0.0.1:9 http://127.0.0.1:9",
       `compose --project-name ${project} down --volumes`,
     ]);
   });
@@ -122,7 +122,7 @@ fi
     writeFile(
       pnpmPath,
       `#!/bin/sh
-printf 'pnpm %s %s %s %s\n' "$*" "$DATABASE_URL" "$NODE_ENV" "$KERNEL_API_KEY" >> "$EVAL_SUPERVISOR_LOG"
+printf 'pnpm %s %s %s %s %s %s\n' "$*" "$DATABASE_URL" "$NODE_ENV" "$KERNEL_API_KEY" "$KERNEL_BASE_URL" "$BETTER_AUTH_URL" >> "$EVAL_SUPERVISOR_LOG"
 if [ "$1" = "exec" ]; then
   exit "\${EVAL_EXIT_CODE:-0}"
 fi

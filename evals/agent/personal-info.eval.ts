@@ -1,14 +1,16 @@
 import { defineEval } from "eve/evals";
-import { includes } from "eve/evals/expect";
+import { includes, satisfies } from "eve/evals/expect";
 import { isDeepStrictEqual } from "node:util";
 import {
   agentEvalTags,
   assertPlainTextDelivery,
   requireDeliveredText,
 } from "@/evals/agent/shared";
+import { accessScopeForUser } from "@/lib/access-scope";
 
 const firstNameCanary = "Evalina";
 const lastNameCanary = "Canary";
+const isolatedFirstNameCanary = "OtherTenantEvalina";
 
 export default [
   defineEval({
@@ -22,7 +24,7 @@ export default [
         );
         save.expectOk();
         save.succeeded();
-        save.calledTool("update_user_profile", {
+        save.calledTool("personal_info__update", {
           input: (input) =>
             isDeepStrictEqual(input, {
               firstName: firstNameCanary,
@@ -57,11 +59,11 @@ export default [
       try {
         const cleanupSession = t.newSession();
         const cleanup = await cleanupSession.send(
-          "Use update_user_profile to forget my first and last name from personal information."
+          "Use personal_info__update to forget my first and last name from personal information."
         );
         cleanup.expectOk();
         cleanup.succeeded();
-        cleanup.calledTool("update_user_profile", {
+        cleanup.calledTool("personal_info__update", {
           input: (input) =>
             isDeepStrictEqual(input, { firstName: null, lastName: null }),
           status: "completed",
@@ -98,8 +100,37 @@ export default [
       turn.expectOk();
       turn.succeeded();
       turn.notCalledTool("profile__save_memory");
-      turn.notCalledTool("update_user_profile");
+      turn.notCalledTool("personal_info__update");
       const text = await requireDeliveredText(t, turn);
+      assertPlainTextDelivery(t, text);
+    },
+  }),
+  defineEval({
+    description: "Does not recall personal information from another workspace",
+    tags: [...agentEvalTags, "personal-info", "memory", "isolation"],
+    async test(t) {
+      const { patchUserProfile } = await import("@/db/services/user-profile");
+      const isolatedScope = accessScopeForUser(
+        "better-auth:isolated-agent-eval"
+      );
+      await patchUserProfile(isolatedScope, {
+        firstName: isolatedFirstNameCanary,
+      });
+
+      const turn = await t.send(
+        "What first name do you currently have saved in my personal information? If none is saved, say that plainly."
+      );
+      turn.expectOk();
+      turn.succeeded();
+      turn.notCalledTool("personal_info__update");
+      const text = await requireDeliveredText(t, turn);
+      t.check(
+        text,
+        satisfies<string>(
+          (value) => !value.includes(isolatedFirstNameCanary),
+          "delivery does not contain another workspace's profile canary"
+        )
+      );
       assertPlainTextDelivery(t, text);
     },
   }),
