@@ -13,3 +13,6 @@ The `anti-slop` plugin vendors the generic rules and shared helpers from
 [`dmmulroy/anti-slop`](https://github.com/dmmulroy/anti-slop) at commit
 `0b863049ca2173b74ae6ebf1f8d0f6f911f9a220`. The upstream Effect integration
 is intentionally excluded. Its MIT license is included in the plugin folder.
+The RuleTester cases under `anti-slop/tests` adapt the upstream suite at the
+same commit and add local coverage for upstream gaps. Refresh those cases
+whenever the vendored source is updated.
