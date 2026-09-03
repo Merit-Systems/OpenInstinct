@@ -19,6 +19,7 @@ export default defineHook({
       if (!initiator) return;
 
       await saveChat(scopeFromPrincipal(initiator), {
+        channel: ctx.channel.kind,
         sessionId: ctx.session.id,
       });
     },

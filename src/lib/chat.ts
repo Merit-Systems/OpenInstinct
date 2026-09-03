@@ -7,6 +7,7 @@ const chatUsageSchema = z.object({
 });
 
 const chatSummarySchema = z.object({
+  channel: z.string().min(1).nullable(),
   createdAt: z.string(),
   sessionId: z.string().min(1),
   title: z.string().min(1),

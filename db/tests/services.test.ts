@@ -28,6 +28,7 @@ describe("database services", () => {
     await applyBrowserTraceEventMigration(client);
     await applySchemaAdoptionMigration(client);
     await applyNativeTypesMigration(client);
+    await applyChatChannelMigration(client);
 
     const pgliteDatabase = drizzle(client, { schema });
     // SAFETY: PGlite implements the query-builder surface exercised by these services despite using a different Drizzle driver.
@@ -142,38 +143,14 @@ describe("database services", () => {
     expect(await sessions.isSessionOwned(bob, "session-alice")).toBe(false);
 
     await sessions.claimSession(alice, "session-imessage");
-    const unindexedChats = (await chats.listChats(alice)).toSorted(
-      (left, right) => left.sessionId.localeCompare(right.sessionId)
-    );
-    expect(
-      unindexedChats.map(({ sessionId, title, usage }) => ({
-        sessionId,
-        title,
-        usage,
-      }))
-    ).toEqual([
-      {
-        sessionId: "session-alice",
-        title: "New chat",
-        usage: { costUsd: null, inputTokens: 0, outputTokens: 0 },
-      },
-      {
-        sessionId: "session-imessage",
-        title: "New chat",
-        usage: { costUsd: null, inputTokens: 0, outputTokens: 0 },
-      },
-    ]);
-    expect(
-      unindexedChats.every(
-        (chat) => chat.createdAt.length > 0 && chat.updatedAt.length > 0
-      )
-    ).toBe(true);
+    expect(await chats.listChats(alice)).toEqual([]);
 
     await sessions.claimSession(bob, "session-alice");
     expect(await sessions.isSessionOwned(alice, "session-alice")).toBe(true);
     expect(await sessions.isSessionOwned(bob, "session-alice")).toBe(false);
 
     await chats.saveChat(alice, {
+      channel: "http",
       sessionId: "session-alice",
       title: "Initial title",
       usage: { costUsd: 0.25, inputTokens: 10, outputTokens: 4 },
@@ -182,9 +159,14 @@ describe("database services", () => {
       sessionId: "session-alice",
       title: "Updated title",
     });
+    await chats.saveChat(alice, {
+      channel: "channel:linq",
+      sessionId: "session-imessage",
+    });
 
     const aliceChat = await chats.readChat(alice, "session-alice");
     expect(aliceChat?.title).toBe("Updated title");
+    expect(aliceChat?.channel).toBe("http");
     expect(aliceChat?.usage).toEqual({
       costUsd: 0.25,
       inputTokens: 10,
@@ -196,9 +178,9 @@ describe("database services", () => {
     expect(
       indexedChats.find((chat) => chat.sessionId === "session-alice")
     ).toEqual(aliceChat);
-    expect(indexedChats.map((chat) => chat.sessionId)).toContain(
-      "session-imessage"
-    );
+    expect(
+      indexedChats.find((chat) => chat.sessionId === "session-imessage")
+    ).toMatchObject({ channel: "channel:linq", title: "New chat" });
     expect(await chats.listChats(bob)).toEqual([]);
 
     await chats.saveChat(bob, {
@@ -424,6 +406,18 @@ async function applySchemaAdoptionMigration(database: PGlite) {
 async function applyNativeTypesMigration(database: PGlite) {
   const migration = await readFile(
     new URL("../migrations/0008_black_sandman.sql", import.meta.url),
+    "utf8"
+  );
+  /* oxlint-disable eslint/no-await-in-loop -- SQL migration statements must execute in file order. */
+  for (const statement of migration.split("--> statement-breakpoint")) {
+    if (statement.trim()) await database.exec(statement);
+  }
+  /* oxlint-enable eslint/no-await-in-loop */
+}
+
+async function applyChatChannelMigration(database: PGlite) {
+  const migration = await readFile(
+    new URL("../migrations/0011_faulty_unicorn.sql", import.meta.url),
     "utf8"
   );
   /* oxlint-disable eslint/no-await-in-loop -- SQL migration statements must execute in file order. */
