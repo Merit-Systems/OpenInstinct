@@ -3,8 +3,14 @@ import { chmod, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
+import {
+  SUPERVISOR_TEST_TIMEOUT_MS,
+  waitForSupervisorClose,
+  waitForSupervisorLogEntry,
+} from "./helpers/supervisor-process";
 
 const temporaryDirectories: string[] = [];
+const supervisorTestOptions = { timeout: SUPERVISOR_TEST_TIMEOUT_MS };
 
 afterEach(async () => {
   await Promise.all(
@@ -14,7 +20,7 @@ afterEach(async () => {
   );
 });
 
-describe("agent eval supervisor", () => {
+describe("agent eval supervisor", supervisorTestOptions, () => {
   it("runs migrations and the filtered suite against an isolated database", async () => {
     const result = await runSupervisor({
       AI_GATEWAY_API_KEY: "test-gateway-key",
@@ -174,30 +180,18 @@ fi
   supervisor.stderr.on("data", (chunk: string) => {
     stderr += chunk;
   });
+  const exitCode = waitForSupervisorClose(supervisor);
   if (environment.EVAL_BLOCK_ACTION) {
-    await waitForLogEntry(logPath, ` ${environment.EVAL_BLOCK_ACTION} `);
+    await waitForSupervisorLogEntry(
+      logPath,
+      ` ${environment.EVAL_BLOCK_ACTION} `
+    );
     supervisor.kill("SIGINT");
   }
-  const code = await new Promise<number | null>((resolve, reject) => {
-    supervisor.once("error", reject);
-    supervisor.once("exit", resolve);
-  });
 
   return {
-    code,
+    code: await exitCode,
     commands: await readFile(logPath, "utf8").catch(() => ""),
     stderr,
   };
-}
-
-async function waitForLogEntry(path: string, expected: string) {
-  /* oxlint-disable eslint/no-await-in-loop -- This bounded poll observes the supervisor log before sending a signal. */
-  for (let attempt = 0; attempt < 250; attempt += 1) {
-    const contents = await readFile(path, "utf8").catch(() => "");
-    if (contents.includes(expected)) return;
-    await new Promise((resolve) => setTimeout(resolve, 20));
-  }
-  /* oxlint-enable eslint/no-await-in-loop */
-
-  throw new Error(`Timed out waiting for ${expected}`);
 }
