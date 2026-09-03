@@ -38,6 +38,7 @@ describe("database migrations", () => {
     await applyMigration(database, "0008_black_sandman.sql");
     await applyMigration(database, "0009_cold_power_man.sql");
     await applyMigration(database, "0010_rapid_cerise.sql");
+    await applyMigration(database, "0011_big_shape.sql");
 
     const tables = await database.query<{ count: number }>(
       `SELECT count(*)::int AS count
@@ -58,6 +59,9 @@ describe("database migrations", () => {
            'chats',
            'scheduled_agent_jobs',
            'scheduled_agent_runs',
+           'proaction_policies',
+           'proaction_settings',
+           'proaction_findings',
            'encrypted_secrets',
            'user',
            'session',
@@ -67,7 +71,7 @@ describe("database migrations", () => {
     );
     const pendingConstraints = await pendingConstraintCount(database);
 
-    expect(tables.rows[0]?.count).toBe(19);
+    expect(tables.rows[0]?.count).toBe(22);
     expect(pendingConstraints).toBe(0);
     await expect(
       database.query("SELECT id FROM vault_items WHERE id = 'contact-1'")

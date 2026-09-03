@@ -166,6 +166,51 @@ Gotchas:
 - Sending email and creating confirmed calendar events always require approval.
   Calendar events with attendees send Google invitations.
 
+## Proactions
+
+Proactions are the proactive half of OpenInstinct: behaviors the agent runs on
+its own clock, without a prompt. Each one watches a slice of your connected
+services, records what it notices, and only messages you when something is
+worth acting on. Nothing needs turning on. A proaction activates itself the
+moment its prerequisites exist (for example, once Google Workspace is
+connected) and pauses again if they go away.
+
+The deployment ships with four: a tomorrow brief, a flight price watch, a bill
+savings check, and a card rewards nudge. See `/proactions` in the web app for
+their state, an inbox of findings, and your brief time.
+
+Each proaction has an autonomy level: `notify` (just tell me), `propose` (ask
+before acting), or `auto` (act, then tell me). Three layers decide the effective
+level and whether it runs at all:
+
+1. The author's defaults and ceiling in `agent/lib/proactions/catalog/<id>.ts`.
+2. The deployment ceiling, which is the checked-in default in
+   `agent/lib/proactions/admin.ts` or the `PROACTIONS_ADMIN_POLICY` JSON
+   environment variable:
+
+   ```json
+   {
+     "disabled": ["bill-savings"],
+     "maxAutonomy": "propose",
+     "overrides": { "flight-price-watch": { "maxAutonomy": "auto" } }
+   }
+   ```
+
+3. The user's own choices, from the `/proactions` page or by telling the agent
+   ("stop telling me about internet deals", "just rebook it next time").
+
+Findings are delivered to the user's most recent iMessage thread. Without one
+they stay in the web inbox. Time-sensitive findings go out as soon as a run
+finishes; everything else comes from proactions that run at the user's brief
+time, so it arrives together.
+
+To author a proaction, add `agent/lib/proactions/catalog/<id>.ts` with
+`defineProaction` and list it in `catalog/index.ts`, then write its observe
+procedure at `agent/instructions/content/proactions/<id>.md` and register it
+in `agent/lib/proactions/procedures.ts`. A proaction that allows `auto` must
+also supply an `<id>.act.md` procedure describing exactly what it may do
+unattended.
+
 ## Local development
 
 The **Deploy with Vercel** flow above is the simplest way to run OpenInstinct. It

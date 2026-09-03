@@ -30,6 +30,7 @@ describe("scheduled agent jobs", () => {
       "0008_black_sandman.sql",
       "0009_cold_power_man.sql",
       "0010_rapid_cerise.sql",
+      "0011_big_shape.sql",
     ]) {
       await applyMigration(client, migration);
     }

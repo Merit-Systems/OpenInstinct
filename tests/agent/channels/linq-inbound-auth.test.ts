@@ -14,6 +14,7 @@ const capture = vi.hoisted(() => ({
   // SAFETY: The mocked channel factory replaces this value during module loading.
   config: undefined as LinqChannelConfig | undefined,
   findOne: vi.fn<() => Promise<AuthUserRow | null>>(),
+  rememberLinqThread: vi.fn<() => Promise<boolean>>(async () => true),
 }));
 
 vi.mock("@/env", async (importOriginal) => {
@@ -36,6 +37,9 @@ vi.mock(import("eve/channels/linq"), async (importOriginal) => {
     },
   };
 });
+vi.mock("@/db/services/proaction-settings", () => ({
+  rememberLinqThread: capture.rememberLinqThread,
+}));
 vi.mock("@/auth", () => ({
   getAuth: async () => ({
     $context: Promise.resolve({ adapter: { findOne: capture.findOne } }),
@@ -112,6 +116,10 @@ describe("Linq inbound authentication", () => {
     });
     expect(result?.auth?.attributes.workspaceId).toMatch(
       /^personal:[0-9a-f]{32}$/
+    );
+    expect(capture.rememberLinqThread).toHaveBeenCalledWith(
+      expect.objectContaining({ userId: "better-auth:user-1" }),
+      "linq:dm:chat-1"
     );
   });
 });

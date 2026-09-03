@@ -5,6 +5,8 @@ import {
   finalizeScheduledReport,
   releaseScheduledReport,
 } from "@/db/services/scheduled-agent-jobs";
+import { proactionReportTurnPrompt } from "@/agent/lib/proactions/dispatch";
+import { isInboxOnlyConversation } from "@/agent/lib/proactions/reconcile";
 import linq from "../../channels/linq";
 
 export async function dispatchScheduledReport(
@@ -23,6 +25,21 @@ export async function dispatchScheduledReport(
     runId: claimed.run.id,
     runStatus: claimed.run.status,
   });
+  if (
+    claimed.job.proactionId &&
+    isInboxOnlyConversation(claimed.job.conversationId)
+  ) {
+    // No home conversation yet: findings stay in the web inbox.
+    await finalizeScheduledReport(claimed.run.id, leaseToken, "suppressed");
+    console.info("[scheduled-run] proaction report kept in inbox", {
+      proactionId: claimed.job.proactionId,
+      runId: claimed.run.id,
+    });
+    return;
+  }
+  const proaction = claimed.job.proactionId
+    ? { proactionId: claimed.job.proactionId }
+    : undefined;
   const reportAttributes = {
     conversationChannel: claimed.job.conversationChannel,
     conversationId: claimed.job.conversationId,
@@ -31,6 +48,7 @@ export async function dispatchScheduledReport(
     scheduledReportSequence: String(claimed.run.reportSequence),
     scheduledRunId: claimed.run.id,
     workspaceId: claimed.job.workspaceId,
+    ...proaction,
   };
   const attributes = claimed.run.workerSessionId
     ? {
@@ -49,7 +67,7 @@ export async function dispatchScheduledReport(
     turnPolicy: "queue" as const,
   };
   try {
-    const prompt = scheduledReportPrompt(claimed);
+    const prompt = await scheduledReportPrompt(claimed);
     if (claimed.job.conversationChannel === "linq") {
       const session = await delivery
         .to(linq, {
@@ -95,9 +113,17 @@ export async function dispatchScheduledReport(
   }
 }
 
-function scheduledReportPrompt(
+async function scheduledReportPrompt(
   claimed: NonNullable<Awaited<ReturnType<typeof claimScheduledReport>>>
 ) {
+  if (
+    claimed.job.proactionId &&
+    !claimed.run.pendingInputRequests &&
+    claimed.run.status === "completed"
+  ) {
+    const prompt = await proactionReportTurnPrompt(claimed);
+    if (prompt) return prompt;
+  }
   if (claimed.run.pendingInputRequests) {
     return [
       "A background scheduled run is waiting for the user before it can continue.",

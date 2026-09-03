@@ -104,6 +104,7 @@ export async function listScheduledAgentJobs(
         conversation.conversationChannel
       ),
       eq(scheduledAgentJobs.conversationId, conversation.conversationId),
+      isNull(scheduledAgentJobs.proactionId),
       sql`${scheduledAgentJobs.status} <> 'deleted'`
     ),
     with: {
@@ -142,6 +143,7 @@ export async function updateScheduledAgentJob(
         conversation.conversationChannel
       ),
       eq(scheduledAgentJobs.conversationId, conversation.conversationId),
+      isNull(scheduledAgentJobs.proactionId),
       sql`${scheduledAgentJobs.status} <> 'deleted'`
     ),
   });
@@ -172,6 +174,102 @@ export async function updateScheduledAgentJob(
     .where(eq(scheduledAgentJobs.id, current.id))
     .returning();
   return job ? parseJob(job) : undefined;
+}
+
+export interface UpsertProactionJob {
+  readonly conversationChannel: "eve" | "linq";
+  readonly conversationId: string;
+  readonly status: "active" | "paused";
+  readonly timing: ScheduleTiming;
+}
+
+// System-owned jobs keyed by (workspace, proaction). Timing is only replaced
+// when its stable shape changes, so an interval anchor is not reset on every
+// reconcile and a calendar cadence keeps its computed next occurrence.
+export async function upsertProactionJob(
+  scope: AccessScope,
+  proactionId: string,
+  input: UpsertProactionJob,
+  now = new Date()
+) {
+  const current = await db.query.scheduledAgentJobs.findFirst({
+    where: and(
+      eq(scheduledAgentJobs.workspaceId, scope.workspaceId),
+      eq(scheduledAgentJobs.proactionId, proactionId)
+    ),
+  });
+  if (!current) {
+    const nextRunAt =
+      input.status === "active" ? computeNextRun(input.timing, now) : null;
+    const [job] = await db
+      .insert(scheduledAgentJobs)
+      .values({
+        conversationChannel: input.conversationChannel,
+        conversationId: input.conversationId,
+        createdAt: now,
+        createdByUserId: scope.userId,
+        missedRunPolicy: "run_latest",
+        nextRunAt,
+        proactionId,
+        prompt: `proaction:${proactionId}`,
+        status: input.status,
+        timing: input.timing,
+        updatedAt: now,
+        workspaceId: scope.workspaceId,
+      })
+      .returning();
+    if (!job) throw new Error("The proaction job could not be created.");
+    return parseJob(job);
+  }
+  const currentTiming = scheduleTimingSchema.parse(current.timing);
+  const timingChanged = !sameRecurrence(currentTiming, input.timing);
+  const timing = timingChanged ? input.timing : currentTiming;
+  const reactivated = input.status === "active" && current.status !== "active";
+  const nextRunAt =
+    input.status !== "active"
+      ? null
+      : timingChanged || reactivated || current.nextRunAt === null
+        ? computeNextRun(timing, now)
+        : current.nextRunAt;
+  const unchanged =
+    !timingChanged &&
+    !reactivated &&
+    current.status === input.status &&
+    current.conversationChannel === input.conversationChannel &&
+    current.conversationId === input.conversationId &&
+    current.nextRunAt?.getTime() === nextRunAt?.getTime();
+  if (unchanged) return parseJob(current);
+  const [job] = await db
+    .update(scheduledAgentJobs)
+    .set({
+      conversationChannel: input.conversationChannel,
+      conversationId: input.conversationId,
+      nextRunAt,
+      revision: sql`${scheduledAgentJobs.revision} + 1`,
+      status: input.status,
+      timing,
+      updatedAt: now,
+    })
+    .where(eq(scheduledAgentJobs.id, current.id))
+    .returning();
+  if (!job) throw new Error("The proaction job could not be updated.");
+  return parseJob(job);
+}
+
+function sameRecurrence(left: ScheduleTiming, right: ScheduleTiming) {
+  if (left.kind !== right.kind) return false;
+  if (left.kind === "interval" && right.kind === "interval") {
+    return left.everyMinutes === right.everyMinutes;
+  }
+  if (left.kind === "calendar" && right.kind === "calendar") {
+    return (
+      left.frequency === right.frequency &&
+      left.localTime === right.localTime &&
+      left.timezone === right.timezone &&
+      left.weekday === right.weekday
+    );
+  }
+  return left.kind === "once" && right.kind === "once" && left.at === right.at;
 }
 
 export async function materializeDueScheduledAgentRuns(options: {

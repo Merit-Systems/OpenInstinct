@@ -1,5 +1,6 @@
 import { defineSchedule, type ScheduleToFn } from "eve/schedules";
 import scheduledRunChannel from "@/agent/channels/scheduled-run";
+import { proactionRunPrompt } from "@/agent/lib/proactions/dispatch";
 import { dispatchScheduledReport } from "@/agent/lib/schedules/report";
 import { postScheduledReport } from "@/agent/lib/schedules/request";
 import {
@@ -60,7 +61,7 @@ async function executeScheduledRun(
     const session = await to(scheduledRunChannel, {
       restart: claim.run.workerSessionId !== null,
       runId: claim.run.id,
-    }).send(scheduledRunPrompt(claim), {
+    }).send(await scheduledRunPrompt(claim), {
       auth: scheduledWorkerAuth(claim),
     });
     const persisted = await setScheduledRunSession(
@@ -105,9 +106,18 @@ function dispatchRecoverableReport(
     : postScheduledReport(report.runId);
 }
 
-function scheduledRunPrompt(
+async function scheduledRunPrompt(
   claim: Awaited<ReturnType<typeof claimReadyScheduledAgentRuns>>[number]
 ) {
+  if (claim.job.proactionId) {
+    const prompt = await proactionRunPrompt(claim);
+    if (!prompt) {
+      throw new Error(
+        `Proaction ${claim.job.proactionId} is no longer in the catalog.`
+      );
+    }
+    return prompt;
+  }
   return [
     "Complete this user-owned scheduled task in an isolated background session.",
     `Scheduled for: ${claim.run.scheduledFor.toISOString()}`,
@@ -120,6 +130,9 @@ function scheduledWorkerAuth(
 ) {
   const leaseToken = claim.run.leaseToken;
   if (!leaseToken) throw new Error("A scheduled run claim requires a lease.");
+  const proaction = claim.job.proactionId
+    ? { proactionId: claim.job.proactionId }
+    : undefined;
   return {
     attributes: {
       conversationChannel: claim.job.conversationChannel,
@@ -128,6 +141,7 @@ function scheduledWorkerAuth(
       scheduledRunLeaseToken: leaseToken,
       scheduledRunId: claim.run.id,
       workspaceId: claim.job.workspaceId,
+      ...proaction,
     },
     authenticator: "scheduled-worker",
     issuer: "open-instinct",

@@ -1,5 +1,7 @@
 import { defineHook } from "eve/hooks";
+import { proactionIdentity } from "@/agent/lib/proactions/identity";
 import { scheduledRunIdentity } from "@/agent/lib/schedules/identity";
+import { listRunFindings } from "@/db/services/proaction-findings";
 import { scheduledRunOutcomeSchema } from "@/agent/lib/schedules/outcome";
 import {
   completeScheduledAgentRun,
@@ -101,16 +103,7 @@ export default defineHook({
       }
       const message = event.data.message?.trim().slice(0, 4_000);
       const outcome = scheduledRunOutcomeSchema.parse(
-        message
-          ? {
-              kind: "result",
-              summary: message,
-              urgency: "normal",
-            }
-          : {
-              kind: "nothing_to_report",
-              reason: "The scheduled task produced no useful update.",
-            }
+        await runOutcome(ctx.session.auth, identity.runId, message)
       );
       const completed = await completeScheduledAgentRun(
         identity.runId,
@@ -211,4 +204,35 @@ function logDeadLetterReportQueued(
     runId,
     sessionId,
   });
+}
+
+// A proaction run reports only through the findings it recorded; its final
+// message is an internal handoff. Other scheduled runs report their message.
+async function runOutcome(
+  auth: Parameters<typeof proactionIdentity>[0],
+  runId: string,
+  message: string | undefined
+) {
+  if (proactionIdentity(auth)) {
+    const findings = await listRunFindings(runId);
+    if (findings.length === 0) {
+      return {
+        kind: "nothing_to_report",
+        reason: message ?? "The proaction found nothing new.",
+      };
+    }
+    return {
+      kind: "result",
+      summary: message ?? `${String(findings.length)} new finding(s).`,
+      urgency: findings.some((finding) => finding.urgency === "time_sensitive")
+        ? "time_sensitive"
+        : "normal",
+    };
+  }
+  return message
+    ? { kind: "result", summary: message, urgency: "normal" }
+    : {
+        kind: "nothing_to_report",
+        reason: "The scheduled task produced no useful update.",
+      };
 }

@@ -6,6 +6,7 @@ import {
   ListTodoIcon,
   MessageSquareIcon,
   PanelsTopLeftIcon,
+  SparklesIcon,
   UserRoundIcon,
 } from "lucide-react";
 import Link from "next/link";
@@ -21,6 +22,12 @@ import {
 
 const navigation = [
   { href: "/", icon: PanelsTopLeftIcon, id: "workspace", label: "Workspace" },
+  {
+    href: "/proactions",
+    icon: SparklesIcon,
+    id: "proactions",
+    label: "Proactions",
+  },
   { href: "/vault", icon: KeyRoundIcon, id: "vault", label: "Vault" },
   {
     href: "/personal-info",
@@ -81,6 +88,7 @@ export function AuthenticatedMobileHeader() {
 
 function activeRoute(pathname: string) {
   if (pathname === "/") return "workspace";
+  if (pathname.startsWith("/proactions")) return "proactions";
   if (pathname.startsWith("/vault")) return "vault";
   if (pathname.startsWith("/personal-info")) return "personal-info";
   if (pathname.startsWith("/chat/history")) return "history";
