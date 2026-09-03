@@ -26,7 +26,3 @@ export const scheduledRunOutcomeSchema = z.discriminatedUnion("kind", [
 ]);
 
 export type ScheduledRunOutcome = z.infer<typeof scheduledRunOutcomeSchema>;
-
-export const scheduledRunOutcomeJsonSchema = z
-  .record(z.string(), z.json())
-  .parse(z.toJSONSchema(scheduledRunOutcomeSchema));

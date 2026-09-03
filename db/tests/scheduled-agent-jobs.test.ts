@@ -29,6 +29,7 @@ describe("scheduled agent jobs", () => {
       "0007_known_fenris.sql",
       "0008_black_sandman.sql",
       "0009_cold_power_man.sql",
+      "0010_rapid_cerise.sql",
     ]) {
       await applyMigration(client, migration);
     }
@@ -232,7 +233,7 @@ describe("scheduled agent jobs", () => {
       await jobs.listRecoverableScheduledReports(
         new Date("2026-09-01T13:07:00.000Z")
       )
-    ).toEqual([claim.run.id]);
+    ).toEqual([{ conversationChannel: "linq", runId: claim.run.id }]);
     const retriedQuestionReport = await jobs.claimScheduledReport(
       claim.run.id,
       new Date("2026-09-01T13:07:00.000Z")
@@ -316,21 +317,59 @@ describe("scheduled agent jobs", () => {
       claim.run.leaseToken,
       "replacement-worker-session"
     );
+    expect(
+      await jobs.deferScheduledAgentRunCompletion(
+        claim.run.id,
+        claim.run.leaseToken,
+        "turn-1",
+        new Date("2026-09-01T13:01:59.000Z")
+      )
+    ).toBe(true);
+    expect(
+      await jobs.completeScheduledAgentRun(
+        claim.run.id,
+        claim.run.leaseToken,
+        "turn-1",
+        {
+          kind: "result",
+          summary: "Browser research is still running.",
+          urgency: "normal",
+        },
+        new Date("2026-09-01T13:02:00.000Z")
+      )
+    ).toEqual({ status: "deferred" });
+    expect(
+      await jobs.completeScheduledAgentRun(
+        claim.run.id,
+        claim.run.leaseToken,
+        "turn-2",
+        {
+          kind: "nothing_to_report",
+          reason: "Another background task is still running.",
+        },
+        new Date("2026-09-01T13:02:01.000Z")
+      )
+    ).toEqual({ status: "deferred" });
     const completed = await jobs.completeScheduledAgentRun(
       claim.run.id,
       claim.run.leaseToken,
+      "turn-3",
       {
         kind: "result",
         summary: "The price fell to $250.",
         urgency: "normal",
       },
-      new Date("2026-09-01T13:02:00.000Z")
+      new Date("2026-09-01T13:02:02.000Z")
     );
     expect(completed).toMatchObject({
-      reportSequence: 2,
-      reportStatus: "pending",
       status: "completed",
-      workerSessionId: "replacement-worker-session",
+      run: {
+        deferredCompletionTurnId: null,
+        reportSequence: 2,
+        reportStatus: "pending",
+        status: "completed",
+        workerSessionId: "replacement-worker-session",
+      },
     });
     const report = await jobs.claimScheduledReport(claim.run.id, dueAt);
     expect(report).toMatchObject({
@@ -345,7 +384,7 @@ describe("scheduled agent jobs", () => {
         new Date("2026-09-01T13:10:00.000Z")
       ),
     ]);
-    expect(recovered.flat()).toContain(claim.run.id);
+    expect(recovered.flat().map(({ runId }) => runId)).toContain(claim.run.id);
     const competingClaims = await Promise.all([
       jobs.claimScheduledReport(claim.run.id, dueAt),
       jobs.claimScheduledReport(claim.run.id, dueAt),

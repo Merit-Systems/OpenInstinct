@@ -71,6 +71,13 @@
       "when": 1788376857527,
       "tag": "0009_cold_power_man",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1788393204481,
+      "tag": "0010_rapid_cerise",
+      "breakpoints": true
     }
   ]
 }

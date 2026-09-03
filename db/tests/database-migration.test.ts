@@ -36,6 +36,8 @@ describe("database migrations", () => {
       );
     `);
     await applyMigration(database, "0008_black_sandman.sql");
+    await applyMigration(database, "0009_cold_power_man.sql");
+    await applyMigration(database, "0010_rapid_cerise.sql");
 
     const tables = await database.query<{ count: number }>(
       `SELECT count(*)::int AS count
