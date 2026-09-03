@@ -235,7 +235,10 @@ describe("schedule tools", () => {
       {},
       dynamicContext("test", "channel:linq")
     );
-    expect(Object.keys(debugMessaging ?? {})).toEqual(["send_message"]);
+    expect(Object.keys(debugMessaging ?? {}).toSorted()).toEqual([
+      "react_to_message",
+      "send_message",
+    ]);
     expect(Object.keys(interactiveMessaging ?? {}).toSorted()).toEqual([
       "react_to_message",
       "send_message",

@@ -1,5 +1,9 @@
 import type { MessageStreamEvent } from "eve/client";
 import type { EveMessagePart } from "eve/react";
+import {
+  reactionTextFor,
+  reactToMessageToolResultSchema,
+} from "@/agent/lib/react-to-message";
 import { sendMessageToolResultSchema } from "@/agent/lib/send-message";
 
 export function messageTimestamps(events: readonly MessageStreamEvent[]) {
@@ -42,38 +46,49 @@ export function sentMessages(events: readonly MessageStreamEvent[]) {
   for (const event of events) {
     if (event.type !== "action.result") continue;
     const delivery = completedSendMessageOutput(event);
-    if (!delivery) continue;
+    const reaction = completedReactionOutput(event);
+    const completed = delivery ?? reaction;
+    if (!completed) continue;
 
     const turnMessageId = `${event.data.turnId}:assistant`;
     const parts: EveMessagePart[] = [];
-    const { output } = delivery;
-    // Delivered text is plain and reaches the phone verbatim. The chat view
-    // renders text parts as Markdown, so keep every line break as a hard break.
-    const text =
-      output.kind === "link"
-        ? output.url
-        : output.text?.replaceAll("\n", "  \n");
-    if (text) {
+    if (reaction) {
       parts.push({
         state: "done",
         stepIndex: event.data.stepIndex,
-        text,
+        text: reactionTextFor(reaction.output.type),
         type: "text",
       });
-    }
-    const attachments = output.kind === "message" ? output.attachments : [];
-    for (const attachment of attachments ?? []) {
-      parts.push({
-        filename: attachment.name,
-        mediaType: attachment.mimeType ?? defaultMediaType[attachment.kind],
-        stepIndex: event.data.stepIndex,
-        type: "file",
-        url: attachment.url,
-      });
+    } else if (delivery) {
+      const { output } = delivery;
+      // Delivered text is plain and reaches the user verbatim. The chat view
+      // renders text parts as Markdown, so keep every line break as a hard break.
+      const text =
+        output.kind === "link"
+          ? output.url
+          : output.text?.replaceAll("\n", "  \n");
+      if (text) {
+        parts.push({
+          state: "done",
+          stepIndex: event.data.stepIndex,
+          text,
+          type: "text",
+        });
+      }
+      const attachments = output.kind === "message" ? output.attachments : [];
+      for (const attachment of attachments ?? []) {
+        parts.push({
+          filename: attachment.name,
+          mediaType: attachment.mimeType ?? defaultMediaType[attachment.kind],
+          stepIndex: event.data.stepIndex,
+          type: "file",
+          url: attachment.url,
+        });
+      }
     }
     const messages = messagesByTurn.get(turnMessageId) ?? [];
     messages.push({
-      id: `${turnMessageId}:${delivery.callId}`,
+      id: `${turnMessageId}:${completed.callId}`,
       parts,
       timestamp: event.meta.at,
     });
@@ -81,6 +96,17 @@ export function sentMessages(events: readonly MessageStreamEvent[]) {
   }
 
   return messagesByTurn;
+}
+
+function completedReactionOutput(event: MessageStreamEvent) {
+  if (event.type !== "action.result" || event.data.status !== "completed") {
+    return undefined;
+  }
+
+  const result = reactToMessageToolResultSchema.safeParse(event.data.result);
+  return result.success && result.data.output.operation === "add"
+    ? { callId: event.data.result.callId, output: result.data.output }
+    : undefined;
 }
 
 function completedSendMessageOutput(event: MessageStreamEvent) {
