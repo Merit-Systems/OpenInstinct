@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import * as SessionService from "@/db/services/sessions";
 import { accessScopeForUser } from "@/lib/access-scope";
-import { requireWorkerScope } from "@/agent/subagents/worker/lib/access";
+import { requireWorkerScope } from "@/agent/subagents/browser-agent/lib/access";
 
 const isSessionOwnedMock = vi.spyOn(SessionService, "isSessionOwned");
 

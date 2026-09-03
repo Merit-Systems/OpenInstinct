@@ -210,7 +210,7 @@ describe("scheduled run completion hook", () => {
           backgroundTask: { status: "working", taskId: "task-1" },
           callId: "call-1",
           output: '{"status":"working"}',
-          subagentName: "worker",
+          subagentName: "browser-agent",
         },
         meta: { at: "2026-09-01T13:01:00.000Z", id: "event-task" },
         type: "subagent.completed",

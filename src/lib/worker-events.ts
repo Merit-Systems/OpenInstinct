@@ -2,7 +2,8 @@ import type { MessageStreamEvent } from "eve/client";
 import { z } from "zod";
 import { taskCompletionOutputSchema } from "@/lib/worker-completion";
 
-const workerTaskNotificationPrefix = /^Background task (\S+) \(worker\) /u;
+const workerTaskNotificationPrefix =
+  /^Background task (\S+) \(browser-agent\) /u;
 const terminalTaskControlSchema = z.object({
   tasks: z.array(
     z.object({
@@ -142,7 +143,7 @@ export function readTaskCompletion(events: readonly MessageStreamEvent[]) {
 
     if (event.type === "subagent.completed") {
       if (
-        event.data.subagentName === "worker" &&
+        event.data.subagentName === "browser-agent" &&
         event.data.backgroundTask === undefined
       ) {
         const completion = taskCompletionOutputSchema.safeParse(
@@ -162,7 +163,7 @@ export function readTaskCompletion(events: readonly MessageStreamEvent[]) {
     const result = event.data.result;
     if (result.kind === "subagent-result") {
       if (
-        result.subagentName === "worker" &&
+        result.subagentName === "browser-agent" &&
         (result.origin !== "child" || result.backgroundTask === undefined)
       ) {
         const completion = taskCompletionOutputSchema.safeParse(result.output);
@@ -265,7 +266,7 @@ function readBackgroundWorkerTasks(events: readonly MessageStreamEvent[]) {
 function readBackgroundWorkerReceiptTaskId(event: MessageStreamEvent) {
   if (
     event.type === "subagent.completed" &&
-    event.data.subagentName === "worker" &&
+    event.data.subagentName === "browser-agent" &&
     event.data.backgroundTask !== undefined
   ) {
     return event.data.backgroundTask.taskId;
@@ -274,7 +275,7 @@ function readBackgroundWorkerReceiptTaskId(event: MessageStreamEvent) {
   if (
     event.type === "action.result" &&
     event.data.result.kind === "subagent-result" &&
-    event.data.result.subagentName === "worker" &&
+    event.data.result.subagentName === "browser-agent" &&
     event.data.result.origin === "child" &&
     event.data.result.backgroundTask !== undefined
   ) {

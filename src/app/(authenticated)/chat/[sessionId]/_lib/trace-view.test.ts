@@ -26,7 +26,7 @@ describe("trace view", () => {
         ...(hidesResponse ? [workerCancellationResult("task_worker")] : []),
         receivedMessage(
           "task-delivery",
-          `Background task task_worker (worker) ${notification}`
+          `Background task task_worker (browser-agent) ${notification}`
         ),
       ] satisfies MessageStreamEvent[];
 
@@ -54,9 +54,10 @@ describe("trace view", () => {
   });
 
   it("hides task deliveries only in the iMessage projection", () => {
-    const deliveryText = "Background task task_worker (worker) is cancelled.";
+    const deliveryText =
+      "Background task task_worker (browser-agent) is cancelled.";
     const ordinaryText =
-      "Background task task_someone_else (worker) is cancelled.";
+      "Background task task_someone_else (browser-agent) is cancelled.";
     const events = [
       workerActionReceipt("task_worker"),
       workerCancellationResult("task_worker"),
@@ -76,7 +77,7 @@ describe("trace view", () => {
   });
 
   it("keeps identical user-authored cancellation text visible", () => {
-    const text = "Background task task_worker (worker) is cancelled.";
+    const text = "Background task task_worker (browser-agent) is cancelled.";
     const events = [
       workerActionReceipt("task_worker"),
       receivedMessage("user-spoof", text),
@@ -99,11 +100,11 @@ describe("trace view", () => {
     const receipt = workerActionReceipt("task_worker");
     const update = receivedMessage(
       "task-update",
-      "Background task task_worker (worker) update: Still working"
+      "Background task task_worker (browser-agent) update: Still working"
     );
     const completed = receivedMessage(
       "task-completed",
-      'Background task task_worker (worker) is completed.\n\nResult:\n{"message":"Done"}'
+      'Background task task_worker (browser-agent) is completed.\n\nResult:\n{"message":"Done"}'
     );
 
     expect(hasPendingBackgroundWorker([receipt])).toBe(true);
@@ -120,7 +121,7 @@ function workerCompletedReceipt(taskId: string): MessageStreamEvent {
       backgroundTask: { status: "working", taskId },
       callId: "call_worker",
       output: `{"status":"working","taskId":"${taskId}"}`,
-      subagentName: "worker",
+      subagentName: "browser-agent",
     },
     meta: { at: "2026-08-27T20:00:00.000Z", id: "receipt" },
     type: "subagent.completed",
@@ -149,7 +150,7 @@ function workerActionReceipt(taskId: string): MessageStreamEvent {
           },
         },
         output: { agentId: "agent_worker", status: "working", taskId },
-        subagentName: "worker",
+        subagentName: "browser-agent",
       },
       sequence: 1,
       status: "completed",
@@ -174,7 +175,7 @@ function workerCancellationResult(taskId: string): MessageStreamEvent {
                 agentId: "agent_worker",
                 kind: "subagent",
                 mode: "local",
-                name: "worker",
+                name: "browser-agent",
               },
               status: "cancelled",
               taskId,

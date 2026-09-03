@@ -3,7 +3,7 @@ import type { EveMessage } from "eve/react";
 import { z } from "zod";
 
 const backgroundWorkerDelivery =
-  /^Background task (\S+) \(worker\) (?:update: |needs input\.$|is cancelled\.$|is completed\.\n\nResult:\n|failed\.\n\nError:\n)/u;
+  /^Background task (\S+) \(browser-agent\) (?:update: |needs input\.$|is cancelled\.$|is completed\.\n\nResult:\n|failed\.\n\nError:\n)/u;
 const backgroundWorkerAuthorization =
   /^Background task (\S+) needs authorization\.$/u;
 const taskCancelResultSchema = z.object({
@@ -12,7 +12,7 @@ const taskCancelResultSchema = z.object({
   toolName: z.literal("task_cancel"),
 });
 const cancelledWorkerTaskSchema = z.object({
-  metadata: z.object({ name: z.literal("worker") }),
+  metadata: z.object({ name: z.literal("browser-agent") }),
   status: z.literal("cancelled"),
   taskId: z.string(),
 });
@@ -53,7 +53,7 @@ export function backgroundWorkerDeliveryMessageIds(
     const taskId = deliveredTaskId(event.data.message);
     if (taskId && taskIds.has(taskId)) {
       const isCancellation = event.data.message.endsWith(
-        "(worker) is cancelled."
+        "(browser-agent) is cancelled."
       );
       if (!isCancellation) messageIds.add(`${event.data.turnId}:user`);
       if (isCancellation && cancelledTaskIds.delete(taskId)) {
@@ -74,7 +74,7 @@ export function hasPendingBackgroundWorker(
   for (const event of events) {
     if (
       event.type === "subagent.completed" &&
-      event.data.subagentName === "worker" &&
+      event.data.subagentName === "browser-agent" &&
       event.data.backgroundTask !== undefined
     ) {
       taskIds.add(event.data.backgroundTask.taskId);
@@ -85,7 +85,7 @@ export function hasPendingBackgroundWorker(
       const result = event.data.result;
       if (
         result.kind === "subagent-result" &&
-        result.subagentName === "worker" &&
+        result.subagentName === "browser-agent" &&
         result.origin === "child" &&
         result.backgroundTask !== undefined
       ) {
@@ -107,7 +107,7 @@ export function hasPendingBackgroundWorker(
     if (
       taskId &&
       !event.data.message.startsWith(
-        `Background task ${taskId} (worker) update: `
+        `Background task ${taskId} (browser-agent) update: `
       )
     ) {
       taskIds.delete(taskId);
@@ -123,7 +123,7 @@ function workerTaskIds(events: readonly MessageStreamEvent[]) {
   for (const event of events) {
     if (
       event.type === "subagent.completed" &&
-      event.data.subagentName === "worker" &&
+      event.data.subagentName === "browser-agent" &&
       event.data.backgroundTask !== undefined
     ) {
       taskIds.add(event.data.backgroundTask.taskId);
@@ -133,7 +133,7 @@ function workerTaskIds(events: readonly MessageStreamEvent[]) {
     if (
       event.type === "action.result" &&
       event.data.result.kind === "subagent-result" &&
-      event.data.result.subagentName === "worker" &&
+      event.data.result.subagentName === "browser-agent" &&
       event.data.result.origin === "child" &&
       event.data.result.backgroundTask !== undefined
     ) {

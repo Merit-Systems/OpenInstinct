@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 
 const rootTools = "agent/tools";
 const rootMemory = "agent/memory/profile.ts";
-const workerRoot = "agent/subagents/worker";
+const workerRoot = "agent/subagents/browser-agent";
 const workerTools = `${workerRoot}/tools`;
 
 function toolFiles(directory: string, root = directory): string[] {
@@ -188,7 +188,7 @@ describe("root and worker capability boundaries", () => {
     const workerConfig = readFileSync(`${workerRoot}/agent.ts`, "utf8");
 
     expect(workerCoordination).toContain(
-      "Every initial or resumed `worker` call must set `outputSchema`"
+      "Every initial or resumed `browser-agent` call must set `outputSchema`"
     );
     expect(workerCoordination).toContain(
       '"required": ["status", "message", "images"]'

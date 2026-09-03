@@ -1,9 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import * as WorkerAccess from "@/agent/subagents/worker/lib/access";
-import * as OwnedBrowser from "@/agent/subagents/worker/lib/owned-browser";
+import * as WorkerAccess from "@/agent/subagents/browser-agent/lib/access";
+import * as OwnedBrowser from "@/agent/subagents/browser-agent/lib/owned-browser";
 import { kernel } from "@/lib/kernel";
 import { toolContextFor } from "@/tests/helpers/tool-context";
-import computerAction from "@/agent/subagents/worker/tools/computer_action";
+import computerAction from "@/agent/subagents/browser-agent/tools/computer_action";
 
 const mocks = {
   batch: vi.spyOn(kernel.browsers.computer, "batch"),

@@ -97,7 +97,7 @@ describe("agent instructions", () => {
     );
     for (const selected of selections) {
       expect(selected?.content).toContain(
-        "Every initial or resumed `worker` call must set `outputSchema`"
+        "Every initial or resumed `browser-agent` call must set `outputSchema`"
       );
       expect(selected?.content).toContain(
         '"required": ["status", "message", "images"]'
