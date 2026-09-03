@@ -76,7 +76,7 @@ async function runAgentEvals() {
       ],
       environment
     );
-    process.exitCode = exitCode ?? 1;
+    if (!interrupted) process.exitCode = exitCode ?? 1;
   } finally {
     if (composeAttempted) {
       const exitCode = await run(

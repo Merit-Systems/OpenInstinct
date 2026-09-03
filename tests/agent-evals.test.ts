@@ -84,6 +84,24 @@ describe("agent eval supervisor", () => {
       `compose --project-name ${project} down --volumes`,
     ]);
   });
+
+  it("preserves the signal exit code when the eval process is interrupted", async () => {
+    const result = await runSupervisor({
+      AI_GATEWAY_API_KEY: "test-gateway-key",
+      EVAL_BLOCK_ACTION: "eval",
+    });
+
+    expect(result.code).toBe(130);
+    const lines = result.commands.trim().split("\n");
+    const project = projectFromComposeCommand(lines[0]);
+    expect(lines).toEqual([
+      `compose --project-name ${project} up --detach --wait postgres`,
+      `compose --project-name ${project} port postgres 5432`,
+      "pnpm db:migrate postgresql://postgres:postgres@127.0.0.1:49152/open_instinct development unused-by-agent-evals http://127.0.0.1:9 http://127.0.0.1:9",
+      "pnpm exec eve eval agent --strict --max-concurrency 1 --tag smoke postgresql://postgres:postgres@127.0.0.1:49152/open_instinct development unused-by-agent-evals http://127.0.0.1:9 http://127.0.0.1:9",
+      `compose --project-name ${project} down --volumes`,
+    ]);
+  });
 });
 
 function projectFromComposeCommand(command: string | undefined) {
@@ -124,6 +142,10 @@ fi
       `#!/bin/sh
 printf 'pnpm %s %s %s %s %s %s\n' "$*" "$DATABASE_URL" "$NODE_ENV" "$KERNEL_API_KEY" "$KERNEL_BASE_URL" "$BETTER_AUTH_URL" >> "$EVAL_SUPERVISOR_LOG"
 if [ "$1" = "exec" ]; then
+  if [ "\${EVAL_BLOCK_ACTION:-never}" = "eval" ]; then
+    trap 'exit 130' INT TERM HUP
+    while true; do /bin/sleep 0.1; done
+  fi
   exit "\${EVAL_EXIT_CODE:-0}"
 fi
 `
