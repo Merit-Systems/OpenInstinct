@@ -1,9 +1,9 @@
 import { defineHook } from "eve/hooks";
 import { scheduledRunIdentity } from "@/agent/lib/schedules/identity";
 import { scheduledRunOutcomeSchema } from "@/agent/lib/schedules/outcome";
-import { postScheduledReport } from "@/agent/lib/schedules/request";
 import {
   completeScheduledAgentRun,
+  deferScheduledAgentRunCompletion,
   markScheduledAgentRunStarted,
   releaseScheduledAgentRun,
   waitForScheduledAgentRunInput,
@@ -56,36 +56,80 @@ export default defineHook({
         runId: waiting.id,
         sessionId: ctx.session.id,
       });
-      try {
-        await postScheduledReport(waiting.id);
-        console.info("[scheduled-run] input report callback accepted", {
-          runId: waiting.id,
-          sessionId: ctx.session.id,
-        });
-      } catch (error) {
-        console.warn("[scheduled-run] input report callback failed", {
-          cause: error,
-          runId: waiting.id,
-        });
-      }
+      console.info("[scheduled-run] input report queued", {
+        runId: waiting.id,
+        sessionId: ctx.session.id,
+      });
     },
-    async "result.completed"(event, ctx) {
+    async "subagent.completed"(event, ctx) {
+      if (!event.data.backgroundTask) return;
       const identity = scheduledRunIdentity(ctx.session.auth);
       if (!identity) return;
-      const outcome = scheduledRunOutcomeSchema.safeParse(event.data.result);
-      if (!outcome.success) {
-        console.warn("[scheduled-run] worker returned an invalid outcome", {
+      const deferred = await deferScheduledAgentRunCompletion(
+        identity.runId,
+        identity.leaseToken,
+        ctx.session.turn.id,
+        new Date(event.meta.at)
+      );
+      console.info("[scheduled-run] worker delegated background work", {
+        deferred,
+        runId: identity.runId,
+        sessionId: ctx.session.id,
+        taskId: event.data.backgroundTask.taskId,
+        turnId: ctx.session.turn.id,
+      });
+    },
+    async "message.completed"(event, ctx) {
+      const identity = scheduledRunIdentity(ctx.session.auth);
+      if (!identity) return;
+      if (event.data.finishReason === "tool-calls") return;
+      if (event.data.finishReason !== "stop") {
+        const status = await releaseScheduledAgentRun(
+          identity.runId,
+          identity.leaseToken,
+          `Scheduled worker stopped with finish reason: ${event.data.finishReason}.`,
+          new Date(event.meta.at)
+        );
+        console.warn("[scheduled-run] worker stopped without a final result", {
+          finishReason: event.data.finishReason,
+          nextStatus: status,
           runId: identity.runId,
           sessionId: ctx.session.id,
         });
+        logDeadLetterReportQueued(status, identity.runId, ctx.session.id);
         return;
       }
+      const message = event.data.message?.trim().slice(0, 4_000);
+      const outcome = scheduledRunOutcomeSchema.parse(
+        message
+          ? {
+              kind: "result",
+              summary: message,
+              urgency: "normal",
+            }
+          : {
+              kind: "nothing_to_report",
+              reason: "The scheduled task produced no useful update.",
+            }
+      );
       const completed = await completeScheduledAgentRun(
         identity.runId,
         identity.leaseToken,
-        outcome.data,
+        event.data.turnId,
+        outcome,
         new Date(event.meta.at)
       );
+      if (completed?.status === "deferred") {
+        console.info(
+          "[scheduled-run] worker completion deferred for background work",
+          {
+            runId: identity.runId,
+            sessionId: ctx.session.id,
+            turnId: event.data.turnId,
+          }
+        );
+        return;
+      }
       if (!completed) {
         console.warn("[scheduled-run] worker completion missed its lease", {
           runId: identity.runId,
@@ -94,22 +138,15 @@ export default defineHook({
         return;
       }
       console.info("[scheduled-run] worker completed", {
-        outcomeKind: outcome.data.kind,
-        reportStatus: completed.reportStatus,
-        runId: completed.id,
+        outcomeKind: outcome.kind,
+        reportStatus: completed.run.reportStatus,
+        runId: completed.run.id,
         sessionId: ctx.session.id,
       });
-      if (completed.reportStatus !== "pending") return;
-      try {
-        await postScheduledReport(completed.id);
-        console.info("[scheduled-run] completion report callback accepted", {
-          runId: completed.id,
+      if (completed.run.reportStatus === "pending") {
+        console.info("[scheduled-run] completion report queued", {
+          runId: completed.run.id,
           sessionId: ctx.session.id,
-        });
-      } catch (error) {
-        console.warn("[scheduled-run] immediate report callback failed", {
-          cause: error,
-          runId: completed.id,
         });
       }
     },
@@ -127,7 +164,7 @@ export default defineHook({
         runId: identity.runId,
         sessionId: ctx.session.id,
       });
-      await reportDeadLetter(status, identity.runId, ctx.session.id);
+      logDeadLetterReportQueued(status, identity.runId, ctx.session.id);
     },
     async "turn.cancelled"(event, ctx) {
       const identity = scheduledRunIdentity(ctx.session.auth);
@@ -143,7 +180,7 @@ export default defineHook({
         runId: identity.runId,
         sessionId: ctx.session.id,
       });
-      await reportDeadLetter(status, identity.runId, ctx.session.id);
+      logDeadLetterReportQueued(status, identity.runId, ctx.session.id);
     },
     async "session.failed"(event, ctx) {
       const identity = scheduledRunIdentity(ctx.session.auth);
@@ -159,28 +196,19 @@ export default defineHook({
         runId: identity.runId,
         sessionId: ctx.session.id,
       });
-      await reportDeadLetter(status, identity.runId, ctx.session.id);
+      logDeadLetterReportQueued(status, identity.runId, ctx.session.id);
     },
   },
 });
 
-async function reportDeadLetter(
+function logDeadLetterReportQueued(
   status: Awaited<ReturnType<typeof releaseScheduledAgentRun>>,
   runId: string,
   sessionId: string
 ) {
   if (status !== "dead_letter") return;
-  try {
-    await postScheduledReport(runId);
-    console.info("[scheduled-run] dead-letter report callback accepted", {
-      runId,
-      sessionId,
-    });
-  } catch (error) {
-    console.warn("[scheduled-run] dead-letter report callback failed", {
-      cause: error,
-      runId,
-      sessionId,
-    });
-  }
+  console.info("[scheduled-run] dead-letter report queued", {
+    runId,
+    sessionId,
+  });
 }

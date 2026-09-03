@@ -9,7 +9,7 @@ import linq from "../../channels/linq";
 
 export async function dispatchScheduledReport(
   delivery: {
-    readonly attachSession: AttachSessionFn;
+    readonly attachSession?: AttachSessionFn;
     readonly to: ScheduleToFn;
   },
   runId: string
@@ -64,6 +64,9 @@ export async function dispatchScheduledReport(
         sessionId: session.id,
       });
       return;
+    }
+    if (!delivery.attachSession) {
+      throw new Error("Eve debug reports require an active session handle.");
     }
     const result = await delivery
       .attachSession(claimed.job.conversationId)

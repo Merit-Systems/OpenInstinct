@@ -126,6 +126,7 @@ export const scheduledAgentRuns = pgTable(
       .notNull()
       .default("queued"),
     workerSessionId: text("worker_session_id"),
+    deferredCompletionTurnId: text("deferred_completion_turn_id"),
     pendingInputRequests: jsonb("pending_input_requests").$type<
       readonly InputRequest[]
     >(),

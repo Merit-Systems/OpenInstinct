@@ -2,7 +2,6 @@ import { defineChannel, POST } from "eve/channels";
 import { localDev, routeAuth, vercelOidc } from "eve/channels/auth";
 import { parseInputResponses, resolveTextToResponses } from "eve/client";
 import { z } from "zod";
-import { scheduledRunOutcomeJsonSchema } from "@/agent/lib/schedules/outcome";
 import { dispatchScheduledReport } from "@/agent/lib/schedules/report";
 import {
   claimScheduledAgentRunInput,
@@ -33,7 +32,6 @@ export default defineChannel({
     }
     return source.send(input.message, {
       auth: input.auth,
-      outputSchema: scheduledRunOutcomeJsonSchema,
       title: `Scheduled run ${target.runId}`,
     });
   },

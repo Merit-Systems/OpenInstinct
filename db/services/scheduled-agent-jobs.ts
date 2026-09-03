@@ -1,5 +1,17 @@
 import { randomUUID } from "node:crypto";
-import { and, asc, desc, eq, inArray, isNull, lte, or, sql } from "drizzle-orm";
+import {
+  and,
+  asc,
+  desc,
+  eq,
+  inArray,
+  isNotNull,
+  isNull,
+  lte,
+  ne,
+  or,
+  sql,
+} from "drizzle-orm";
 import { inputRequestSchema, type InputRequest } from "eve/client";
 import type { AccessScope } from "@/lib/access-scope";
 import {
@@ -280,6 +292,7 @@ export async function claimReadyScheduledAgentRuns(options: {
       .update(scheduledAgentRuns)
       .set({
         attempts: sql`${scheduledAgentRuns.attempts} + 1`,
+        deferredCompletionTurnId: null,
         leaseExpiresAt,
         leaseToken,
         retryAt: null,
@@ -384,6 +397,29 @@ export async function waitForScheduledAgentRunInput(
   return run ? parseRun(run) : undefined;
 }
 
+export async function deferScheduledAgentRunCompletion(
+  runId: string,
+  leaseToken: string,
+  turnId: string,
+  now = new Date()
+) {
+  const [run] = await db
+    .update(scheduledAgentRuns)
+    .set({
+      deferredCompletionTurnId: turnId,
+      updatedAt: now,
+    })
+    .where(
+      and(
+        eq(scheduledAgentRuns.id, runId),
+        eq(scheduledAgentRuns.status, "running"),
+        eq(scheduledAgentRuns.leaseToken, leaseToken)
+      )
+    )
+    .returning({ id: scheduledAgentRuns.id });
+  return run !== undefined;
+}
+
 export async function getScheduledAgentRunInput(
   scope: AccessScope,
   conversation: Pick<
@@ -481,6 +517,7 @@ export async function restoreScheduledAgentRunInput(
   await db
     .update(scheduledAgentRuns)
     .set({
+      deferredCompletionTurnId: null,
       lastError: errorMessage.slice(0, 2_000),
       leaseExpiresAt: null,
       status: "waiting_for_input",
@@ -503,6 +540,7 @@ export async function finishScheduledAgentRunInput(
   await db
     .update(scheduledAgentRuns)
     .set({
+      deferredCompletionTurnId: null,
       pendingInputRequests: null,
       lastError: null,
       reportLeaseExpiresAt: null,
@@ -522,13 +560,22 @@ export async function finishScheduledAgentRunInput(
 export async function completeScheduledAgentRun(
   runId: string,
   leaseToken: string,
+  turnId: string,
   outcome: ScheduledRunOutcome,
   completedAt = new Date()
 ) {
+  const completionCondition =
+    outcome.kind === "nothing_to_report"
+      ? isNull(scheduledAgentRuns.deferredCompletionTurnId)
+      : or(
+          isNull(scheduledAgentRuns.deferredCompletionTurnId),
+          ne(scheduledAgentRuns.deferredCompletionTurnId, turnId)
+        );
   const [run] = await db
     .update(scheduledAgentRuns)
     .set({
       completedAt,
+      deferredCompletionTurnId: null,
       pendingInputRequests: null,
       lastError: null,
       leaseExpiresAt: null,
@@ -546,11 +593,25 @@ export async function completeScheduledAgentRun(
     .where(
       and(
         eq(scheduledAgentRuns.id, runId),
-        eq(scheduledAgentRuns.leaseToken, leaseToken)
+        eq(scheduledAgentRuns.status, "running"),
+        eq(scheduledAgentRuns.leaseToken, leaseToken),
+        completionCondition
       )
     )
     .returning();
-  return run ? parseRun(run) : undefined;
+  if (run) return { status: "completed" as const, run: parseRun(run) };
+  const deferred = await db.query.scheduledAgentRuns.findFirst({
+    columns: { id: true },
+    where: and(
+      eq(scheduledAgentRuns.id, runId),
+      eq(scheduledAgentRuns.status, "running"),
+      eq(scheduledAgentRuns.leaseToken, leaseToken),
+      outcome.kind === "nothing_to_report"
+        ? isNotNull(scheduledAgentRuns.deferredCompletionTurnId)
+        : eq(scheduledAgentRuns.deferredCompletionTurnId, turnId)
+    ),
+  });
+  return deferred ? { status: "deferred" as const } : undefined;
 }
 
 export async function releaseScheduledAgentRun(
@@ -570,6 +631,7 @@ export async function releaseScheduledAgentRun(
   const [released] = await db
     .update(scheduledAgentRuns)
     .set({
+      deferredCompletionTurnId: null,
       lastError: errorMessage.slice(0, 2_000),
       leaseExpiresAt: null,
       leaseToken: null,
@@ -629,9 +691,16 @@ export async function listRecoverableScheduledReports(
   limit = 25
 ) {
   return db.transaction(async (transaction) => {
-    const runs = await transaction
-      .select()
+    const reports = await transaction
+      .select({
+        conversationChannel: scheduledAgentJobs.conversationChannel,
+        run: scheduledAgentRuns,
+      })
       .from(scheduledAgentRuns)
+      .innerJoin(
+        scheduledAgentJobs,
+        eq(scheduledAgentRuns.jobId, scheduledAgentJobs.id)
+      )
       .where(
         and(
           inArray(scheduledAgentRuns.status, [
@@ -650,8 +719,10 @@ export async function listRecoverableScheduledReports(
       )
       .orderBy(asc(scheduledAgentRuns.updatedAt))
       .limit(limit)
-      .for("update", { skipLocked: true });
-    const stale = runs.filter((run) => run.reportStatus === "queued");
+      .for("update", { of: scheduledAgentRuns, skipLocked: true });
+    const stale = reports
+      .map(({ run }) => run)
+      .filter((run) => run.reportStatus === "queued");
     if (stale.length > 0) {
       await transaction
         .update(scheduledAgentRuns)
@@ -672,7 +743,10 @@ export async function listRecoverableScheduledReports(
           )
         );
     }
-    return runs.map((run) => run.id);
+    return reports.map(({ conversationChannel, run }) => ({
+      conversationChannel,
+      runId: run.id,
+    }));
   });
 }
 
