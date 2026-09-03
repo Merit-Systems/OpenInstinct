@@ -1,6 +1,6 @@
 "use client";
 
-import { Client, type MessageStreamEvent } from "eve/client";
+import type { MessageStreamEvent } from "eve/client";
 import { ListTreeIcon } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
@@ -14,7 +14,6 @@ import {
 import {
   collectSubagentSessions,
   getSubagentStatus,
-  getSubagentSubscriptionKey,
 } from "@/app/_lib/subagent-sessions";
 import type { ChatUsage } from "@/lib/chat";
 import { cn } from "@/lib/utils";
@@ -23,103 +22,34 @@ import { ActivityCard } from "./card";
 import { TracePreview } from "./preview";
 import { useChatUsage } from "./use-chat-usage";
 
-const client = new Client({ host: "" });
+const emptyEventsBySession = new Map<string, readonly MessageStreamEvent[]>();
 
 export function SubagentPanel({
   events,
+  historyComplete,
   initialUsage,
   onTraceViewChange,
   sessionId,
   traceView,
 }: {
   readonly events: readonly MessageStreamEvent[];
+  readonly historyComplete: boolean;
   readonly initialUsage?: ChatUsage;
   readonly onTraceViewChange: (view: TraceView) => void;
   readonly sessionId?: string;
   readonly traceView: TraceView;
 }) {
-  const [eventsBySession, setEventsBySession] = useState<
-    ReadonlyMap<string, readonly MessageStreamEvent[]>
-  >(new Map());
-  const [streamErrors, setStreamErrors] = useState<ReadonlyMap<string, string>>(
-    new Map()
-  );
   const [selectedId, setSelectedId] = useState<string>();
   const [mobileOpen, setMobileOpen] = useState(false);
   const traceCloseButton = useRef<HTMLButtonElement>(null);
   const restoreFocusId = useRef<string | undefined>(undefined);
   const sessions = useMemo(() => collectSubagentSessions(events), [events]);
-  const usage = useChatUsage({ events, initialUsage, sessionId });
-  const subscriptionKey = getSubagentSubscriptionKey(sessions);
-
-  useEffect(() => {
-    if (!subscriptionKey) return undefined;
-    const controllers = subscriptionKey.split("\n").map((subscription) => {
-      const [encodedSessionId] = subscription.split(":");
-      const childSessionId = decodeURIComponent(encodedSessionId ?? "");
-      const controller = new AbortController();
-      const child = client.sessions.attach(childSessionId);
-
-      void (async () => {
-        try {
-          const snapshot = await child.snapshot({ signal: controller.signal });
-          if (controller.signal.aborted) return;
-
-          setStreamErrors((current) => {
-            if (!current.has(childSessionId)) return current;
-            const next = new Map(current);
-            next.delete(childSessionId);
-            return next;
-          });
-          setEventsBySession((current) => {
-            const next = new Map(current);
-            next.set(childSessionId, snapshot.events);
-            return next;
-          });
-
-          const liveChild = client.sessions.attach(childSessionId, {
-            streamIndex: snapshot.session.streamIndex,
-          });
-          for await (const event of liveChild.stream({
-            signal: controller.signal,
-          })) {
-            setEventsBySession((current) => {
-              const sessionEvents = current.get(childSessionId) ?? [];
-              if (
-                sessionEvents.some(
-                  (candidate) => candidate.meta.id === event.meta.id
-                )
-              ) {
-                return current;
-              }
-              const next = new Map(current);
-              next.set(childSessionId, [...sessionEvents, event]);
-              return next;
-            });
-          }
-        } catch (error) {
-          if (!controller.signal.aborted) {
-            setStreamErrors((current) => {
-              const next = new Map(current);
-              next.set(
-                childSessionId,
-                error instanceof Error
-                  ? error.message
-                  : "The task stream disconnected."
-              );
-              return next;
-            });
-          }
-        }
-      })();
-
-      return controller;
-    });
-
-    return () => {
-      for (const controller of controllers) controller.abort();
-    };
-  }, [subscriptionKey]);
+  const usage = useChatUsage({
+    events,
+    historyComplete,
+    initialUsage,
+    sessionId,
+  });
 
   useEffect(() => {
     if (!window.matchMedia("(min-width: 48rem)").matches) return undefined;
@@ -160,13 +90,10 @@ export function SubagentPanel({
       new Map(
         sessions.map((session) => [
           session.childSessionId,
-          getSubagentStatus(
-            eventsBySession.get(session.childSessionId) ?? [],
-            session
-          ),
+          getSubagentStatus([], session),
         ])
       ),
-    [eventsBySession, sessions]
+    [sessions]
   );
   const workingCount = [...statuses.values()].filter((status) =>
     ["starting", "working"].includes(status)
@@ -182,7 +109,7 @@ export function SubagentPanel({
   const activity = (
     <ActivityCard
       doneCount={doneCount}
-      eventsBySession={eventsBySession}
+      eventsBySession={emptyEventsBySession}
       onSelect={openTask}
       onTraceViewChange={onTraceViewChange}
       sessions={sessions}
@@ -244,12 +171,10 @@ export function SubagentPanel({
         >
           {selected ? (
             <TracePreview
-              events={eventsBySession.get(selected.childSessionId) ?? []}
               closeButtonRef={traceCloseButton}
+              key={selected.childSessionId}
               onClose={closeTask}
               session={selected}
-              status={statuses.get(selected.childSessionId) ?? "starting"}
-              streamError={streamErrors.get(selected.childSessionId)}
             />
           ) : null}
         </div>
@@ -278,11 +203,9 @@ export function SubagentPanel({
           </SheetHeader>
           {selected ? (
             <TracePreview
-              events={eventsBySession.get(selected.childSessionId) ?? []}
+              key={selected.childSessionId}
               onClose={closeTask}
               session={selected}
-              status={statuses.get(selected.childSessionId) ?? "starting"}
-              streamError={streamErrors.get(selected.childSessionId)}
             />
           ) : (
             activity

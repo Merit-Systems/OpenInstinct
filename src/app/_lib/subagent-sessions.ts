@@ -6,6 +6,7 @@ import type {
 
 export type SubagentSession = SubagentCalledStreamEvent["data"] & {
   readonly completion?: SubagentCompletedStreamEvent["data"];
+  readonly task?: string;
 };
 
 export type SubagentStatus =
@@ -20,11 +21,23 @@ export function collectSubagentSessions(
   events: readonly MessageStreamEvent[]
 ): readonly SubagentSession[] {
   const completions = new Map<string, SubagentCompletedStreamEvent["data"]>();
+  const tasks = new Map<string, string>();
   const sessions = new Map<string, SubagentSession>();
 
   for (const event of events) {
     if (event.type === "subagent.completed") {
       completions.set(event.data.callId, event.data);
+      continue;
+    }
+    if (event.type === "actions.requested") {
+      for (const action of event.data.actions) {
+        if (
+          action.kind === "subagent-call" ||
+          action.kind === "remote-agent-call"
+        ) {
+          tasks.set(action.callId, action.description);
+        }
+      }
     }
   }
 
@@ -34,6 +47,7 @@ export function collectSubagentSessions(
     const session = {
       ...event.data,
       completion: completions.get(event.data.callId),
+      task: tasks.get(event.data.callId),
     };
     sessions.delete(session.childSessionId);
     sessions.set(session.childSessionId, session);

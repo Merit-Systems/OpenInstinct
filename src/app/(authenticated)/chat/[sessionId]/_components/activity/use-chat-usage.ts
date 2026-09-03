@@ -6,10 +6,12 @@ import { api } from "@/trpc/client";
 
 export function useChatUsage({
   events,
+  historyComplete,
   initialUsage,
   sessionId,
 }: {
   readonly events: readonly MessageStreamEvent[];
+  readonly historyComplete: boolean;
   readonly initialUsage?: ChatUsage;
   readonly sessionId?: string;
 }) {
@@ -28,13 +30,19 @@ export function useChatUsage({
   )?.meta.id;
 
   useEffect(() => {
-    if (sessionId === undefined || latestTerminalTurnId === undefined) return;
+    if (
+      !historyComplete ||
+      sessionId === undefined ||
+      latestTerminalTurnId === undefined
+    ) {
+      return;
+    }
 
     const terminalTurn = `${sessionId}:${latestTerminalTurnId}`;
     if (persistedTurn.current === terminalTurn) return;
     persistedTurn.current = terminalTurn;
     saveChat({ sessionId, usage });
-  }, [latestTerminalTurnId, saveChat, sessionId, usage]);
+  }, [historyComplete, latestTerminalTurnId, saveChat, sessionId, usage]);
 
   return usage;
 }

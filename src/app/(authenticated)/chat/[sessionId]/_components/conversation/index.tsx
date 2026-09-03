@@ -1,4 +1,4 @@
-import { AlertCircleIcon, BrainIcon } from "lucide-react";
+import { AlertCircleIcon, BrainIcon, LoaderCircleIcon } from "lucide-react";
 import { Fragment, useMemo } from "react";
 import {
   imessageTimestamps,
@@ -15,11 +15,13 @@ import {
 import { Message, MessageContent } from "@/components/ai-elements/message";
 import { Shimmer } from "@/components/ai-elements/shimmer";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
 import { AgentMessage } from "./message";
 import type { ChatAgent } from "../chat-agent";
 
 export function ChatConversation({
   agent,
+  history,
   initial,
   sessionId,
   traceView,
@@ -28,6 +30,11 @@ export function ChatConversation({
     ChatAgent,
     "data" | "error" | "events" | "respond" | "status"
   >;
+  readonly history?: {
+    readonly hasOlder: boolean;
+    readonly isLoadingOlder: boolean;
+    readonly loadOlder: () => Promise<void>;
+  };
   readonly initial?: false;
   readonly sessionId?: string;
   readonly traceView: TraceView;
@@ -79,6 +86,26 @@ export function ChatConversation({
       }
     >
       <ConversationContent className="mx-auto w-full max-w-3xl gap-6 px-4 pt-6 pb-36 sm:px-6">
+        {history?.hasOlder ? (
+          <Button
+            className="self-center"
+            disabled={history.isLoadingOlder}
+            onClick={() => void history.loadOlder()}
+            size="sm"
+            type="button"
+            variant="ghost"
+          >
+            {history.isLoadingOlder ? (
+              <LoaderCircleIcon className="animate-spin" />
+            ) : null}
+            {history.isLoadingOlder ? "Loading…" : "Load older messages"}
+          </Button>
+        ) : null}
+        {isRestoring && messages.length === 0 ? (
+          <Shimmer className="type-supporting-body self-center" duration={1}>
+            Loading recent messages
+          </Shimmer>
+        ) : null}
         {messages.map((message, index) => {
           if (showPendingThinking && message.id === pendingAssistantMessageId) {
             return null;

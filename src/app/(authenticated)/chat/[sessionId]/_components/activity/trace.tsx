@@ -5,7 +5,7 @@ import {
   type MessageStreamEvent,
   type SubagentCalledStreamEvent,
 } from "eve/client";
-import { BotIcon } from "lucide-react";
+import { BotIcon, LoaderCircleIcon } from "lucide-react";
 import { useMemo } from "react";
 import { Shimmer } from "@/components/ai-elements/shimmer";
 import {
@@ -15,6 +15,7 @@ import {
   AlertTitle,
 } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { getLatestTurnFailure } from "../../_lib/turn-failure";
 import { messageTimestamps } from "../../_lib/message-events";
 import type { SubagentStatus } from "@/app/_lib/subagent-sessions";
@@ -24,11 +25,19 @@ const messageReducer = defaultMessageReducer();
 
 export function SubagentTrace({
   events,
+  hasOlder,
+  isLoading,
+  isLoadingOlder,
+  loadOlder,
   streamError,
   status,
   target,
 }: {
   readonly events: readonly MessageStreamEvent[];
+  readonly hasOlder: boolean;
+  readonly isLoading: boolean;
+  readonly isLoadingOlder: boolean;
+  readonly loadOlder: () => Promise<void>;
   readonly streamError?: string;
   readonly status: SubagentStatus;
   readonly target: SubagentCalledStreamEvent["data"];
@@ -67,6 +76,21 @@ export function SubagentTrace({
         </AlertAction>
       </Alert>
       <div className="space-y-5 py-5">
+        {hasOlder ? (
+          <Button
+            className="mx-auto flex"
+            disabled={isLoadingOlder}
+            onClick={() => void loadOlder()}
+            size="sm"
+            type="button"
+            variant="ghost"
+          >
+            {isLoadingOlder ? (
+              <LoaderCircleIcon className="animate-spin" />
+            ) : null}
+            {isLoadingOlder ? "Loading…" : "Load older messages"}
+          </Button>
+        ) : null}
         {data.messages.map((message, index) => (
           <AgentMessage
             canRespond={false}
@@ -77,7 +101,7 @@ export function SubagentTrace({
             timestamp={timestamps.get(message.id)}
           />
         ))}
-        {isRunning && data.messages.length === 0 ? (
+        {(isLoading || isRunning) && data.messages.length === 0 ? (
           <Shimmer className="type-supporting-body" duration={1}>
             Loading task trace
           </Shimmer>
