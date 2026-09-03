@@ -1,13 +1,21 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { HookContext } from "eve/hooks";
 import type { saveChat } from "@/db/services/chats";
+import type { ensureScope } from "@/db/services/scope";
+import type { claimSession } from "@/db/services/sessions";
 import sessionOwner from "@/agent/hooks/session-owner";
 
 const mocks = vi.hoisted(() => ({
+  claimSession: vi.fn<typeof claimSession>(),
+  ensureScope: vi.fn<typeof ensureScope>(),
   saveChat: vi.fn<typeof saveChat>(),
 }));
 
 vi.mock("@/db/services/chats", () => ({ saveChat: mocks.saveChat }));
+vi.mock("@/db/services/scope", () => ({ ensureScope: mocks.ensureScope }));
+vi.mock("@/db/services/sessions", () => ({
+  claimSession: mocks.claimSession,
+}));
 
 type MessageReceivedHandler = NonNullable<
   NonNullable<typeof sessionOwner.events>["message.received"]
@@ -40,11 +48,13 @@ const context = {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  mocks.claimSession.mockResolvedValue();
+  mocks.ensureScope.mockResolvedValue();
   mocks.saveChat.mockResolvedValue();
 });
 
 describe("session ownership hook", () => {
-  it("indexes messages received outside the web chat client", async () => {
+  it("repairs ownership before indexing a received message", async () => {
     const handler = sessionOwner.events?.["message.received"];
     expect(handler).toBeDefined();
 
@@ -58,10 +68,18 @@ describe("session ownership hook", () => {
     } satisfies Parameters<MessageReceivedHandler>[0];
     await handler?.(event, context);
 
+    expect(mocks.ensureScope).toHaveBeenCalledWith(scope);
+    expect(mocks.claimSession).toHaveBeenCalledWith(scope, "session-1");
     expect(mocks.saveChat).toHaveBeenCalledWith(scope, {
       channel: "channel:linq",
       sessionId: "session-1",
     });
+    expect(mocks.ensureScope.mock.invocationCallOrder[0]).toBeLessThan(
+      mocks.claimSession.mock.invocationCallOrder[0] ?? 0
+    );
+    expect(mocks.claimSession.mock.invocationCallOrder[0]).toBeLessThan(
+      mocks.saveChat.mock.invocationCallOrder[0] ?? 0
+    );
   });
 
   it("records the web channel for HTTP messages", async () => {
