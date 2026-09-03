@@ -1,29 +1,26 @@
-import type { MessageStreamEvent } from "eve/client";
 import { SparklesIcon, XIcon } from "lucide-react";
 import type { RefObject } from "react";
-import type {
-  SubagentSession,
-  SubagentStatus,
+import {
+  getSubagentStatus,
+  type SubagentSession,
 } from "@/app/_lib/subagent-sessions";
 import { Button } from "@/components/ui/button";
 import { agentLabel } from "./presentation";
 import { SubagentTrace } from "./trace";
+import { useSessionHistory } from "./use-session-history";
 
 export function TracePreview({
   closeButtonRef,
-  events,
   onClose,
   session,
-  status,
-  streamError,
 }: {
   readonly closeButtonRef?: RefObject<HTMLButtonElement | null>;
-  readonly events: readonly MessageStreamEvent[];
   readonly onClose: () => void;
   readonly session: SubagentSession;
-  readonly status: SubagentStatus;
-  readonly streamError?: string;
 }) {
+  const history = useSessionHistory(session.childSessionId);
+  const status = getSubagentStatus(history.events, session);
+
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <header className="flex h-14 shrink-0 items-center gap-3 border-b px-4">
@@ -49,9 +46,13 @@ export function TracePreview({
       </header>
       <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-6 sm:px-6">
         <SubagentTrace
-          events={events}
+          events={history.events}
+          hasOlder={history.hasOlder}
+          isLoading={history.isLoading}
+          isLoadingOlder={history.isLoadingOlder}
+          loadOlder={history.loadOlder}
           status={status}
-          streamError={streamError}
+          streamError={history.error}
           target={session}
         />
       </div>

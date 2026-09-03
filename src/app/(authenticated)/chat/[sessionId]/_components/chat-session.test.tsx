@@ -1,28 +1,37 @@
-import type { useEveAgent } from "eve/react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { beforeEach, describe, expect, it, type Mock, vi } from "vitest";
 
-type AgentOptions = Parameters<typeof useEveAgent>[0];
-
 interface Mocks {
   activityEvents: readonly unknown[] | undefined;
-  agent: { events: readonly unknown[]; send: Mock<() => Promise<void>> };
+  agent: {
+    events: readonly unknown[];
+    hasOlder: boolean;
+    isLoadingOlder: boolean;
+    loadOlder: Mock<() => Promise<void>>;
+    send: Mock<() => Promise<void>>;
+  };
   conversationAgent: unknown;
   inputAgent: unknown;
-  options: AgentOptions | undefined;
+  sessionId: string | undefined;
 }
 
 const mocks = vi.hoisted<Mocks>(() => ({
   activityEvents: undefined,
-  agent: { events: [], send: vi.fn<() => Promise<void>>() },
+  agent: {
+    events: [],
+    hasOlder: true,
+    isLoadingOlder: false,
+    loadOlder: vi.fn<() => Promise<void>>(),
+    send: vi.fn<() => Promise<void>>(),
+  },
   conversationAgent: undefined,
   inputAgent: undefined,
-  options: undefined,
+  sessionId: undefined,
 }));
 
-vi.mock("eve/react", () => ({
-  useEveAgent: (options: AgentOptions) => {
-    mocks.options = options;
+vi.mock("./use-session-agent", () => ({
+  useSessionAgent: (sessionId: string) => {
+    mocks.sessionId = sessionId;
     return mocks.agent;
   },
 }));
@@ -53,13 +62,14 @@ import { ChatSession } from "./chat-session";
 describe("chat session", () => {
   beforeEach(() => {
     mocks.activityEvents = undefined;
+    mocks.agent.loadOlder.mockReset().mockResolvedValue(undefined);
     mocks.agent.send.mockReset().mockResolvedValue(undefined);
     mocks.conversationAgent = undefined;
     mocks.inputAgent = undefined;
-    mocks.options = undefined;
+    mocks.sessionId = undefined;
   });
 
-  it("resumes the routed session without resubmitting its first prompt", () => {
+  it("loads the routed session through the paginated agent", () => {
     const markup = renderToStaticMarkup(
       <ChatSession
         initialUsage={{ costUsd: null, inputTokens: 3, outputTokens: 2 }}
@@ -67,10 +77,7 @@ describe("chat session", () => {
       />
     );
 
-    expect(mocks.options).toMatchObject({
-      initialSession: { sessionId: "session/one", streamIndex: 0 },
-      resume: true,
-    });
+    expect(mocks.sessionId).toBe("session/one");
     expect(mocks.agent.send).not.toHaveBeenCalled();
     expect(mocks.conversationAgent).toBe(mocks.agent);
     expect(mocks.inputAgent).toBe(mocks.agent);

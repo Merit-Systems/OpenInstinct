@@ -1,12 +1,12 @@
 "use client";
 
-import { useEveAgent } from "eve/react";
 import { useState } from "react";
 import type { ChatUsage } from "@/lib/chat";
 import type { TraceView } from "../_lib/trace-view";
 import { SubagentPanel } from "./activity";
 import { ChatConversation } from "./conversation";
 import { ChatInput } from "./input";
+import { useSessionAgent } from "./use-session-agent";
 
 export function ChatSession({
   initialUsage,
@@ -16,10 +16,7 @@ export function ChatSession({
   readonly sessionId: string;
 }) {
   const [traceView, setTraceView] = useState<TraceView>("imessage");
-  const agent = useEveAgent({
-    initialSession: { sessionId, streamIndex: 0 },
-    resume: true,
-  });
+  const agent = useSessionAgent(sessionId);
 
   return (
     <div className="relative flex h-full min-h-0 overflow-hidden bg-background text-foreground">
@@ -27,6 +24,11 @@ export function ChatSession({
         <ChatConversation
           agent={agent}
           initial={false}
+          history={{
+            hasOlder: agent.hasOlder,
+            isLoadingOlder: agent.isLoadingOlder,
+            loadOlder: agent.loadOlder,
+          }}
           sessionId={sessionId}
           traceView={traceView}
         />
@@ -34,6 +36,7 @@ export function ChatSession({
       </div>
       <SubagentPanel
         events={agent.events}
+        historyComplete={!agent.hasOlder}
         initialUsage={initialUsage}
         onTraceViewChange={setTraceView}
         sessionId={sessionId}

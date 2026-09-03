@@ -72,6 +72,34 @@ describe("collectSubagentSessions", () => {
     ).toEqual(["child_2", "child_1"]);
   });
 
+  it("uses the parent action description without reading the child stream", () => {
+    const [session] = collectSubagentSessions([
+      {
+        type: "actions.requested",
+        data: {
+          actions: [
+            {
+              callId: "call_1",
+              description: "Research nearby appointments",
+              input: { task: "Find a slot" },
+              kind: "subagent-call",
+              name: "Research appointments",
+              nodeId: "worker",
+              subagentName: "researcher",
+            },
+          ],
+          sequence: 0,
+          stepIndex: 0,
+          turnId: "turn_1",
+        },
+        meta,
+      },
+      called,
+    ]);
+
+    expect(session?.task).toBe("Research nearby appointments");
+  });
+
   it("moves a continued child back to the front", () => {
     const secondChild = {
       ...called,

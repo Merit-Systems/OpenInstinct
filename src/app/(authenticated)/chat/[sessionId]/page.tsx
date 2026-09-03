@@ -8,5 +8,11 @@ export default async function ChatSessionPage({
   const { sessionId } = await params;
   const scope = await requireRequestScope();
   const chat = await readChat(scope, sessionId);
-  return <ChatSession initialUsage={chat?.usage} sessionId={sessionId} />;
+  return (
+    <ChatSession
+      initialUsage={chat?.usage}
+      key={sessionId}
+      sessionId={sessionId}
+    />
+  );
 }
