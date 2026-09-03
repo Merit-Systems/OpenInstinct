@@ -1,6 +1,9 @@
 import { defineEval, type EveEvalLiveTurn, type EveEvalTurn } from "eve/evals";
 import { satisfies } from "eve/evals/expect";
-import { reportBrowserBenchmarkActivity } from "@/evals/browser/benchmark-reporter";
+import {
+  browserBenchmarkReporter,
+  reportBrowserBenchmarkActivity,
+} from "@/evals/browser/benchmark-reporter";
 import {
   didCompleteWorker,
   didFinishWorker,
@@ -23,6 +26,7 @@ export default tasks.flatMap((task) =>
         : `${task.description} [${String(repetitionIndex + 1)}/${String(repetitions)}]`;
     return defineEval({
       description,
+      reporters: [browserBenchmarkReporter],
       tags: ["browser", "benchmark"],
       async test(t) {
         const started = await t.send(task.prompt);

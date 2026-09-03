@@ -43,6 +43,18 @@ describe("agent instructions", () => {
     expect(selected?.content).toContain("approval");
   });
 
+  it("uses native approval cards instead of prose approval loops", async () => {
+    const resolve = executionSafety.events["turn.started"];
+    expect(resolve).toBeDefined();
+    if (!resolve) return;
+
+    const selected = await resolve({}, dynamicContext("linq-message"));
+    expect(selected?.content).toContain(
+      "Never ask for approval in prose first"
+    );
+    expect(selected?.content).toContain("native approval card");
+  });
+
   it("omits message style from scheduled workers", async () => {
     const resolve = messageStyle.events["turn.started"];
     expect(resolve).toBeDefined();
