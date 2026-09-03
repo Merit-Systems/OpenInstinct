@@ -4,6 +4,7 @@ import { env } from "@/env";
 import type { AutofillClaim } from "./protocol";
 import {
   classifyNativeLoginControl,
+  frameOriginExpression,
   nativeLoginAutofillTokens,
   nativeLoginControlInspectionExpression,
   nativeLoginFillFunctionDeclaration,
@@ -50,6 +51,9 @@ const evaluatedValueSchema = z.object({
 });
 const evaluatedBooleanSchema = z.object({
   result: z.object({ value: z.boolean() }),
+});
+const evaluatedStringSchema = z.object({
+  result: z.object({ value: z.string() }),
 });
 const evaluatedNumberSchema = z.object({
   result: z.object({ value: z.number().int().nonnegative() }),
@@ -156,12 +160,18 @@ export async function fillWithKernelNativeAutofill({
         const filledClaims = await fillNativeLoginControls(
           connection,
           sessionId,
-          claims
+          claims,
+          expectedOrigin
         );
         return { filledClaims, origin };
       }
 
-      const controls = await inspectControls(connection, sessionId, kind);
+      const controls = await inspectControls(
+        connection,
+        sessionId,
+        kind,
+        expectedOrigin
+      );
       if (controls.length === 0) {
         throw new Error("No visible form control is available for autofill.");
       }
@@ -199,9 +209,14 @@ export async function fillWithKernelNativeAutofill({
 async function fillNativeLoginControls(
   connection: CdpConnection,
   sessionIds: readonly string[],
-  claims: readonly AutofillClaim[]
+  claims: readonly AutofillClaim[],
+  expectedOrigin: string
 ) {
-  const controls = await inspectNativeLoginControls(connection, sessionIds);
+  const controls = await inspectNativeLoginControls(
+    connection,
+    sessionIds,
+    expectedOrigin
+  );
   const focused = controls.find((control) => control.focused);
   if (!focused) {
     throw new Error(
@@ -222,9 +237,16 @@ async function fillNativeLoginControls(
 
   /* oxlint-disable eslint/no-await-in-loop -- Login fields must be filled in DOM order so page validation sees coherent intermediate state. */
   for (const { control, value } of fills) {
-    const accepted = await fillNativeLoginControl(connection, control, value);
+    const accepted = await fillNativeLoginControl(
+      connection,
+      control,
+      value,
+      expectedOrigin
+    );
     if (!accepted) {
-      throw new Error("The login form rejected secure credential autofill.");
+      throw new Error(
+        "The login form rejected secure credential autofill or is not served from the saved origin."
+      );
     }
   }
   /* oxlint-enable eslint/no-await-in-loop */
@@ -233,7 +255,8 @@ async function fillNativeLoginControls(
 
 async function inspectNativeLoginControls(
   connection: CdpConnection,
-  sessionIds: readonly string[]
+  sessionIds: readonly string[],
+  expectedOrigin: string
 ) {
   return (
     await Promise.all(
@@ -246,9 +269,12 @@ async function inspectNativeLoginControls(
           return (
             await Promise.all(
               flattenFrames(frameTree).map(({ id: frameId }) =>
-                inspectNativeLoginFrame(connection, sessionId, frameId).catch(
-                  () => []
-                )
+                inspectNativeLoginFrame(
+                  connection,
+                  sessionId,
+                  frameId,
+                  expectedOrigin
+                ).catch(() => [])
               )
             )
           ).flat();
@@ -263,7 +289,8 @@ async function inspectNativeLoginControls(
 async function inspectNativeLoginFrame(
   connection: CdpConnection,
   sessionId: string,
-  frameId: string
+  frameId: string,
+  expectedOrigin: string
 ) {
   const { executionContextId } = isolatedWorldSchema.parse(
     await connection.send(
@@ -272,6 +299,16 @@ async function inspectNativeLoginFrame(
       sessionId
     )
   );
+  if (
+    !(await isFrameAtOrigin(
+      connection,
+      sessionId,
+      executionContextId,
+      expectedOrigin
+    ))
+  ) {
+    return [];
+  }
   const response = evaluatedValueSchema.parse(
     await connection.send(
       "Runtime.evaluate",
@@ -301,7 +338,8 @@ async function fillNativeLoginControl(
     readonly frameId: string;
     readonly sessionId: string;
   },
-  value: string
+  value: string,
+  expectedOrigin: string
 ) {
   const evaluated = evaluatedObjectSchema.parse(
     await connection.send(
@@ -321,7 +359,7 @@ async function fillNativeLoginControl(
       await connection.send(
         "Runtime.callFunctionOn",
         {
-          arguments: [{ value }],
+          arguments: [{ value }, { value: expectedOrigin }],
           awaitPromise: false,
           functionDeclaration: nativeLoginFillFunctionDeclaration,
           objectId,
@@ -373,7 +411,8 @@ export function buildNativeAutofillPayload(
 async function inspectControls(
   connection: CdpConnection,
   sessionIds: readonly string[],
-  kind: "address" | "contact" | "payment"
+  kind: "address" | "contact" | "payment",
+  expectedOrigin: string
 ) {
   const controls = (
     await Promise.all(
@@ -390,7 +429,8 @@ async function inspectControls(
                   connection,
                   sessionId,
                   frameId,
-                  kind
+                  kind,
+                  expectedOrigin
                 ).catch(() => [])
               )
             )
@@ -413,7 +453,8 @@ async function inspectFrameControls(
   connection: CdpConnection,
   sessionId: string,
   frameId: string,
-  kind: "address" | "contact" | "payment"
+  kind: "address" | "contact" | "payment",
+  expectedOrigin: string
 ) {
   const { executionContextId } = isolatedWorldSchema.parse(
     await connection.send(
@@ -422,6 +463,18 @@ async function inspectFrameControls(
       sessionId
     )
   );
+  // Chromium's Autofill.trigger writes into whichever frame owns the control,
+  // so only controls in documents served from the saved origin are eligible.
+  if (
+    !(await isFrameAtOrigin(
+      connection,
+      sessionId,
+      executionContextId,
+      expectedOrigin
+    ))
+  ) {
+    return [];
+  }
   const response = evaluatedValueSchema.parse(
     await connection.send(
       "Runtime.evaluate",
@@ -473,6 +526,26 @@ async function inspectFrameControls(
       })
     )
   ).filter((control) => control !== null);
+}
+
+async function isFrameAtOrigin(
+  connection: CdpConnection,
+  sessionId: string,
+  executionContextId: number,
+  expectedOrigin: string
+) {
+  const response = evaluatedStringSchema.parse(
+    await connection.send(
+      "Runtime.evaluate",
+      {
+        contextId: executionContextId,
+        expression: frameOriginExpression,
+        returnByValue: true,
+      },
+      sessionId
+    )
+  );
+  return response.result.value === expectedOrigin;
 }
 
 const controlInspectionExpression = `(() => {
