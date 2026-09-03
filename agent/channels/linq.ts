@@ -11,7 +11,8 @@ import { getAuth } from "@/auth";
 import { reactToMessageToolResultSchema } from "@/agent/lib/react-to-message";
 import { sendMessageToolResultSchema } from "@/agent/lib/send-message";
 import { normalizeAuthPhoneNumber } from "@/auth/phone-number";
-import { accessScopeForUser, scopeFromPrincipal } from "@/lib/access-scope";
+import { scopeFromPrincipal } from "@/agent/lib/principal-scope";
+import { accessScopeForUser } from "@/lib/access-scope";
 import { prepareLinqImageArtifactDelivery } from "../lib/linq-image-artifact/delivery";
 import {
   extractImageArtifactMarkdownReferences,
