@@ -31,7 +31,7 @@ export default defineEval({
       {
         ...conversation,
         missedRunPolicy: "run_latest",
-        prompt: `Return exactly this final structured outcome without calling tools: {"kind":"result","summary":"${resultCanary}","urgency":"normal"}`,
+        prompt: `Return exactly ${resultCanary} as your concise final handoff without calling tools.`,
         timing: { at: dueAt.toISOString(), kind: "once" },
       },
       new Date(dueAt.getTime() - 1_000)
@@ -52,11 +52,7 @@ export default defineEval({
 
     const worker = await t.target.attachSession(workerSessionId);
     worker.succeeded();
-    worker.outputEquals({
-      kind: "result",
-      summary: resultCanary,
-      urgency: "normal",
-    });
+    worker.outputEquals(resultCanary);
 
     const stored = (await listScheduledAgentJobs(scope, conversation)).find(
       (candidate) => candidate.id === job.id
