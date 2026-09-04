@@ -1,5 +1,5 @@
 import { defineHook } from "eve/hooks";
-import { registerBackgroundReplyTarget } from "@/agent/lib/reply-targets";
+import { registerBackgroundReplyTarget } from "@agent/lib/reply-targets";
 
 export default defineHook({
   events: {

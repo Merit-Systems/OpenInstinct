@@ -2,12 +2,12 @@ import { defineChannel, POST } from "eve/channels";
 import { localDev, routeAuth, vercelOidc } from "eve/channels/auth";
 import { parseInputResponses, resolveTextToResponses } from "eve/client";
 import { z } from "zod";
-import { dispatchScheduledReport } from "@/agent/lib/schedules/report";
+import { dispatchScheduledReport } from "@agent/lib/schedules/report";
 import {
   claimScheduledAgentRunInput,
   finishScheduledAgentRunInput,
   restoreScheduledAgentRunInput,
-} from "@/db/services/scheduled-agent-jobs";
+} from "@db/services/scheduled-agent-jobs";
 
 const scheduledRunTargetSchema = z.strictObject({
   restart: z.boolean().optional(),

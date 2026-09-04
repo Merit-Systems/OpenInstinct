@@ -8,24 +8,24 @@ import {
 } from "eve/channels/linq";
 import { vercelOidc } from "eve/channels/auth";
 import { z } from "zod";
-import { getAuth } from "@/auth";
-import { reactToMessageToolResultSchema } from "@/agent/lib/react-to-message";
-import { resolveLinqReplyTarget } from "@/agent/lib/reply-targets";
-import { sendMessageToolResultSchema } from "@/agent/lib/send-message";
-import { normalizeAuthPhoneNumber } from "@/auth/phone-number";
-import { scopeFromPrincipal } from "@/agent/lib/principal-scope";
-import { accessScopeForUser } from "@/lib/access-scope";
+import { resolveLinqReplyTarget } from "@agent/lib/reply-targets";
+import { scopeFromPrincipal } from "@agent/lib/principal-scope";
+import { getAuth } from "@db/services/auth";
+import { sendMessageToolResultSchema } from "@shared/chat/message-delivery";
+import { reactToMessageToolResultSchema } from "@shared/chat/reaction";
+import { accessScopeForUser } from "@shared/identity/access-scope";
+import { normalizeAuthPhoneNumber } from "@shared/identity/phone-number";
 import { prepareLinqImageArtifactDelivery } from "../lib/linq-image-artifact/delivery";
 import {
   extractImageArtifactMarkdownReferences,
   stripImageArtifactMarkdownReferences,
 } from "../lib/linq-image-artifact/markdown";
-import { env } from "@/env";
+import { env } from "@shared/environment";
 import {
   finalizeScheduledReportDelivery,
   releaseScheduledReportDelivery,
   scheduledReportFromSession,
-} from "@/agent/lib/schedules/report-lifecycle";
+} from "@agent/lib/schedules/report-lifecycle";
 
 const verifiedPhoneUserSchema = z.object({
   id: z.string().min(1),

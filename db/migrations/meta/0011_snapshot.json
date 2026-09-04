@@ -1,5 +1,5 @@
 {
-  "id": "50884ede-d209-4c57-993d-3cfa06e20493",
+  "id": "c4d701c1-3269-4972-b750-3f136b83f5b9",
   "prevId": "6a5f5899-87c7-4f9b-8c6b-d33aef5f9198",
   "version": "7",
   "dialect": "postgresql",
@@ -932,6 +932,12 @@
           "primaryKey": false,
           "notNull": true
         },
+        "channel": {
+          "name": "channel",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
         "title": {
           "name": "title",
           "type": "text",
@@ -1066,12 +1072,6 @@
           "type": "text",
           "primaryKey": false,
           "notNull": true
-        },
-        "reply_anchor_message_id": {
-          "name": "reply_anchor_message_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
         },
         "timing": {
           "name": "timing",

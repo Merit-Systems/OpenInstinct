@@ -1,12 +1,12 @@
 import { defineEval, type EveEvalContext } from "eve/evals";
 import { includes, satisfies } from "eve/evals/expect";
-import { reactToMessageOutputSchema } from "@/agent/lib/react-to-message";
-import { sendMessageOutputSchema } from "@/agent/lib/send-message";
+import { sendMessageOutputSchema } from "@shared/chat/message-delivery";
+import { reactToMessageOutputSchema } from "@shared/chat/reaction";
 import {
   agentEvalTags,
   assertPlainTextDelivery,
   requireDeliveredText,
-} from "@/evals/agent/shared";
+} from "@evals/agent/shared";
 
 const cases: readonly {
   description: string;
@@ -89,7 +89,7 @@ const textEvals = cases.map((testCase) =>
       turn.calledTool("send_message", { count: 1 });
       turn.notCalledTool("web_search");
       turn.notCalledTool("web_fetch");
-      turn.notEvent("subagent.called", { data: { name: "worker" } });
+      turn.notEvent("subagent.called", { data: { name: "browser-agent" } });
       turn.maxToolCalls(1);
       const text = await requireDeliveredText(t, turn);
       assertPlainTextDelivery(t, text);
@@ -186,7 +186,7 @@ const replyEvals = [
           `[Task state]\n${JSON.stringify({
             tasks: [
               {
-                name: "worker",
+                name: "browser-agent",
                 output:
                   "The best nearby showing is 6:00 PM XPlus at Showcase Legacy Place, and availability was confirmed.",
                 status: "completed",

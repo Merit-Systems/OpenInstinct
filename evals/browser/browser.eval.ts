@@ -3,17 +3,17 @@ import { satisfies } from "eve/evals/expect";
 import {
   browserBenchmarkReporter,
   reportBrowserBenchmarkActivity,
-} from "@/evals/browser/benchmark-reporter";
+} from "@evals/browser/benchmark-reporter";
 import {
   didCompleteWorker,
   didFinishWorker,
   readTaskCompletion,
-} from "@/lib/worker-events";
+} from "@evals/browser/worker-events";
 import {
   browserBenchmarkFixtureContext,
   browserBenchmarkTasks,
-} from "@/evals/browser/tasks";
-import { browserBenchmarkEnv } from "@/evals/browser/env";
+} from "@evals/browser/tasks";
+import { browserBenchmarkEnv } from "@evals/browser/env";
 
 const repetitions = browserBenchmarkEnv.BROWSER_BENCH_REPETITIONS;
 const tasks = browserBenchmarkTasks(browserBenchmarkEnv.BROWSER_BENCH_SUITE);
@@ -31,7 +31,7 @@ export default tasks.flatMap((task) =>
       async test(t) {
         const started = await t.send(task.prompt);
         started.expectOk();
-        started.calledSubagent("worker", { count: 1 });
+        started.calledSubagent("browser-agent", { count: 1 });
         const childSessionId = requireWorkerSessionId(started);
         let child = t.target.watchTurn(childSessionId, { startIndex: 0 });
         let turnStartIndex = 0;
@@ -175,7 +175,10 @@ function isIdleStreamClosure(cause: unknown) {
 
 function requireWorkerSessionId(turn: EveEvalTurn) {
   for (const event of turn.events) {
-    if (event.type === "subagent.called" && event.data.name === "worker") {
+    if (
+      event.type === "subagent.called" &&
+      event.data.name === "browser-agent"
+    ) {
       return event.data.childSessionId;
     }
   }

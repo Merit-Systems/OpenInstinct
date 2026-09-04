@@ -13,16 +13,16 @@ import {
   paymentCardBrand,
   vaultItemKindSchema,
   type VaultCreateItem,
-} from "@/lib/vault";
-import type { AccessScope } from "@/lib/access-scope";
-import { db, vaultItems } from "@/db";
+} from "@shared/vault/schema";
+import type { AccessScope } from "@shared/identity/access-scope";
+import { db, vaultItems } from "@db";
 import {
   deleteEncryptedSecret,
   readEncryptedSecret,
   writeEncryptedSecret,
-} from "@/db/services/secrets";
-import { ensureScope } from "@/db/services/scope";
-import { getInstallationSecrets } from "@/lib/installation-secrets";
+} from "@db/services/secrets";
+import { ensureScope } from "@db/services/scope";
+import { getInstallationSecrets } from "@db/services/installation-secrets";
 
 const vaultRecordSchema = z.object({
   account: z.string(),

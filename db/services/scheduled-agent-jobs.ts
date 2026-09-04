@@ -13,18 +13,18 @@ import {
   sql,
 } from "drizzle-orm";
 import { inputRequestSchema, type InputRequest } from "eve/client";
-import type { AccessScope } from "@/lib/access-scope";
+import type { AccessScope } from "@shared/identity/access-scope";
 import {
   computeNextRun,
   computeLatestRun,
   scheduleTimingSchema,
   type ScheduleTiming,
-} from "@/agent/lib/schedules/timing";
+} from "@shared/schedules/timing";
 import {
   scheduledRunOutcomeSchema,
   type ScheduledRunOutcome,
-} from "@/agent/lib/schedules/outcome";
-import { db, scheduledAgentJobs, scheduledAgentRuns } from "@/db";
+} from "@shared/schedules/outcome";
+import { db, scheduledAgentJobs, scheduledAgentRuns } from "@db";
 
 const exhaustedRunOutcome = {
   kind: "blocked",

@@ -3,8 +3,8 @@ import { resolveModeValue } from "../lib/mode";
 import {
   addReactionToMessageOutputSchema,
   reactToMessageOutputSchema,
-} from "../lib/react-to-message";
-import { sendMessageOutputSchema } from "../lib/send-message";
+} from "@shared/chat/reaction";
+import { sendMessageOutputSchema } from "@shared/chat/message-delivery";
 
 function defineSendMessage() {
   return defineTool({

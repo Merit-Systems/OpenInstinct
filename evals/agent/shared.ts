@@ -1,7 +1,7 @@
 import type { EveEvalContext, EveEvalTurn } from "eve/evals";
 import { equals, satisfies } from "eve/evals/expect";
 import { z } from "zod";
-import { sendMessageOutputSchema } from "@/agent/lib/send-message";
+import { sendMessageOutputSchema } from "@shared/chat/message-delivery";
 
 export const agentEvalTags = ["agent", "behavior"] as const;
 

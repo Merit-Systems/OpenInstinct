@@ -9,8 +9,8 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "@/components/ui/table";
-import { ActivityDurationBreakdown } from "@/components/browser/activity-duration-breakdown";
+} from "@web/components/ui/table";
+import { ActivityDurationBreakdown } from "@web/components/browser/activity-duration-breakdown";
 import type { BrowserBenchmarkLiveStatus } from "../../live-status-schema";
 import {
   averageBenchmarkImprovement,

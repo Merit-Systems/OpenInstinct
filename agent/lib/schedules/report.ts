@@ -4,7 +4,7 @@ import {
   claimScheduledReport,
   finalizeScheduledReport,
   releaseScheduledReport,
-} from "@/db/services/scheduled-agent-jobs";
+} from "@db/services/scheduled-agent-jobs";
 import linq from "../../channels/linq";
 
 type ClaimedScheduledReport = NonNullable<

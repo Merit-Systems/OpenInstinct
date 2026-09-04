@@ -11,17 +11,21 @@ export default defineConfig({
         ),
       },
       {
-        find: "@/env",
-        replacement: fileURLToPath(new URL("src/env.ts", import.meta.url)),
+        find: /^@db$/u,
+        replacement: fileURLToPath(new URL("db/index.ts", import.meta.url)),
       },
       {
-        find: /^@\/(app|auth|components|hooks|lib|trpc)(\/.*)?$/,
-        replacement: fileURLToPath(new URL("src/$1$2", import.meta.url)),
+        find: /^@shared\/environment$/u,
+        replacement: fileURLToPath(
+          new URL("shared/environment/env.ts", import.meta.url)
+        ),
       },
-      {
-        find: "@",
-        replacement: fileURLToPath(new URL(".", import.meta.url)),
-      },
+      ...["agent", "app", "db", "evals", "shared", "tests", "tools", "web"].map(
+        (owner) => ({
+          find: new RegExp(`^@${owner}/(.*)$`, "u"),
+          replacement: fileURLToPath(new URL(`${owner}/$1`, import.meta.url)),
+        })
+      ),
     ],
   },
   test: {

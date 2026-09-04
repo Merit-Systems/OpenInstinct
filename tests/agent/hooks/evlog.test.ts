@@ -3,7 +3,7 @@ import type { DrainContext, WideEvent } from "evlog";
 import { initLogger } from "evlog";
 import { resetEvlogEveForTests, useLogger } from "evlog/eve";
 import { beforeAll, describe, expect, it } from "vitest";
-import evlogHook from "@/agent/hooks/evlog";
+import evlogHook from "@agent/hooks/evlog";
 
 const capturedEvents: WideEvent[] = [];
 

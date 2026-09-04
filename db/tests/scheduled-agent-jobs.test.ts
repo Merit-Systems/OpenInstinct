@@ -3,7 +3,7 @@ import { readFile } from "node:fs/promises";
 import { PGlite } from "@electric-sql/pglite";
 import { drizzle } from "drizzle-orm/pglite";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import * as Database from "@/db";
+import * as Database from "@db";
 import * as schema from "../schema";
 
 const databases: PGlite[] = [];
@@ -30,7 +30,8 @@ describe("scheduled agent jobs", () => {
       "0008_black_sandman.sql",
       "0009_cold_power_man.sql",
       "0010_rapid_cerise.sql",
-      "0011_jazzy_zarda.sql",
+      "0011_faulty_unicorn.sql",
+      "0012_harsh_domino.sql",
     ]) {
       await applyMigration(client, migration);
     }
@@ -39,9 +40,9 @@ describe("scheduled agent jobs", () => {
     // SAFETY: PGlite implements the query-builder surface exercised by this service while retaining the shared Drizzle schema.
     // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- The focused test swaps only the database driver.
     vi.spyOn(Database, "db", "get").mockReturnValue(pgliteDatabase as never);
-    const scope = await import("@/db/services/scope");
-    const jobs = await import("@/db/services/scheduled-agent-jobs");
-    const leases = await import("@/db/services/scheduled-agent-run-leases");
+    const scope = await import("@db/services/scope");
+    const jobs = await import("@db/services/scheduled-agent-jobs");
+    const leases = await import("@db/services/scheduled-agent-run-leases");
     const alice = { userId: "alice", workspaceId: "workspace:alice" };
     const bob = { userId: "bob", workspaceId: "workspace:bob" };
     const aliceConversation = {

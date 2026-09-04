@@ -1,6 +1,6 @@
 import { and, desc, eq, sql } from "drizzle-orm";
-import type { AccessScope } from "@/lib/access-scope";
-import { browserSessions, db } from "@/db";
+import type { AccessScope } from "@shared/identity/access-scope";
+import { browserSessions, db } from "@db";
 
 interface BrowserSessionRecord {
   readonly createdAt: string;

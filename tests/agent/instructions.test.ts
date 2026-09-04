@@ -1,9 +1,9 @@
 import type { DynamicResolveContext } from "eve/instructions";
 import { describe, expect, it } from "vitest";
-import executionSafety from "@/agent/instructions/10-execution-safety";
-import roleInstructions from "@/agent/instructions/20-role";
-import workerCoordination from "@/agent/instructions/25-worker-coordination";
-import messageStyle from "@/agent/instructions/30-message-style";
+import executionSafety from "@agent/instructions/10-execution-safety";
+import roleInstructions from "@agent/instructions/20-role";
+import workerCoordination from "@agent/instructions/25-worker-coordination";
+import messageStyle from "@agent/instructions/30-message-style";
 
 describe("agent instructions", () => {
   it.each([
@@ -97,7 +97,7 @@ describe("agent instructions", () => {
     );
     for (const selected of selections) {
       expect(selected?.content).toContain(
-        "Every initial or resumed `worker` call must set `outputSchema`"
+        "Every initial or resumed `browser-agent` call must set `outputSchema`"
       );
       expect(selected?.content).toContain(
         '"required": ["status", "message", "images"]'

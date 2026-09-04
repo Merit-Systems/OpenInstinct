@@ -6,7 +6,7 @@ import {
   resolveProfileMemoryBackend,
   resolveProfileMemoryScope,
 } from "../lib/profile-memory";
-import { env } from "@/env";
+import { env } from "@shared/environment";
 
 const backend = resolveProfileMemoryBackend(env);
 const provider = preserveProfileMemoryCancellation(

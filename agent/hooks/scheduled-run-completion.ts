@@ -1,13 +1,13 @@
 import { defineHook } from "eve/hooks";
-import { scheduledRunIdentity } from "@/agent/lib/schedules/identity";
-import { scheduledRunOutcomeSchema } from "@/agent/lib/schedules/outcome";
+import { scheduledRunIdentity } from "@agent/lib/schedules/identity";
+import { scheduledRunOutcomeSchema } from "@shared/schedules/outcome";
 import {
   completeScheduledAgentRun,
   deferScheduledAgentRunCompletion,
   markScheduledAgentRunStarted,
   releaseScheduledAgentRun,
   waitForScheduledAgentRunInput,
-} from "@/db/services/scheduled-agent-jobs";
+} from "@db/services/scheduled-agent-jobs";
 
 const workerRuntimeLimitMs = 6 * 60 * 60_000;
 

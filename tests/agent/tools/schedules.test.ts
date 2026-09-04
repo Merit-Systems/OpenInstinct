@@ -11,7 +11,7 @@ import type {
   getScheduledAgentRunInputForReport,
   listScheduledAgentJobs,
   updateScheduledAgentJob,
-} from "@/db/services/scheduled-agent-jobs";
+} from "@db/services/scheduled-agent-jobs";
 
 const services = vi.hoisted(() => ({
   create: vi.fn<typeof createScheduledAgentJob>(),
@@ -21,7 +21,7 @@ const services = vi.hoisted(() => ({
   update: vi.fn<typeof updateScheduledAgentJob>(),
 }));
 
-vi.mock("@/db/services/scheduled-agent-jobs", () => ({
+vi.mock("@db/services/scheduled-agent-jobs", () => ({
   createScheduledAgentJob: services.create,
   getScheduledAgentRunInput: services.getInput,
   getScheduledAgentRunInputForReport: services.getInputForReport,
@@ -29,12 +29,12 @@ vi.mock("@/db/services/scheduled-agent-jobs", () => ({
   updateScheduledAgentJob: services.update,
 }));
 
-import messaging from "@/agent/tools/messaging";
+import messaging from "@agent/tools/messaging";
 import schedules, {
   createSchedule,
   listSchedules,
   updateSchedule,
-} from "@/agent/tools/schedules";
+} from "@agent/tools/schedules";
 
 describe("schedule tools", () => {
   beforeEach(() => {

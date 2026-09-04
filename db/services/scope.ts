@@ -1,5 +1,5 @@
-import type { AccessScope } from "@/lib/access-scope";
-import { db, workspaceMemberships, workspaces } from "@/db";
+import type { AccessScope } from "@shared/identity/access-scope";
+import { db, workspaceMemberships, workspaces } from "@db";
 
 export async function ensureScope(scope: AccessScope) {
   const createdAt = new Date();

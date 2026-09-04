@@ -4,7 +4,7 @@ import {
   agentEvalTags,
   assertPlainTextDelivery,
   requireDeliveredText,
-} from "@/evals/agent/shared";
+} from "@evals/agent/shared";
 
 const cases = [
   {
@@ -47,7 +47,7 @@ export default cases.map((testCase) =>
         status: "completed",
         count: 1,
       });
-      turn.notEvent("subagent.called", { data: { name: "worker" } });
+      turn.notEvent("subagent.called", { data: { name: "browser-agent" } });
       const text = await requireDeliveredText(t, turn);
       assertPlainTextDelivery(t, text);
     },

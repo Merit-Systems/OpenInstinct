@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 
 const rootTools = "agent/tools";
 const rootMemory = "agent/memory/profile.ts";
-const workerRoot = "agent/subagents/worker";
+const workerRoot = "agent/subagents/browser-agent";
 const workerTools = `${workerRoot}/tools`;
 
 function toolFiles(directory: string, root = directory): string[] {
@@ -165,14 +165,18 @@ describe("root and worker capability boundaries", () => {
     expect(existsSync(`${workerRoot}/lib/browser-runtime.ts`)).toBe(false);
     expect(existsSync(`${workerRoot}/lib/owned-browser.ts`)).toBe(true);
 
-    expect(readFileSync("src/lib/kernel.ts", "utf8")).toContain("new Kernel(");
+    expect(readFileSync(`${workerRoot}/lib/kernel.ts`, "utf8")).toContain(
+      "new Kernel("
+    );
     for (const tool of [
       "capture_browser_image",
       "computer_action",
       "manage_browsers",
     ]) {
       const source = readFileSync(`${workerTools}/${tool}.ts`, "utf8");
-      expect(source).toContain('from "@/lib/kernel"');
+      expect(source).toContain(
+        'from "@agent/subagents/browser-agent/lib/kernel"'
+      );
       expect(source).not.toContain("new Kernel(");
     }
     expect(readFileSync(`${workerTools}/fill_from_vault.ts`, "utf8")).toContain(
@@ -188,7 +192,7 @@ describe("root and worker capability boundaries", () => {
     const workerConfig = readFileSync(`${workerRoot}/agent.ts`, "utf8");
 
     expect(workerCoordination).toContain(
-      "Every initial or resumed `worker` call must set `outputSchema`"
+      "Every initial or resumed `browser-agent` call must set `outputSchema`"
     );
     expect(workerCoordination).toContain(
       '"required": ["status", "message", "images"]'

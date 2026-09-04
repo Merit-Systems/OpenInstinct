@@ -4,7 +4,7 @@ import {
   browserActivityKindForTool,
   type BrowserActivityKind,
   sumBrowserActivityDurations,
-} from "@/lib/browser-activity";
+} from "@web/browser/activity";
 
 const toolActivity = new Map<string, string>([
   ["browser_act", "Acting in the browser"],

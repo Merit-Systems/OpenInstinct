@@ -22,11 +22,11 @@ vi.mock("eve/context", () => ({
   },
 }));
 
-import backgroundReplyTargetHook from "@/agent/hooks/background-reply-target";
+import backgroundReplyTargetHook from "@agent/hooks/background-reply-target";
 import {
   registerBackgroundReplyTarget,
   resolveLinqReplyTarget,
-} from "@/agent/lib/reply-targets";
+} from "@agent/lib/reply-targets";
 
 beforeEach(() => {
   for (const reset of stateControls.reset) reset();
@@ -75,7 +75,7 @@ describe("reply targets", () => {
           backgroundTask: { status: "working", taskId: "task-from-hook" },
           callId: "call-1",
           output: "Delegated",
-          subagentName: "worker",
+          subagentName: "browser-agent",
         },
         meta: { at: "2026-09-03T12:00:00.000Z", id: "event-1" },
         type: "subagent.completed",

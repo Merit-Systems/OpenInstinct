@@ -3,8 +3,8 @@ import { z } from "zod";
 import type {
   createScheduledAgentJob,
   listScheduledAgentJobs,
-} from "@/db/services/scheduled-agent-jobs";
-import { scopeFromPrincipal } from "@/agent/lib/principal-scope";
+} from "@db/services/scheduled-agent-jobs";
+import { scopeFromPrincipal } from "@agent/lib/principal-scope";
 
 export function scheduleOwner(context: ToolContext) {
   const auth = context.session.auth.current;

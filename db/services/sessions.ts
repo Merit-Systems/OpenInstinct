@@ -1,6 +1,6 @@
 import { and, eq } from "drizzle-orm";
-import type { AccessScope } from "@/lib/access-scope";
-import { agentSessions, db } from "@/db";
+import type { AccessScope } from "@shared/identity/access-scope";
+import { agentSessions, db } from "@db";
 
 export async function claimSession(scope: AccessScope, sessionId: string) {
   await db

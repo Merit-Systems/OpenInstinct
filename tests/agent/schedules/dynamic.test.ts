@@ -10,7 +10,7 @@ import type {
   releaseScheduledAgentRun,
   releaseScheduledReport,
   setScheduledRunSession,
-} from "@/db/services/scheduled-agent-jobs";
+} from "@db/services/scheduled-agent-jobs";
 
 const services = vi.hoisted(() => ({
   claimReports: vi.fn<typeof claimScheduledReport>(),
@@ -26,7 +26,7 @@ const requests = vi.hoisted(() => ({
   report: vi.fn<(runId: string) => Promise<void>>(),
 }));
 
-vi.mock("@/db/services/scheduled-agent-jobs", () => ({
+vi.mock("@db/services/scheduled-agent-jobs", () => ({
   claimReadyScheduledAgentRuns: services.claimRuns,
   claimScheduledReport: services.claimReports,
   finalizeScheduledReport: services.finalizeReport,
@@ -36,16 +36,16 @@ vi.mock("@/db/services/scheduled-agent-jobs", () => ({
   releaseScheduledReport: services.releaseReport,
   setScheduledRunSession: services.setSession,
 }));
-vi.mock("@/agent/channels/linq", () => ({ default: { channel: "linq" } }));
-vi.mock("@/agent/lib/schedules/request", () => ({
+vi.mock("@agent/channels/linq", () => ({ default: { channel: "linq" } }));
+vi.mock("@agent/lib/schedules/request", () => ({
   postScheduledReport: requests.report,
 }));
-vi.mock("@/agent/channels/scheduled-run", () => ({
+vi.mock("@agent/channels/scheduled-run", () => ({
   default: { channel: "scheduled-run" },
 }));
 
-import dynamicSchedule from "@/agent/schedules/dynamic";
-import { dispatchScheduledReport } from "@/agent/lib/schedules/report";
+import dynamicSchedule from "@agent/schedules/dynamic";
+import { dispatchScheduledReport } from "@agent/lib/schedules/report";
 
 describe("dynamic schedule dispatch", () => {
   beforeEach(() => {

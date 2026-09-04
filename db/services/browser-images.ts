@@ -1,14 +1,14 @@
 import { createHash, randomUUID } from "node:crypto";
 import { and, eq } from "drizzle-orm";
-import type { AccessScope } from "@/lib/access-scope";
+import type { AccessScope } from "@shared/identity/access-scope";
 import {
   browserImageArtifactReferenceSchema,
   browserImageArtifactUrl,
   browserImageMediaTypeSchema,
   browserImageSourceKindSchema,
   type BrowserImageArtifactReference,
-} from "@/lib/browser-artifact";
-import { browserImageArtifacts, db } from "@/db";
+} from "@shared/browser/artifact";
+import { browserImageArtifacts, db } from "@db";
 
 type ArtifactRow = typeof browserImageArtifacts.$inferSelect;
 

@@ -1,4 +1,4 @@
-import { isBrowserImageArtifactUrl } from "@/lib/browser-artifact";
+import { isBrowserImageArtifactUrl } from "@shared/browser/artifact";
 
 const imageArtifactMarkdownPattern =
   /!\[((?:\\.|[^\]])*)\]\((\/artifacts\/([^\s)]+))\)/giu;

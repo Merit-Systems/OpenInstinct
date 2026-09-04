@@ -1,13 +1,13 @@
 import { eq } from "drizzle-orm";
-import type { AccessScope } from "@/lib/access-scope";
+import type { AccessScope } from "@shared/identity/access-scope";
 import {
   emptyUserProfile,
   parseUserProfile,
   userProfilePatchSchema,
   type UserProfile,
   type UserProfilePatch,
-} from "@/lib/user-profile";
-import { db, userProfiles } from "@/db";
+} from "@shared/user-profile/schema";
+import { db, userProfiles } from "@db";
 import { ensureScope } from "./scope";
 
 const selection = {

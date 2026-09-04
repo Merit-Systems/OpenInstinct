@@ -1,19 +1,20 @@
 import type { DynamicResolveContext } from "eve/tools";
 import { describe, expect, it } from "vitest";
-import personalInfoMemory from "@/agent/memory/personal_info";
-import worker from "@/agent/subagents/worker/agent";
-import calendar from "@/agent/tools/calendar";
-import contacts from "@/agent/tools/contacts";
-import gmail from "@/agent/tools/gmail";
-import messaging from "@/agent/tools/messaging";
-import schedules from "@/agent/tools/schedules";
-import vault from "@/agent/tools/vault";
+import personalInfoMemory from "@agent/memory/personal_info";
+import browserAgent from "@agent/subagents/browser-agent/agent";
+import calendar from "@agent/tools/calendar";
+import contacts from "@agent/tools/contacts";
+import gmail from "@agent/tools/gmail";
+import messaging from "@agent/tools/messaging";
+import schedules from "@agent/tools/schedules";
+import vault from "@agent/tools/vault";
 
 const groupedTools = [calendar, contacts, gmail, messaging, schedules, vault];
 
 describe("authored mode capability matrix", () => {
   it("gives interactive turns the authored coordinator capabilities", async () => {
     expect(await authoredCapabilities("linq-message")).toEqual([
+      "browser-agent",
       "calendar-check-availability",
       "calendar-create-event",
       "calendar-list-events",
@@ -31,18 +32,17 @@ describe("authored mode capability matrix", () => {
       "schedules-list",
       "schedules-update",
       "send_message",
-      "worker",
     ]);
   });
 
   it("gives scheduled workers only authored read and execution capabilities", async () => {
     expect(await authoredCapabilities("scheduled-worker")).toEqual([
+      "browser-agent",
       "calendar-check-availability",
       "calendar-list-events",
       "contacts-search",
       "gmail-read-thread",
       "gmail-search",
-      "worker",
     ]);
   });
 
@@ -86,9 +86,9 @@ async function authoredCapabilities(authenticator: string) {
     );
   }
 
-  const resolveWorker = worker.events["turn.started"];
-  if (resolveWorker && (await resolveWorker({}, context))) {
-    capabilities.push("worker");
+  const resolveBrowserAgent = browserAgent.events["turn.started"];
+  if (resolveBrowserAgent && (await resolveBrowserAgent({}, context))) {
+    capabilities.push("browser-agent");
   }
 
   return capabilities.toSorted();
