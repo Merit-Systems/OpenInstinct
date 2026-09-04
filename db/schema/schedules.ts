@@ -25,6 +25,7 @@ export const scheduledAgentJobs = pgTable(
       enum: ["eve", "linq"],
     }).notNull(),
     conversationId: text("conversation_id").notNull(),
+    replyAnchorMessageId: text("reply_anchor_message_id"),
     timing: jsonb("timing").notNull(),
     missedRunPolicy: text("missed_run_policy", {
       enum: ["skip", "run_latest", "catch_up"],

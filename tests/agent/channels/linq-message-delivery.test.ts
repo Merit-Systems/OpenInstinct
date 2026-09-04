@@ -1,5 +1,8 @@
 import type { LinqChannelConfig } from "eve/channels/linq";
-import type { LinqSendOptions } from "@linqapp/chat-sdk-adapter";
+import {
+  createLinqAdapter,
+  type LinqSendOptions,
+} from "@linqapp/chat-sdk-adapter";
 import type { LinqAPIV3 } from "@linqapp/sdk";
 import type { AdapterPostableMessage } from "chat";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -26,6 +29,8 @@ type NativeMessageOptions = Parameters<
   LinqAPIV3["chats"]["messages"]["send"]
 >[2];
 
+const rawMessage = (id: string) => ({ id });
+
 const linqChannelCapture = vi.hoisted(() => ({
   // SAFETY: This mutable test capture stores only API keys from the typed SDK constructor mock.
   clientApiKeys: [] as string[],
@@ -48,9 +53,9 @@ const linqChannelCapture = vi.hoisted(() => ({
         threadId: string,
         message: AdapterPostableMessage,
         options?: LinqSendOptions
-      ) => Promise<void>
+      ) => Promise<{ id: string }>
     >()
-    .mockResolvedValue(undefined),
+    .mockResolvedValue({ id: "scheduled-message-1" }),
   resolveApiKey: vi
     .fn<() => Promise<string>>()
     .mockResolvedValue("linq-test-api-key"),
@@ -60,9 +65,9 @@ const linqChannelCapture = vi.hoisted(() => ({
         chatId: string,
         body: NativeMessageBody,
         options?: NativeMessageOptions
-      ) => Promise<void>
+      ) => Promise<{ message: { id: string } }>
     >()
-    .mockResolvedValue(undefined),
+    .mockResolvedValue({ message: { id: "native-message-1" } }),
 }));
 const scheduleDeliveryCapture = vi.hoisted(() => ({
   finalize: vi.fn<typeof finalizeScheduledReport>(),
@@ -195,6 +200,133 @@ describe("Linq message delivery", () => {
     expect(post).toHaveBeenCalledExactlyOnceWith({ raw: message });
   });
 
+  it("sends a native reply to the current inbound message", async () => {
+    const { context, post } = handlerContext();
+
+    await handleActionResult(
+      sendMessageResult({
+        kind: "message",
+        replyTo: { kind: "current" },
+        text: "Yes, that one.",
+      }),
+      context,
+      sessionContext("test", undefined, "message-to-reply-to")
+    );
+
+    expect(linqChannelCapture.postMessage).toHaveBeenCalledExactlyOnceWith(
+      "linq:dm:chat-1",
+      { raw: "Yes, that one." },
+      { replyToMessageId: "message-to-reply-to" }
+    );
+    expect(post).not.toHaveBeenCalled();
+  });
+
+  it("sends an attachment-only native reply", async () => {
+    const { context, post } = handlerContext();
+
+    await handleActionResult(
+      sendMessageResult({
+        attachments: [
+          {
+            kind: "image",
+            mimeType: "image/png",
+            name: "result.png",
+            url: "https://media.example/result.png",
+          },
+        ],
+        kind: "message",
+        replyTo: { kind: "current" },
+      }),
+      context,
+      sessionContext("test", undefined, "message-to-reply-to")
+    );
+
+    expect(linqChannelCapture.postMessage).toHaveBeenCalledExactlyOnceWith(
+      "linq:dm:chat-1",
+      {
+        attachments: [
+          {
+            mimeType: "image/png",
+            name: "result.png",
+            type: "image",
+            url: "https://media.example/result.png",
+          },
+        ],
+        raw: "",
+      },
+      { replyToMessageId: "message-to-reply-to" }
+    );
+    expect(post).not.toHaveBeenCalled();
+  });
+
+  it("passes media and a reply target through the Linq adapter", async () => {
+    const nativeFetch = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          chat_id: "chat-1",
+          message: { id: "native-message-1" },
+        }),
+        { headers: { "content-type": "application/json" }, status: 200 }
+      )
+    );
+    const adapter = createLinqAdapter({
+      apiKey: "linq-test-api-key",
+      baseURL: "https://linq.test",
+      signingSecret: "linq-test-signing-secret",
+    });
+    let body: unknown;
+
+    try {
+      await adapter.postMessage(
+        adapter.encodeThreadId({ chatId: "chat-1" }),
+        {
+          attachments: [
+            { type: "image", url: "https://media.example/result.png" },
+          ],
+          raw: "Here it is.",
+        },
+        {
+          idempotencyKey: "reply-with-media",
+          replyToMessageId: "message-to-reply-to",
+        }
+      );
+      expect(nativeFetch).toHaveBeenCalledOnce();
+      const [input, init] = nativeFetch.mock.calls[0] ?? [];
+      body = await (
+        input instanceof Request ? input.clone() : new Response(init?.body)
+      ).json();
+    } finally {
+      nativeFetch.mockRestore();
+    }
+
+    expect(body).toEqual({
+      message: {
+        idempotency_key: "reply-with-media",
+        parts: [
+          { type: "text", value: "Here it is." },
+          { type: "media", url: "https://media.example/result.png" },
+        ],
+        reply_to: { message_id: "message-to-reply-to" },
+      },
+    });
+  });
+
+  it("falls back to a normal message when a reply handle is unavailable", async () => {
+    const { context, post } = handlerContext(null);
+
+    await handleActionResult(
+      sendMessageResult({
+        kind: "message",
+        replyTo: { kind: "current" },
+        text: "Yes, that one.",
+      }),
+      context,
+      sessionContext("test", undefined, null)
+    );
+
+    expect(post).toHaveBeenCalledExactlyOnceWith({ raw: "Yes, that one." });
+  });
+
   it("finalizes a scheduled result after send_message posts it", async () => {
     const { context } = handlerContext();
 
@@ -212,6 +344,102 @@ describe("Linq message delivery", () => {
     expect(linqChannelCapture.postMessage).toHaveBeenCalledExactlyOnceWith(
       "linq:dm:chat-1",
       { raw: "The price fell." },
+      {
+        idempotencyKey:
+          "scheduled-report:00000000-0000-4000-8000-000000000002:1",
+      }
+    );
+  });
+
+  it("replies scheduled results to their initiating message", async () => {
+    const { context } = handlerContext();
+
+    await handleActionResult(
+      sendMessageResult({
+        kind: "message",
+        replyTo: {
+          id: "00000000-0000-4000-8000-000000000003",
+          kind: "automation",
+        },
+        text: "Time to renew it.",
+      }),
+      context,
+      sessionContext("scheduled-result", "original-message")
+    );
+
+    expect(linqChannelCapture.postMessage).toHaveBeenCalledExactlyOnceWith(
+      "linq:dm:chat-1",
+      { raw: "Time to renew it." },
+      {
+        idempotencyKey:
+          "scheduled-report:00000000-0000-4000-8000-000000000002:1",
+        replyToMessageId: "original-message",
+      }
+    );
+  });
+
+  it("keeps scheduled native link replies idempotent", async () => {
+    const { context } = handlerContext();
+
+    await handleActionResult(
+      sendMessageResult({
+        kind: "link",
+        replyTo: {
+          id: "00000000-0000-4000-8000-000000000003",
+          kind: "automation",
+        },
+        url: "https://example.com/renew",
+      }),
+      context,
+      sessionContext("scheduled-result", "original-message")
+    );
+
+    expect(linqChannelCapture.sendNativeMessage).toHaveBeenCalledWith(
+      "chat-1",
+      {
+        message: {
+          idempotency_key:
+            "scheduled-report:00000000-0000-4000-8000-000000000002:1",
+          parts: [{ type: "link", value: "https://example.com/renew" }],
+          reply_to: { message_id: "original-message" },
+        },
+      },
+      undefined
+    );
+  });
+
+  it("falls back without changing an automation anchor when the old target is unavailable", async () => {
+    linqChannelCapture.postMessage.mockRejectedValueOnce({ status: 404 });
+    const { context } = handlerContext();
+
+    await handleActionResult(
+      sendMessageResult({
+        kind: "message",
+        replyTo: {
+          id: "00000000-0000-4000-8000-000000000003",
+          kind: "automation",
+        },
+        text: "Time to renew it.",
+      }),
+      context,
+      sessionContext("scheduled-result", "expired-message")
+    );
+
+    expect(linqChannelCapture.postMessage).toHaveBeenCalledTimes(2);
+    expect(linqChannelCapture.postMessage).toHaveBeenNthCalledWith(
+      1,
+      "linq:dm:chat-1",
+      { raw: "Time to renew it." },
+      {
+        idempotencyKey:
+          "scheduled-report:00000000-0000-4000-8000-000000000002:1",
+        replyToMessageId: "expired-message",
+      }
+    );
+    expect(linqChannelCapture.postMessage).toHaveBeenNthCalledWith(
+      2,
+      "linq:dm:chat-1",
+      { raw: "Time to renew it." },
       {
         idempotencyKey:
           "scheduled-report:00000000-0000-4000-8000-000000000002:1",
@@ -299,6 +527,41 @@ describe("Linq message delivery", () => {
     ).toBe(false);
   });
 
+  it("accepts typed reply handles for text, attachments, and native links", () => {
+    expect(
+      sendMessageOutputSchema.safeParse({
+        kind: "message",
+        replyTo: { kind: "current" },
+        text: "This one.",
+      }).success
+    ).toBe(true);
+    expect(
+      sendMessageOutputSchema.safeParse({
+        kind: "message",
+        replyTo: { id: "task-1", kind: "task" },
+        text: "This one.",
+      }).success
+    ).toBe(true);
+    expect(
+      sendMessageOutputSchema.safeParse({
+        kind: "link",
+        replyTo: {
+          id: "00000000-0000-4000-8000-000000000003",
+          kind: "automation",
+        },
+        url: "https://example.com",
+      }).success
+    ).toBe(true);
+    expect(
+      sendMessageOutputSchema.safeParse({
+        attachments: [{ kind: "image", url: "https://example.com/image.png" }],
+        kind: "message",
+        replyTo: { kind: "current" },
+        text: "This one.",
+      }).success
+    ).toBe(true);
+  });
+
   it("discriminates native links from message content", () => {
     expect(
       sendMessageOutputSchema.safeParse({
@@ -349,7 +612,7 @@ describe("Linq message delivery", () => {
   });
 
   it("posts a proactive message without a current inbound message", async () => {
-    const { context, post } = handlerContext(undefined);
+    const { context, post } = handlerContext(null);
 
     await handleActionResult(
       sendMessageResult({
@@ -389,7 +652,7 @@ describe("Linq message delivery", () => {
     });
   });
 
-  it("replaces scoped artifact markdown with native iMessage files", async () => {
+  it("threads scoped artifact files as a native reply", async () => {
     const artifactId = "0d01e667-d128-4bb7-a248-1ae21db72f4f";
     linqChannelCapture.readImage.mockResolvedValue({
       bytes: new Uint8Array([1, 2, 3]),
@@ -402,6 +665,7 @@ describe("Linq message delivery", () => {
     await handleActionResult(
       sendMessageResult({
         kind: "message",
+        replyTo: { kind: "current" },
         text: `Here it is.\n\n![Product](/artifacts/${artifactId})`,
       }),
       context,
@@ -416,19 +680,24 @@ describe("Linq message delivery", () => {
       artifactId,
       { rootSessionId: "session-1", signal: undefined }
     );
-    expect(post).toHaveBeenCalledExactlyOnceWith({
-      files: [
-        {
-          data: Buffer.from([1, 2, 3]),
-          filename: "product.png",
-          mimeType: "image/png",
-        },
-      ],
-      raw: "Here it is.",
-    });
+    expect(linqChannelCapture.postMessage).toHaveBeenCalledExactlyOnceWith(
+      "linq:dm:chat-1",
+      {
+        files: [
+          {
+            data: Buffer.from([1, 2, 3]),
+            filename: "product.png",
+            mimeType: "image/png",
+          },
+        ],
+        raw: "Here it is.",
+      },
+      { replyToMessageId: "message-1" }
+    );
+    expect(post).not.toHaveBeenCalled();
   });
 
-  it("loads scheduled artifacts from the scheduled-run session", async () => {
+  it("threads scheduled artifacts from the scheduled-run session", async () => {
     const artifactId = "0d01e667-d128-4bb7-a248-1ae21db72f4f";
     linqChannelCapture.readImage.mockResolvedValue({
       bytes: new Uint8Array([1, 2, 3]),
@@ -441,10 +710,14 @@ describe("Linq message delivery", () => {
     await handleActionResult(
       sendMessageResult({
         kind: "message",
+        replyTo: {
+          id: "00000000-0000-4000-8000-000000000003",
+          kind: "automation",
+        },
         text: `Price changed.\n\n![Product](/artifacts/${artifactId})`,
       }),
       context,
-      sessionContext("scheduled-result")
+      sessionContext("scheduled-result", "original-message")
     );
 
     expect(linqChannelCapture.readImage).toHaveBeenCalledWith(
@@ -464,6 +737,7 @@ describe("Linq message delivery", () => {
       expect.objectContaining({
         idempotencyKey:
           "scheduled-report:00000000-0000-4000-8000-000000000002:1",
+        replyToMessageId: "original-message",
       })
     );
   });
@@ -624,9 +898,9 @@ function reactToMessageResult(
   };
 }
 
-function handlerContext(currentMessageId: string | undefined = "message-1") {
-  const post = vi.fn<(message: LinqTestMessage) => Promise<void>>();
-  post.mockResolvedValue();
+function handlerContext(currentMessageId: string | null = "message-1") {
+  const post = vi.fn<(message: LinqTestMessage) => Promise<{ id: string }>>();
+  post.mockResolvedValue(rawMessage("message-2"));
   const addReaction = vi
     .fn<(threadId: string, messageId: string, emoji: string) => Promise<void>>()
     .mockResolvedValue(undefined);
@@ -674,17 +948,34 @@ function handlerEventContext(value: unknown): ActionHandlerParameters[1] {
   return value as ActionHandlerParameters[1];
 }
 
-function sessionContext(authenticator = "test") {
+function sessionContext(
+  authenticator = "test",
+  replyAnchorMessageId?: string,
+  currentMessageId: string | null = "message-1"
+) {
   const attributes: Record<string, string | readonly string[]> =
     authenticator === "scheduled-result"
       ? {
+          conversationChannel: "linq",
+          conversationId: "linq:dm:chat-1",
+          scheduleId: "00000000-0000-4000-8000-000000000003",
           scheduledReportLeaseToken: "00000000-0000-4000-8000-000000000004",
           scheduledReportSequence: "1",
           scheduledRunId: "00000000-0000-4000-8000-000000000002",
           scheduledRunSessionId: "scheduled-run-session",
           workspaceId: "workspace-1",
         }
-      : { workspaceId: "workspace-1" };
+      : {
+          conversationChannel: "linq",
+          conversationId: "linq:dm:chat-1",
+          workspaceId: "workspace-1",
+        };
+  if (authenticator !== "scheduled-result" && currentMessageId) {
+    attributes.linqMessageId = currentMessageId;
+  }
+  if (replyAnchorMessageId) {
+    attributes.linqReplyAnchorMessageId = replyAnchorMessageId;
+  }
   return {
     async getSandbox() {
       throw new Error("Sandbox access is outside this focused test.");

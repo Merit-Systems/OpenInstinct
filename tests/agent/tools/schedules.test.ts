@@ -151,6 +151,7 @@ describe("schedule tools", () => {
         conversationId: "linq:dm:chat-1",
         missedRunPolicy: "run_latest",
         prompt: "Send the morning summary.",
+        replyAnchorMessageId: "message-1",
         timing: {
           frequency: "daily",
           kind: "calendar",
@@ -243,6 +244,33 @@ describe("schedule tools", () => {
       "react_to_message",
       "send_message",
     ]);
+    const reportSend =
+      reportMessaging && !("execute" in reportMessaging)
+        ? reportMessaging.send_message
+        : undefined;
+    const interactiveSend =
+      interactiveMessaging && !("execute" in interactiveMessaging)
+        ? interactiveMessaging.send_message
+        : undefined;
+    const debugSend =
+      debugMessaging && !("execute" in debugMessaging)
+        ? debugMessaging.send_message
+        : undefined;
+    if (
+      !(reportSend?.inputSchema instanceof z.ZodType) ||
+      !(interactiveSend?.inputSchema instanceof z.ZodType) ||
+      !(debugSend?.inputSchema instanceof z.ZodType)
+    ) {
+      throw new Error("Expected authored send_message schemas.");
+    }
+    const reply = {
+      kind: "message",
+      replyTo: { kind: "current" as const },
+      text: "This one.",
+    };
+    expect(interactiveSend.inputSchema.safeParse(reply).success).toBe(true);
+    expect(debugSend.inputSchema.safeParse(reply).success).toBe(true);
+    expect(reportSend.inputSchema.safeParse(reply).success).toBe(true);
   });
 
   it("owns web schedules by their Eve session", async () => {
@@ -340,6 +368,7 @@ function toolContext(
           attributes: {
             conversationChannel,
             conversationId: "linq:dm:chat-1",
+            linqMessageId: "message-1",
             linqThreadId: "linq:dm:chat-1",
             workspaceId: "workspace-1",
           },
@@ -369,6 +398,7 @@ function scheduledReportToolContext() {
           ...current,
           attributes: {
             ...current.attributes,
+            scheduleId: "00000000-0000-4000-8000-000000000001",
             scheduledReportLeaseToken: "00000000-0000-4000-8000-000000000004",
             scheduledReportSequence: "1",
             scheduledRunId: "00000000-0000-4000-8000-000000000002",
@@ -406,6 +436,7 @@ function scheduledJob(
     missedRunPolicy: "run_latest",
     nextRunAt: new Date("2026-09-02T13:00:00.000Z"),
     prompt: "Send the morning summary.",
+    replyAnchorMessageId: null,
     revision: 0,
     status: "active",
     timing: {

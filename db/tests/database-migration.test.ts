@@ -39,6 +39,7 @@ describe("database migrations", () => {
     await applyMigration(database, "0009_cold_power_man.sql");
     await applyMigration(database, "0010_rapid_cerise.sql");
     await applyMigration(database, "0011_faulty_unicorn.sql");
+    await applyMigration(database, "0012_harsh_domino.sql");
 
     const tables = await database.query<{ count: number }>(
       `SELECT count(*)::int AS count
@@ -76,6 +77,32 @@ describe("database migrations", () => {
       rows: [{ id: "contact-1" }],
     });
   }, 15_000);
+
+  it("reconciles the pre-merge reply-anchor migration", async () => {
+    const database = createDatabase();
+    await database.exec(`
+      CREATE TABLE chats (session_id text PRIMARY KEY);
+      CREATE TABLE scheduled_agent_jobs (
+        id text PRIMARY KEY,
+        reply_anchor_message_id text
+      );
+    `);
+
+    await applyMigration(database, "0012_harsh_domino.sql");
+
+    const columns = await database.query<{ columnName: string }>(`
+      SELECT column_name AS "columnName"
+      FROM information_schema.columns
+      WHERE (table_name = 'chats' AND column_name = 'channel')
+         OR (table_name = 'scheduled_agent_jobs' AND column_name = 'reply_anchor_message_id')
+      ORDER BY column_name
+    `);
+
+    expect(columns.rows).toEqual([
+      { columnName: "channel" },
+      { columnName: "reply_anchor_message_id" },
+    ]);
+  });
 
   it("preserves legacy rows while enforcing constraints for new writes", async () => {
     const database = createDatabase();

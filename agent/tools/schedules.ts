@@ -6,6 +6,7 @@ import { postScheduledRunRoute } from "@agent/lib/schedules/request";
 import {
   scheduleListSummary,
   scheduleOwner,
+  scheduleReplyAnchor,
   scheduleSummary,
 } from "@agent/lib/schedules/tools";
 import { scheduleTimingSchema } from "@shared/schedules/timing";
@@ -32,6 +33,7 @@ export const createSchedule = defineTool({
         ...owner.conversation,
         missedRunPolicy: input.missedRunPolicy,
         prompt: input.prompt,
+        replyAnchorMessageId: scheduleReplyAnchor(context),
         timing: input.timing,
       })
     );

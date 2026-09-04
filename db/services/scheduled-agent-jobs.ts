@@ -37,6 +37,7 @@ export interface CreateScheduledAgentJob {
   readonly conversationId: string;
   readonly missedRunPolicy: "catch_up" | "run_latest";
   readonly prompt: string;
+  readonly replyAnchorMessageId?: string;
   readonly timing: ScheduleTiming;
 }
 
@@ -77,6 +78,7 @@ export async function createScheduledAgentJob(
       missedRunPolicy: input.missedRunPolicy,
       nextRunAt,
       prompt: input.prompt,
+      replyAnchorMessageId: input.replyAnchorMessageId,
       status: "active",
       timing: input.timing,
       updatedAt: now,

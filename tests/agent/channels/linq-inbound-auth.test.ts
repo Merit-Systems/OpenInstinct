@@ -108,6 +108,7 @@ describe("Linq inbound authentication", () => {
     expect(result?.auth?.attributes).toMatchObject({
       conversationChannel: "linq",
       conversationId: "linq:dm:chat-1",
+      linqMessageId: "message-1",
       phoneNumber: "+15550100011",
     });
     expect(result?.auth?.attributes.workspaceId).toMatch(

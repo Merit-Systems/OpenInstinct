@@ -24,6 +24,13 @@ export function scheduleOwner(context: ToolContext) {
   };
 }
 
+export function scheduleReplyAnchor(context: ToolContext) {
+  const auth = context.session.auth.current;
+  if (auth?.attributes.conversationChannel !== "linq") return undefined;
+  const messageId = z.string().min(1).safeParse(auth.attributes.linqMessageId);
+  return messageId.success ? messageId.data : undefined;
+}
+
 export function scheduleSummary(
   job: Awaited<ReturnType<typeof createScheduledAgentJob>>
 ) {

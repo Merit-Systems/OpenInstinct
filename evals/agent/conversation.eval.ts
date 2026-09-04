@@ -1,5 +1,6 @@
 import { defineEval, type EveEvalContext } from "eve/evals";
 import { includes, satisfies } from "eve/evals/expect";
+import { sendMessageOutputSchema } from "@shared/chat/message-delivery";
 import { reactToMessageOutputSchema } from "@shared/chat/reaction";
 import {
   agentEvalTags,
@@ -146,4 +147,209 @@ const reactionEvals = [
   }),
 ];
 
-export default [...textEvals, ...reactionEvals];
+const replyEvals = [
+  defineEval({
+    description:
+      "Reconnects a delayed background result to its initiating request",
+    tags: [...agentEvalTags, "conversation", "reply", "background"],
+    async test(t) {
+      const taskId = "task_movie_search_01";
+      const turn = await t.send("Continue with the completed work.", {
+        clientContext: [
+          "Background task reporting. This turn was triggered by completed background work after unrelated conversation occurred.",
+          `[Task state]\n${JSON.stringify({
+            tasks: [
+              {
+                name: "browser-agent",
+                output:
+                  "The best nearby showing is 6:00 PM XPlus at Showcase Legacy Place, and availability was confirmed.",
+                status: "completed",
+                taskId,
+              },
+            ],
+          })}`,
+        ],
+      });
+      turn.expectOk();
+      turn.succeeded();
+      turn.calledTool("send_message", {
+        count: 1,
+        input: (input) => {
+          const parsed = sendMessageOutputSchema.safeParse(input);
+          return (
+            parsed.success &&
+            parsed.data.kind === "message" &&
+            parsed.data.replyTo?.kind === "task" &&
+            parsed.data.replyTo.id === taskId
+          );
+        },
+        status: "completed",
+      });
+      turn.notCalledTool("react_to_message");
+      turn.maxToolCalls(1);
+    },
+  }),
+  defineEval({
+    description:
+      "Reconnects an automation update to the request that created it",
+    tags: [...agentEvalTags, "conversation", "reply", "automation"],
+    async test(t) {
+      const automationId = "00000000-0000-4000-8000-000000000003";
+      const turn = await t.send("Continue with the scheduled update.", {
+        clientContext: [
+          "A background scheduled run has completed after the conversation moved on.",
+          "Original task: Remind me to renew TSA PreCheck before Thursday.",
+          `Reply handle: ${JSON.stringify({ kind: "automation", id: automationId })}. Pass this exact value as send_message.replyTo for every user-visible message about this scheduled task. Omit replyTo only when the message is genuinely unrelated to the scheduled task.`,
+          "Worker outcome: The appointment is Thursday, so the user should finish the form today.",
+        ],
+      });
+      turn.expectOk();
+      turn.succeeded();
+      turn.calledTool("send_message", {
+        count: 1,
+        input: (input) => {
+          const parsed = sendMessageOutputSchema.safeParse(input);
+          return (
+            parsed.success &&
+            parsed.data.kind === "message" &&
+            parsed.data.replyTo?.kind === "automation" &&
+            parsed.data.replyTo.id === automationId
+          );
+        },
+        status: "completed",
+      });
+      turn.notCalledTool("react_to_message");
+      turn.maxToolCalls(1);
+    },
+  }),
+  defineEval({
+    description: "Replies to the current message for an ordinary answer",
+    tags: [...agentEvalTags, "conversation", "reply", "smoke"],
+    async test(t) {
+      const turn = await t.send("What is 14 plus 9? Answer briefly.");
+      turn.expectOk();
+      turn.succeeded();
+      turn.calledTool("send_message", {
+        count: 1,
+        input: (input) => {
+          const parsed = sendMessageOutputSchema.safeParse(input);
+          return (
+            parsed.success &&
+            parsed.data.kind === "message" &&
+            parsed.data.replyTo?.kind === "current" &&
+            parsed.data.text?.includes("23") === true
+          );
+        },
+        status: "completed",
+      });
+      turn.notCalledTool("react_to_message");
+      turn.maxToolCalls(1);
+    },
+  }),
+  defineEval({
+    description:
+      "Replies to each message in an ordinary conversational exchange",
+    tags: [...agentEvalTags, "conversation", "reply", "smoke"],
+    async test(t) {
+      const question = await t.send(
+        "Ask me in a normal text whether I want you to focus on Boston or New York."
+      );
+      question.expectOk();
+      question.calledTool("send_message", {
+        count: 1,
+        input: (input) => {
+          const parsed = sendMessageOutputSchema.safeParse(input);
+          return (
+            parsed.success &&
+            parsed.data.kind === "message" &&
+            parsed.data.replyTo?.kind === "current"
+          );
+        },
+        status: "completed",
+      });
+      await requireDeliveredText(t, question);
+      const answer = await t.send(
+        "Boston. Briefly confirm that you will focus there."
+      );
+      answer.expectOk();
+      answer.succeeded();
+      answer.calledTool("send_message", {
+        count: 1,
+        input: (input) => {
+          const parsed = sendMessageOutputSchema.safeParse(input);
+          return (
+            parsed.success &&
+            parsed.data.kind === "message" &&
+            parsed.data.replyTo?.kind === "current" &&
+            /boston/iu.test(parsed.data.text ?? "")
+          );
+        },
+        status: "completed",
+      });
+      answer.notCalledTool("react_to_message");
+      answer.maxToolCalls(1);
+    },
+  }),
+  defineEval({
+    description: "Replies to the current message after a topic switch",
+    tags: [...agentEvalTags, "conversation", "reply", "smoke"],
+    async test(t) {
+      const first = await t.send("What is 2 plus 2? Keep it brief.");
+      first.expectOk();
+      await requireDeliveredText(t, first);
+
+      const second = await t.send(
+        "Separate question: what is the capital of France? Keep it brief."
+      );
+      second.expectOk();
+      second.succeeded();
+      second.calledTool("send_message", {
+        count: 1,
+        input: (input) => {
+          const parsed = sendMessageOutputSchema.safeParse(input);
+          return (
+            parsed.success &&
+            parsed.data.kind === "message" &&
+            parsed.data.replyTo?.kind === "current" &&
+            /paris/iu.test(parsed.data.text ?? "")
+          );
+        },
+        status: "completed",
+      });
+      second.notCalledTool("react_to_message");
+      second.maxToolCalls(1);
+    },
+  }),
+  defineEval({
+    description: "Keeps a genuinely standalone announcement out of a thread",
+    tags: [...agentEvalTags, "conversation", "reply", "announcement"],
+    async test(t) {
+      const turn = await t.send("Continue with the system announcement.", {
+        clientContext: [
+          "This is an internally initiated announcement turn, not a response to the trigger text or any earlier user request.",
+          "Announcement to deliver: OpenInstinct will be unavailable for scheduled maintenance tonight at 11 PM.",
+          "Send the announcement as a brief user-visible message.",
+        ],
+      });
+      turn.expectOk();
+      turn.succeeded();
+      turn.calledTool("send_message", {
+        count: 1,
+        input: (input) => {
+          const parsed = sendMessageOutputSchema.safeParse(input);
+          return (
+            parsed.success &&
+            parsed.data.kind === "message" &&
+            parsed.data.replyTo === undefined &&
+            /maintenance/iu.test(parsed.data.text ?? "")
+          );
+        },
+        status: "completed",
+      });
+      turn.notCalledTool("react_to_message");
+      turn.maxToolCalls(1);
+    },
+  }),
+];
+
+export default [...textEvals, ...replyEvals, ...reactionEvals];
