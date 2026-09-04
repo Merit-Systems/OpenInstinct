@@ -83,9 +83,10 @@ export function ActivityCard({
                 {sessions.map((session) => {
                   const status =
                     statuses.get(session.childSessionId) ?? "starting";
-                  const task = getSubagentTask(
-                    eventsBySession.get(session.childSessionId) ?? []
-                  );
+                  const task =
+                    getSubagentTask(
+                      eventsBySession.get(session.childSessionId) ?? []
+                    ) ?? session.task;
                   return (
                     <Button
                       aria-label={`${agentLabel(session.name)} task, ${status}`}
@@ -103,7 +104,7 @@ export function ActivityCard({
                           {agentLabel(session.name)}
                         </span>
                         <span className="block truncate type-caption text-muted-foreground">
-                          {task ?? "Waiting for assignment"}
+                          {task ?? "Open to load task details"}
                         </span>
                       </span>
                       <StatusIndicator status={status} />

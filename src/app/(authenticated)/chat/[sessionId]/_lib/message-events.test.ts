@@ -61,13 +61,26 @@ describe("iMessage event projection", () => {
     expect(imessageTimestamps(events).has("turn-1:assistant")).toBe(false);
   });
 
-  it("does not create a standalone bubble for a reaction tool result", () => {
+  it("projects a compact reaction for the Eve chat", () => {
     const events = [
       toolResult("react_to_message", { operation: "add", type: "heart" }),
     ];
 
-    expect(sentMessages(events).has("turn-1:assistant")).toBe(false);
+    expect(sentMessages(events).get("turn-1:assistant")).toEqual([
+      expect.objectContaining({
+        id: "turn-1:assistant:call-react_to_message",
+        parts: [expect.objectContaining({ text: "❤️" })],
+      }),
+    ]);
     expect(imessageTimestamps(events).has("turn-1:assistant")).toBe(false);
+  });
+
+  it("does not project a removed reaction as a new message", () => {
+    const events = [
+      toolResult("react_to_message", { operation: "remove", type: "heart" }),
+    ];
+
+    expect(sentMessages(events).has("turn-1:assistant")).toBe(false);
   });
 
   it("projects a native link-preview send as its URL", () => {

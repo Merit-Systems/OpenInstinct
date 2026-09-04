@@ -14,7 +14,7 @@ function completedWorkerNotification(output: {
 }) {
   return {
     data: {
-      message: `Background task task_worker (worker) is completed.\n\nResult:\n${JSON.stringify(output)}`,
+      message: `Background task task_worker (browser-agent) is completed.\n\nResult:\n${JSON.stringify(output)}`,
       sequence: 0,
       turnId: "turn_0",
     },
@@ -26,7 +26,7 @@ function completedWorkerNotification(output: {
 function terminalWorkerNotification(message: string) {
   return {
     data: {
-      message: `Background task task_worker (worker) ${message}`,
+      message: `Background task task_worker (browser-agent) ${message}`,
       sequence: 0,
       turnId: "turn_0",
     },
@@ -57,7 +57,7 @@ function completedWorkerResult(
           },
         },
         output,
-        subagentName: "worker",
+        subagentName: "browser-agent",
       },
       sequence: 0,
       status: "completed",

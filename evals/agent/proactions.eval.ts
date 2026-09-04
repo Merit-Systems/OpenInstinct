@@ -47,7 +47,7 @@ export default cases.map((testCase) =>
         },
         status: "completed",
       });
-      turn.notEvent("subagent.called", { data: { name: "worker" } });
+      turn.notEvent("subagent.called", { data: { name: "browser-agent" } });
       const text = await requireDeliveredText(t, turn);
       assertPlainTextDelivery(t, text);
     },

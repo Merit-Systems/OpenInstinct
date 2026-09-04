@@ -16,6 +16,7 @@ export const chats = pgTable(
   {
     sessionId: text("session_id").primaryKey(),
     workspaceId: text("workspace_id").notNull(),
+    channel: text("channel"),
     title: text("title").notNull(),
     createdAt: timestamp("created_at", {
       mode: "date",

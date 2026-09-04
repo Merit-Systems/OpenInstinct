@@ -5,7 +5,7 @@ import type { EveEvalResult, EveEvalRunSummary } from "eve/evals";
 import type { EvalReporter } from "eve/evals/reporters";
 import type { MessageStreamEvent } from "eve/client";
 import { z } from "zod";
-import { traceTimelineRows } from "@/agent/subagents/worker/lib/trace/timeline";
+import { traceTimelineRows } from "@/agent/subagents/browser-agent/lib/trace/timeline";
 import {
   browserBenchmarkActivity,
   browserBenchmarkActivityDurations,

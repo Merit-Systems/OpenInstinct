@@ -1,4 +1,4 @@
-import { defineHook } from "eve/hooks";
+import { defineHook, type HookContext } from "eve/hooks";
 import { saveChat } from "@/db/services/chats";
 import { ensureScope } from "@/db/services/scope";
 import { claimSession } from "@/db/services/sessions";
@@ -8,14 +8,11 @@ import { reconcileProactions } from "@/agent/lib/proactions/reconcile";
 export default defineHook({
   events: {
     async "session.started"(_event, ctx) {
+      const scope = await claimOwnedSession(ctx);
       const initiator = ctx.session.auth.initiator;
-      if (!initiator) return;
-
-      const scope = scopeFromPrincipal(initiator);
-      await ensureScope(scope);
-      await claimSession(scope, ctx.session.id);
       if (
-        initiator.principalType !== "user" ||
+        !scope ||
+        initiator?.principalType !== "user" ||
         initiator.authenticator === "scheduled-worker"
       ) {
         return;
@@ -32,12 +29,23 @@ export default defineHook({
       }
     },
     async "message.received"(_event, ctx) {
-      const initiator = ctx.session.auth.initiator;
-      if (!initiator) return;
+      const scope = await claimOwnedSession(ctx);
+      if (!scope) return;
 
-      await saveChat(scopeFromPrincipal(initiator), {
+      await saveChat(scope, {
+        channel: ctx.channel.kind,
         sessionId: ctx.session.id,
       });
     },
   },
 });
+
+async function claimOwnedSession(ctx: HookContext) {
+  const initiator = ctx.session.auth.initiator;
+  if (!initiator) return undefined;
+
+  const scope = scopeFromPrincipal(initiator);
+  await ensureScope(scope);
+  await claimSession(scope, ctx.session.id);
+  return scope;
+}

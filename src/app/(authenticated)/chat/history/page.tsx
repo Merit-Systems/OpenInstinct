@@ -5,6 +5,7 @@ import {
   formatChatUsage,
 } from "@/app/(authenticated)/chat/_lib/chat-usage";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { listChats } from "@/db/services/chats";
 import { requireRequestScope } from "@/lib/request-scope";
@@ -15,6 +16,9 @@ export default async function AllChatsPage() {
   const scope = await requireRequestScope();
   const chats = await listChats(scope);
   const totalUsage = combineChatUsage(chats.map((chat) => chat.usage));
+  const imessageSessionId = chats.find(
+    (chat) => chat.channel === "channel:linq"
+  )?.sessionId;
 
   return (
     <div className="mx-auto w-full max-w-4xl space-y-8 px-4 py-6 sm:px-6 sm:py-8">
@@ -48,8 +52,19 @@ export default async function AllChatsPage() {
               }
               variant="surface"
             >
-              <MessageSquareIcon className="size-4 shrink-0 text-muted-foreground" />
-              <span className="min-w-0 flex-1 truncate">{chat.title}</span>
+              <MessageSquareIcon
+                className={
+                  chat.sessionId === imessageSessionId
+                    ? "size-4 shrink-0 text-information"
+                    : "size-4 shrink-0 text-muted-foreground"
+                }
+              />
+              <span className="min-w-0 flex-1 truncate">
+                {chat.sessionId === imessageSessionId ? "iMessage" : chat.title}
+              </span>
+              {chat.sessionId === imessageSessionId ? (
+                <Badge variant="information">Main thread</Badge>
+              ) : null}
               <span className="shrink-0 type-label text-muted-foreground">
                 {formatChatUsage(chat.usage)}
               </span>
