@@ -40,6 +40,8 @@ describe("database migrations", () => {
     await applyMigration(database, "0010_rapid_cerise.sql");
     await applyMigration(database, "0011_faulty_unicorn.sql");
     await applyMigration(database, "0012_purple_wong.sql");
+    // 0012 repairs databases that ran its earlier revision, so it must re-apply cleanly.
+    await applyMigration(database, "0012_purple_wong.sql");
 
     const tables = await database.query<{ count: number }>(
       `SELECT count(*)::int AS count
