@@ -2,11 +2,11 @@ import { auth } from "@googleapis/gmail";
 import { connect, type EveAuthorizationOptions } from "@vercel/connect/eve";
 import type { ToolContext } from "eve/tools";
 import { z } from "zod";
-import { env } from "@/env";
+import { env } from "@shared/environment";
 import {
   googleWorkspaceSubject,
   googleWorkspaceScopes,
-} from "@/lib/google-workspace";
+} from "@shared/google-workspace/connection";
 
 export const googleWorkspaceAuthOptions = {
   connector: env.GOOGLE_CONNECTOR_UID,

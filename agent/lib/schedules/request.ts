@@ -1,8 +1,8 @@
 import { readFile } from "node:fs/promises";
 import { getVercelOidcToken } from "@vercel/oidc";
 import { z } from "zod";
-import { env } from "@/env";
-import { applicationOrigin } from "@/lib/application-origin";
+import { env } from "@shared/environment";
+import { applicationOrigin } from "@shared/environment/origin";
 
 const eveDevServerSchema = z.object({
   appRoot: z.string(),

@@ -1,9 +1,9 @@
 import { defineTool } from "eve/tools";
 import { z } from "zod";
-import { requireOwnedBrowserSession } from "@/agent/subagents/browser-agent/lib/owned-browser";
-import { requireWorkerScope } from "@/agent/subagents/browser-agent/lib/access";
-import { readVaultItem } from "@/db/services/vault";
-import { kernel } from "@/lib/kernel";
+import { requireOwnedBrowserSession } from "@agent/subagents/browser-agent/lib/owned-browser";
+import { requireWorkerScope } from "@agent/subagents/browser-agent/lib/access";
+import { readVaultItem } from "@db/services/vault";
+import { kernel } from "@agent/subagents/browser-agent/lib/kernel";
 import {
   currentKernelPageOrigin,
   fillWithKernelNativeAutofill,

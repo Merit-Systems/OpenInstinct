@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { scopeFromPrincipal } from "@/agent/lib/principal-scope";
-import { accessScopeForUser } from "@/lib/access-scope";
+import { scopeFromPrincipal } from "@agent/lib/principal-scope";
+import { accessScopeForUser } from "@shared/identity/access-scope";
 
 describe("principal scope", () => {
   it("accepts the workspace derived from the authenticated user", () => {

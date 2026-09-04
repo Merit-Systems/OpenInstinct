@@ -1,8 +1,8 @@
 import { defineAgent, defineDynamic } from "eve";
-import { scheduledRunIdentity } from "@/agent/lib/schedules/identity";
-import { isScheduledAgentRunLeaseActive } from "@/db/services/scheduled-agent-run-leases";
-import { getGatewayModel } from "@/db/services/settings";
-import { scopeFromPrincipal } from "@/agent/lib/principal-scope";
+import { scheduledRunIdentity } from "@agent/lib/schedules/identity";
+import { isScheduledAgentRunLeaseActive } from "@db/services/scheduled-agent-run-leases";
+import { getGatewayModel } from "@db/services/settings";
+import { scopeFromPrincipal } from "@agent/lib/principal-scope";
 
 export default defineAgent({
   experimental: {

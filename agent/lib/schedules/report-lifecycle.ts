@@ -2,8 +2,8 @@ import type { SessionContext } from "eve/context";
 import {
   finalizeScheduledReport,
   releaseScheduledReport,
-} from "@/db/services/scheduled-agent-jobs";
-import { scheduledReportIdentity } from "@/agent/lib/schedules/identity";
+} from "@db/services/scheduled-agent-jobs";
+import { scheduledReportIdentity } from "@agent/lib/schedules/identity";
 
 export function scheduledReportFromSession(session: SessionContext) {
   return scheduledReportIdentity(session.session.auth);

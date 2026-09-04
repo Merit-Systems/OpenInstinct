@@ -3,14 +3,14 @@ import {
   listVaultItems,
   readVaultItem,
   readVaultSecret,
-} from "@/db/services/vault";
+} from "@db/services/vault";
 import {
   parseAddressVaultPayload,
   parseContactVaultPayload,
   parseLoginVaultPayload,
   parsePaymentCardSecret,
   type VaultItemKind,
-} from "@/lib/vault";
+} from "@shared/vault/schema";
 import type { DetectedAutofillSurface } from "./protocol";
 import type { AutofillVaultAdapter } from "./service";
 

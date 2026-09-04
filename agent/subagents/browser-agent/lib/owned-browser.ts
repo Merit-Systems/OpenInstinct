@@ -1,5 +1,5 @@
-import { readBrowserSession } from "@/db/services/browsers";
-import type { AccessScope } from "@/lib/access-scope";
+import { readBrowserSession } from "@db/services/browsers";
+import type { AccessScope } from "@shared/identity/access-scope";
 
 export async function requireOwnedBrowserSession(
   scope: AccessScope,

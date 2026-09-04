@@ -6,8 +6,8 @@ import {
   type MemoryScopeContext,
 } from "eve/memory";
 import { z } from "zod";
-import type { env } from "@/env";
-import { resolveModeValue } from "@/agent/lib/mode";
+import type { env } from "@shared/environment";
+import { resolveModeValue } from "@agent/lib/mode";
 
 export function resolveProfileMemoryBackend(
   environment: Pick<

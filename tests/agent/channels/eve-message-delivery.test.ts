@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type {
   finalizeScheduledReport,
   releaseScheduledReport,
-} from "@/db/services/scheduled-agent-jobs";
+} from "@db/services/scheduled-agent-jobs";
 
 const channelCapture = vi.hoisted(() => {
   const configs: EveChannelInput[] = [];
@@ -24,13 +24,13 @@ vi.mock(import("eve/channels/eve"), async (importOriginal) => {
     },
   };
 });
-vi.mock("@/db/services/scheduled-agent-jobs", () => ({
+vi.mock("@db/services/scheduled-agent-jobs", () => ({
   finalizeScheduledReport: delivery.finalize,
   releaseScheduledReport: delivery.release,
 }));
 
 // Loads the production channel so the mocked factory captures its event configuration.
-await import("@/agent/channels/eve");
+await import("@agent/channels/eve");
 
 const events = channelCapture.configs[0]?.events;
 const handleActionResult = events?.["action.result"];

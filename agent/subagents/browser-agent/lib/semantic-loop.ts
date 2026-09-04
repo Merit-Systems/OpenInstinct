@@ -5,7 +5,7 @@ import {
   type LoopToolSpec,
 } from "@onkernel/browser-loop";
 import { defineState } from "eve/context";
-import { kernel } from "@/lib/kernel";
+import { kernel } from "@agent/subagents/browser-agent/lib/kernel";
 
 /* oxlint-disable anti-slop/no-unsafe-dictionary-type -- Browser Loop's materialized vendor tool accepts arbitrary JSON input by contract. */
 

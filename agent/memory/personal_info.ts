@@ -7,14 +7,14 @@ import {
 } from "eve/memory";
 import { defineTool } from "eve/tools";
 import { z } from "zod";
-import { scopeFromPrincipal } from "@/agent/lib/principal-scope";
-import { readUserProfile, patchUserProfile } from "@/db/services/user-profile";
-import type { AccessScope } from "@/lib/access-scope";
+import { scopeFromPrincipal } from "@agent/lib/principal-scope";
+import { readUserProfile, patchUserProfile } from "@db/services/user-profile";
+import type { AccessScope } from "@shared/identity/access-scope";
 import {
   hasUserProfileValues,
   userProfilePatchSchema,
   userProfileSchema,
-} from "@/lib/user-profile";
+} from "@shared/user-profile/schema";
 import { resolveModeValue } from "../lib/mode";
 
 function resolvePersonalInfoAccessScope(

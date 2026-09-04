@@ -8,7 +8,7 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "@/components/ui/table";
+} from "@web/components/ui/table";
 import type { BrowserBenchmarkLiveStatus } from "../../../live-status-schema";
 import { averageBenchmarkImprovement } from "../../lib/benchmark-comparison";
 import { useRuns } from "../../lib/use-runs";

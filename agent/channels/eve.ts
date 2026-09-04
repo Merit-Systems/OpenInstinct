@@ -5,15 +5,18 @@ import {
   UnauthenticatedError,
 } from "eve/channels/auth";
 import { z } from "zod";
-import { isSessionOwned } from "@/db/services/sessions";
-import { accessScopeForUser, type AccessScope } from "@/lib/access-scope";
-import { getAuthSession } from "@/auth/session";
-import { sendMessageToolResultSchema } from "@/agent/lib/send-message";
+import { isSessionOwned } from "@db/services/sessions";
+import {
+  accessScopeForUser,
+  type AccessScope,
+} from "@shared/identity/access-scope";
+import { getAuthSession } from "@db/services/auth/session";
+import { sendMessageToolResultSchema } from "@shared/chat/message-delivery";
 import {
   finalizeScheduledReportDelivery,
   releaseScheduledReportDelivery,
   scheduledReportFromSession,
-} from "@/agent/lib/schedules/report-lifecycle";
+} from "@agent/lib/schedules/report-lifecycle";
 
 const authenticateLocalDev = localDev();
 

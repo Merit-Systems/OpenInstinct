@@ -1,6 +1,6 @@
 import { drizzle } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
-import { env } from "@/env";
+import { env } from "@shared/environment";
 import * as schema from "./schema";
 
 export * from "./schema";

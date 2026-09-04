@@ -3,7 +3,7 @@ import { PGlite } from "@electric-sql/pglite";
 import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import * as Database from "@/db";
+import * as Database from "@db";
 import * as schema from "../schema";
 import {
   browserTraceDomains as browserTraceDomainsTable,
@@ -47,15 +47,15 @@ describe("database services", () => {
       scope,
       vault,
     ] = await Promise.all([
-      import("@/db/services/browser-images"),
-      import("@/db/services/browsers"),
-      import("@/db/services/browser-traces"),
-      import("@/db/services/chats"),
-      import("@/db/services/secrets"),
-      import("@/db/services/sessions"),
-      import("@/db/services/settings"),
-      import("@/db/services/scope"),
-      import("@/db/services/vault"),
+      import("@db/services/browser-images"),
+      import("@db/services/browsers"),
+      import("@db/services/browser-traces"),
+      import("@db/services/chats"),
+      import("@db/services/secrets"),
+      import("@db/services/sessions"),
+      import("@db/services/settings"),
+      import("@db/services/scope"),
+      import("@db/services/vault"),
     ]);
     const alice = { userId: "alice", workspaceId: "workspace:alice" };
     const bob = { userId: "bob", workspaceId: "workspace:bob" };
@@ -215,7 +215,7 @@ describe("database services", () => {
       false
     );
 
-    const { serializeLoginVaultPayload } = await import("@/lib/vault");
+    const { serializeLoginVaultPayload } = await import("@shared/vault/schema");
     await browserTraces.beginBrowserTrace(alice, {
       sessionId: "worker-alice",
       startedAt: "2026-08-31T00:00:00.000Z",

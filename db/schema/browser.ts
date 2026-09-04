@@ -11,7 +11,7 @@ import {
   uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
-import { browserImageSourceKinds } from "@/lib/browser-artifact";
+import { browserImageSourceKinds } from "@shared/browser/artifact";
 import { workspaceMemberships } from "./workspaces";
 
 export const browserSessions = pgTable(

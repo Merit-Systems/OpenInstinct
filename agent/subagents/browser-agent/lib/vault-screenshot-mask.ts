@@ -1,4 +1,4 @@
-import { kernel } from "@/lib/kernel";
+import { kernel } from "@agent/subagents/browser-agent/lib/kernel";
 
 export async function withVaultScreenshotMask<T>(
   sessionId: string,

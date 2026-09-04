@@ -1,9 +1,9 @@
 import type { LinqChannelConfig } from "eve/channels/linq";
 import { Message } from "chat";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type * as EnvModule from "@/env";
+import type * as EnvModule from "@shared/environment";
 // oxlint-disable-next-line import/no-unassigned-import -- Loads the production module so the mocked channel factory can capture its configuration.
-import "@/agent/channels/linq";
+import "@agent/channels/linq";
 
 interface AuthUserRow {
   readonly id: string;
@@ -16,7 +16,7 @@ const capture = vi.hoisted(() => ({
   findOne: vi.fn<() => Promise<AuthUserRow | null>>(),
 }));
 
-vi.mock("@/env", async (importOriginal) => {
+vi.mock("@shared/environment", async (importOriginal) => {
   const original = await importOriginal<typeof EnvModule>();
   return {
     ...original,
@@ -36,7 +36,7 @@ vi.mock(import("eve/channels/linq"), async (importOriginal) => {
     },
   };
 });
-vi.mock("@/auth", () => ({
+vi.mock("@db/services/auth", () => ({
   getAuth: async () => ({
     $context: Promise.resolve({ adapter: { findOne: capture.findOne } }),
   }),

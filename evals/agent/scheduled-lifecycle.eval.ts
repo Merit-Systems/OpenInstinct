@@ -1,8 +1,8 @@
 import { defineEval } from "eve/evals";
 import { equals, satisfies } from "eve/evals/expect";
-import { sendMessageOutputSchema } from "@/agent/lib/send-message";
-import { agentEvalTags } from "@/evals/agent/shared";
-import { accessScopeForUser } from "@/lib/access-scope";
+import { sendMessageOutputSchema } from "@shared/chat/message-delivery";
+import { agentEvalTags } from "@evals/agent/shared";
+import { accessScopeForUser } from "@shared/identity/access-scope";
 
 const cases = [
   {
@@ -27,7 +27,7 @@ export default defineEval({
     initial.succeeded();
     let mainEventIndex = initial.events.length;
     const { createScheduledAgentJob, listScheduledAgentJobs } =
-      await import("@/db/services/scheduled-agent-jobs");
+      await import("@db/services/scheduled-agent-jobs");
     const scope = accessScopeForUser("better-auth:browser-benchmark");
     const conversation = {
       conversationChannel: "eve" as const,

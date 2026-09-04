@@ -4,7 +4,7 @@ export default {
   semi: true,
   singleQuote: false,
   sortPackageJson: false,
-  sortTailwindcss: { stylesheet: "./src/app/globals.css" },
+  sortTailwindcss: { stylesheet: "./app/globals.css" },
   tabWidth: 2,
   trailingComma: "es5",
   overrides: [

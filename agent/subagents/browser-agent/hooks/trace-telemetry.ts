@@ -4,13 +4,13 @@ import {
   beginBrowserTrace,
   completeBrowserTrace,
   recordBrowserTraceEvents,
-} from "@/db/services/browser-traces";
-import { traceTimelineRows } from "@/agent/subagents/browser-agent/lib/trace/timeline";
-import { listWorkerBrowserSessions } from "@/db/services/browsers";
-import type { AccessScope } from "@/lib/access-scope";
-import { scopeFromPrincipal } from "@/agent/lib/principal-scope";
-import { taskCompletionOutputSchema } from "@/lib/worker-completion";
-import { harvestBrowserTraceDomains } from "@/agent/subagents/browser-agent/lib/trace/domains";
+} from "@db/services/browser-traces";
+import { traceTimelineRows } from "@agent/subagents/browser-agent/lib/trace/timeline";
+import { listWorkerBrowserSessions } from "@db/services/browsers";
+import type { AccessScope } from "@shared/identity/access-scope";
+import { scopeFromPrincipal } from "@agent/lib/principal-scope";
+import { taskCompletionOutputSchema } from "@agent/subagents/browser-agent/lib/completion";
+import { harvestBrowserTraceDomains } from "@agent/subagents/browser-agent/lib/trace/domains";
 
 function traceScope(ctx: HookContext) {
   const initiator = ctx.session.auth.initiator;

@@ -3,7 +3,7 @@ import {
   agentEvalTags,
   assertPlainTextDelivery,
   requireDeliveredText,
-} from "@/evals/agent/shared";
+} from "@evals/agent/shared";
 
 export default defineEval({
   description: "Delegates browser work and cancels it through task steering",

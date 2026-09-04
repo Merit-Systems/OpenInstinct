@@ -1,7 +1,10 @@
 import type { ConnectionPrincipal } from "eve/connections";
 import type { SessionAuthContext } from "eve/context";
 import { z } from "zod";
-import { accessScopeForUser, type AccessScope } from "@/lib/access-scope";
+import {
+  accessScopeForUser,
+  type AccessScope,
+} from "@shared/identity/access-scope";
 
 const principalScopeSchema = z.object({
   attributes: z.object({

@@ -1,8 +1,8 @@
 import { defineHook, type HookContext } from "eve/hooks";
-import { saveChat } from "@/db/services/chats";
-import { ensureScope } from "@/db/services/scope";
-import { claimSession } from "@/db/services/sessions";
-import { scopeFromPrincipal } from "@/agent/lib/principal-scope";
+import { saveChat } from "@db/services/chats";
+import { ensureScope } from "@db/services/scope";
+import { claimSession } from "@db/services/sessions";
+import { scopeFromPrincipal } from "@agent/lib/principal-scope";
 
 export default defineHook({
   events: {

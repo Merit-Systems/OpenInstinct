@@ -165,14 +165,18 @@ describe("root and worker capability boundaries", () => {
     expect(existsSync(`${workerRoot}/lib/browser-runtime.ts`)).toBe(false);
     expect(existsSync(`${workerRoot}/lib/owned-browser.ts`)).toBe(true);
 
-    expect(readFileSync("src/lib/kernel.ts", "utf8")).toContain("new Kernel(");
+    expect(readFileSync(`${workerRoot}/lib/kernel.ts`, "utf8")).toContain(
+      "new Kernel("
+    );
     for (const tool of [
       "capture_browser_image",
       "computer_action",
       "manage_browsers",
     ]) {
       const source = readFileSync(`${workerTools}/${tool}.ts`, "utf8");
-      expect(source).toContain('from "@/lib/kernel"');
+      expect(source).toContain(
+        'from "@agent/subagents/browser-agent/lib/kernel"'
+      );
       expect(source).not.toContain("new Kernel(");
     }
     expect(readFileSync(`${workerTools}/fill_from_vault.ts`, "utf8")).toContain(

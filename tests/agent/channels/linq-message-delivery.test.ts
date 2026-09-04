@@ -4,15 +4,15 @@ import type { LinqAPIV3 } from "@linqapp/sdk";
 import type { AdapterPostableMessage } from "chat";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type * as Blob from "@vercel/blob";
-import type * as EnvModule from "@/env";
-import { sendMessageOutputSchema } from "@/agent/lib/send-message";
-import type { AccessScope } from "@/lib/access-scope";
+import type * as EnvModule from "@shared/environment";
+import { sendMessageOutputSchema } from "@shared/chat/message-delivery";
+import type { AccessScope } from "@shared/identity/access-scope";
 import type {
   finalizeScheduledReport,
   releaseScheduledReport,
-} from "@/db/services/scheduled-agent-jobs";
+} from "@db/services/scheduled-agent-jobs";
 // oxlint-disable-next-line import/no-unassigned-import -- Loads the production module so the mocked channel factory can capture its configuration.
-import "@/agent/channels/linq";
+import "@agent/channels/linq";
 
 interface BrowserImage {
   bytes: Uint8Array;
@@ -68,11 +68,11 @@ const scheduleDeliveryCapture = vi.hoisted(() => ({
   finalize: vi.fn<typeof finalizeScheduledReport>(),
   release: vi.fn<typeof releaseScheduledReport>(),
 }));
-vi.mock("@/db/services/scheduled-agent-jobs", () => ({
+vi.mock("@db/services/scheduled-agent-jobs", () => ({
   finalizeScheduledReport: scheduleDeliveryCapture.finalize,
   releaseScheduledReport: scheduleDeliveryCapture.release,
 }));
-vi.mock("@/env", async (importOriginal) => {
+vi.mock("@shared/environment", async (importOriginal) => {
   const original = await importOriginal<typeof EnvModule>();
   return {
     ...original,
@@ -105,7 +105,7 @@ vi.mock(import("eve/channels/linq"), async (importOriginal) => {
     },
   };
 });
-vi.mock("@/db/services/browser-images", () => ({
+vi.mock("@db/services/browser-images", () => ({
   async readReadyBrowserImageArtifact(
     scope: AccessScope,
     id: string,

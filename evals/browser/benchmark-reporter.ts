@@ -5,19 +5,22 @@ import type { EveEvalResult, EveEvalRunSummary } from "eve/evals";
 import type { EvalReporter } from "eve/evals/reporters";
 import type { MessageStreamEvent } from "eve/client";
 import { z } from "zod";
-import { traceTimelineRows } from "@/agent/subagents/browser-agent/lib/trace/timeline";
+import { traceTimelineRows } from "@agent/subagents/browser-agent/lib/trace/timeline";
 import {
   browserBenchmarkActivity,
   browserBenchmarkActivityDurations,
   browserBenchmarkLiveViewUrl,
-} from "@/evals/browser/benchmark-activity";
-import { browserBenchmarkEnv } from "@/evals/browser/env";
-import { measureWorkerTask, terminalWorkerMessage } from "@/lib/worker-events";
-import type { BrowserBenchmark } from "@/evals/browser/benchmark-schema";
+} from "@evals/browser/benchmark-activity";
+import { browserBenchmarkEnv } from "@evals/browser/env";
+import {
+  measureWorkerTask,
+  terminalWorkerMessage,
+} from "@evals/browser/worker-events";
+import type { BrowserBenchmark } from "@evals/browser/benchmark-schema";
 import {
   type BrowserBenchmarkLiveStatus,
   updateBrowserBenchmarkLiveStatus,
-} from "@/evals/browser/live-status";
+} from "@evals/browser/live-status";
 
 const tableWidths = [34, 8, 10, 12, 64] as const;
 const taskNames = new Map<string, string>();

@@ -1,7 +1,7 @@
 import { defineTool } from "eve/tools";
 import { z } from "zod";
-import { requireWorkerScope } from "@/agent/subagents/browser-agent/lib/access";
-import { readVaultItems } from "@/db/services/vault";
+import { requireWorkerScope } from "@agent/subagents/browser-agent/lib/access";
+import { readVaultItems } from "@db/services/vault";
 
 export default defineTool({
   description:

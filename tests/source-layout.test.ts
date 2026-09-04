@@ -1,44 +1,6 @@
-import { readdirSync, statSync } from "node:fs";
+import { existsSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-
-const allowedSrcDirectories = [
-  "app",
-  "auth",
-  "components",
-  "hooks",
-  "lib",
-  "trpc",
-];
-
-const expectedSrcFiles = ["env.ts", "proxy.ts"];
-
-const disallowedLibDirectories = [
-  "browser",
-  "browser-images",
-  "google-workspace",
-  "manager",
-  "model-catalog",
-  "task-history",
-];
-
-const expectedLibFiles = [
-  "access-scope.ts",
-  "application-origin.ts",
-  "browser-activity.ts",
-  "browser-artifact.ts",
-  "chat.ts",
-  "google-workspace.ts",
-  "installation-secrets.ts",
-  "kernel.ts",
-  "request-scope.ts",
-  "same-origin.ts",
-  "user-profile.ts",
-  "utils.ts",
-  "vault.ts",
-  "worker-completion.ts",
-  "worker-events.ts",
-];
 
 function directories(directory: string) {
   return readdirSync(directory)
@@ -53,17 +15,41 @@ function files(directory: string) {
 }
 
 describe("source layout", () => {
-  it("keeps src limited to application layers", () => {
-    expect(directories("src")).toEqual(allowedSrcDirectories);
-    expect(files("src")).toEqual(expectedSrcFiles);
+  it("keeps the Eve agent and Next route tree at the repository root", () => {
+    expect(existsSync("agent/agent.ts")).toBe(true);
+    expect(existsSync("agent/instructions.md")).toBe(true);
+    expect(existsSync("app/layout.tsx")).toBe(true);
+    expect(existsSync("app/(authenticated)/(workspace)/page.tsx")).toBe(true);
+    expect(existsSync("app/(authenticated)/chat/(new)/page.tsx")).toBe(true);
+    expect(existsSync("proxy.ts")).toBe(true);
+    expect(existsSync("src")).toBe(false);
   });
 
-  it("keeps lib limited to shared infrastructure and contracts", () => {
-    const libDirectories = directories("src/lib");
-
-    for (const directory of disallowedLibDirectories) {
-      expect(libDirectories).not.toContain(directory);
-    }
-    expect(files("src/lib")).toEqual(expectedLibFiles);
+  it("keeps browser support and cross-boundary contracts explicitly owned", () => {
+    expect(directories("web")).toEqual([
+      "auth",
+      "browser",
+      "components",
+      "hooks",
+      "trpc",
+    ]);
+    expect(files("web")).toEqual([]);
+    expect(directories("shared")).toEqual([
+      "browser",
+      "chat",
+      "environment",
+      "google-workspace",
+      "identity",
+      "schedules",
+      "user-profile",
+      "vault",
+    ]);
+    expect(files("shared")).toEqual([]);
+    expect(existsSync("shared/environment/env.ts")).toBe(true);
+    expect(existsSync("agent/subagents/browser-agent/lib/kernel.ts")).toBe(
+      true
+    );
+    expect(existsSync("db/services/installation-secrets.ts")).toBe(true);
+    expect(existsSync("evals/browser/worker-events.ts")).toBe(true);
   });
 });

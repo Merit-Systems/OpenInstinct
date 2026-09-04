@@ -1,12 +1,12 @@
 import { and, asc, desc, eq, sql } from "drizzle-orm";
 import { z } from "zod";
-import type { AccessScope } from "@/lib/access-scope";
+import type { AccessScope } from "@shared/identity/access-scope";
 import {
   browserTraceDomains,
   browserTraceEvents,
   browserTraces,
   db,
-} from "@/db";
+} from "@db";
 
 type CompletedBrowserTraceStatus = Exclude<
   typeof browserTraces.$inferSelect.status,

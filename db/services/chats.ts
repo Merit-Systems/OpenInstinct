@@ -1,8 +1,12 @@
 import { and, desc, eq } from "drizzle-orm";
 import { z } from "zod";
-import type { AccessScope } from "@/lib/access-scope";
-import { chatListSchema, type ChatSummary, type SaveChat } from "@/lib/chat";
-import { chats, db } from "@/db";
+import type { AccessScope } from "@shared/identity/access-scope";
+import {
+  chatListSchema,
+  type ChatSummary,
+  type SaveChat,
+} from "@shared/chat/schema";
+import { chats, db } from "@db";
 import { ensureScope } from "./scope";
 import { waitForSessionOwnership } from "./sessions";
 

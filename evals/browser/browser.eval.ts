@@ -3,17 +3,17 @@ import { satisfies } from "eve/evals/expect";
 import {
   browserBenchmarkReporter,
   reportBrowserBenchmarkActivity,
-} from "@/evals/browser/benchmark-reporter";
+} from "@evals/browser/benchmark-reporter";
 import {
   didCompleteWorker,
   didFinishWorker,
   readTaskCompletion,
-} from "@/lib/worker-events";
+} from "@evals/browser/worker-events";
 import {
   browserBenchmarkFixtureContext,
   browserBenchmarkTasks,
-} from "@/evals/browser/tasks";
-import { browserBenchmarkEnv } from "@/evals/browser/env";
+} from "@evals/browser/tasks";
+import { browserBenchmarkEnv } from "@evals/browser/env";
 
 const repetitions = browserBenchmarkEnv.BROWSER_BENCH_REPETITIONS;
 const tasks = browserBenchmarkTasks(browserBenchmarkEnv.BROWSER_BENCH_SUITE);

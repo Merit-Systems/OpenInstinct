@@ -4,7 +4,7 @@ import {
   agentEvalTags,
   assertPlainTextDelivery,
   requireDeliveredText,
-} from "@/evals/agent/shared";
+} from "@evals/agent/shared";
 
 export default [
   defineEval({

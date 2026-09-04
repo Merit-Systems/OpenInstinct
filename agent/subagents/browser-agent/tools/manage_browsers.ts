@@ -12,16 +12,16 @@ import {
   deleteBrowserSession,
   listBrowserSessions,
   withBrowserProfileWriteLock,
-} from "@/db/services/browsers";
-import { recordBrowserTraceDomains } from "@/db/services/browser-traces";
-import { kernel } from "@/lib/kernel";
-import { requireWorkerScope } from "@/agent/subagents/browser-agent/lib/access";
+} from "@db/services/browsers";
+import { recordBrowserTraceDomains } from "@db/services/browser-traces";
+import { kernel } from "@agent/subagents/browser-agent/lib/kernel";
+import { requireWorkerScope } from "@agent/subagents/browser-agent/lib/access";
 import { disposeBrowserLoopSession } from "../lib/semantic-loop";
-import { requireOwnedBrowserSession } from "@/agent/subagents/browser-agent/lib/owned-browser";
+import { requireOwnedBrowserSession } from "@agent/subagents/browser-agent/lib/owned-browser";
 import {
   domainFromUrl,
   harvestBrowserTraceDomains,
-} from "@/agent/subagents/browser-agent/lib/trace/domains";
+} from "@agent/subagents/browser-agent/lib/trace/domains";
 
 const browserTimeoutFloorSeconds = 15 * 60;
 

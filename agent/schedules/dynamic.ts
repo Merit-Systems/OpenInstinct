@@ -1,14 +1,14 @@
 import { defineSchedule, type ScheduleToFn } from "eve/schedules";
-import scheduledRunChannel from "@/agent/channels/scheduled-run";
-import { dispatchScheduledReport } from "@/agent/lib/schedules/report";
-import { postScheduledReport } from "@/agent/lib/schedules/request";
+import scheduledRunChannel from "@agent/channels/scheduled-run";
+import { dispatchScheduledReport } from "@agent/lib/schedules/report";
+import { postScheduledReport } from "@agent/lib/schedules/request";
 import {
   claimReadyScheduledAgentRuns,
   listRecoverableScheduledReports,
   materializeDueScheduledAgentRuns,
   releaseScheduledAgentRun,
   setScheduledRunSession,
-} from "@/db/services/scheduled-agent-jobs";
+} from "@db/services/scheduled-agent-jobs";
 
 const workerStartupLimitMs = 5 * 60_000;
 

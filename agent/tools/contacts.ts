@@ -1,7 +1,7 @@
 import { defineDynamic, defineTool } from "eve/tools";
 import { z } from "zod";
-import { searchGoogleContacts } from "@/agent/lib/google-workspace/contacts";
-import { resolveModeValue } from "@/agent/lib/mode";
+import { searchGoogleContacts } from "@agent/lib/google-workspace/contacts";
+import { resolveModeValue } from "@agent/lib/mode";
 
 export const contactsSearch = defineTool({
   description:
