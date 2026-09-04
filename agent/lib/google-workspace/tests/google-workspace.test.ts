@@ -1,14 +1,14 @@
 import { describe, expect, it } from "vitest";
-import { parseCalendarAvailability } from "@/agent/lib/google-workspace/calendar";
-import { googleWorkspaceAuthOptions } from "@/agent/lib/google-workspace/client";
-import { gmailUpdateLabels } from "@/agent/lib/google-workspace/gmail";
-import { calendarCreateEvent } from "@/agent/tools/calendar";
-import { gmailSend, gmailUpdate } from "@/agent/tools/gmail";
+import { parseCalendarAvailability } from "@agent/lib/google-workspace/calendar";
+import { googleWorkspaceAuthOptions } from "@agent/lib/google-workspace/client";
+import { gmailUpdateLabels } from "@agent/lib/google-workspace/gmail";
+import { calendarCreateEvent } from "@agent/tools/calendar";
+import { gmailSend, gmailUpdate } from "@agent/tools/gmail";
 import {
   googleWorkspaceScopes,
   googleWorkspaceSubject,
   googleWorkspaceTokenParams,
-} from "@/lib/google-workspace";
+} from "@shared/google-workspace/connection";
 
 const userId = "better-auth:user-123";
 

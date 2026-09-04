@@ -1,6 +1,6 @@
 import { defineAgent, defineDynamic } from "eve";
-import { resolveModeValue } from "@/agent/lib/mode";
-import { taskCompletionSchema } from "@/lib/worker-completion";
+import { resolveModeValue } from "@agent/lib/mode";
+import { taskCompletionSchema } from "@agent/subagents/browser-agent/lib/completion";
 
 export default defineDynamic({
   build: {

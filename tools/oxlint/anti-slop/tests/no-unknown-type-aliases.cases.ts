@@ -1,6 +1,6 @@
 import { typescriptRuleTester as tester } from "./rule-tester.ts";
 
-import { noUnknownTypeAliasesRule } from "@/tools/oxlint/anti-slop/rules/no-unknown-type-aliases.ts";
+import { noUnknownTypeAliasesRule } from "@tools/oxlint/anti-slop/rules/no-unknown-type-aliases.ts";
 
 const error = { messageId: "unknownAlias" };
 

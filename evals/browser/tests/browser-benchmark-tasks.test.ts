@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   browserBenchmarkFixtureContext,
   browserBenchmarkTasks,
-} from "@/evals/browser/tasks";
+} from "@evals/browser/tasks";
 
 describe("browser benchmark tasks", () => {
   it("includes the focused Peek next-month calendar regression", () => {

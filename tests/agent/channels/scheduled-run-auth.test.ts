@@ -5,7 +5,7 @@ import type {
   Session,
 } from "eve/channels";
 import { describe, expect, it, vi } from "vitest";
-import scheduledRunChannel from "@/agent/channels/scheduled-run";
+import scheduledRunChannel from "@agent/channels/scheduled-run";
 
 const scheduledRunPaths = [
   "/internal/scheduled-run/report",

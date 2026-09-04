@@ -23,12 +23,12 @@ const mocks = vi.hoisted(() => {
 
 vi.mock("node:fs/promises", () => ({ readFile: mocks.readFile }));
 vi.mock("@vercel/oidc", () => ({ getVercelOidcToken: mocks.getToken }));
-vi.mock("@/env", () => ({ env: mocks.env }));
-vi.mock("@/lib/application-origin", () => ({
+vi.mock("@shared/environment", () => ({ env: mocks.env }));
+vi.mock("@shared/environment/origin", () => ({
   applicationOrigin: () => "https://example.com",
 }));
 
-import { postScheduledRunRoute } from "@/agent/lib/schedules/request";
+import { postScheduledRunRoute } from "@agent/lib/schedules/request";
 
 describe("scheduled run requests", () => {
   beforeEach(() => {

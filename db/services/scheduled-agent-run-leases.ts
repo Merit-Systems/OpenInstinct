@@ -1,5 +1,5 @@
 import { and, eq, gt } from "drizzle-orm";
-import { db, scheduledAgentRuns } from "@/db";
+import { db, scheduledAgentRuns } from "@db";
 
 export async function isScheduledAgentRunLeaseActive(
   runId: string,

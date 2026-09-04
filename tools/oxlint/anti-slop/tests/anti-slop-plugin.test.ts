@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "vitest";
 
-import plugin from "@/tools/oxlint/anti-slop/index.ts";
+import plugin from "@tools/oxlint/anti-slop/index.ts";
 
 import "./no-chained-type-assertions.cases.ts";
 import "./no-conditional-empty-object-spread.cases.ts";

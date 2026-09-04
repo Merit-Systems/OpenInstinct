@@ -5,13 +5,13 @@ import {
   type MemoryToolsContext,
 } from "eve/memory";
 import { describe, expect, it } from "vitest";
-import personalInfoMemory from "@/agent/memory/personal_info";
+import personalInfoMemory from "@agent/memory/personal_info";
 import {
   preserveProfileMemoryCancellation,
   resolveProfileMemoryBackend,
   resolveProfileMemoryScope,
-} from "@/agent/lib/profile-memory";
-import { accessScopeForUser } from "@/lib/access-scope";
+} from "@agent/lib/profile-memory";
+import { accessScopeForUser } from "@shared/identity/access-scope";
 
 const derivedWorkspaceId = accessScopeForUser("better-auth:user").workspaceId;
 

@@ -1,32 +1,32 @@
 import { runInNewContext } from "node:vm";
 import { describe, expect, it, vi } from "vitest";
 import { z } from "zod";
-import type { AccessScope } from "@/lib/access-scope";
+import type { AccessScope } from "@shared/identity/access-scope";
 import {
   serializeAddressVaultPayload,
   serializeContactVaultPayload,
   serializeLoginVaultPayload,
   serializePaymentCard,
   type VaultItemKind,
-} from "@/lib/vault";
+} from "@shared/vault/schema";
 import {
   classifyNativeLoginControl,
   frameOriginExpression,
   nativeLoginFillFunctionDeclaration,
   selectNativeLoginFills,
   type NativeLoginControlDescriptor,
-} from "@/agent/subagents/browser-agent/lib/autofill/login";
+} from "@agent/subagents/browser-agent/lib/autofill/login";
 import {
   buildNativeAutofillPayload,
   nativeAutofillSecretMarkingExpression,
   nativeAutofillTokens,
-} from "@/agent/subagents/browser-agent/lib/autofill/native";
+} from "@agent/subagents/browser-agent/lib/autofill/native";
 import {
   listAutofillSuggestions,
   materializeAutofillClaims,
   type AutofillVaultAdapter,
-} from "@/agent/subagents/browser-agent/lib/autofill/service";
-import { vaultAutofillProvider } from "@/agent/subagents/browser-agent/lib/autofill/provider";
+} from "@agent/subagents/browser-agent/lib/autofill/service";
+import { vaultAutofillProvider } from "@agent/subagents/browser-agent/lib/autofill/provider";
 
 interface VaultStore {
   items: { id: string }[];
@@ -42,7 +42,7 @@ function createVaultStore(): VaultStore {
 
 const vaultStore = vi.hoisted(createVaultStore);
 
-vi.mock("@/db/services/vault", () => ({
+vi.mock("@db/services/vault", () => ({
   hasVaultSecret: async () => true,
   listVaultItems: async () => vaultStore.items,
   readVaultItem: async (_scope: AccessScope, id: string) =>

@@ -6,8 +6,8 @@ import {
   checkCalendarAvailability,
   createCalendarEvent,
   listCalendarEvents,
-} from "@/agent/lib/google-workspace/calendar";
-import { resolveModeValue } from "@/agent/lib/mode";
+} from "@agent/lib/google-workspace/calendar";
+import { resolveModeValue } from "@agent/lib/mode";
 
 export const calendarListEvents = defineTool({
   description:

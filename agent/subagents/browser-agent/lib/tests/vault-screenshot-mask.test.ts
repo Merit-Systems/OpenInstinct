@@ -12,7 +12,7 @@ const mocks = vi.hoisted(() => ({
     >(),
 }));
 
-vi.mock("@/lib/kernel", () => ({
+vi.mock("@agent/subagents/browser-agent/lib/kernel", () => ({
   kernel: { browsers: { playwright: { execute: mocks.execute } } },
 }));
 

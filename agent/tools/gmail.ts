@@ -8,8 +8,8 @@ import {
   searchGmail,
   sendGmail,
   updateGmail,
-} from "@/agent/lib/google-workspace/gmail";
-import { resolveModeValue } from "@/agent/lib/mode";
+} from "@agent/lib/google-workspace/gmail";
+import { resolveModeValue } from "@agent/lib/mode";
 
 export const gmailSearch = defineTool({
   description:

@@ -6,7 +6,7 @@ import type {
   markScheduledAgentRunStarted,
   releaseScheduledAgentRun,
   waitForScheduledAgentRunInput,
-} from "@/db/services/scheduled-agent-jobs";
+} from "@db/services/scheduled-agent-jobs";
 
 const services = vi.hoisted(() => ({
   complete: vi.fn<typeof completeScheduledAgentRun>(),
@@ -16,7 +16,7 @@ const services = vi.hoisted(() => ({
   waitForInput: vi.fn<typeof waitForScheduledAgentRunInput>(),
 }));
 
-vi.mock("@/db/services/scheduled-agent-jobs", () => ({
+vi.mock("@db/services/scheduled-agent-jobs", () => ({
   completeScheduledAgentRun: services.complete,
   deferScheduledAgentRunCompletion: services.deferCompletion,
   markScheduledAgentRunStarted: services.markStarted,
@@ -24,7 +24,7 @@ vi.mock("@/db/services/scheduled-agent-jobs", () => ({
   waitForScheduledAgentRunInput: services.waitForInput,
 }));
 
-import completionHook from "@/agent/hooks/scheduled-run-completion";
+import completionHook from "@agent/hooks/scheduled-run-completion";
 
 const runId = "00000000-0000-4000-8000-000000000001";
 const leaseToken = "00000000-0000-4000-8000-000000000002";

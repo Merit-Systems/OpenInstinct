@@ -1,6 +1,6 @@
-import { recordBrowserTraceDomains } from "@/db/services/browser-traces";
-import type { AccessScope } from "@/lib/access-scope";
-import { kernel } from "@/lib/kernel";
+import { recordBrowserTraceDomains } from "@db/services/browser-traces";
+import type { AccessScope } from "@shared/identity/access-scope";
+import { kernel } from "@agent/subagents/browser-agent/lib/kernel";
 
 const maximumTelemetryEvents = 5000;
 

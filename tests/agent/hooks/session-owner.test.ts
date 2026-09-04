@@ -1,9 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { HookContext } from "eve/hooks";
-import type { saveChat } from "@/db/services/chats";
-import type { ensureScope } from "@/db/services/scope";
-import type { claimSession } from "@/db/services/sessions";
-import sessionOwner from "@/agent/hooks/session-owner";
+import type { saveChat } from "@db/services/chats";
+import type { ensureScope } from "@db/services/scope";
+import type { claimSession } from "@db/services/sessions";
+import sessionOwner from "@agent/hooks/session-owner";
 
 const mocks = vi.hoisted(() => ({
   claimSession: vi.fn<typeof claimSession>(),
@@ -11,9 +11,9 @@ const mocks = vi.hoisted(() => ({
   saveChat: vi.fn<typeof saveChat>(),
 }));
 
-vi.mock("@/db/services/chats", () => ({ saveChat: mocks.saveChat }));
-vi.mock("@/db/services/scope", () => ({ ensureScope: mocks.ensureScope }));
-vi.mock("@/db/services/sessions", () => ({
+vi.mock("@db/services/chats", () => ({ saveChat: mocks.saveChat }));
+vi.mock("@db/services/scope", () => ({ ensureScope: mocks.ensureScope }));
+vi.mock("@db/services/sessions", () => ({
   claimSession: mocks.claimSession,
 }));
 

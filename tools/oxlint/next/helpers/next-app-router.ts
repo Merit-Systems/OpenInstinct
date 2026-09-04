@@ -126,8 +126,11 @@ export const resolveLocalImport = (
   source: string,
   sourceDirectory: string
 ): string | undefined => {
-  if (source.startsWith("@/")) {
-    return normalizePath(path.join(sourceDirectory, source.slice(2)));
+  const alias = /^@(agent|app|db|evals|shared|tests|tools|web)\/(.+)$/u.exec(
+    source
+  );
+  if (alias?.[1] && alias[2]) {
+    return normalizePath(path.join(sourceDirectory, alias[1], alias[2]));
   }
 
   if (source.startsWith(".")) {

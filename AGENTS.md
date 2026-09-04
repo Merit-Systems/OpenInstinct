@@ -58,15 +58,15 @@ Run the validation the task requests. When it does not establish the behavior yo
 
 - The repository root owns the single Next.js application, Eve agent, and shared UI contract.
 - The workspace manager lives on `/` and the agent chat on `/chat`; browser execution belongs only to the declared browser-agent subagent's flat tool surface under `agent/subagents/browser-agent/tools`.
-- Keep each worker browser tool's schema and implementation together. Share the Kernel SDK client through `src/lib/kernel.ts`; do not add a Kernel extension or root browser connection.
+- Keep each worker browser tool's schema and implementation together. Share the Kernel SDK client through `agent/subagents/browser-agent/lib/kernel.ts`; do not add a Kernel extension or root browser connection.
 - `agent/subagents/browser-agent/lib` is for code genuinely shared by worker tools. Group a shared worker domain in a lower-case folder, such as `trace/domains.ts` or `autofill/provider.ts`; do not use it as a holding area for a tool's one-off logic.
-- Validate runtime environment variables through `src/env.ts`. `KERNEL_API_KEY` is required by the worker browser tools.
+- Validate runtime environment variables through `shared/environment/env.ts`. `KERNEL_API_KEY` is required by the worker browser tools.
 - Run `pnpm check` and `pnpm build` before handing off changes.
 
 ## Code organization
 
-- Treat `src/lib` as a small shared infrastructure and contract boundary, not a default destination for application code. A file belongs there only when it has real cross-feature ownership; put database access in `db/services`, agent behavior under `agent`, and route or section behavior with its route.
-- Do not add a generic `src/modules` layer. Give code a concrete owner and colocate it there. A route section owns its section components, forms, and local parsing; split it only when the files have distinct responsibilities.
+- Treat `shared` as a narrow contract boundary, not a default destination for application code. A file belongs there only when at least two of `agent`, `app`, `web`, and `db` consume it; put database access in `db/services`, agent behavior under `agent`, and route or section behavior with its route.
+- Do not add a generic `modules` layer. Give code a concrete owner and colocate it there. A route section owns its section components, forms, and local parsing; split it only when the files have distinct responsibilities.
 - Prefer one cohesive call-site file for code used once. Do not add production factories, dependency containers, server wrappers, or files solely to make a unit test easier to mock.
 - Mock imported modules at their owning or external boundary in tests. Do not export mutable dependency bags, dependency setters, reset hooks, or other test-only seams from production modules; keep production exports limited to application behavior and real domain contracts.
 - Use lower-case file and folder names. When several files share a domain prefix, make that prefix a folder and name files for their role, such as `trace/domains.ts` rather than `trace-domains.ts`. Do not introduce camel-case filenames.
@@ -76,8 +76,8 @@ Run the validation the task requests. When it does not establish the behavior yo
 
 Before planning or changing product UI:
 
-- Build from the primitives in `src/components/ui` and the semantic `type-*`
-  typography utilities defined in `src/app/styles/brand/typography.css`.
+- Build from the primitives in `web/components/ui` and the semantic `type-*`
+  typography utilities defined in `app/styles/brand/typography.css`.
 - Preserve the current `components.json` primitive base and local extensions;
   add new primitives with the official shadcn CLI.
 

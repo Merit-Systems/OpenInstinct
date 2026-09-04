@@ -5,12 +5,12 @@ import type {
   beginBrowserTrace,
   completeBrowserTrace,
   recordBrowserTraceEvents,
-} from "@/db/services/browser-traces";
-import type { listWorkerBrowserSessions } from "@/db/services/browsers";
-import type * as TraceDomainsModule from "@/agent/subagents/browser-agent/lib/trace/domains";
-import type { harvestBrowserTraceDomains } from "@/agent/subagents/browser-agent/lib/trace/domains";
-import { domainFromUrl } from "@/agent/subagents/browser-agent/lib/trace/domains";
-import traceTelemetry from "@/agent/subagents/browser-agent/hooks/trace-telemetry";
+} from "@db/services/browser-traces";
+import type { listWorkerBrowserSessions } from "@db/services/browsers";
+import type * as TraceDomainsModule from "@agent/subagents/browser-agent/lib/trace/domains";
+import type { harvestBrowserTraceDomains } from "@agent/subagents/browser-agent/lib/trace/domains";
+import { domainFromUrl } from "@agent/subagents/browser-agent/lib/trace/domains";
+import traceTelemetry from "@agent/subagents/browser-agent/hooks/trace-telemetry";
 
 const mocks = vi.hoisted(() => ({
   beginBrowserTrace: vi.fn<typeof beginBrowserTrace>(),
@@ -20,16 +20,16 @@ const mocks = vi.hoisted(() => ({
   recordBrowserTraceEvents: vi.fn<typeof recordBrowserTraceEvents>(),
 }));
 
-vi.mock("@/db/services/browser-traces", () => ({
+vi.mock("@db/services/browser-traces", () => ({
   beginBrowserTrace: mocks.beginBrowserTrace,
   completeBrowserTrace: mocks.completeBrowserTrace,
   recordBrowserTraceEvents: mocks.recordBrowserTraceEvents,
 }));
-vi.mock("@/db/services/browsers", () => ({
+vi.mock("@db/services/browsers", () => ({
   listWorkerBrowserSessions: mocks.listWorkerBrowserSessions,
 }));
 vi.mock(
-  "@/agent/subagents/browser-agent/lib/trace/domains",
+  "@agent/subagents/browser-agent/lib/trace/domains",
   async (importOriginal) => ({
     ...(await importOriginal<typeof TraceDomainsModule>()),
     harvestBrowserTraceDomains: mocks.harvestBrowserTraceDomains,

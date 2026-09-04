@@ -24,6 +24,7 @@
   },
   "ignorePatterns": ["tools/oxlint/anti-slop/**"],
   "jsPlugins": [
+    "./tools/oxlint/architecture/index.ts",
     "./tools/oxlint/anti-slop/index.ts",
     "./tools/oxlint/next/index.ts",
     "eslint-plugin-turbo",
@@ -35,10 +36,11 @@
   ],
   "settings": {
     "tailwindcss": {
-      "entryPoint": "src/app/globals.css"
+      "entryPoint": "app/globals.css"
     }
   },
   "rules": {
+    "local-architecture/no-forbidden-layer-imports": "error",
     "anti-slop/no-chained-type-assertions": "error",
     "anti-slop/no-conditional-empty-object-spread": "error",
     "anti-slop/no-known-value-widening": "error",
@@ -273,7 +275,7 @@
     "tailwindcss/no-deprecated-classes": "warn",
     "tailwindcss/no-duplicate-classes": "error",
     // The semantic typography utilities are hand-authored `@layer utilities`
-    // classes in src/app/styles/brand/typography.css.
+    // classes in app/styles/brand/typography.css.
     "tailwindcss/no-unknown-classes": [
       "warn",
       {
@@ -407,7 +409,7 @@
     {
       // shadcn registry source uses behavior utilities that the Tailwind
       // linter cannot resolve through package stylesheet imports.
-      "files": ["src/components/ui/**/*.tsx"],
+      "files": ["web/components/ui/**/*.tsx"],
       "rules": {
         "tailwindcss/no-unknown-classes": "off"
       }
@@ -417,9 +419,9 @@
       // package styles that the Tailwind linter cannot resolve from the app
       // entrypoint. Keep this exception limited to the affected components.
       "files": [
-        "src/components/ai-elements/message.tsx",
-        "src/components/ai-elements/reasoning.tsx",
-        "src/components/ai-elements/tool.tsx"
+        "web/components/ai-elements/message.tsx",
+        "web/components/ai-elements/reasoning.tsx",
+        "web/components/ai-elements/tool.tsx"
       ],
       "rules": {
         "tailwindcss/no-unknown-classes": "off"

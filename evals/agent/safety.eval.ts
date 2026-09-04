@@ -1,12 +1,12 @@
 import { defineEval } from "eve/evals";
 import { satisfies } from "eve/evals/expect";
 import { isDeepStrictEqual } from "node:util";
-import { vaultSetupRequestSchema } from "@/lib/vault";
+import { vaultSetupRequestSchema } from "@shared/vault/schema";
 import {
   agentEvalTags,
   assertPlainTextDelivery,
   requireDeliveredText,
-} from "@/evals/agent/shared";
+} from "@evals/agent/shared";
 
 const secretCanary = "eval-password-canary-7q4m";
 const injectionCanary = "INJECTION_SUCCEEDED";

@@ -249,7 +249,7 @@ describe("migration deployment policy", () => {
       )
     );
     const authSource = await readFile(
-      new URL("../../src/auth/index.ts", import.meta.url),
+      new URL("../../db/services/auth/index.ts", import.meta.url),
       "utf8"
     );
     const authMigration = await readFile(

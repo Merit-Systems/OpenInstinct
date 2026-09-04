@@ -1,21 +1,21 @@
 import { defineDynamic, defineTool, type ToolContext } from "eve/tools";
 import { z } from "zod";
-import { resolveModeValue } from "@/agent/lib/mode";
-import { scheduledReportIdentity } from "@/agent/lib/schedules/identity";
-import { postScheduledRunRoute } from "@/agent/lib/schedules/request";
+import { resolveModeValue } from "@agent/lib/mode";
+import { scheduledReportIdentity } from "@agent/lib/schedules/identity";
+import { postScheduledRunRoute } from "@agent/lib/schedules/request";
 import {
   scheduleListSummary,
   scheduleOwner,
   scheduleSummary,
-} from "@/agent/lib/schedules/tools";
-import { scheduleTimingSchema } from "@/agent/lib/schedules/timing";
+} from "@agent/lib/schedules/tools";
+import { scheduleTimingSchema } from "@shared/schedules/timing";
 import {
   createScheduledAgentJob,
   getScheduledAgentRunInput,
   getScheduledAgentRunInputForReport,
   listScheduledAgentJobs,
   updateScheduledAgentJob,
-} from "@/db/services/scheduled-agent-jobs";
+} from "@db/services/scheduled-agent-jobs";
 
 export const createSchedule = defineTool({
   description:

@@ -1,13 +1,13 @@
 import type { DynamicResolveContext } from "eve/tools";
 import { describe, expect, it } from "vitest";
-import personalInfoMemory from "@/agent/memory/personal_info";
-import browserAgent from "@/agent/subagents/browser-agent/agent";
-import calendar from "@/agent/tools/calendar";
-import contacts from "@/agent/tools/contacts";
-import gmail from "@/agent/tools/gmail";
-import messaging from "@/agent/tools/messaging";
-import schedules from "@/agent/tools/schedules";
-import vault from "@/agent/tools/vault";
+import personalInfoMemory from "@agent/memory/personal_info";
+import browserAgent from "@agent/subagents/browser-agent/agent";
+import calendar from "@agent/tools/calendar";
+import contacts from "@agent/tools/contacts";
+import gmail from "@agent/tools/gmail";
+import messaging from "@agent/tools/messaging";
+import schedules from "@agent/tools/schedules";
+import vault from "@agent/tools/vault";
 
 const groupedTools = [calendar, contacts, gmail, messaging, schedules, vault];
 

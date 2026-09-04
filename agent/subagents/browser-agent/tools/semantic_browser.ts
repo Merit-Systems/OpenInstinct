@@ -10,8 +10,8 @@ import {
   toolOutput,
   toolOutputPart,
 } from "eve/tools";
-import { requireWorkerScope } from "@/agent/subagents/browser-agent/lib/access";
-import { requireOwnedBrowserSession } from "@/agent/subagents/browser-agent/lib/owned-browser";
+import { requireWorkerScope } from "@agent/subagents/browser-agent/lib/access";
+import { requireOwnedBrowserSession } from "@agent/subagents/browser-agent/lib/owned-browser";
 import { executeBrowserLoopTool, modelText } from "../lib/semantic-loop";
 
 /* oxlint-disable anti-slop/no-known-value-widening, anti-slop/no-runtime-typeof, anti-slop/no-unknown-parameters, anti-slop/no-unsafe-dictionary-type -- Browser Loop supplies runtime-selected JSON Schemas and JSON inputs, so this adapter must preserve its dynamic vendor boundary. */

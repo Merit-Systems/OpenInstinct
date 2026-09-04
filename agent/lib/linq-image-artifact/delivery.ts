@@ -1,10 +1,10 @@
 import { createHash } from "node:crypto";
 import { get } from "@vercel/blob";
-import type { AccessScope } from "@/lib/access-scope";
-import { readReadyBrowserImageArtifact } from "@/db/services/browser-images";
-import { maximumBrowserImageBytes } from "@/lib/browser-artifact";
-import { env } from "@/env";
-import { maximumWorkerCompletionImages } from "@/lib/worker-completion";
+import type { AccessScope } from "@shared/identity/access-scope";
+import { readReadyBrowserImageArtifact } from "@db/services/browser-images";
+import { maximumBrowserImageBytes } from "@shared/browser/artifact";
+import { env } from "@shared/environment";
+import { maximumWorkerCompletionImages } from "@agent/subagents/browser-agent/lib/completion";
 import {
   extractImageArtifactMarkdownReferences,
   stripImageArtifactMarkdownReferences,

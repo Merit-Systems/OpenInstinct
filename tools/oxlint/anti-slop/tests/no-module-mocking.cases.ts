@@ -1,6 +1,6 @@
 import { typescriptRuleTester as tester } from "./rule-tester.ts";
 
-import { noModuleMockingRule } from "@/tools/oxlint/anti-slop/rules/no-module-mocking.ts";
+import { noModuleMockingRule } from "@tools/oxlint/anti-slop/rules/no-module-mocking.ts";
 
 const error = { messageId: "moduleMock" };
 

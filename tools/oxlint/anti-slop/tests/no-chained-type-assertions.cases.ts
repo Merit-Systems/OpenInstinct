@@ -1,6 +1,6 @@
 import { typescriptRuleTester as tester } from "./rule-tester.ts";
 
-import { noChainedTypeAssertionsRule } from "@/tools/oxlint/anti-slop/rules/no-chained-type-assertions.ts";
+import { noChainedTypeAssertionsRule } from "@tools/oxlint/anti-slop/rules/no-chained-type-assertions.ts";
 
 const error = { messageId: "chained" };
 

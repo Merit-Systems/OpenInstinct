@@ -1,11 +1,11 @@
 import { defineEval, type EveEvalContext } from "eve/evals";
 import { includes, satisfies } from "eve/evals/expect";
-import { reactToMessageOutputSchema } from "@/agent/lib/react-to-message";
+import { reactToMessageOutputSchema } from "@shared/chat/reaction";
 import {
   agentEvalTags,
   assertPlainTextDelivery,
   requireDeliveredText,
-} from "@/evals/agent/shared";
+} from "@evals/agent/shared";
 
 const cases: readonly {
   description: string;

@@ -1,12 +1,12 @@
 /* oxlint-disable vitest/require-mock-type-parameters -- The Blob mock implements only the read operation exercised here. */
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { AccessScope } from "@/lib/access-scope";
+import type { AccessScope } from "@shared/identity/access-scope";
 
 const firstId = "0d01e667-d128-4bb7-a248-1ae21db72f4f";
 const secondId = "206c3a7e-c0b8-4317-9e34-552cff646673";
 const mocks = vi.hoisted(() => ({ getBlob: vi.fn(), readArtifact: vi.fn() }));
 
-vi.mock("@/db/services/browser-images", () => ({
+vi.mock("@db/services/browser-images", () => ({
   readReadyBrowserImageArtifact: mocks.readArtifact,
 }));
 vi.mock("@vercel/blob", () => ({

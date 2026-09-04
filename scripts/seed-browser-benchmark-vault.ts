@@ -1,7 +1,7 @@
 import type { replaceUserProfile as replaceUserProfileType } from "../db/services/user-profile";
 import { saveVaultItem } from "../db/services/vault";
-import { accessScopeForUser } from "../src/lib/access-scope";
-import { serializePaymentCard } from "../src/lib/vault";
+import { accessScopeForUser } from "../shared/identity/access-scope";
+import { serializePaymentCard } from "../shared/vault/schema";
 import { z } from "zod";
 
 const scope = accessScopeForUser("better-auth:browser-benchmark");

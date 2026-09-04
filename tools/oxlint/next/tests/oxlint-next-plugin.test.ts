@@ -4,11 +4,11 @@ import os from "node:os";
 import path from "node:path";
 import { RuleTester } from "oxlint/plugins-dev";
 import { test } from "vitest";
-import plugin from "@/tools/oxlint/next/index.ts";
-import { noRoutePrivateImportsRule } from "@/tools/oxlint/next/rules/no-route-private-imports.ts";
-import { preferNearestRoutePrivateOwnerRule } from "@/tools/oxlint/next/rules/prefer-nearest-route-private-owner.ts";
-import { requireGeneratedRoutePropsRule } from "@/tools/oxlint/next/rules/require-generated-route-props.ts";
-import { requirePageRouteGroupRule } from "@/tools/oxlint/next/rules/require-page-route-group.ts";
+import plugin from "@tools/oxlint/next/index.ts";
+import { noRoutePrivateImportsRule } from "@tools/oxlint/next/rules/no-route-private-imports.ts";
+import { preferNearestRoutePrivateOwnerRule } from "@tools/oxlint/next/rules/prefer-nearest-route-private-owner.ts";
+import { requireGeneratedRoutePropsRule } from "@tools/oxlint/next/rules/require-generated-route-props.ts";
+import { requirePageRouteGroupRule } from "@tools/oxlint/next/rules/require-page-route-group.ts";
 
 const tester = new RuleTester();
 
@@ -39,7 +39,7 @@ tester.run("local-next/no-route-private-imports", noRoutePrivateImportsRule, {
   ],
   invalid: [
     {
-      code: 'import "../account/_components/card";',
+      code: 'import "@app/account/_components/card";',
       cwd: privateImportRoot,
       filename: path.join(privateImportRoot, "app/admin/page.tsx"),
       before() {

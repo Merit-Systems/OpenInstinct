@@ -1,6 +1,6 @@
 import { and, eq } from "drizzle-orm";
-import type { AccessScope } from "@/lib/access-scope";
-import { db, settings } from "@/db";
+import type { AccessScope } from "@shared/identity/access-scope";
+import { db, settings } from "@db";
 
 const gatewayModelKey = "gateway_model";
 const defaultGatewayModel = "openai/gpt-5.6-sol-fast";
