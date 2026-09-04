@@ -4,6 +4,8 @@ import {
   releaseScheduledReport,
 } from "@/db/services/scheduled-agent-jobs";
 import { scheduledReportIdentity } from "@/agent/lib/schedules/identity";
+import { proactionIdentity } from "@/agent/lib/proactions/identity";
+import { markRunFindingsDelivered } from "@/db/services/proaction-findings";
 
 export function scheduledReportFromSession(session: SessionContext) {
   return scheduledReportIdentity(session.session.auth);
@@ -20,6 +22,13 @@ export async function finalizeScheduledReportDelivery(
       report.leaseToken,
       status
     );
+    if (
+      finalized &&
+      status === "delivered" &&
+      proactionIdentity(session.session.auth)
+    ) {
+      await markRunFindingsDelivered(report.runId);
+    }
     if (finalized) {
       console.info("[scheduled-run] report finalized", {
         runId: report.runId,

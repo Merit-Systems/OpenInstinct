@@ -10,6 +10,7 @@ const applicationEnvironment = [
   "KERNEL_*",
   "LINQ_*",
   "NODE_ENV",
+  "PROACTIONS_*",
   "SECRET_ENCRYPTION_KEY",
   "VERCEL_*",
 ];

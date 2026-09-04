@@ -20,6 +20,7 @@ export const scheduledAgentJobs = pgTable(
     id: uuid("id").defaultRandom().primaryKey(),
     workspaceId: text("workspace_id").notNull(),
     createdByUserId: text("created_by_user_id").notNull(),
+    proactionId: text("proaction_id"),
     prompt: text("prompt").notNull(),
     conversationChannel: text("conversation_channel", {
       enum: ["eve", "linq"],
@@ -88,6 +89,9 @@ export const scheduledAgentJobs = pgTable(
       "scheduled_agent_jobs_status_check",
       sql`${table.status} IN ('active', 'paused', 'completed', 'deleted')`
     ),
+    uniqueIndex("scheduled_agent_jobs_proaction_idx")
+      .on(table.workspaceId, table.proactionId)
+      .where(sql`${table.proactionId} IS NOT NULL`),
     index("scheduled_agent_jobs_due_idx").on(
       table.status,
       table.nextRunAt.asc().nullsLast()

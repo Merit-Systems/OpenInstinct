@@ -292,6 +292,7 @@ function scheduledClaim(): Awaited<
     job: {
       createdAt: new Date("2026-09-01T12:00:00.000Z"),
       createdByUserId: "user-1",
+      proactionId: null,
       id: "00000000-0000-4000-8000-000000000001",
       lastError: null,
       lastRunAt: new Date("2026-09-02T13:00:00.000Z"),

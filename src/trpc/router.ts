@@ -1,7 +1,14 @@
 import { gateway } from "ai";
 import { revokeToken, startAuthorization } from "@vercel/connect";
 import { z } from "zod";
+import { proactionById } from "@/agent/lib/proactions/catalog";
+import { autonomySchema } from "@/agent/lib/proactions/define";
+import { proactionOverview } from "@/agent/lib/proactions/overview";
+import { reconcileProactions } from "@/agent/lib/proactions/reconcile";
 import { listBrowserTraces } from "@/db/services/browser-traces";
+import { resolveFinding } from "@/db/services/proaction-findings";
+import { saveProactionPolicy } from "@/db/services/proaction-policies";
+import { saveProactionSettings } from "@/db/services/proaction-settings";
 import { saveChat } from "@/db/services/chats";
 import { replaceUserProfile } from "@/db/services/user-profile";
 import { selectGatewayModel } from "@/db/services/settings";
@@ -42,6 +49,61 @@ export const appRouter = createTRPCRouter({
             callbackUrl.toString()
           ),
         };
+      }),
+  },
+  proactions: {
+    configure: protectedProcedure
+      .input(
+        z.strictObject({
+          autonomy: autonomySchema.optional(),
+          enabled: z.boolean().optional(),
+          proactionId: z.string().min(1),
+        })
+      )
+      .mutation(async ({ ctx, input: { proactionId, ...patch } }) => {
+        if (!proactionById(proactionId)) throw new Error("Unknown proaction.");
+        await saveProactionPolicy(ctx.scope, proactionId, patch);
+        await reconcileProactions(ctx.scope);
+      }),
+    overview: protectedProcedure.query(({ ctx }) =>
+      proactionOverview(ctx.scope)
+    ),
+    resolveFinding: protectedProcedure
+      .input(
+        z.strictObject({
+          findingId: z.uuid(),
+          status: z.enum(["acted", "dismissed"]),
+        })
+      )
+      .mutation(async ({ ctx, input }) => {
+        await resolveFinding(ctx.scope, input.findingId, input.status);
+      }),
+    updateSettings: protectedProcedure
+      .input(
+        z.strictObject({
+          briefLocalTime: z
+            .string()
+            .regex(/^(?:[01]\d|2[0-3]):[0-5]\d$/u)
+            .optional(),
+          timezone: z
+            .string()
+            .min(1)
+            .refine((timezone) => {
+              try {
+                new Intl.DateTimeFormat("en-US", {
+                  timeZone: timezone,
+                }).format();
+                return true;
+              } catch {
+                return false;
+              }
+            }, "Use a valid IANA timezone.")
+            .optional(),
+        })
+      )
+      .mutation(async ({ ctx, input }) => {
+        await saveProactionSettings(ctx.scope, input);
+        await reconcileProactions(ctx.scope);
       }),
   },
   settings: {

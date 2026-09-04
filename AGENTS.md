@@ -61,6 +61,7 @@ Run the validation the task requests. When it does not establish the behavior yo
 - Keep each worker browser tool's schema and implementation together. Share the Kernel SDK client through `src/lib/kernel.ts`; do not add a Kernel extension or root browser connection.
 - `agent/subagents/browser-agent/lib` is for code genuinely shared by worker tools. Group a shared worker domain in a lower-case folder, such as `trace/domains.ts` or `autofill/provider.ts`; do not use it as a holding area for a tool's one-off logic.
 - Validate runtime environment variables through `src/env.ts`. `KERNEL_API_KEY` is required by the worker browser tools.
+- Proactions (always-on proactive behaviors) are authored in `agent/lib/proactions/catalog` with `defineProaction`, with their model-facing procedures in `agent/instructions/content/proactions`; the runtime under `agent/lib/proactions` reuses the scheduled-job tables. System-owned jobs carry `proaction_id` and must never be exposed through the user schedule tools. The deployment ceiling is code plus the `PROACTIONS_ADMIN_POLICY` env JSON; user overrides live in `proaction_policies`.
 - Run `pnpm check` and `pnpm build` before handing off changes.
 
 ## Code organization

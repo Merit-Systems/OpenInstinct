@@ -14,6 +14,7 @@ import { sendMessageToolResultSchema } from "@/agent/lib/send-message";
 import { normalizeAuthPhoneNumber } from "@/auth/phone-number";
 import { scopeFromPrincipal } from "@/agent/lib/principal-scope";
 import { accessScopeForUser } from "@/lib/access-scope";
+import { rememberLinqThread } from "@/db/services/proaction-settings";
 import { prepareLinqImageArtifactDelivery } from "../lib/linq-image-artifact/delivery";
 import {
   extractImageArtifactMarkdownReferences,
@@ -241,6 +242,15 @@ export default linqChannel({
     }
     const principalId = `better-auth:${verifiedUserId}`;
     const scope = accessScopeForUser(principalId);
+    try {
+      // The latest iMessage thread is the home delivery target for proactions.
+      await rememberLinqThread(scope, context.thread.id);
+    } catch (error) {
+      console.warn("[linq] could not remember the delivery thread", {
+        cause: error,
+        threadId: context.thread.id,
+      });
+    }
     return {
       auth: {
         ...auth,

@@ -85,6 +85,16 @@ export const env = createEnv({
     BLOB_STORE_ID: requiredValue.optional(),
     GOOGLE_CONNECTOR_UID: requiredValue.default("google/open-instinct"),
     LINQ_CONNECTOR: requiredValue.optional(),
+    PROACTIONS_ADMIN_POLICY: requiredValue
+      .refine((value) => {
+        try {
+          JSON.parse(value);
+          return true;
+        } catch {
+          return false;
+        }
+      }, "PROACTIONS_ADMIN_POLICY must be a JSON object.")
+      .optional(),
     LINQ_PHONE_NUMBER: requiredValue
       .refine(
         (value) => isE164PhoneNumber(value),
