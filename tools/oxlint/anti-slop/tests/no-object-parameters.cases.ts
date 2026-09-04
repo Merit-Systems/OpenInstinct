@@ -1,6 +1,6 @@
 import { typescriptRuleTester as tester } from "./rule-tester.ts";
 
-import { noObjectParametersRule } from "@/tools/oxlint/anti-slop/rules/no-object-parameters.ts";
+import { noObjectParametersRule } from "@tools/oxlint/anti-slop/rules/no-object-parameters.ts";
 
 const error = { messageId: "objectParameter" };
 

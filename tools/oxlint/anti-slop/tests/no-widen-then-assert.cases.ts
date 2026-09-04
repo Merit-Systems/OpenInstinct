@@ -1,6 +1,6 @@
 import { typescriptRuleTester as tester } from "./rule-tester.ts";
 
-import { noWidenThenAssertRule } from "@/tools/oxlint/anti-slop/rules/no-widen-then-assert.ts";
+import { noWidenThenAssertRule } from "@tools/oxlint/anti-slop/rules/no-widen-then-assert.ts";
 
 const error = { messageId: "widenThenAssert" };
 

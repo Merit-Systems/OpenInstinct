@@ -1,6 +1,6 @@
 import { typescriptRuleTester as tester } from "./rule-tester.ts";
 
-import { noForbiddenTermInSymbolNamesRule } from "@/tools/oxlint/anti-slop/rules/no-shape-in-symbol-names.ts";
+import { noForbiddenTermInSymbolNamesRule } from "@tools/oxlint/anti-slop/rules/no-shape-in-symbol-names.ts";
 
 const error = { messageId: "forbiddenSymbolName" };
 

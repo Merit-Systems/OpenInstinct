@@ -1,6 +1,6 @@
 import { typescriptRuleTester as tester } from "./rule-tester.ts";
 
-import { noRuntimeTypeofRule } from "@/tools/oxlint/anti-slop/rules/no-runtime-typeof.ts";
+import { noRuntimeTypeofRule } from "@tools/oxlint/anti-slop/rules/no-runtime-typeof.ts";
 
 const error = { messageId: "runtimeTypeof" };
 const allowInTypeGuards = [{ allowInTypeGuards: true }];
