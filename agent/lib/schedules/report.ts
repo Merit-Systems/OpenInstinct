@@ -87,7 +87,7 @@ export async function dispatchScheduledReport(
 
 function scheduledReportPrompt(claimed: ClaimedScheduledReport) {
   const replyContext = claimed.job.replyAnchorMessageId
-    ? `Reply handle: {"kind":"automation","id":"${claimed.job.id}"}. Pass this exact value as send_message.replyTo when a quoted reply to the original request would help reconnect the update. Omit replyTo when a new top-level message reads better.`
+    ? `Reply handle: {"kind":"automation","id":"${claimed.job.id}"}. Pass this exact value as send_message.replyTo for every user-visible message about this scheduled task. Omit replyTo only when the message is genuinely unrelated to the scheduled task.`
     : "No reply handle is available for this automation. Omit send_message.replyTo.";
   if (claimed.run.pendingInputRequests) {
     return [

@@ -201,6 +201,9 @@ describe("scheduled report delivery", () => {
     expect(send.mock.calls[0]?.[0]).toContain(
       `Reply handle: {"kind":"automation","id":"${report.job.id}"}`
     );
+    expect(send.mock.calls[0]?.[0]).toContain(
+      "Pass this exact value as send_message.replyTo for every user-visible message about this scheduled task."
+    );
   });
 
   it("routes Eve reports to the stored debug session", async () => {
