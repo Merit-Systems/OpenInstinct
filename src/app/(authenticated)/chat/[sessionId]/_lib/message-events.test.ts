@@ -128,6 +128,30 @@ describe("iMessage event projection", () => {
     ]);
   });
 
+  it("treats reply association as transport metadata in the Eve chat", () => {
+    const events = [
+      toolResult(
+        "send_message",
+        {
+          kind: "message",
+          replyTo: { kind: "current" },
+          text: "This is still a normal Eve message.",
+        },
+        1
+      ),
+    ];
+
+    expect(sentMessages(events).get("turn-1:assistant")).toEqual([
+      expect.objectContaining({
+        parts: [
+          expect.objectContaining({
+            text: "This is still a normal Eve message.",
+          }),
+        ],
+      }),
+    ]);
+  });
+
   it("keeps consecutive sends in the same turn as separate messages", () => {
     const events = [
       toolResult(

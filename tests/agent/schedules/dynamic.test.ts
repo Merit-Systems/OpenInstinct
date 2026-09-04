@@ -173,6 +173,7 @@ describe("scheduled report delivery", () => {
 
   it("routes Linq reports to the stored conversation", async () => {
     const report = scheduledReport();
+    report.job.replyAnchorMessageId = "original-message";
     services.claimReports.mockResolvedValue(report);
     const send = vi
       .fn<ReturnType<ScheduleToFn>["send"]>()
@@ -188,9 +189,18 @@ describe("scheduled report delivery", () => {
     });
     expect(attachSession).not.toHaveBeenCalled();
     expect(send.mock.calls[0]?.[1]).toMatchObject({
-      auth: { authenticator: "scheduled-result" },
+      auth: {
+        attributes: {
+          linqReplyAnchorMessageId: "original-message",
+          scheduleId: report.job.id,
+        },
+        authenticator: "scheduled-result",
+      },
       turnPolicy: "queue",
     });
+    expect(send.mock.calls[0]?.[0]).toContain(
+      `Reply handle: {"kind":"automation","id":"${report.job.id}"}`
+    );
   });
 
   it("routes Eve reports to the stored debug session", async () => {
@@ -300,6 +310,7 @@ function scheduledClaim(): Awaited<
       missedRunPolicy: "run_latest",
       nextRunAt: new Date("2026-09-03T13:00:00.000Z"),
       prompt: "Watch the price.",
+      replyAnchorMessageId: null,
       revision: 0,
       status: "active",
       timing: {

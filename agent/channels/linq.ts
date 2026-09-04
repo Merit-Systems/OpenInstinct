@@ -10,6 +10,7 @@ import { vercelOidc } from "eve/channels/auth";
 import { z } from "zod";
 import { getAuth } from "@/auth";
 import { reactToMessageToolResultSchema } from "@/agent/lib/react-to-message";
+import { resolveLinqReplyTarget } from "@/agent/lib/reply-targets";
 import { sendMessageToolResultSchema } from "@/agent/lib/send-message";
 import { normalizeAuthPhoneNumber } from "@/auth/phone-number";
 import { scopeFromPrincipal } from "@/agent/lib/principal-scope";
@@ -30,6 +31,13 @@ const verifiedPhoneUserSchema = z.object({
   id: z.string().min(1),
   phoneNumberVerified: z.literal(true),
 });
+const unavailableReplyTargetSchema = z.object({
+  status: z.union([z.literal(400), z.literal(404)]),
+});
+
+type LinqMessageContent = Parameters<
+  LinqAPIV3["chats"]["messages"]["send"]
+>[1]["message"];
 
 const trustedForwarder = vercelOidc();
 
@@ -98,6 +106,14 @@ export default linqChannel({
           );
         }
         const report = scheduledReportFromSession(session);
+        const replyTarget = resolveLinqReplyTarget(
+          message.data.output.replyTo,
+          session.session.auth
+        );
+        const requestedReplyMessageId =
+          replyTarget?.conversationId === thread.id
+            ? replyTarget.messageId
+            : undefined;
         const idempotencyKey = report
           ? `scheduled-report:${report.runId}:${String(report.sequence)}`
           : undefined;
@@ -107,26 +123,50 @@ export default linqChannel({
                 .getAdapter("linq")
                 .postMessage(thread.id, content, { idempotencyKey })
           : (content: AdapterPostableMessage) => thread.post(content);
-
-        if (message.data.output.kind === "link") {
+        const resolveExistingChatId = () => {
           const adapter = context.bot.getAdapter("linq");
           const { chatId, pendingHandle } = adapter.decodeThreadId(thread.id);
           if (pendingHandle || !chatId) {
-            throw new Error(
-              "A native link preview requires an existing Linq conversation."
-            );
+            throw new Error("A Linq reply requires an existing conversation.");
           }
+          return chatId;
+        };
+
+        if (message.data.output.kind === "link") {
+          const { url } = message.data.output;
+          const chatId = resolveExistingChatId();
           const apiKey = await credentials.apiKey();
           const client = new LinqAPIV3({ apiKey });
-          await client.chats.messages.send(
-            chatId,
-            {
-              message: {
-                parts: [{ type: "link", value: message.data.output.url }],
-              },
-            },
-            idempotencyKey ? { idempotencyKey } : undefined
-          );
+          const sendLink = (replyToMessageId?: string) => {
+            const nativeMessage: LinqMessageContent = {
+              parts: [{ type: "link", value: url }],
+            };
+            if (idempotencyKey) {
+              nativeMessage.idempotency_key = idempotencyKey;
+            }
+            if (replyToMessageId) {
+              nativeMessage.reply_to = { message_id: replyToMessageId };
+            }
+            return client.chats.messages.send(
+              chatId,
+              { message: nativeMessage },
+              undefined
+            );
+          };
+          try {
+            await sendLink(requestedReplyMessageId);
+          } catch (error) {
+            if (
+              !requestedReplyMessageId ||
+              !unavailableReplyTargetSchema.safeParse(error).success
+            ) {
+              throw error;
+            }
+            console.warn("[linq] reply target is unavailable", {
+              sessionId: session.session.id,
+            });
+            await sendLink();
+          }
           await finalizeScheduledReportDelivery(session);
           return;
         }
@@ -138,6 +178,8 @@ export default linqChannel({
         if (!requestedText) {
           if (attachments?.length) {
             await post({ attachments, raw: "" });
+            await finalizeScheduledReportDelivery(session);
+            return;
           }
           await finalizeScheduledReportDelivery(session);
           return;
@@ -162,7 +204,14 @@ export default linqChannel({
             { raw: string }
           > = { raw: text };
           if (attachments?.length) outgoing.attachments = attachments;
-          await post(outgoing);
+          await sendLinqMessage({
+            idempotencyKey,
+            outgoing,
+            post,
+            resolveExistingChatId,
+            replyToMessageId:
+              attachments?.length === 0 ? requestedReplyMessageId : undefined,
+          });
           await finalizeScheduledReportDelivery(session);
           return;
         }
@@ -192,7 +241,16 @@ export default linqChannel({
         > = { raw: text };
         if (attachments?.length) outgoing.attachments = attachments;
         if (delivery.files.length > 0) outgoing.files = delivery.files;
-        await post(outgoing);
+        await sendLinqMessage({
+          idempotencyKey,
+          outgoing,
+          post,
+          resolveExistingChatId,
+          replyToMessageId:
+            !attachments?.length && delivery.files.length === 0
+              ? requestedReplyMessageId
+              : undefined,
+        });
         await finalizeScheduledReportDelivery(session);
       }
     },
@@ -249,6 +307,7 @@ export default linqChannel({
           conversationChannel: "linq",
           conversationId: context.thread.id,
           linqThreadId: context.thread.id,
+          linqMessageId: message.id,
           phoneNumber,
           workspaceId: scope.workspaceId,
         },
@@ -257,6 +316,51 @@ export default linqChannel({
     };
   },
 });
+
+async function sendLinqMessage({
+  idempotencyKey,
+  outgoing,
+  post,
+  resolveExistingChatId,
+  replyToMessageId,
+}: {
+  readonly idempotencyKey?: string;
+  readonly outgoing: Extract<AdapterPostableMessage, { raw: string }>;
+  readonly post: (
+    content: AdapterPostableMessage
+  ) => Promise<{ readonly id: string }>;
+  readonly resolveExistingChatId: () => string;
+  readonly replyToMessageId?: string;
+}) {
+  if (!replyToMessageId) {
+    await post(outgoing);
+    return;
+  }
+  const chatId = resolveExistingChatId();
+  const apiKey = await credentials.apiKey();
+  const client = new LinqAPIV3({ apiKey });
+  try {
+    const nativeMessage: LinqMessageContent = {
+      parts: [{ type: "text", value: outgoing.raw }],
+      reply_to: { message_id: replyToMessageId },
+    };
+    if (idempotencyKey) {
+      nativeMessage.idempotency_key = idempotencyKey;
+    }
+    await client.chats.messages.send(
+      chatId,
+      { message: nativeMessage },
+      undefined
+    );
+    return;
+  } catch (error) {
+    if (!unavailableReplyTargetSchema.safeParse(error).success) throw error;
+    console.warn("[linq] reply target is unavailable", {
+      replyToMessageId,
+    });
+    await post(outgoing);
+  }
+}
 
 async function findVerifiedAuthUserIdByPhoneNumber(phoneNumber: string) {
   const auth = await getAuth();

@@ -7,6 +7,10 @@ import {
 } from "@/db/services/scheduled-agent-jobs";
 import linq from "../../channels/linq";
 
+type ClaimedScheduledReport = NonNullable<
+  Awaited<ReturnType<typeof claimScheduledReport>>
+>;
+
 export async function dispatchScheduledReport(
   delivery: {
     readonly attachSession?: AttachSessionFn;
@@ -23,21 +27,7 @@ export async function dispatchScheduledReport(
     runId: claimed.run.id,
     runStatus: claimed.run.status,
   });
-  const reportAttributes = {
-    conversationChannel: claimed.job.conversationChannel,
-    conversationId: claimed.job.conversationId,
-    scheduleId: claimed.job.id,
-    scheduledReportLeaseToken: leaseToken,
-    scheduledReportSequence: String(claimed.run.reportSequence),
-    scheduledRunId: claimed.run.id,
-    workspaceId: claimed.job.workspaceId,
-  };
-  const attributes = claimed.run.workerSessionId
-    ? {
-        ...reportAttributes,
-        scheduledRunSessionId: claimed.run.workerSessionId,
-      }
-    : reportAttributes;
+  const attributes = scheduledReportAttributes(claimed, leaseToken);
   const options = {
     auth: {
       attributes,
@@ -95,14 +85,16 @@ export async function dispatchScheduledReport(
   }
 }
 
-function scheduledReportPrompt(
-  claimed: NonNullable<Awaited<ReturnType<typeof claimScheduledReport>>>
-) {
+function scheduledReportPrompt(claimed: ClaimedScheduledReport) {
+  const replyContext = claimed.job.replyAnchorMessageId
+    ? `Reply handle: {"kind":"automation","id":"${claimed.job.id}"}. Pass this exact value as send_message.replyTo when a quoted reply to the original request would help reconnect the update. Omit replyTo when a new top-level message reads better.`
+    : "No reply handle is available for this automation. Omit send_message.replyTo.";
   if (claimed.run.pendingInputRequests) {
     return [
       "A background scheduled run is waiting for the user before it can continue.",
       `Original task: ${claimed.job.prompt}`,
       `Scheduled for: ${claimed.run.scheduledFor.toISOString()}`,
+      replyContext,
       `Internal run ID: ${claimed.run.id}`,
       `Pending request: ${JSON.stringify(claimed.run.pendingInputRequests)}`,
       "First check whether the existing conversation clearly answers the request. If it does, call schedules-answer now. Otherwise ask the user clearly, keeping the internal run ID out of the user-visible message so schedules-answer can resume this run after they reply.",
@@ -115,6 +107,35 @@ function scheduledReportPrompt(
     "A background scheduled run has completed.",
     `Original task: ${claimed.job.prompt}`,
     `Scheduled for: ${claimed.run.scheduledFor.toISOString()}`,
+    replyContext,
     `Worker outcome: ${JSON.stringify(claimed.run.outcome)}`,
   ].join("\n\n");
+}
+
+function scheduledReportAttributes(
+  claimed: ClaimedScheduledReport,
+  leaseToken: string
+) {
+  const attributes = new Map<string, string>([
+    ["conversationChannel", claimed.job.conversationChannel],
+    ["conversationId", claimed.job.conversationId],
+    ["scheduleId", claimed.job.id],
+    ["scheduledReportLeaseToken", leaseToken],
+    ["scheduledReportSequence", String(claimed.run.reportSequence)],
+    ["scheduledRunId", claimed.run.id],
+    ["workspaceId", claimed.job.workspaceId],
+  ]);
+  if (
+    claimed.job.conversationChannel === "linq" &&
+    claimed.job.replyAnchorMessageId
+  ) {
+    attributes.set(
+      "linqReplyAnchorMessageId",
+      claimed.job.replyAnchorMessageId
+    );
+  }
+  if (claimed.run.workerSessionId) {
+    attributes.set("scheduledRunSessionId", claimed.run.workerSessionId);
+  }
+  return Object.fromEntries(attributes);
 }

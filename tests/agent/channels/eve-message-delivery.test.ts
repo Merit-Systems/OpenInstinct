@@ -106,6 +106,7 @@ function scheduledReportSession() {
       auth: {
         current: {
           attributes: {
+            scheduleId: "00000000-0000-4000-8000-000000000001",
             scheduledReportLeaseToken: "00000000-0000-4000-8000-000000000004",
             scheduledReportSequence: "1",
             scheduledRunId: "00000000-0000-4000-8000-000000000002",

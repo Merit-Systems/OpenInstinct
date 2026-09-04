@@ -1,0 +1,1 @@
+ALTER TABLE "scheduled_agent_jobs" ADD COLUMN "reply_anchor_message_id" text;
