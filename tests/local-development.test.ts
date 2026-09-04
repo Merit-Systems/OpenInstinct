@@ -4,8 +4,14 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { z } from "zod";
+import {
+  SUPERVISOR_TEST_TIMEOUT_MS,
+  waitForSupervisorClose,
+  waitForSupervisorLogEntry,
+} from "./helpers/supervisor-process";
 
 const temporaryDirectories: string[] = [];
+const supervisorTestOptions = { timeout: SUPERVISOR_TEST_TIMEOUT_MS };
 
 afterEach(async () => {
   await Promise.all(
@@ -15,7 +21,7 @@ afterEach(async () => {
   );
 });
 
-describe("local development", () => {
+describe("local development", supervisorTestOptions, () => {
   it("owns the PostgreSQL lifecycle around the application process", async () => {
     const [compose, developmentScript, packageManifestSource] =
       await Promise.all([
@@ -192,16 +198,13 @@ printf 'pnpm %s\\n' "$*" >> "$DEV_SUPERVISOR_LOG"
     }
   );
 
-  await waitForLogEntry(
+  const exitCode = waitForSupervisorClose(supervisor);
+  await waitForSupervisorLogEntry(
     logPath,
     environment.DEV_BLOCK_ACTION === "port"
       ? " port postgres 5432"
       : " up --detach --wait"
   );
-  const exitCode = new Promise<number | null>((resolve, reject) => {
-    supervisor.once("error", reject);
-    supervisor.once("exit", resolve);
-  });
   supervisor.kill("SIGINT");
 
   return {
@@ -248,10 +251,7 @@ printf 'pnpm %s %s\n' "$*" "$DATABASE_URL" >> "$DEV_SUPERVISOR_LOG"
       stdio: "ignore",
     }
   );
-  const exitCode = new Promise<number | null>((resolve, reject) => {
-    supervisor.once("error", reject);
-    supervisor.once("exit", resolve);
-  });
+  const exitCode = waitForSupervisorClose(supervisor);
 
   return {
     code: await exitCode,
@@ -289,28 +289,11 @@ printf '%s\n' "$*" >> "$DEV_SUPERVISOR_LOG"
   supervisor.stderr.on("data", (chunk: string) => {
     stderr += chunk;
   });
-  const exitCode = new Promise<number | null>((resolve, reject) => {
-    supervisor.once("error", reject);
-    supervisor.once("exit", resolve);
-  });
+  const exitCode = waitForSupervisorClose(supervisor);
 
   return {
     code: await exitCode,
     commands: await readFile(logPath, "utf8").catch(() => ""),
     stderr,
   };
-}
-
-async function waitForLogEntry(path: string, expected: string) {
-  /* oxlint-disable eslint/no-await-in-loop -- This bounded poll must observe each read before scheduling the next retry. */
-  for (let attempt = 0; attempt < 250; attempt += 1) {
-    const contents = await readFile(path, "utf8").catch(() => "");
-    if (contents.includes(expected)) {
-      return;
-    }
-    await new Promise((resolve) => setTimeout(resolve, 20));
-  }
-  /* oxlint-enable eslint/no-await-in-loop */
-
-  throw new Error(`Timed out waiting for ${expected}`);
 }
