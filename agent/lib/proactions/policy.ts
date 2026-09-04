@@ -16,8 +16,6 @@ export interface EffectiveProactionPolicy {
   readonly autonomy: Autonomy;
   readonly autonomyCeiling: Autonomy;
   readonly enabled: boolean;
-  readonly userAutonomy: Autonomy | null;
-  readonly userEnabled: boolean | null;
 }
 
 export function effectiveProactionPolicy(
@@ -43,7 +41,5 @@ export function effectiveProactionPolicy(
     autonomy,
     autonomyCeiling,
     enabled: !adminDisabled && (user?.enabled ?? definition.defaults.enabled),
-    userAutonomy: user?.autonomy ?? null,
-    userEnabled: user?.enabled ?? null,
   };
 }

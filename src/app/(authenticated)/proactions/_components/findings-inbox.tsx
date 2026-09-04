@@ -108,8 +108,6 @@ function statusLabel(status: ProactionOverview["findings"][number]["status"]) {
       return "Done";
     case "dismissed":
       return "Dismissed";
-    case "expired":
-      return "Expired";
     default:
       return status;
   }

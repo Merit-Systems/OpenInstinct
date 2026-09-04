@@ -16,13 +16,12 @@ CREATE TABLE IF NOT EXISTS "proaction_findings" (
 	"proposed_action" text,
 	"action_status" text DEFAULT 'none' NOT NULL,
 	"status" text DEFAULT 'new' NOT NULL,
-	"expires_at" timestamp (3) with time zone,
 	"delivered_at" timestamp (3) with time zone,
 	"created_at" timestamp (3) with time zone DEFAULT now() NOT NULL,
 	"updated_at" timestamp (3) with time zone DEFAULT now() NOT NULL,
 	CONSTRAINT "proaction_findings_urgency_check" CHECK ("proaction_findings"."urgency" IN ('normal', 'time_sensitive')),
 	CONSTRAINT "proaction_findings_action_status_check" CHECK ("proaction_findings"."action_status" IN ('none', 'proposed', 'completed', 'failed')),
-	CONSTRAINT "proaction_findings_status_check" CHECK ("proaction_findings"."status" IN ('new', 'delivered', 'acted', 'dismissed', 'expired')),
+	CONSTRAINT "proaction_findings_status_check" CHECK ("proaction_findings"."status" IN ('new', 'delivered', 'acted', 'dismissed')),
 	CONSTRAINT "proaction_findings_fingerprint_check" CHECK ("proaction_findings"."fingerprint" <> '')
 );
 --> statement-breakpoint

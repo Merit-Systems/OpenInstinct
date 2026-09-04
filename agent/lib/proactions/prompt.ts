@@ -1,20 +1,16 @@
 import type { proactionFindings } from "@/db/schema";
 import type { recentFingerprints } from "@/db/services/proaction-findings";
+import type { ProactionSettings } from "@/db/services/proaction-settings";
 import type { ProactionDefinition } from "./define";
 import type { EffectiveProactionPolicy } from "./policy";
 import type { ProactionProcedure } from "./procedures";
-
-export interface ProactionPromptSettings {
-  readonly briefLocalTime: string;
-  readonly timezone: string;
-}
 
 export function proactionWorkerPrompt(
   definition: ProactionDefinition,
   procedure: ProactionProcedure,
   policy: EffectiveProactionPolicy,
   known: Awaited<ReturnType<typeof recentFingerprints>>,
-  settings: ProactionPromptSettings,
+  settings: Pick<ProactionSettings, "briefLocalTime" | "timezone">,
   scheduledFor: Date
 ) {
   const knownList =

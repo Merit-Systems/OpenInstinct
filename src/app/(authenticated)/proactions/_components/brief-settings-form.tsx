@@ -1,17 +1,12 @@
 "use client";
 
 import { type SubmitEvent, useState } from "react";
-import { z } from "zod";
 import type { ProactionOverview } from "@/agent/lib/proactions/overview";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { proactionSettingsSchema } from "@/agent/lib/proactions/define";
 import { api } from "@/trpc/client";
-
-const briefSettingsFormSchema = z.object({
-  briefLocalTime: z.string().regex(/^(?:[01]\d|2[0-3]):[0-5]\d$/u),
-  timezone: z.string().trim().min(1),
-});
 
 export function BriefSettingsForm({
   onSaved,
@@ -27,7 +22,7 @@ export function BriefSettingsForm({
   const submit = (event: SubmitEvent<HTMLFormElement>) => {
     event.preventDefault();
     setStatus(undefined);
-    const parsed = briefSettingsFormSchema.safeParse(
+    const parsed = proactionSettingsSchema.safeParse(
       Object.fromEntries(new FormData(event.currentTarget))
     );
     if (!parsed.success) {

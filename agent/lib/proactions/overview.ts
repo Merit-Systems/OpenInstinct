@@ -1,6 +1,5 @@
 import type { AccessScope } from "@/lib/access-scope";
 import { listFindings } from "@/db/services/proaction-findings";
-import { readProactionSettings } from "@/db/services/proaction-settings";
 import { autonomyLevels, autonomyRank } from "./define";
 import { describeMissingRequirement } from "./prerequisites";
 import { reconcileProactions } from "./reconcile";
@@ -9,9 +8,8 @@ import { describeCadence } from "./timing";
 // One reconcile doubles as the read model: it returns the catalog joined with
 // the effective policy, readiness, and the system job, exactly as persisted.
 export async function proactionOverview(scope: AccessScope) {
-  const [entries, settings, findings] = await Promise.all([
+  const [{ entries, settings }, findings] = await Promise.all([
     reconcileProactions(scope),
-    readProactionSettings(scope),
     listFindings(scope),
   ]);
   return {

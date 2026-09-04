@@ -1,5 +1,6 @@
 import { eq, sql } from "drizzle-orm";
-import type { Autonomy } from "@/agent/lib/proactions/define";
+import type { z } from "zod";
+import type { proactionPolicyPatchSchema } from "@/agent/lib/proactions/define";
 import type { AccessScope } from "@/lib/access-scope";
 import { db, proactionPolicies } from "@/db";
 
@@ -20,10 +21,7 @@ export async function readProactionPolicies(scope: AccessScope) {
 export async function saveProactionPolicy(
   scope: AccessScope,
   proactionId: string,
-  patch: {
-    readonly autonomy?: Autonomy | null;
-    readonly enabled?: boolean | null;
-  },
+  patch: z.infer<typeof proactionPolicyPatchSchema>,
   now = new Date()
 ) {
   const [row] = await db
@@ -38,14 +36,8 @@ export async function saveProactionPolicy(
     .onConflictDoUpdate({
       target: [proactionPolicies.workspaceId, proactionPolicies.proactionId],
       set: {
-        autonomy:
-          patch.autonomy === undefined
-            ? sql`${proactionPolicies.autonomy}`
-            : patch.autonomy,
-        enabled:
-          patch.enabled === undefined
-            ? sql`${proactionPolicies.enabled}`
-            : patch.enabled,
+        autonomy: patch.autonomy ?? sql`${proactionPolicies.autonomy}`,
+        enabled: patch.enabled ?? sql`${proactionPolicies.enabled}`,
         updatedAt: now,
       },
     })

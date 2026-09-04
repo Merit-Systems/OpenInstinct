@@ -1,11 +1,10 @@
-/* oxlint-disable eslint/no-await-in-loop -- Migrations and their statements must be applied in order. */
-import { readFile } from "node:fs/promises";
 import { PGlite } from "@electric-sql/pglite";
 import { drizzle } from "drizzle-orm/pglite";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import * as Database from "@/db";
 import type * as GoogleWorkspace from "@/lib/google-workspace";
 import * as schema from "../schema";
+import { applyAllMigrations } from "./helpers/migrations";
 
 const databases: PGlite[] = [];
 const google = vi.hoisted(() => ({
@@ -43,7 +42,7 @@ describe("proactions", () => {
     await scope.ensureScope(alice);
     const now = new Date("2026-09-01T12:00:00.000Z");
 
-    const first = await reconcileProactions(alice, now);
+    const { entries: first } = await reconcileProactions(alice, now);
     expect(
       first.map((entry) => [entry.definition.id, entry.job.status])
     ).toEqual([
@@ -57,7 +56,7 @@ describe("proactions", () => {
     expect(first[0]?.readiness.missing).toEqual(["google"]);
 
     google.state = "connected";
-    const connected = await reconcileProactions(alice, now);
+    const { entries: connected } = await reconcileProactions(alice, now);
     expect(
       connected.map((entry) => [entry.definition.id, entry.job.status])
     ).toEqual([
@@ -72,7 +71,7 @@ describe("proactions", () => {
     );
 
     // The same rows are reused and untouched on an idempotent reconcile.
-    const again = await reconcileProactions(
+    const { entries: again } = await reconcileProactions(
       alice,
       new Date(now.getTime() + 60_000)
     );
@@ -88,7 +87,7 @@ describe("proactions", () => {
     expect(await settings.rememberLinqThread(alice, "linq:dm:alice")).toBe(
       false
     );
-    const homed = await reconcileProactions(alice, now);
+    const { entries: homed } = await reconcileProactions(alice, now);
     expect(homed[0]?.job).toMatchObject({
       conversationChannel: "linq",
       conversationId: "linq:dm:alice",
@@ -98,7 +97,7 @@ describe("proactions", () => {
     await policies.saveProactionPolicy(alice, "bill-savings", {
       enabled: false,
     });
-    const paused = await reconcileProactions(alice, now);
+    const { entries: paused } = await reconcileProactions(alice, now);
     expect(paused[2]?.job).toMatchObject({ nextRunAt: null, status: "paused" });
     expect(paused[2]?.policy.enabled).toBe(false);
 
@@ -107,7 +106,7 @@ describe("proactions", () => {
       briefLocalTime: "06:15",
       timezone: "America/New_York",
     });
-    const rescheduled = await reconcileProactions(alice, now);
+    const { entries: rescheduled } = await reconcileProactions(alice, now);
     expect(rescheduled[0]?.job.nextRunAt?.toISOString()).toBe(
       "2026-09-02T10:15:00.000Z"
     );
@@ -202,35 +201,9 @@ describe("proactions", () => {
 async function useDatabase() {
   const client = new PGlite();
   databases.push(client);
-  for (const migration of [
-    "0000_fluffy_the_spike.sql",
-    "0001_better-auth.sql",
-    "0002_heavy_celestials.sql",
-    "0003_unusual_fabian_cortez.sql",
-    "0004_kind_manta.sql",
-    "0005_brave_kang.sql",
-    "0006_illegal_tattoo.sql",
-    "0007_known_fenris.sql",
-    "0008_black_sandman.sql",
-    "0009_cold_power_man.sql",
-    "0010_rapid_cerise.sql",
-    "0011_faulty_unicorn.sql",
-    "0012_purple_wong.sql",
-  ]) {
-    await applyMigration(client, migration);
-  }
+  await applyAllMigrations(client);
   const pgliteDatabase = drizzle(client, { schema });
   // SAFETY: PGlite implements the query-builder surface exercised by these services while retaining the shared Drizzle schema.
   // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- The focused test swaps only the database driver.
   vi.spyOn(Database, "db", "get").mockReturnValue(pgliteDatabase as never);
-}
-
-async function applyMigration(database: PGlite, filename: string) {
-  const source = await readFile(
-    new URL(`../migrations/${filename}`, import.meta.url),
-    "utf8"
-  );
-  for (const statement of source.split("--> statement-breakpoint")) {
-    if (statement.trim()) await database.exec(statement);
-  }
 }

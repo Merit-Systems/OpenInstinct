@@ -1,10 +1,10 @@
 import { z } from "zod";
 
-const localTimeSchema = z
+export const localTimeSchema = z
   .string()
   .regex(/^(?:[01]\d|2[0-3]):[0-5]\d$/u, "Use a 24-hour HH:MM time.");
 
-const timezoneSchema = z
+export const timezoneSchema = z
   .string()
   .min(1)
   .refine(

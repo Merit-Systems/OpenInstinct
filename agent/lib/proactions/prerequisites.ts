@@ -3,39 +3,6 @@ import type { AccessScope } from "@/lib/access-scope";
 import { readGoogleWorkspaceConnection } from "@/lib/google-workspace";
 import type { ProactionDefinition, ProactionRequirement } from "./define";
 
-export interface ProactionReadiness {
-  readonly missing: readonly ProactionRequirement[];
-  readonly ready: boolean;
-}
-
-// Resolves each requirement once per reconcile, so a catalog of many
-// proactions costs one Google token check and one vault read.
-export async function proactionPrerequisiteChecker(scope: AccessScope) {
-  const cache = new Map<ProactionRequirement, Promise<boolean>>();
-  const check = (requirement: ProactionRequirement) => {
-    let pending = cache.get(requirement);
-    if (!pending) {
-      pending = resolveRequirement(scope, requirement);
-      cache.set(requirement, pending);
-    }
-    return pending;
-  };
-  return async (
-    definition: ProactionDefinition
-  ): Promise<ProactionReadiness> => {
-    const results = await Promise.all(
-      definition.requires.map(async (requirement) => ({
-        requirement,
-        satisfied: await check(requirement),
-      }))
-    );
-    const missing = results
-      .filter((result) => !result.satisfied)
-      .map((result) => result.requirement);
-    return { missing, ready: missing.length === 0 };
-  };
-}
-
 const requirementChecks: Record<
   ProactionRequirement,
   (scope: AccessScope) => Promise<boolean>
@@ -48,11 +15,23 @@ const requirementChecks: Record<
     (await listVaultItems(scope)).some((item) => item.kind === "payment"),
 };
 
-function resolveRequirement(
-  scope: AccessScope,
-  requirement: ProactionRequirement
-) {
-  return requirementChecks[requirement](scope);
+// Resolves every requirement once per reconcile, so a catalog of many
+// proactions costs one Google token check and one vault read.
+export async function proactionPrerequisiteChecker(scope: AccessScope) {
+  const entries = await Promise.all(
+    Object.entries(requirementChecks).map(
+      async ([requirement, check]) => [requirement, await check(scope)] as const
+    )
+  );
+  const satisfied = new Set(
+    entries.filter(([, ready]) => ready).map(([requirement]) => requirement)
+  );
+  return (definition: ProactionDefinition) => {
+    const missing = definition.requires.filter(
+      (requirement) => !satisfied.has(requirement)
+    );
+    return { missing, ready: missing.length === 0 };
+  };
 }
 
 const missingRequirementLabels: Record<ProactionRequirement, string> = {

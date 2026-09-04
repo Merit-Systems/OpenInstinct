@@ -87,11 +87,10 @@ export const proactionFindings = pgTable(
       .notNull()
       .default("none"),
     status: text("status", {
-      enum: ["new", "delivered", "acted", "dismissed", "expired"],
+      enum: ["new", "delivered", "acted", "dismissed"],
     })
       .notNull()
       .default("new"),
-    expiresAt: timestampColumn("expires_at"),
     deliveredAt: timestampColumn("delivered_at"),
     createdAt: timestampColumn("created_at").defaultNow().notNull(),
     updatedAt: timestampColumn("updated_at").defaultNow().notNull(),
@@ -112,7 +111,7 @@ export const proactionFindings = pgTable(
     ),
     check(
       "proaction_findings_status_check",
-      sql`${table.status} IN ('new', 'delivered', 'acted', 'dismissed', 'expired')`
+      sql`${table.status} IN ('new', 'delivered', 'acted', 'dismissed')`
     ),
     check(
       "proaction_findings_fingerprint_check",

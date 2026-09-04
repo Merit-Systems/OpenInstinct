@@ -1,14 +1,10 @@
 import type { ScheduleTiming } from "@/agent/lib/schedules/timing";
+import type { ProactionSettings } from "@/db/services/proaction-settings";
 import type { ProactionCadence } from "./define";
-
-export interface ProactionTimingSettings {
-  readonly briefLocalTime: string;
-  readonly timezone: string;
-}
 
 export function proactionTiming(
   cadence: ProactionCadence,
-  settings: ProactionTimingSettings,
+  settings: Pick<ProactionSettings, "briefLocalTime" | "timezone">,
   now: Date
 ): ScheduleTiming {
   if (cadence.kind === "interval") {

@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray, lt, sql } from "drizzle-orm";
+import { and, desc, eq, sql } from "drizzle-orm";
 import { z } from "zod";
 import type { AccessScope } from "@/lib/access-scope";
 import { db, proactionFindings } from "@/db";
@@ -14,7 +14,6 @@ const findingActionStatusSchema = z.enum([
 export const recordFindingInputSchema = z.strictObject({
   actionStatus: findingActionStatusSchema.default("none"),
   details: z.string().trim().min(1).max(8_000).optional(),
-  expiresAt: z.iso.datetime({ offset: true }).optional(),
   fingerprint: z.string().trim().min(1).max(200),
   proposedAction: z.string().trim().min(1).max(2_000).optional(),
   summary: z.string().trim().min(1).max(2_000),
@@ -45,11 +44,7 @@ export async function recordFinding(
       )
       .limit(1)
       .for("update");
-    if (
-      existing &&
-      existing.status !== "expired" &&
-      existing.createdAt.getTime() >= cooldownStart.getTime()
-    ) {
+    if (existing && existing.createdAt.getTime() >= cooldownStart.getTime()) {
       return { finding: existing, status: "duplicate" as const };
     }
     const values = {
@@ -57,7 +52,6 @@ export async function recordFinding(
       createdAt: now,
       deliveredAt: null,
       details: input.details ?? null,
-      expiresAt: input.expiresAt ? new Date(input.expiresAt) : null,
       fingerprint: input.fingerprint,
       proactionId,
       proposedAction: input.proposedAction ?? null,
@@ -120,7 +114,7 @@ export async function recentFingerprints(
   proactionId: string,
   limit = 25
 ) {
-  const rows = await db
+  return db
     .select({
       createdAt: proactionFindings.createdAt,
       fingerprint: proactionFindings.fingerprint,
@@ -131,18 +125,11 @@ export async function recentFingerprints(
     .where(
       and(
         eq(proactionFindings.workspaceId, scope.workspaceId),
-        eq(proactionFindings.proactionId, proactionId),
-        inArray(proactionFindings.status, [
-          "new",
-          "delivered",
-          "acted",
-          "dismissed",
-        ])
+        eq(proactionFindings.proactionId, proactionId)
       )
     )
     .orderBy(desc(proactionFindings.createdAt))
     .limit(limit);
-  return rows;
 }
 
 export async function resolveFinding(
@@ -169,16 +156,4 @@ export async function resolveFinding(
     )
     .returning();
   return finding;
-}
-
-export async function expireFindings(now = new Date()) {
-  await db
-    .update(proactionFindings)
-    .set({ status: "expired", updatedAt: now })
-    .where(
-      and(
-        inArray(proactionFindings.status, ["new", "delivered"]),
-        lt(proactionFindings.expiresAt, now)
-      )
-    );
 }

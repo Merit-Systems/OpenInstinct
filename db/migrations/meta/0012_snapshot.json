@@ -1,5 +1,5 @@
 {
-  "id": "7153a078-8b6d-4800-aa28-597dc33bca2f",
+  "id": "cbbc9701-400e-498a-a5ce-112040666f06",
   "prevId": "c4d701c1-3269-4972-b750-3f136b83f5b9",
   "version": "7",
   "dialect": "postgresql",
@@ -1106,12 +1106,6 @@
           "notNull": true,
           "default": "'new'"
         },
-        "expires_at": {
-          "name": "expires_at",
-          "type": "timestamp (3) with time zone",
-          "primaryKey": false,
-          "notNull": false
-        },
         "delivered_at": {
           "name": "delivered_at",
           "type": "timestamp (3) with time zone",
@@ -1232,7 +1226,7 @@
         },
         "proaction_findings_status_check": {
           "name": "proaction_findings_status_check",
-          "value": "\"proaction_findings\".\"status\" IN ('new', 'delivered', 'acted', 'dismissed', 'expired')"
+          "value": "\"proaction_findings\".\"status\" IN ('new', 'delivered', 'acted', 'dismissed')"
         },
         "proaction_findings_fingerprint_check": {
           "name": "proaction_findings_fingerprint_check",

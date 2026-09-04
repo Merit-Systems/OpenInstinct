@@ -1,8 +1,21 @@
 import { z } from "zod";
+import { localTimeSchema, timezoneSchema } from "@/agent/lib/schedules/timing";
 
 export const autonomyLevels = ["notify", "propose", "auto"] as const;
 export const autonomySchema = z.enum(autonomyLevels);
 export type Autonomy = z.infer<typeof autonomySchema>;
+
+// User overrides and settings, shared by the chat tools, the web API, and the
+// settings form.
+export const proactionPolicyPatchSchema = z.strictObject({
+  autonomy: autonomySchema.optional(),
+  enabled: z.boolean().optional(),
+});
+export const proactionSettingsSchema = z.strictObject({
+  briefLocalTime: localTimeSchema,
+  timezone: timezoneSchema,
+});
+export const proactionSettingsPatchSchema = proactionSettingsSchema.partial();
 
 const proactionCadenceSchema = z.discriminatedUnion("kind", [
   z.strictObject({ kind: z.literal("brief") }),

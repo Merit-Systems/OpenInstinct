@@ -237,7 +237,7 @@ export async function upsertProactionJob(
     current.status === input.status &&
     current.conversationChannel === input.conversationChannel &&
     current.conversationId === input.conversationId &&
-    current.nextRunAt?.getTime() === nextRunAt?.getTime();
+    (input.status !== "active" || current.nextRunAt !== null);
   if (unchanged) return parseJob(current);
   const [job] = await db
     .update(scheduledAgentJobs)

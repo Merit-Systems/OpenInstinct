@@ -1,4 +1,6 @@
 import { eq, sql } from "drizzle-orm";
+import type { z } from "zod";
+import type { proactionSettingsPatchSchema } from "@/agent/lib/proactions/define";
 import type { AccessScope } from "@/lib/access-scope";
 import { db, proactionSettings } from "@/db";
 
@@ -21,9 +23,13 @@ export async function readProactionSettings(scope: AccessScope) {
   return rows[0] ?? { ...defaultProactionSettings };
 }
 
+export type ProactionSettings = Awaited<
+  ReturnType<typeof readProactionSettings>
+>;
+
 export async function saveProactionSettings(
   scope: AccessScope,
-  patch: { readonly briefLocalTime?: string; readonly timezone?: string },
+  patch: z.infer<typeof proactionSettingsPatchSchema>,
   now = new Date()
 ) {
   await db

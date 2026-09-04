@@ -1,7 +1,6 @@
 import { defineSchedule } from "eve/schedules";
 import { asc, gt } from "drizzle-orm";
 import { reconcileProactions } from "@/agent/lib/proactions/reconcile";
-import { expireFindings } from "@/db/services/proaction-findings";
 import { db, workspaceMemberships } from "@/db";
 
 // Hourly sweep so a connection made in the web UI, a catalog change, or an
@@ -15,7 +14,6 @@ export default defineSchedule({
 
 async function reconcileAllWorkspaces() {
   const now = new Date();
-  await expireFindings(now);
   let cursor = "";
   let reconciled = 0;
   let failed = 0;

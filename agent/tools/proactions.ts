@@ -3,29 +3,21 @@ import { z } from "zod";
 import { resolveModeValue } from "@/agent/lib/mode";
 import { scopeFromPrincipal } from "@/agent/lib/principal-scope";
 import { proactionById } from "@/agent/lib/proactions/catalog";
-import { autonomySchema } from "@/agent/lib/proactions/define";
+import {
+  proactionPolicyPatchSchema,
+  proactionSettingsPatchSchema,
+} from "@/agent/lib/proactions/define";
+import {
+  configureProaction as applyProactionPolicy,
+  updateProactionSettings as applyProactionSettings,
+} from "@/agent/lib/proactions/configure";
 import { proactionIdentity } from "@/agent/lib/proactions/identity";
 import { proactionOverview } from "@/agent/lib/proactions/overview";
-import { reconcileProactions } from "@/agent/lib/proactions/reconcile";
 import {
   recordFinding,
   recordFindingInputSchema,
   resolveFinding,
 } from "@/db/services/proaction-findings";
-import { saveProactionPolicy } from "@/db/services/proaction-policies";
-import { saveProactionSettings } from "@/db/services/proaction-settings";
-
-const timezoneSchema = z
-  .string()
-  .min(1)
-  .refine((timezone) => {
-    try {
-      new Intl.DateTimeFormat("en-US", { timeZone: timezone }).format();
-      return true;
-    } catch {
-      return false;
-    }
-  }, "Use a valid IANA timezone.");
 
 function userScope(context: ToolContext) {
   const auth = context.session.auth.current;
@@ -67,25 +59,15 @@ export const listProactions = defineTool({
 export const configureProaction = defineTool({
   description:
     "Turn a proaction on or off, or change how autonomously it acts: notify (just tell me), propose (ask before acting), auto (act, then tell me). Autonomy is capped by the deployment; the result reports the effective values.",
-  inputSchema: z
-    .strictObject({
-      autonomy: autonomySchema.optional(),
-      enabled: z.boolean().optional(),
-      proactionId: z.string().min(1),
-    })
-    .refine(
-      ({ autonomy, enabled }) =>
-        autonomy !== undefined || enabled !== undefined,
-      { message: "Provide enabled or autonomy." }
-    ),
+  inputSchema: proactionPolicyPatchSchema.extend({
+    proactionId: z.string().min(1),
+  }),
   async execute({ proactionId, ...patch }, context) {
-    if (!proactionById(proactionId)) throw new Error("Unknown proaction.");
-    const scope = userScope(context);
-    await saveProactionPolicy(scope, proactionId, patch);
-    const entry = (await reconcileProactions(scope)).find(
-      (candidate) => candidate.definition.id === proactionId
+    const entry = await applyProactionPolicy(
+      userScope(context),
+      proactionId,
+      patch
     );
-    if (!entry) throw new Error("Unknown proaction.");
     return {
       autonomy: entry.policy.autonomy,
       autonomyCeiling: entry.policy.autonomyCeiling,
@@ -102,23 +84,9 @@ export const configureProaction = defineTool({
 export const updateProactionSettings = defineTool({
   description:
     "Set the user's timezone and the local time of day (24-hour HH:MM) when daily and weekly proactions run and deliver.",
-  inputSchema: z
-    .strictObject({
-      briefLocalTime: z
-        .string()
-        .regex(/^(?:[01]\d|2[0-3]):[0-5]\d$/u, "Use a 24-hour HH:MM time.")
-        .optional(),
-      timezone: timezoneSchema.optional(),
-    })
-    .refine(
-      ({ briefLocalTime, timezone }) =>
-        briefLocalTime !== undefined || timezone !== undefined,
-      { message: "Provide a timezone or a brief time." }
-    ),
+  inputSchema: proactionSettingsPatchSchema,
   async execute(input, context) {
-    const scope = userScope(context);
-    const settings = await saveProactionSettings(scope, input);
-    await reconcileProactions(scope);
+    const settings = await applyProactionSettings(userScope(context), input);
     return {
       briefLocalTime: settings.briefLocalTime,
       timezone: settings.timezone,

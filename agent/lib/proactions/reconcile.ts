@@ -37,14 +37,14 @@ export async function reconcileProactions(
         conversationChannel: "eve" as const,
         conversationId: inboxOnlyConversationId(scope),
       };
-  return Promise.all(
+  const entries = await Promise.all(
     proactions.map(async (definition) => {
       const policy = effectiveProactionPolicy(
         definition,
         adminPolicy,
         userPolicies.get(definition.id)
       );
-      const readiness = await isReady(definition);
+      const readiness = isReady(definition);
       const job = await upsertProactionJob(
         scope,
         definition.id,
@@ -58,4 +58,5 @@ export async function reconcileProactions(
       return { definition, job, policy, readiness };
     })
   );
+  return { entries, settings };
 }

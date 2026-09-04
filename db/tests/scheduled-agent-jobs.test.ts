@@ -1,10 +1,9 @@
-/* oxlint-disable eslint/no-await-in-loop -- Migrations and their statements must be applied in order. */
-import { readFile } from "node:fs/promises";
 import { PGlite } from "@electric-sql/pglite";
 import { drizzle } from "drizzle-orm/pglite";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import * as Database from "@/db";
 import * as schema from "../schema";
+import { applyAllMigrations } from "./helpers/migrations";
 
 const databases: PGlite[] = [];
 
@@ -18,24 +17,7 @@ describe("scheduled agent jobs", () => {
   it("materializes one occurrence, leases its worker, and persists reporting", async () => {
     const client = new PGlite();
     databases.push(client);
-    for (const migration of [
-      "0000_fluffy_the_spike.sql",
-      "0001_better-auth.sql",
-      "0002_heavy_celestials.sql",
-      "0003_unusual_fabian_cortez.sql",
-      "0004_kind_manta.sql",
-      "0005_brave_kang.sql",
-      "0006_illegal_tattoo.sql",
-      "0007_known_fenris.sql",
-      "0008_black_sandman.sql",
-      "0009_cold_power_man.sql",
-      "0010_rapid_cerise.sql",
-      "0011_faulty_unicorn.sql",
-      "0012_purple_wong.sql",
-    ]) {
-      await applyMigration(client, migration);
-    }
-
+    await applyAllMigrations(client);
     const pgliteDatabase = drizzle(client, { schema });
     // SAFETY: PGlite implements the query-builder surface exercised by this service while retaining the shared Drizzle schema.
     // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- The focused test swaps only the database driver.
@@ -465,6 +447,7 @@ describe("scheduled agent jobs", () => {
       run: { scheduledFor: new Date("2026-09-08T13:00:00.000Z") },
     });
     let retryAt = recoveredAt;
+    /* oxlint-disable eslint/no-await-in-loop -- Each retry depends on the previous release and claim. */
     for (let attempt = 1; attempt <= 3; attempt += 1) {
       if (!latestClaim?.run.leaseToken) {
         throw new Error("Expected a leased run.");
@@ -482,6 +465,7 @@ describe("scheduled agent jobs", () => {
         now: retryAt,
       });
     }
+    /* oxlint-enable eslint/no-await-in-loop */
 
     expect(await jobs.listScheduledAgentJobs(bob, bobConversation)).toEqual([
       expect.objectContaining({ lastError: "Source unavailable." }),
@@ -552,13 +536,3 @@ describe("scheduled agent jobs", () => {
     });
   }, 20_000);
 });
-
-async function applyMigration(database: PGlite, filename: string) {
-  const source = await readFile(
-    new URL(`../migrations/${filename}`, import.meta.url),
-    "utf8"
-  );
-  for (const statement of source.split("--> statement-breakpoint")) {
-    if (statement.trim()) await database.exec(statement);
-  }
-}

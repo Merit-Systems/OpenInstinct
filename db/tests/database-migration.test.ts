@@ -1,6 +1,6 @@
-import { readFile } from "node:fs/promises";
 import { PGlite } from "@electric-sql/pglite";
 import { afterEach, describe, expect, it } from "vitest";
+import { applyMigration } from "./helpers/migrations";
 
 const databases: PGlite[] = [];
 
@@ -39,9 +39,9 @@ describe("database migrations", () => {
     await applyMigration(database, "0009_cold_power_man.sql");
     await applyMigration(database, "0010_rapid_cerise.sql");
     await applyMigration(database, "0011_faulty_unicorn.sql");
-    await applyMigration(database, "0012_purple_wong.sql");
+    await applyMigration(database, "0012_tricky_prima.sql");
     // 0012 repairs databases that ran its earlier revision, so it must re-apply cleanly.
-    await applyMigration(database, "0012_purple_wong.sql");
+    await applyMigration(database, "0012_tricky_prima.sql");
 
     const tables = await database.query<{ count: number }>(
       `SELECT count(*)::int AS count
@@ -277,18 +277,6 @@ function createDatabase() {
   const database = new PGlite();
   databases.push(database);
   return database;
-}
-
-async function applyMigration(database: PGlite, name: string) {
-  const migration = await readFile(
-    new URL(`../migrations/${name}`, import.meta.url),
-    "utf8"
-  );
-  /* oxlint-disable eslint/no-await-in-loop -- SQL migration statements must execute in file order. */
-  for (const statement of migration.split("--> statement-breakpoint")) {
-    if (statement.trim()) await database.exec(statement);
-  }
-  /* oxlint-enable eslint/no-await-in-loop */
 }
 
 async function pendingConstraintCount(database: PGlite) {
