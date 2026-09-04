@@ -117,14 +117,26 @@ export default linqChannel({
         const idempotencyKey = report
           ? `scheduled-report:${report.runId}:${String(report.sequence)}`
           : undefined;
+        const adapter = context.bot.getAdapter("linq");
         const post = idempotencyKey
           ? (content: AdapterPostableMessage) =>
-              context.bot
-                .getAdapter("linq")
-                .postMessage(thread.id, content, { idempotencyKey })
+              adapter.postMessage(thread.id, content, { idempotencyKey })
           : (content: AdapterPostableMessage) => thread.post(content);
+        const postReply = (
+          content: AdapterPostableMessage,
+          replyToMessageId: string
+        ) => {
+          if (idempotencyKey) {
+            return adapter.postMessage(thread.id, content, {
+              idempotencyKey,
+              replyToMessageId,
+            });
+          }
+          return adapter.postMessage(thread.id, content, {
+            replyToMessageId,
+          });
+        };
         const resolveExistingChatId = () => {
-          const adapter = context.bot.getAdapter("linq");
           const { chatId, pendingHandle } = adapter.decodeThreadId(thread.id);
           if (pendingHandle || !chatId) {
             throw new Error("A Linq reply requires an existing conversation.");
@@ -177,7 +189,12 @@ export default linqChannel({
         const { text: requestedText } = message.data.output;
         if (!requestedText) {
           if (attachments?.length) {
-            await post({ attachments, raw: "" });
+            await sendLinqMessage({
+              outgoing: { attachments, raw: "" },
+              post,
+              postReply,
+              replyToMessageId: requestedReplyMessageId,
+            });
             await finalizeScheduledReportDelivery(session);
             return;
           }
@@ -205,12 +222,10 @@ export default linqChannel({
           > = { raw: text };
           if (attachments?.length) outgoing.attachments = attachments;
           await sendLinqMessage({
-            idempotencyKey,
             outgoing,
             post,
-            resolveExistingChatId,
-            replyToMessageId:
-              attachments?.length === 0 ? requestedReplyMessageId : undefined,
+            postReply,
+            replyToMessageId: requestedReplyMessageId,
           });
           await finalizeScheduledReportDelivery(session);
           return;
@@ -242,14 +257,10 @@ export default linqChannel({
         if (attachments?.length) outgoing.attachments = attachments;
         if (delivery.files.length > 0) outgoing.files = delivery.files;
         await sendLinqMessage({
-          idempotencyKey,
           outgoing,
           post,
-          resolveExistingChatId,
-          replyToMessageId:
-            !attachments?.length && delivery.files.length === 0
-              ? requestedReplyMessageId
-              : undefined,
+          postReply,
+          replyToMessageId: requestedReplyMessageId,
         });
         await finalizeScheduledReportDelivery(session);
       }
@@ -318,40 +329,27 @@ export default linqChannel({
 });
 
 async function sendLinqMessage({
-  idempotencyKey,
   outgoing,
   post,
-  resolveExistingChatId,
+  postReply,
   replyToMessageId,
 }: {
-  readonly idempotencyKey?: string;
   readonly outgoing: Extract<AdapterPostableMessage, { raw: string }>;
   readonly post: (
     content: AdapterPostableMessage
   ) => Promise<{ readonly id: string }>;
-  readonly resolveExistingChatId: () => string;
+  readonly postReply: (
+    content: AdapterPostableMessage,
+    replyToMessageId: string
+  ) => Promise<{ readonly id: string }>;
   readonly replyToMessageId?: string;
 }) {
   if (!replyToMessageId) {
     await post(outgoing);
     return;
   }
-  const chatId = resolveExistingChatId();
-  const apiKey = await credentials.apiKey();
-  const client = new LinqAPIV3({ apiKey });
   try {
-    const nativeMessage: LinqMessageContent = {
-      parts: [{ type: "text", value: outgoing.raw }],
-      reply_to: { message_id: replyToMessageId },
-    };
-    if (idempotencyKey) {
-      nativeMessage.idempotency_key = idempotencyKey;
-    }
-    await client.chats.messages.send(
-      chatId,
-      { message: nativeMessage },
-      undefined
-    );
+    await postReply(outgoing, replyToMessageId);
     return;
   } catch (error) {
     if (!unavailableReplyTargetSchema.safeParse(error).success) throw error;

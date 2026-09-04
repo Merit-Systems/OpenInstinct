@@ -5,6 +5,7 @@ settings:
   excludeLinksFromLockfile: false
 
 patchedDependencies:
+  '@linqapp/chat-sdk-adapter@0.5.1': 78b56cdd08c4250ad2680c094858b28d6d6935538d8e59e6dd578f106c77b9e7
   eve@0.49.0: 5b21e49f1a138ffa73b484505a6abc5a3540fc9ae32ff8d7101626fcc8c9d08d
 
 importers:
@@ -143,7 +144,7 @@ importers:
         version: 0.5.8
       '@linqapp/chat-sdk-adapter':
         specifier: 0.5.1
-        version: 0.5.1(chat@4.34.0(ai@7.0.83(zod@4.4.3))(zod@4.4.3))
+        version: 0.5.1(patch_hash=78b56cdd08c4250ad2680c094858b28d6d6935538d8e59e6dd578f106c77b9e7)(chat@4.34.0(ai@7.0.83(zod@4.4.3))(zod@4.4.3))
       '@next/env':
         specifier: 16.3.3
         version: 16.3.3
@@ -8534,7 +8535,7 @@ snapshots:
       '@jridgewell/resolve-uri': 3.1.2
       '@jridgewell/sourcemap-codec': 1.5.5
 
-  '@linqapp/chat-sdk-adapter@0.5.1(chat@4.34.0(ai@7.0.83(zod@4.4.3))(zod@4.4.3))':
+  '@linqapp/chat-sdk-adapter@0.5.1(patch_hash=78b56cdd08c4250ad2680c094858b28d6d6935538d8e59e6dd578f106c77b9e7)(chat@4.34.0(ai@7.0.83(zod@4.4.3))(zod@4.4.3))':
     dependencies:
       '@linqapp/sdk': 0.47.1
       chat: 4.34.0(ai@7.0.83(zod@4.4.3))(zod@4.4.3)

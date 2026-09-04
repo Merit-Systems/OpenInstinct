@@ -50,12 +50,6 @@ const messageOutputSchema = messageContentSchema
   })
   .superRefine((message, context) => {
     requireMessageContent(message, context);
-    if (message.replyTo && message.attachments) {
-      context.addIssue({
-        code: "custom",
-        message: "Replies currently support plain text only.",
-      });
-    }
   });
 
 const linkOutputSchema = z.strictObject({
