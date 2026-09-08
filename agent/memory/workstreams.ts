@@ -22,7 +22,7 @@ import {
   workstreamIdSchema,
 } from "@shared/workstreams/schema";
 
-function workstreamScope(context: MemoryScopeContext) {
+function interactiveWorkstreamScope(context: MemoryScopeContext) {
   const caller = context.session.auth.current;
   if (
     caller?.principalType !== "user" ||
@@ -30,21 +30,14 @@ function workstreamScope(context: MemoryScopeContext) {
   )
     return null;
   const scope = scopeFromPrincipal(caller);
-  return resolveModeValue(context, { interactive: scope.workspaceId });
+  return resolveModeValue(context, { interactive: scope });
 }
 
 async function recall(context: MemoryOperationContext) {
-  const caller = context.session.auth.current;
-  if (
-    caller?.principalType !== "user" ||
-    resolveModeValue(context, { interactive: true }) !== true
-  )
-    return null;
+  const scope = interactiveWorkstreamScope(context);
+  if (!scope) return null;
   context.abortSignal.throwIfAborted();
-  const index = await recallWorkstreams(
-    scopeFromPrincipal(caller),
-    context.memory.scope.key
-  );
+  const index = await recallWorkstreams(scope, context.memory.scope.key);
   context.abortSignal.throwIfAborted();
   // Always supersede the index, including when every workstream was closed or forgotten.
   return {
@@ -64,17 +57,14 @@ async function recall(context: MemoryOperationContext) {
 export default defineMemory({
   description:
     "Remember ongoing work across conversations: goals, constraints, decisions, evidence, and unresolved steps. Never store secrets or treat notes as permission to act.",
-  scope: workstreamScope,
+  scope(context) {
+    return interactiveWorkstreamScope(context)?.workspaceId ?? null;
+  },
   provider: defineMemoryProvider({
     recall: { "turn.started": recall, "compaction.completed": recall },
-    async tools(context) {
-      const caller = context.session.auth.current;
-      if (
-        caller?.principalType !== "user" ||
-        resolveModeValue(context, { interactive: true }) !== true
-      )
-        return null;
-      const scope = scopeFromPrincipal(caller);
+    tools(context) {
+      const scope = interactiveWorkstreamScope(context);
+      if (!scope) return null;
       const key = context.memory.scope.key;
       return {
         find: defineTool({

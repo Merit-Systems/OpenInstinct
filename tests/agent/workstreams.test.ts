@@ -380,6 +380,13 @@ describe("workstream memory", () => {
     };
     expect(workstreamMemory.scope(anonymous)).toBeNull();
     expect(await workstreamMemory.provider.tools(anonymous)).toBeNull();
+    const unscoped = context("unscoped");
+    unscoped.session.auth.current.attributes.workspaceId = "";
+    expect(workstreamMemory.scope(unscoped)).toBeNull();
+    expect(await workstreamMemory.provider.tools(unscoped)).toBeNull();
+    expect(
+      await workstreamMemory.provider.recall["turn.started"](unscoped)
+    ).toBeNull();
     const runtime = context("worker");
     runtime.session.auth.current.principalType = "runtime";
     expect(workstreamMemory.scope(runtime)).toBeNull();
