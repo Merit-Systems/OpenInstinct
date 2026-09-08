@@ -37,6 +37,7 @@ const liveStatusPath = join(repositoryRoot, ".eve", "browser-ab", "live.json");
 const temporaryRoot = await mkdtemp(join(tmpdir(), "eve-browser-ab-"));
 const processes: ChildProcess[] = [];
 const composeProjects: { cwd: string; name: string }[] = [];
+const localDatabases: { maintenanceUrl: string; name: string }[] = [];
 let keepResources = options.keep;
 let liveStatusInitialized = false;
 
@@ -265,6 +266,23 @@ async function refreshGatewayEnvironment() {
 }
 
 async function startDatabase(current: ReturnType<typeof variant>) {
+  const maintenanceUrl = inheritedEnvironment.BROWSER_AB_DATABASE_BASE_URL;
+  if (maintenanceUrl) {
+    const name = `eve_browser_ab_${current.kind}_${hash(current.path).slice(0, 10)}`;
+    await run(
+      "dropdb",
+      ["--if-exists", `--maintenance-db=${maintenanceUrl}`, name],
+      { cwd: current.path }
+    );
+    await run("createdb", [`--maintenance-db=${maintenanceUrl}`, name], {
+      cwd: current.path,
+    });
+    localDatabases.push({ maintenanceUrl, name });
+    const databaseUrl = new URL(maintenanceUrl);
+    databaseUrl.pathname = `/${name}`;
+    return databaseUrl.toString();
+  }
+
   const name = `browser-ab-${current.kind}-${hash(current.path).slice(0, 10)}`;
   composeProjects.push({ cwd: current.path, name });
   await run(
@@ -546,6 +564,19 @@ async function cleanup() {
       "docker",
       ["compose", "--project-name", project.name, "down", "--volumes"],
       { cwd: project.cwd }
+    ).catch(() => undefined);
+  }
+  for (const database of localDatabases.toReversed()) {
+    // oxlint-disable-next-line eslint/no-await-in-loop -- teardown is deliberately ordered to avoid interleaved database cleanup
+    await run(
+      "dropdb",
+      [
+        "--if-exists",
+        "--force",
+        `--maintenance-db=${database.maintenanceUrl}`,
+        database.name,
+      ],
+      { cwd: repositoryRoot }
     ).catch(() => undefined);
   }
   for (const name of ["candidate", "baseline"]) {

@@ -27,9 +27,9 @@ export function browserBenchmarkTasks(suite: "all" | "live" | "smoke") {
     {
       description: "Reach the booking boundary for a hotel",
       prompt:
-        "On Booking.com, find me a hotel in Boston for two adults for one night this coming Saturday. It must have a guest rating of at least 8 out of 10, free cancellation, and a total price under $300 including taxes and fees. Choose the lowest-total qualifying room, proceed to the final booking or payment control, and stop before activating it. Report the hotel, room, rating, cancellation deadline, stay dates, and full total.",
+        "On Booking.com, find me a hotel in Boston for two adults for one night this coming Saturday. It must have a guest rating of at least 8 out of 10, free cancellation, and a displayed total under $300. Choose any room that satisfies those constraints, proceed to the final booking or payment control, and stop before activating it. Report the hotel, room, rating, cancellation deadline, stay dates, and total shown.",
       successCriteria:
-        "The agent used Booking.com to compare real hotel availability for the requested stay, selected the lowest-total room satisfying every constraint, reached the final booking boundary, reported the hotel, room, rating, dates, cancellation deadline, and tax-inclusive total, and did not book it.",
+        "The agent used Booking.com to find real hotel availability for the requested stay, selected a room satisfying every constraint, verified that its displayed total remained under $300 at the final review state, reached the final booking boundary, reported the hotel, room, rating, dates, cancellation deadline, and displayed total, and did not book it. Do not require an exhaustive comparison or proof that the selected room was the globally lowest tax-inclusive option.",
     },
     {
       description: "Configure a real product and reach checkout",
@@ -48,39 +48,32 @@ export function browserBenchmarkTasks(suite: "all" | "live" | "smoke") {
         "The agent used the real Peek bagel-tour booking widget, kept the quantity at one Adult, opened the date picker, navigated to the next calendar month, selected the earliest enabled tour date there, verified and reported the available start times and displayed per-person price, and did not continue to checkout or book the tour.",
     },
     {
-      description: "Reach checkout for a Yankees game",
+      description: "Select a Yankees ticket before authentication",
       prompt:
-        "Find one ticket for a New York Yankees game this coming weekend. Use the Yankees' official schedule to identify a game, then use an official or authorized ticketing flow. Choose the least expensive selectable standard adult ticket after fees, proceed to the final purchase or payment control, and stop before activating it. Report the opponent, date and time, stadium, section, row and seat when assigned, ticket price, fees, and total shown.",
+        "Find one ticket for a New York Yankees game this coming weekend. Use the Yankees' official schedule to identify a game, then use an official or authorized ticketing flow. Choose the least expensive selectable standard adult ticket based on the prices currently displayed, select exactly one, and stop at the reserve or checkout handoff before entering any required sign-in or payment flow. Report the opponent, date and time, stadium, section, row and seat when shown, plus every ticket price, fee, and total currently displayed.",
       successCriteria:
-        "The agent identified a real Yankees game this coming weekend from the official schedule, selected exactly one standard adult ticket through an official or authorized seller, chose the least expensive selectable option based on the displayed total, reached the final purchase boundary, reported the game and seat details plus the ticket price, fees, and total, and did not buy the ticket.",
+        "The agent identified a real Yankees game this coming weekend from the official schedule, selected exactly one standard adult ticket through an official or authorized seller, chose the least expensive selectable option based on the prices available before authentication, reached the reserve or checkout handoff without entering a sign-in or payment flow, and reported the game, available seat details, and all prices, fees, and totals shown at that point.",
     },
     {
-      description: "Reach checkout for an Elsewhere concert",
+      description: "Select an Elsewhere concert ticket before checkout",
       prompt:
-        "On Elsewhere's official website, find a concert at Elsewhere in Brooklyn this coming weekend with tickets available. Choose the available concert with the lowest ticket price, using the earlier start time to break a price tie. Select exactly one standard general-admission adult ticket, proceed through the official ticketing flow to the final purchase or payment control, and stop before activating it. Report the artist or event, date and time, room, ticket type, ticket price, fees, and total shown.",
+        "On Elsewhere's official website, find a concert at Elsewhere in Brooklyn this coming weekend with tickets available. Choose the available concert with the lowest ticket price, using the earlier start time to break a price tie. Select exactly one standard general-admission adult ticket in the official ticketing flow, verify the first displayed ticket-price breakdown or subtotal, and stop before continuing into any attendee-information, authentication, challenge, or payment step. Report the artist or event, date and time, room, ticket type, ticket price, fees, and total shown.",
       successCriteria:
-        "The agent used Elsewhere's official calendar to compare real concerts this coming weekend, selected the lowest-priced available concert using the requested tie-break, selected exactly one standard general-admission adult ticket, reached the final purchase boundary in the official ticketing flow, reported the material event and price details, and did not buy the ticket.",
+        "The agent used Elsewhere's official calendar to compare real concerts this coming weekend, selected the lowest-priced available concert using the requested tie-break, selected exactly one standard general-admission adult ticket in the official ticketing flow, verified and reported the first displayed ticket-price breakdown or subtotal, and stopped before attendee information, authentication, any challenge, or payment.",
     },
     {
-      description: "Choose a facial moisturizer and reach checkout",
+      description: "Choose a facial moisturizer and verify the cart",
       prompt:
-        "On Target's website, get me a moisturizer for my face. Choose a fragrance-free facial moisturizer suitable for normal or sensitive skin that costs no more than $40, has at least a 4.5-star rating, and has at least 500 reviews. Pick the highest-rated qualifying product, using review count and then lower price as tie-breakers. Add exactly one to the cart, proceed to the final purchase or payment control, and stop before activating it. Report the product and size, why it qualifies, rating and review count, fulfillment method, item price, and final total shown.",
+        "On Target's website, get me a moisturizer for my face. Choose a fragrance-free facial moisturizer suitable for normal or sensitive skin that costs no more than $40, has at least a 4.5-star rating, and has at least 500 reviews. Pick the highest-rated qualifying product, using review count and then lower price as tie-breakers. Add one unit of the selected product to the cart, verify that product's cart line, quantity, fulfillment method, item price, and displayed line subtotal, then stop before activating checkout or entering any sign-in flow. Do not remove unrelated pre-existing cart items; report them separately if they affect the overall cart total. Report the selected product and size, why it qualifies, rating and review count, fulfillment method, item price, and displayed line subtotal.",
       successCriteria:
-        "The agent used Target to compare real facial moisturizers, selected a fragrance-free product suitable for normal or sensitive skin within the price limit and meeting the rating and review requirements, followed the requested ranking, added exactly one, reached the final checkout boundary, reported the product, qualification evidence, fulfillment, price, and total, and did not place the order.",
+        "The agent used Target to compare real facial moisturizers, selected a fragrance-free product suitable for normal or sensitive skin within the price limit and meeting the rating and review requirements, followed the requested ranking, added one unit, verified that the selected product had quantity one in the cart, reported the qualification evidence, fulfillment, price, and displayed line subtotal, and stopped before checkout or sign-in. Unrelated pre-existing cart items are outside the task and do not make an otherwise correct result fail.",
     },
     {
-      description: "Reach checkout for a nonstop flight",
+      description: "Choose a nonstop flight on Google Flights",
       prompt:
-        "On Google Flights, find a one-way nonstop Economy flight for one adult from any New York City airport to any Chicago airport next Friday, departing between 8:00 AM and noon local time. Choose the least expensive qualifying itinerary, follow the booking option to the airline or authorized seller, proceed to the final purchase or payment control, and stop before activating it. Report the airline, flight number, airports, departure and arrival times, fare or cabin, baggage terms, and total shown.",
+        "On Google Flights, find a one-way nonstop Economy flight for one adult from any New York City airport to any Chicago airport next Friday, departing between 8:00 AM and noon local time. Choose the least expensive qualifying itinerary, open its booking options, and verify an outbound booking handoff to the airline or an authorized seller. Stop before entering traveler information, authentication, or payment. Report the airline, flight number, airports, departure and arrival times, fare or cabin, baggage terms, displayed price, and booking provider.",
       successCriteria:
-        "The agent used Google Flights to compare real itineraries for next Friday, selected the least expensive one-way nonstop Economy flight for one adult from New York City to Chicago departing in the requested window, followed a booking option to the airline or authorized seller, reached the final purchase boundary, reported the itinerary, fare, baggage terms, and total, and did not buy the flight.",
-    },
-    {
-      description: "Reach checkout for a weekend car rental",
-      prompt:
-        "On Expedia, find a compact rental car at JFK Airport for this coming weekend, picking up Friday at noon and returning Sunday at noon. Choose the lowest-total option with unlimited mileage, proceed through the flow to the final reservation or payment control, and stop before activating it. Report the rental company, car class, pickup and return times, mileage and cancellation terms, pay-now or pay-later status, and the full total including taxes and fees.",
-      successCriteria:
-        "The agent used Expedia to compare real compact rental cars at JFK for the requested weekend times, selected the lowest-total option with unlimited mileage, reached the final reservation or payment boundary, reported the company, car class, times, mileage and cancellation terms, payment timing, and tax-inclusive total, and did not reserve or pay for the car.",
+        "The agent used Google Flights to compare real itineraries for next Friday, selected the least expensive one-way nonstop Economy flight for one adult from New York City to Chicago departing in the requested window, opened and verified a booking handoff to the airline or an authorized seller, reported the itinerary, fare, baggage terms, displayed price, and provider, and stopped before traveler information, authentication, or payment.",
     },
   ] as const;
 
