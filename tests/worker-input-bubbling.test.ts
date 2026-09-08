@@ -46,7 +46,7 @@ describe("worker input bubbling", () => {
         value: worker,
         state: new ContextContainer(),
       })
-    ).resolves.toMatchObject({ model: { id: "zai/glm-5.2" } });
+    ).resolves.toMatchObject({ model: { id: "meta/muse-spark-1.3" } });
   });
 
   it("ends the worker turn and routes the answer through its agent id", () => {

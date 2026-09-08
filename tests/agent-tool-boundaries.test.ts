@@ -138,6 +138,10 @@ describe("root and worker capability boundaries", () => {
       "Never use the browser for general web search"
     );
     expect(workerInstructions).toContain(
+      "A named vertical search or booking product"
+    );
+    expect(workerInstructions).toContain("such as Google Flights");
+    expect(workerInstructions).toContain(
       "Use `playwright_execute` as the primary browser execution surface"
     );
     expect(workerInstructions).toContain(

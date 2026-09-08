@@ -17,15 +17,16 @@ BROWSER_BENCH_LABEL=baseline BROWSER_BENCH_REPETITIONS=3 pnpm bench:browser
 ```
 
 The live suite contains real public booking and purchase-boundary tasks across
-movie tickets, restaurants, rail, hotels, and retail. Every task stops before
-the irreversible confirmation:
+movie tickets, restaurants, rail, hotels, retail, and vertical search. Every
+task stops before the irreversible confirmation or before an unrelated
+authentication, challenge, traveler-information, or payment prerequisite:
 
 ```sh
 BROWSER_BENCH_SUITE=live pnpm bench:browser
 ```
 
-Login-required tasks are intentionally out of scope. The `all` suite runs every
-enabled real-site task, while `smoke` runs a smaller subset.
+Login- and CAPTCHA-required outcomes are intentionally out of scope. The `all`
+suite runs every enabled real-site task, while `smoke` runs a smaller subset.
 
 Target a deployment with the same suite:
 
