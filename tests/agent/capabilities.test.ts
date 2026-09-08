@@ -1,6 +1,7 @@
 import type { DynamicResolveContext } from "eve/tools";
 import { describe, expect, it } from "vitest";
 import personalInfoMemory from "@agent/memory/personal_info";
+import workstreamMemory from "@agent/memory/workstreams";
 import browserAgent from "@agent/subagents/browser-agent/agent";
 import calendar from "@agent/tools/calendar";
 import contacts from "@agent/tools/contacts";
@@ -32,6 +33,10 @@ describe("authored mode capability matrix", () => {
       "schedules-list",
       "schedules-update",
       "send_message",
+      "workstreams__find",
+      "workstreams__forget",
+      "workstreams__read",
+      "workstreams__save",
     ]);
   });
 
@@ -85,6 +90,23 @@ async function authoredCapabilities(authenticator: string) {
       ...Object.keys(personalInfoTools).map((name) => `personal_info__${name}`)
     );
   }
+
+  const workstreamTools = await workstreamMemory.provider.tools({
+    ...context,
+    memory: {
+      scope: {
+        key: "workstreams-key",
+        namespace: "workstreams",
+        value: "personal:workspace",
+      },
+      slot: "workstreams",
+    },
+    turn: { id: "turn-1", input: [], sequence: 1 },
+  });
+  if (workstreamTools)
+    capabilities.push(
+      ...Object.keys(workstreamTools).map((name) => `workstreams__${name}`)
+    );
 
   const resolveBrowserAgent = browserAgent.events["turn.started"];
   if (resolveBrowserAgent && (await resolveBrowserAgent({}, context))) {

@@ -43,6 +43,7 @@ describe("source layout", () => {
       "schedules",
       "user-profile",
       "vault",
+      "workstreams",
     ]);
     expect(files("shared")).toEqual([]);
     expect(existsSync("shared/environment/env.ts")).toBe(true);
