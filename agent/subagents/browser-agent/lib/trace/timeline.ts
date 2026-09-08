@@ -46,7 +46,7 @@ export function traceTimelineRows(event: HookEvent): TraceTimelineRow[] {
         detail: compactJson(action.input),
         id: `${id}:${String(index)}`,
         label:
-          action.kind === "tool-call"
+          action.kind === "tool-call" || action.kind === "workflow-tool-call"
             ? action.toolName
             : action.kind === "load-skill"
               ? "Load skill"

@@ -73,6 +73,44 @@ describe("Eve channel authentication", () => {
     );
   });
 
+  it.each([
+    [
+      "GET",
+      "/eve/v1/connections/:name/callback/:attemptId/:token",
+      "/eve/v1/connections/google/callback/attempt/wrun_victim:auth",
+    ],
+    [
+      "POST",
+      "/eve/v1/connections/:name/callback/:attemptId/:token",
+      "/eve/v1/connections/google/callback/attempt/wrun_victim:auth",
+    ],
+    [
+      "GET",
+      "/eve/v1/connections/:name/callback/:token",
+      "/eve/v1/connections/google/callback/wrun_victim:auth",
+    ],
+    [
+      "POST",
+      "/eve/v1/connections/:name/callback/:token",
+      "/eve/v1/connections/google/callback/wrun_victim:auth",
+    ],
+  ] as const)(
+    "guards %s %s before invoking the callback",
+    async (method, pattern, path) => {
+      const route = findRoute(method, pattern);
+      const pending = route.handler(
+        new Request(`https://assistant.example${path}`, { method }),
+        unexpectedRouteContext()
+      );
+      await vi.runAllTimersAsync();
+      expect((await pending).status).toBe(403);
+      expect(isSessionOwnedMock).toHaveBeenCalledWith(
+        expect.objectContaining({ userId: "better-auth:user-1" }),
+        "wrun_victim"
+      );
+    }
+  );
+
   it("fails closed on routes whose subject cannot be resolved", async () => {
     const route = findRoute("POST", "/eve/v1/task-input/:token");
 
