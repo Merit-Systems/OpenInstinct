@@ -74,6 +74,22 @@ OpenInstinct uses this store for persistent per-user memory and browser images.
 Production conversations require it because memory is recalled before each agent
 turn. Local Eve development uses process-local memory instead.
 
+Ongoing undertakings use a separate `workstreams` memory slot backed by the
+application database. Run the application migrations before using this feature;
+it needs no additional service or credentials. The root agent can save goals,
+constraints, decisions, source-linked observations, and unresolved steps across
+conversations. It recalls an index of the eight most recently updated active or
+waiting workstreams, then reads the selected record before continuing. Older and
+completed workstreams remain searchable.
+
+Workstreams are scoped by authenticated workspace and Eve's deployment-aware
+memory key. Updates require the current revision. Each scope retains content for up to 100
+bounded records; the agent asks which obsolete record to forget at capacity.
+Forgetting erases the content and source references, retaining only a tombstone
+to prevent an interrupted save from restoring them. Existing chat history is
+unchanged. This slot is available only in interactive root turns; remembering
+work does not start a job, create a schedule, or authorize an action.
+
 For an existing Vercel project, link it first with
 `eve link --project <your-vercel-project> --non-interactive`, then create and
 connect the store with one command:

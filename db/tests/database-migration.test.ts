@@ -40,6 +40,7 @@ describe("database migrations", () => {
     await applyMigration(database, "0010_rapid_cerise.sql");
     await applyMigration(database, "0011_faulty_unicorn.sql");
     await applyMigration(database, "0012_harsh_domino.sql");
+    await applyMigration(database, "0013_last_christian_walker.sql");
 
     const tables = await database.query<{ count: number }>(
       `SELECT count(*)::int AS count
@@ -47,6 +48,7 @@ describe("database migrations", () => {
        WHERE table_schema = 'public'
          AND table_name IN (
            'workspaces',
+           'workstreams',
            'workspace_memberships',
            'vault_items',
            'settings',
@@ -69,7 +71,7 @@ describe("database migrations", () => {
     );
     const pendingConstraints = await pendingConstraintCount(database);
 
-    expect(tables.rows[0]?.count).toBe(19);
+    expect(tables.rows[0]?.count).toBe(20);
     expect(pendingConstraints).toBe(0);
     await expect(
       database.query("SELECT id FROM vault_items WHERE id = 'contact-1'")
