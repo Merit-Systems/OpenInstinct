@@ -1,3 +1,8 @@
+import type {
+  expireConversationWakeups,
+  isConversationWakeupCurrent,
+  finishConversationWakeup,
+} from "@db/services/conversation-wakeups";
 import type { Session } from "eve/channels";
 import type { ScheduleHandlerArgs, ScheduleToFn } from "eve/schedules";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -22,6 +27,16 @@ const services = vi.hoisted(() => ({
   releaseRun: vi.fn<typeof releaseScheduledAgentRun>(),
   setSession: vi.fn<typeof setScheduledRunSession>(),
 }));
+const wakeups = vi.hoisted(() => ({
+  expire: vi.fn<typeof expireConversationWakeups>(),
+  current: vi.fn<typeof isConversationWakeupCurrent>(),
+  finish: vi.fn<typeof finishConversationWakeup>(),
+}));
+vi.mock("@db/services/conversation-wakeups", () => ({
+  expireConversationWakeups: wakeups.expire,
+  isConversationWakeupCurrent: wakeups.current,
+  finishConversationWakeup: wakeups.finish,
+}));
 const requests = vi.hoisted(() => ({
   report: vi.fn<(runId: string) => Promise<void>>(),
 }));
@@ -45,6 +60,7 @@ vi.mock("@agent/channels/scheduled-run", () => ({
 }));
 
 import dynamicSchedule from "@agent/schedules/dynamic";
+import { assertCurrentWakeup } from "@agent/lib/schedules/wakeup";
 import { dispatchScheduledReport } from "@agent/lib/schedules/report";
 
 describe("dynamic schedule dispatch", () => {
@@ -56,6 +72,7 @@ describe("dynamic schedule dispatch", () => {
     services.releaseRun.mockResolvedValue("queued");
     services.setSession.mockResolvedValue(true);
     requests.report.mockResolvedValue();
+    wakeups.current.mockResolvedValue(true);
   });
 
   it("hands due work directly to the scheduled-run channel", async () => {
@@ -84,6 +101,82 @@ describe("dynamic schedule dispatch", () => {
     expect(services.claimRuns).toHaveBeenCalledWith(
       expect.objectContaining({ leaseForMs: 300_000 })
     );
+  });
+
+  it("queues a wake-up in the existing main conversation with normal capabilities", async () => {
+    const claim = scheduledClaim();
+    claim.job.execution = "conversation";
+    claim.job.defaultKey = "daily-check-in";
+    services.claimRuns.mockResolvedValue([claim]);
+    const send = vi
+      .fn<ReturnType<ScheduleToFn>["send"]>()
+      .mockResolvedValue(workerSession("main-session"));
+    const to = vi.fn<ScheduleToFn>(() => ({ send }));
+    await runSchedule(to);
+    expect(to).toHaveBeenCalledExactlyOnceWith(expect.anything(), {
+      adapterName: "linq",
+      threadId: claim.job.conversationId,
+    });
+    const options = send.mock.calls[0]?.[1];
+    expect(options).toMatchObject({
+      turnPolicy: "queue",
+      auth: {
+        authenticator: "scheduled-wakeup",
+        principalId: "user-1",
+        attributes: { workspaceId: "workspace-1", scheduleRevision: "0" },
+      },
+    });
+    expect(services.setSession).not.toHaveBeenCalled();
+    expect(wakeups.finish).toHaveBeenCalledExactlyOnceWith(claim);
+    const { resolveModeValue } = await import("@agent/lib/mode");
+    expect(
+      resolveModeValue(
+        {
+          session: {
+            auth: { current: options?.auth ?? null, initiator: null },
+          },
+        },
+        { interactive: "normal tools" }
+      )
+    ).toBe("normal tools");
+    expect(services.claimReports).not.toHaveBeenCalled();
+    wakeups.current.mockResolvedValue(false);
+    await expect(
+      assertCurrentWakeup({ current: options?.auth ?? null, initiator: null })
+    ).rejects.toThrow("schedule changed");
+    await expect(
+      assertCurrentWakeup({
+        current: {
+          ...options?.auth,
+          authenticator: "linq-message",
+          principalType: "user",
+          principalId: "user-1",
+          attributes: {},
+        },
+        initiator: options?.auth ?? null,
+      })
+    ).resolves.toBeUndefined();
+  });
+
+  it("does not send stale wake-ups or retry ambiguous delivery failures", async () => {
+    const claim = scheduledClaim();
+    claim.job.execution = "conversation";
+    services.claimRuns.mockResolvedValue([claim]);
+    const send = vi
+      .fn<ReturnType<ScheduleToFn>["send"]>()
+      .mockRejectedValue(new Error("Connection closed after acceptance"));
+    const to = vi.fn<ScheduleToFn>(() => ({ send }));
+    wakeups.current.mockResolvedValue(false);
+    await runSchedule(to);
+    expect(send).not.toHaveBeenCalled();
+    wakeups.current.mockResolvedValue(true);
+    await runSchedule(to);
+    expect(send).toHaveBeenCalledTimes(1);
+    expect(wakeups.finish).toHaveBeenLastCalledWith(
+      claim,
+      "Connection closed after acceptance"
+    );
+    expect(services.releaseRun).not.toHaveBeenCalled();
   });
 
   it("requests a clean restart for a reclaimed interrupted worker", async () => {
@@ -310,6 +403,8 @@ function scheduledClaim(): Awaited<
       lastRunAt: new Date("2026-09-02T13:00:00.000Z"),
       conversationChannel: "linq",
       conversationId: "linq:dm:chat-1",
+      defaultKey: null,
+      execution: "worker",
       missedRunPolicy: "run_latest",
       nextRunAt: new Date("2026-09-03T13:00:00.000Z"),
       prompt: "Watch the price.",

@@ -173,6 +173,26 @@ export async function updateScheduledAgentJob(
     })
     .where(eq(scheduledAgentJobs.id, current.id))
     .returning();
+  if (job?.execution === "conversation") {
+    await db
+      .update(scheduledAgentRuns)
+      .set({
+        status: "completed",
+        reportStatus: "not_needed",
+        completedAt: now,
+        outcome: {
+          kind: "nothing_to_report",
+          reason: "The user changed the check-in schedule.",
+        },
+        updatedAt: now,
+      })
+      .where(
+        and(
+          eq(scheduledAgentRuns.jobId, job.id),
+          eq(scheduledAgentRuns.status, "queued")
+        )
+      );
+  }
   return job ? parseJob(job) : undefined;
 }
 
@@ -246,8 +266,13 @@ export async function claimReadyScheduledAgentRuns(options: {
       .where(
         and(
           or(
+            eq(scheduledAgentJobs.execution, "worker"),
+            inArray(scheduledAgentJobs.status, ["active", "completed"])
+          ),
+          or(
             eq(scheduledAgentRuns.status, "queued"),
             and(
+              eq(scheduledAgentJobs.execution, "worker"),
               eq(scheduledAgentRuns.status, "running"),
               isNull(scheduledAgentRuns.workerSessionId),
               lte(scheduledAgentRuns.leaseExpiresAt, options.now)

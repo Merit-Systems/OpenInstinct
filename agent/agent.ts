@@ -1,3 +1,4 @@
+import { assertCurrentWakeup } from "@agent/lib/schedules/wakeup";
 import { defineAgent, defineDynamic } from "eve";
 import { scheduledRunIdentity } from "@agent/lib/schedules/identity";
 import { isScheduledAgentRunLeaseActive } from "@db/services/scheduled-agent-run-leases";
@@ -11,6 +12,7 @@ export default defineAgent({
   model: defineDynamic({
     events: {
       "step.started": async (_event, ctx) => {
+        await assertCurrentWakeup(ctx.session.auth);
         const scheduledRun = scheduledRunIdentity(ctx.session.auth);
         if (
           scheduledRun &&

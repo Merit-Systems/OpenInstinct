@@ -318,6 +318,7 @@ export default linqChannel({
           conversationChannel: "linq",
           conversationId: context.thread.id,
           linqThreadId: context.thread.id,
+          linqIsDM: String(context.thread.isDM),
           linqMessageId: message.id,
           phoneNumber,
           workspaceId: scope.workspaceId,

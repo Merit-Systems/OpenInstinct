@@ -21,6 +21,10 @@ export const scheduledAgentJobs = pgTable(
     workspaceId: text("workspace_id").notNull(),
     createdByUserId: text("created_by_user_id").notNull(),
     prompt: text("prompt").notNull(),
+    defaultKey: text("default_key"),
+    execution: text("execution", { enum: ["worker", "conversation"] })
+      .notNull()
+      .default("worker"),
     conversationChannel: text("conversation_channel", {
       enum: ["eve", "linq"],
     }).notNull(),
@@ -88,6 +92,23 @@ export const scheduledAgentJobs = pgTable(
     check(
       "scheduled_agent_jobs_status_check",
       sql`${table.status} IN ('active', 'paused', 'completed', 'deleted')`
+    ),
+    check(
+      "scheduled_agent_jobs_execution_check",
+      sql`${table.execution} IN ('worker', 'conversation')`
+    ),
+    check(
+      "scheduled_agent_jobs_default_key_check",
+      sql`${table.defaultKey} IS NULL OR ${table.defaultKey} = 'daily-check-in'`
+    ),
+    check(
+      "scheduled_agent_jobs_conversation_execution_check",
+      sql`${table.execution} <> 'conversation' OR ${table.conversationChannel} = 'linq'`
+    ),
+    uniqueIndex("scheduled_agent_jobs_default_idx").on(
+      table.workspaceId,
+      table.createdByUserId,
+      table.defaultKey
     ),
     index("scheduled_agent_jobs_due_idx").on(
       table.status,

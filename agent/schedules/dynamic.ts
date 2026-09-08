@@ -10,6 +10,9 @@ import {
   setScheduledRunSession,
 } from "@db/services/scheduled-agent-jobs";
 
+import { dispatchConversationWakeup } from "@agent/lib/schedules/wakeup";
+import { expireConversationWakeups } from "@db/services/conversation-wakeups";
+
 const workerStartupLimitMs = 5 * 60_000;
 
 export default defineSchedule({
@@ -21,6 +24,7 @@ export default defineSchedule({
 
 async function dispatchDueWork(to: ScheduleToFn) {
   const now = new Date();
+  await expireConversationWakeups(now);
   const materializedRunIds = await materializeDueScheduledAgentRuns({
     limit: 25,
     now,
@@ -48,6 +52,10 @@ async function executeScheduledRun(
   to: ScheduleToFn,
   claim: Awaited<ReturnType<typeof claimReadyScheduledAgentRuns>>[number]
 ) {
+  if (claim.job.execution === "conversation") {
+    await dispatchConversationWakeup(to, claim);
+    return;
+  }
   const leaseToken = claim.run.leaseToken;
   if (!leaseToken) throw new Error("A scheduled run claim requires a lease.");
   console.info("[scheduled-run] dispatching worker", {
