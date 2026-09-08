@@ -433,6 +433,8 @@ function scheduledJob(
     lastRunAt: null,
     latestRun: null,
     ...conversation,
+    defaultKey: null,
+    execution: "worker",
     missedRunPolicy: "run_latest",
     nextRunAt: new Date("2026-09-02T13:00:00.000Z"),
     prompt: "Send the morning summary.",
@@ -453,6 +455,8 @@ function scheduledJob(
 function scheduleSummary(job: ReturnType<typeof scheduledJob>) {
   return {
     createdAt: job.createdAt.toISOString(),
+    defaultKey: job.defaultKey,
+    execution: job.execution,
     id: job.id,
     lastError: job.lastError,
     lastRunAt: job.lastRunAt?.toISOString() ?? null,

@@ -32,6 +32,7 @@ describe("scheduled agent jobs", () => {
       "0010_rapid_cerise.sql",
       "0011_faulty_unicorn.sql",
       "0012_harsh_domino.sql",
+      "0013_lumpy_bastion.sql",
     ]) {
       await applyMigration(client, migration);
     }

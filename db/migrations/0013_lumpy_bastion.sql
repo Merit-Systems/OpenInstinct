@@ -1,0 +1,6 @@
+ALTER TABLE "scheduled_agent_jobs" ADD COLUMN "default_key" text;--> statement-breakpoint
+ALTER TABLE "scheduled_agent_jobs" ADD COLUMN "execution" text DEFAULT 'worker' NOT NULL;--> statement-breakpoint
+CREATE UNIQUE INDEX "scheduled_agent_jobs_default_idx" ON "scheduled_agent_jobs" USING btree ("workspace_id","created_by_user_id","default_key");--> statement-breakpoint
+ALTER TABLE "scheduled_agent_jobs" ADD CONSTRAINT "scheduled_agent_jobs_execution_check" CHECK ("scheduled_agent_jobs"."execution" IN ('worker', 'conversation'));--> statement-breakpoint
+ALTER TABLE "scheduled_agent_jobs" ADD CONSTRAINT "scheduled_agent_jobs_default_key_check" CHECK ("scheduled_agent_jobs"."default_key" IS NULL OR "scheduled_agent_jobs"."default_key" = 'daily-check-in');--> statement-breakpoint
+ALTER TABLE "scheduled_agent_jobs" ADD CONSTRAINT "scheduled_agent_jobs_conversation_execution_check" CHECK ("scheduled_agent_jobs"."execution" <> 'conversation' OR "scheduled_agent_jobs"."conversation_channel" = 'linq');

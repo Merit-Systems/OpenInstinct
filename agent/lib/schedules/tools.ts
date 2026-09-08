@@ -36,6 +36,8 @@ export function scheduleSummary(
 ) {
   return {
     createdAt: job.createdAt.toISOString(),
+    defaultKey: job.defaultKey,
+    execution: job.execution,
     id: job.id,
     lastError: job.lastError,
     lastRunAt: job.lastRunAt?.toISOString() ?? null,
