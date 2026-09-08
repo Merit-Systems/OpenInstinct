@@ -60,24 +60,45 @@ describe("root and worker capability boundaries", () => {
 
   it("gives worker the browser and opaque-vault tools without messaging", () => {
     expect(toolFiles(workerTools)).toEqual([
+      "ask_question.ts",
+      "bash.ts",
       "capture_browser_image.ts",
       "computer_action.ts",
       "fill_from_vault.ts",
       "list_vault.ts",
+      "load_skill.ts",
       "manage_browsers.ts",
       "personal_info.ts",
+      "read_file.ts",
       "semantic_browser.ts",
-      "task_cancel.ts",
-      "task_update.ts",
+      "todo.ts",
+      "web_fetch.ts",
+      "web_search.ts",
+      "write_file.ts",
     ]);
     expect(existsSync(`${workerRoot}/tools/sendMessage.ts`)).toBe(false);
     expect(existsSync(`${workerRoot}/tools/request_vault_setup.ts`)).toBe(
       false
     );
-    expect(existsSync(`${workerTools}/ask_question.ts`)).toBe(false);
+    expect(readFileSync(`${workerTools}/ask_question.ts`, "utf8")).toContain(
+      "disableTool()"
+    );
     expect(readFileSync(`${workerTools}/personal_info.ts`, "utf8")).toContain(
       "disableTool()"
     );
+    for (const tool of [
+      "bash",
+      "load_skill",
+      "read_file",
+      "todo",
+      "web_fetch",
+      "web_search",
+      "write_file",
+    ]) {
+      expect(readFileSync(`${workerTools}/${tool}.ts`, "utf8")).toContain(
+        "disableTool()"
+      );
+    }
     expect(existsSync(`${workerRoot}/extensions/kernel/extension.ts`)).toBe(
       false
     );
