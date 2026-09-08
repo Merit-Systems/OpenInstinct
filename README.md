@@ -83,7 +83,7 @@ waiting workstreams, then reads the selected record before continuing. Older and
 completed workstreams remain searchable.
 
 Workstreams are scoped by authenticated workspace and Eve's deployment-aware
-memory key. Updates require the current revision. Each scope retains up to 100
+memory key. Updates require the current revision. Each scope retains content for up to 100
 bounded records; the agent asks which obsolete record to forget at capacity.
 Forgetting erases the content and source references, retaining only a tombstone
 to prevent an interrupted save from restoring them. Existing chat history is

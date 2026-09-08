@@ -22,7 +22,9 @@ import {
   workstreamIdSchema,
 } from "@shared/workstreams/schema";
 
-function interactiveWorkstreamScope(context: MemoryScopeContext) {
+function interactiveWorkstreamScope(
+  context: Pick<MemoryScopeContext, "session">
+) {
   const caller = context.session.auth.current;
   if (
     caller?.principalType !== "user" ||
@@ -62,7 +64,7 @@ export default defineMemory({
   },
   provider: defineMemoryProvider({
     recall: { "turn.started": recall, "compaction.completed": recall },
-    tools(context) {
+    async tools(context) {
       const scope = interactiveWorkstreamScope(context);
       if (!scope) return null;
       const key = context.memory.scope.key;
