@@ -1,14 +1,24 @@
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
+import browserAgent from "@agent/subagents/browser-agent/agent";
 
 describe("worker input bubbling", () => {
-  it("keeps native questions disabled inside browser workers", () => {
-    const askQuestionTool = readFileSync(
-      "agent/subagents/browser-agent/tools/ask_question.ts",
-      "utf8"
+  it("keeps native questions disabled inside browser workers", async () => {
+    const worker = await browserAgent.events["turn.started"]?.(
+      {},
+      {
+        channel: { kind: "channel:linq", metadata: {} },
+        messages: [],
+        session: {
+          auth: { current: null, initiator: null },
+          id: "worker-test",
+        },
+      }
     );
-
-    expect(askQuestionTool).toMatch(/disableTool\(\)/);
+    expect(worker?.defaultTools).toBe(false);
+    expect(
+      existsSync("agent/subagents/browser-agent/tools/ask_question.ts")
+    ).toBe(false);
   });
 
   it("ends the worker turn and routes the answer through its agent id", () => {

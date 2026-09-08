@@ -1,7 +1,9 @@
+import { defineChannel } from "eve/channels";
 import { eveChannel } from "eve/channels/eve";
 import {
   ForbiddenError,
   localDev,
+  routeAuth,
   UnauthenticatedError,
 } from "eve/channels/auth";
 import { z } from "zod";
@@ -20,52 +22,54 @@ import {
 
 const authenticateLocalDev = localDev();
 
-export default eveChannel({
-  auth: [
-    async (request) => {
-      const identity = await requestIdentityFromRequest(request);
-      if (!identity) return null;
-      const { phoneNumber, scope } = identity;
+const authenticate: Parameters<typeof routeAuth>[1] = [
+  async (request) => {
+    const identity = await requestIdentityFromRequest(request);
+    if (!identity) return null;
+    const { phoneNumber, scope } = identity;
 
-      await requireOwnedRouteSubject(scope, request);
+    await requireOwnedRouteSubject(scope, request);
 
-      return {
-        attributes: {
-          conversationChannel: "eve",
-          phoneNumber,
-          workspaceId: scope.workspaceId,
-        },
-        authenticator: "authjs",
-        principalId: scope.userId,
-        principalType: "user",
-      };
-    },
-    async (request) => {
-      const local = await authenticateLocalDev(request);
-      if (!local) return null;
+    return {
+      attributes: {
+        conversationChannel: "eve",
+        phoneNumber,
+        workspaceId: scope.workspaceId,
+      },
+      authenticator: "authjs",
+      principalId: scope.userId,
+      principalType: "user",
+    };
+  },
+  async (request) => {
+    const local = await authenticateLocalDev(request);
+    if (!local) return null;
 
-      const scope = accessScopeForUser("better-auth:browser-benchmark");
-      await requireOwnedRouteSubject(scope, request);
+    const scope = accessScopeForUser("better-auth:browser-benchmark");
+    await requireOwnedRouteSubject(scope, request);
 
-      return {
-        ...local,
-        attributes: {
-          ...local.attributes,
-          conversationChannel: "eve",
-          phoneNumber: "+15555550100",
-          workspaceId: scope.workspaceId,
-        },
-        principalId: scope.userId,
-        principalType: "user" as const,
-      };
-    },
-    () => {
-      throw new UnauthenticatedError({
-        code: "authentication_required",
-        message: "Sign in to continue.",
-      });
-    },
-  ],
+    return {
+      ...local,
+      attributes: {
+        ...local.attributes,
+        conversationChannel: "eve",
+        phoneNumber: "+15555550100",
+        workspaceId: scope.workspaceId,
+      },
+      principalId: scope.userId,
+      principalType: "user" as const,
+    };
+  },
+  () => {
+    throw new UnauthenticatedError({
+      code: "authentication_required",
+      message: "Sign in to continue.",
+    });
+  },
+];
+
+const channel = eveChannel({
+  auth: authenticate,
   events: {
     async "action.result"(event, _channel, session) {
       if (
@@ -96,6 +100,36 @@ export default eveChannel({
       await releaseScheduledReportDelivery(session, event.message);
     },
   },
+});
+
+// Eve callback handlers authenticate their capability tokens internally. Apply
+// this app's caller and workspace ownership policy at the public route boundary.
+const ownedCallbackRoutes = new Set([
+  "/eve/v1/connections/:name/callback/:attemptId/:token",
+  "/eve/v1/connections/:name/callback/:token",
+  "/eve/v1/callback/:token",
+  "/eve/v1/task-input/:token",
+]);
+
+export default defineChannel({
+  ...channel,
+  // oxlint-disable-next-line oxc/no-map-spread -- Keep Eve's original route definitions intact when adding the app authorization boundary.
+  routes: channel.routes.map((route) => {
+    if (
+      route.transport === "websocket" ||
+      !ownedCallbackRoutes.has(route.path)
+    ) {
+      return route;
+    }
+    return {
+      ...route,
+      async handler(request, context) {
+        const principal = await routeAuth(request, authenticate);
+        if (principal instanceof Response) return principal;
+        return route.handler(request, context);
+      },
+    };
+  }),
 });
 
 // Routes without a session subject. Every other eve route must name a session

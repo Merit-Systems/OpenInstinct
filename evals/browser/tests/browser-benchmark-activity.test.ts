@@ -46,13 +46,22 @@ describe("browser benchmark live activity", () => {
         } satisfies MessageStreamEvent,
         {
           data: {
-            messageDelta: "Searching",
-            messageSoFar: "Searching current Brooklyn showtimes",
+            messageDelta: "Searching ",
             sequence: 0,
             stepIndex: 0,
             turnId: "turn_1",
           },
           meta: { at: "2026-08-31T17:00:01.000Z", id: "evt_message" },
+          type: "message.appended",
+        } satisfies MessageStreamEvent,
+        {
+          data: {
+            messageDelta: "current Brooklyn showtimes",
+            sequence: 0,
+            stepIndex: 0,
+            turnId: "turn_1",
+          },
+          meta: { at: "2026-08-31T17:00:02.000Z", id: "evt_message_2" },
           type: "message.appended",
         } satisfies MessageStreamEvent,
       ])

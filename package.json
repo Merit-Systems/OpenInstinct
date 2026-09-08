@@ -23,15 +23,15 @@
     "@vercel/blob": "2.8.0",
     "@vercel/connect": "^2.0.0",
     "@vercel/oidc": "3.8.5",
-    "ai": "^7.0.79",
+    "ai": "^7.0.93",
     "better-auth": "1.7.2",
     "class-variance-authority": "0.7.1",
     "clsx": "2.1.1",
     "cmdk": "1.1.1",
     "credit-card-type": "^10.3.0",
     "drizzle-orm": "^0.45.2",
-    "eve": "^0.49.0",
-    "evlog": "2.27.1",
+    "eve": "https://pkg.eve.dev/59ec96cc99f65a80f7a2daf4ca5e2a0ad95455f2/eve.tgz",
+    "evlog": "2.28.1",
     "lucide-react": "1.34.0",
     "motion": "13.1.1",
     "nanoid": "6.0.1",
@@ -43,7 +43,7 @@
     "tailwind-merge": "3.6.0",
     "tailwindcss": "4.3.3",
     "use-stick-to-bottom": "1.1.6",
-    "zod": "4.4.3"
+    "zod": "4.5.4"
   },
   "devDependencies": {
     "@electric-sql/pglite": "^0.5.8",

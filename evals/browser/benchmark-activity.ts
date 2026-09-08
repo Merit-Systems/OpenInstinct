@@ -31,7 +31,17 @@ export function browserBenchmarkActivity(
 ) {
   for (const event of events.toReversed()) {
     if (event.type === "message.appended") {
-      const message = activityLine(event.data.messageSoFar);
+      const message = activityLine(
+        events
+          .flatMap((candidate) =>
+            candidate.type === "message.appended" &&
+            candidate.data.turnId === event.data.turnId &&
+            candidate.data.stepIndex === event.data.stepIndex
+              ? [candidate.data.messageDelta]
+              : []
+          )
+          .join("")
+      );
       if (message) return message;
     }
     if (event.type === "message.completed") {
