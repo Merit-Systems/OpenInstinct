@@ -22,4 +22,5 @@ allowBuilds:
   sharp: true
 patchedDependencies:
   "@linqapp/chat-sdk-adapter@0.5.1": patches/@linqapp__chat-sdk-adapter@0.5.1.patch
-  eve@0.49.0: patches/eve@0.49.0.patch
+  # URL dependencies are patched by name; package.json pins the immutable source SHA.
+  eve: patches/eve@0.52.2+main.59ec96cc99f65a80.patch

@@ -238,6 +238,32 @@ describe("trace event persistence", () => {
     );
   });
 
+  it("labels durable workflow tool calls in the trace", async () => {
+    await fire("*", {
+      data: {
+        actions: [
+          {
+            callId: "workflow-call",
+            input: {},
+            kind: "workflow-tool-call",
+            toolName: "check_availability",
+            workflowId: "workflow-hotel",
+          },
+        ],
+        sequence: 0,
+        stepIndex: 1,
+        turnId: "turn_0",
+      },
+      meta: { at: "2026-08-31T00:00:02.000Z", id: "workflow-event" },
+      type: "actions.requested",
+    });
+    expect(mocks.recordBrowserTraceEvents).toHaveBeenCalledWith(
+      scope,
+      "worker-session-1",
+      [expect.objectContaining({ label: "check_availability" })]
+    );
+  });
+
   it("compacts oversized payloads before persisting", async () => {
     await fire("*", {
       data: {

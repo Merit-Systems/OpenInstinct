@@ -5,9 +5,7 @@ import { getGatewayModel } from "@db/services/settings";
 import { scopeFromPrincipal } from "@agent/lib/principal-scope";
 
 export default defineAgent({
-  experimental: {
-    tasks: true,
-  },
+  defaultTools: false,
   model: defineDynamic({
     events: {
       "step.started": async (_event, ctx) => {
