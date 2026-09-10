@@ -12,3 +12,9 @@ next-env.d.ts
 dist
 .DS_Store
 *.tsbuildinfo
+
+# Vercel marketplace installers (e.g. `vercel integration add neon`) drop
+# third-party agent skills and a lock file into the checkout; they are not
+# part of the OpenInstinct agent definition.
+/agent/skills/
+/skills-lock.json

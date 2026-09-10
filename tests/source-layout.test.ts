@@ -53,4 +53,18 @@ describe("source layout", () => {
     expect(existsSync("db/services/installation-secrets.ts")).toBe(true);
     expect(existsSync("evals/browser/worker-events.ts")).toBe(true);
   });
+
+  it("keeps third-party installer files out of the agent definition", () => {
+    expect(directories("agent")).toEqual([
+      "channels",
+      "hooks",
+      "instructions",
+      "lib",
+      "memory",
+      "schedules",
+      "subagents",
+      "tools",
+    ]);
+    expect(existsSync("skills-lock.json")).toBe(false);
+  });
 });
