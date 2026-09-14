@@ -100,6 +100,7 @@ describe("Notte browser lifecycle", () => {
       profile: { id: "profile-1", persist: true },
       proxies: false,
       idle_timeout_minutes: 15,
+      max_duration_minutes: 15,
     });
     expect(mocks.create).toHaveBeenCalledWith(
       expect.anything(),

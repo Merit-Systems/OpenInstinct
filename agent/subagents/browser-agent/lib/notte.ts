@@ -104,7 +104,7 @@ export async function startNotteBrowser(
         proxies: false,
         solve_captchas: true,
         idle_timeout_minutes: Math.ceil(input.timeoutSeconds / 60),
-        max_duration_minutes: 1440,
+        max_duration_minutes: Math.ceil(input.timeoutSeconds / 60),
         profile: { id: input.profileId, persist: input.writable },
         viewport_width: input.viewport?.width ?? null,
         viewport_height: input.viewport?.height ?? null,
