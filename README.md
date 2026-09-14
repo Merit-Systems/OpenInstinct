@@ -82,6 +82,37 @@ Treat the private Blob store as production key material: deleting it loses the
 automatically generated encryption key, and rotating that key requires
 re-encrypting existing vault values.
 
+### Notte browser provider
+
+To use [Notte](https://www.notte.cc/) cloud browsers instead of Kernel, set:
+
+```dotenv
+BROWSER_PROVIDER=notte
+NOTTE_API_KEY=your-notte-api-key
+```
+
+`BROWSER_PROVIDER` defaults to `kernel`. With Notte selected, `KERNEL_API_KEY`
+is not required. The one-click Vercel button still provisions Kernel; configure
+these variables yourself for an existing deployment or a manual installation.
+
+Notte sessions support the semantic browser tools (`browser_snapshot`,
+`browser_text`, `browser_find`, `browser_act`, `browser_wait_for`), live viewing,
+and the existing secure vault autofill over CDP. Each workspace has its own
+Notte profile; `save_changes: true` persists login state when the browser is
+closed, and only one writer can be active. Read-only sessions can run in parallel.
+CDP connection credentials are kept out of tool results.
+
+Kernel's remote `playwright_execute`, desktop `computer_action`, and
+`capture_browser_image` tools are omitted from the Notte tool set. Notte workers
+use semantic actions instead and return no image attachments. Set the viewport
+at creation; resizing is not supported. Idle timeouts are 15–30 minutes (default
+15), with a maximum lifetime of 24 hours. These sessions explicitly use direct
+connections without proxies and enable CAPTCHA solving. Trace domains currently
+include the starting URL only for Notte.
+
+Profiles and open sessions stay with their original provider. Finish/delete open
+sessions before switching providers; switching does not migrate saved logins.
+
 ### Blob storage
 
 The deploy button connects a private Blob store. Vercel supplies `BLOB_STORE_ID`

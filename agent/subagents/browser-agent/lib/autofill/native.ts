@@ -1,5 +1,7 @@
 import { kernel } from "@agent/subagents/browser-agent/lib/kernel";
+import { notteCdpUrl } from "../notte";
 import { z } from "zod";
+import { env } from "@shared/environment";
 import type { AutofillClaim } from "./protocol";
 import {
   classifyNativeLoginControl,
@@ -1255,12 +1257,12 @@ async function withKernelPage<T>(
   }) => Promise<T>,
   pageUrl?: string
 ) {
-  const browser = await kernel.browsers.retrieve(
-    browserSessionId,
-    {},
-    { signal }
-  );
-  const connection = await CdpConnection.connect(browser.cdp_ws_url, signal);
+  const cdpUrl =
+    env.BROWSER_PROVIDER === "notte"
+      ? await notteCdpUrl(browserSessionId, signal)
+      : (await kernel.browsers.retrieve(browserSessionId, {}, { signal }))
+          .cdp_ws_url;
+  const connection = await CdpConnection.connect(cdpUrl, signal);
 
   try {
     const { targetInfos } = targetListSchema.parse(

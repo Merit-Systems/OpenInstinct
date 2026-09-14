@@ -3,7 +3,19 @@ import * as WorkerAccess from "@agent/subagents/browser-agent/lib/access";
 import * as OwnedBrowser from "@agent/subagents/browser-agent/lib/owned-browser";
 import { kernel } from "@agent/subagents/browser-agent/lib/kernel";
 import { toolContextFor } from "@tests/helpers/tool-context";
-import computerAction from "@agent/subagents/browser-agent/tools/computer_action";
+import computerActionDefinition from "@agent/subagents/browser-agent/tools/computer_action";
+
+const computerAction = await computerActionDefinition.events[
+  "session.started"
+]?.(
+  {},
+  {
+    session: { id: "test", auth: { current: null, initiator: null } },
+    channel: {},
+    messages: [],
+  }
+);
+if (!computerAction) throw new Error("Kernel tool is unavailable.");
 
 const mocks = {
   batch: vi.spyOn(kernel.browsers.computer, "batch"),
