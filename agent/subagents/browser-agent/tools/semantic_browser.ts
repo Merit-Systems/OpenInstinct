@@ -1,3 +1,4 @@
+import { env } from "@shared/environment";
 import {
   loop,
   type BrowserActResult,
@@ -24,7 +25,14 @@ const allSpecs = [
   loop.tools.browser.act(),
   loop.tools.playwright(),
 ];
-const specsByName = new Map(allSpecs.map((spec) => [spec.name, spec]));
+const specsByName = new Map(
+  allSpecs
+    .filter(
+      (spec) =>
+        env.BROWSER_PROVIDER !== "notte" || spec.name !== "playwright_execute"
+    )
+    .map((spec) => [spec.name, spec])
+);
 const relaxedBrowserActTimeoutMs = 8_000;
 const relaxedBrowserActSnapshotCharacters = 4_000;
 const relaxedBrowserActOutputCharacters = 6_000;
@@ -33,15 +41,21 @@ export default defineDynamic({
   events: {
     "session.started": () => {
       return Object.fromEntries(
-        allSpecs.map((spec) => [
-          spec.name,
-          defineTool({
-            description: toolDescription(spec),
-            execute: executeSemanticTool,
-            inputSchema: withSessionId(spec),
-            toModelOutput,
-          }),
-        ])
+        allSpecs
+          .filter(
+            (spec) =>
+              env.BROWSER_PROVIDER !== "notte" ||
+              spec.name !== "playwright_execute"
+          )
+          .map((spec) => [
+            spec.name,
+            defineTool({
+              description: toolDescription(spec),
+              execute: executeSemanticTool,
+              inputSchema: withSessionId(spec),
+              toModelOutput,
+            }),
+          ])
       );
     },
   },
@@ -134,7 +148,7 @@ function withSessionId(spec: LoopToolSpec) {
     additionalProperties: false,
     properties: {
       session_id: {
-        description: "Owned Kernel browser session ID.",
+        description: "Owned browser session ID.",
         minLength: 1,
         type: "string",
       },

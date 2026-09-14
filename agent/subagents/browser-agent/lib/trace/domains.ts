@@ -1,3 +1,4 @@
+import { isNotteSession } from "../notte";
 import { recordBrowserTraceDomains } from "@db/services/browser-traces";
 import type { AccessScope } from "@shared/identity/access-scope";
 import { kernel } from "@agent/subagents/browser-agent/lib/kernel";
@@ -43,6 +44,9 @@ export async function harvestBrowserTraceDomains(
   browser: { createdAt: string; sessionId: string },
   signal?: AbortSignal
 ) {
+  // Notte does not expose Kernel page-navigation telemetry. The create tool
+  // records the starting domain separately.
+  if (isNotteSession(browser.sessionId)) return;
   try {
     const domains = await collectNavigationDomains(browser, signal);
     await recordBrowserTraceDomains(scope, traceSessionId, [...domains]);
