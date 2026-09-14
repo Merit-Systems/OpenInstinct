@@ -87,6 +87,23 @@ describe("local development", supervisorTestOptions, () => {
     expect(result.stderr).toContain("create a key at https://kernel.sh");
   });
 
+  it("starts with a Notte key and no Kernel key", async () => {
+    const result = await runSuccessfulSupervisor({
+      BROWSER_PROVIDER: "notte",
+      NOTTE_API_KEY: "test-notte-key",
+      KERNEL_API_KEY: "",
+    });
+    expect(result.code).toBe(0);
+    expect(result.commands).toContain("pnpm dev:app");
+  });
+
+  it("rejects a missing Notte key before starting Docker", async () => {
+    const result = await runWithoutKernelApiKey({ BROWSER_PROVIDER: "notte" });
+    expect(result.code).toBe(1);
+    expect(result.commands).toBe("");
+    expect(result.stderr).toContain("NOTTE_API_KEY is required");
+  });
+
   it("does not advance when interrupted startup exits cleanly", async () => {
     const result = await interruptDuringStartup({ DEV_STARTUP_EXIT: "0" });
 
@@ -213,7 +230,9 @@ printf 'pnpm %s\\n' "$*" >> "$DEV_SUPERVISOR_LOG"
   };
 }
 
-async function runSuccessfulSupervisor() {
+async function runSuccessfulSupervisor(
+  environment: Record<string, string> = {}
+) {
   const directory = await mkdtemp(join(tmpdir(), "open-instinct-dev-"));
   temporaryDirectories.push(directory);
   const logPath = join(directory, "commands.log");
@@ -247,6 +266,7 @@ printf 'pnpm %s %s\n' "$*" "$DATABASE_URL" >> "$DEV_SUPERVISOR_LOG"
         KERNEL_API_KEY: "test-kernel-key",
         NODE_ENV: "test",
         PATH: directory,
+        ...environment,
       },
       stdio: "ignore",
     }
@@ -259,7 +279,9 @@ printf 'pnpm %s %s\n' "$*" "$DATABASE_URL" >> "$DEV_SUPERVISOR_LOG"
   };
 }
 
-async function runWithoutKernelApiKey() {
+async function runWithoutKernelApiKey(
+  environment: Record<string, string> = {}
+) {
   const directory = await mkdtemp(join(tmpdir(), "open-instinct-dev-"));
   temporaryDirectories.push(directory);
   const logPath = join(directory, "commands.log");
@@ -280,6 +302,7 @@ printf '%s\n' "$*" >> "$DEV_SUPERVISOR_LOG"
         DEV_SUPERVISOR_LOG: logPath,
         NODE_ENV: "test",
         PATH: directory,
+        ...environment,
       },
       stdio: ["ignore", "ignore", "pipe"],
     }
