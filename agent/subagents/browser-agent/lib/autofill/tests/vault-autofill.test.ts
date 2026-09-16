@@ -602,6 +602,74 @@ describe("vault browser autofill", () => {
     ).toBeNull();
   });
 
+  it("rejects confirmation fields that separate the words or omit the label", () => {
+    for (const overrides of [
+      { name: "password_confirmation" },
+      { name: "user_password_confirmation" },
+      { label: "Password confirmation", name: "password2" },
+      { label: "Confirm your password" },
+      { label: "Re-enter password" },
+      { label: "Retype your password" },
+      { label: "Verify password" },
+      { label: "Password (again)" },
+      { label: "Create a password" },
+    ]) {
+      expect(
+        classifyNativeLoginControl(
+          loginControl({ ...overrides, type: "password" })
+        )
+      ).toBeNull();
+    }
+
+    for (const overrides of [
+      { label: "Password", name: "password" },
+      { label: "Enter your password" },
+      { label: "Forgot password?", name: "password" },
+    ]) {
+      expect(
+        classifyNativeLoginControl(
+          loginControl({ ...overrides, type: "password" })
+        )
+      ).toMatchObject({ score: 90, token: "current-password" });
+    }
+  });
+
+  it("fills nothing on a reset form whose confirmation field is focused", () => {
+    const resetForm = [
+      loginControl({
+        autocomplete: "username",
+        index: 0,
+        label: "Email",
+        name: "email",
+        type: "email",
+      }),
+      loginControl({
+        autocomplete: "new-password",
+        index: 1,
+        label: "Password",
+        name: "password",
+        type: "password",
+      }),
+      loginControl({
+        focused: true,
+        index: 2,
+        name: "password_confirmation",
+        type: "password",
+      }),
+    ];
+    const classified = resetForm
+      .map((descriptor) => classifyNativeLoginControl(descriptor))
+      .filter((control) => control !== null);
+
+    expect(classified).toHaveLength(1);
+    expect(
+      selectNativeLoginFills(classified, [
+        claim("username", "ada@example.com"),
+        claim("current-password", "correct horse"),
+      ])
+    ).toEqual([]);
+  });
+
   it("selects one identifier and current password from the focused login form", () => {
     const controls = [
       classifiedLoginControl({
