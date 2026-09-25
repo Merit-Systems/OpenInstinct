@@ -1,19 +1,27 @@
 import type { DynamicResolveContext } from "eve";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { isScheduledAgentRunLeaseActive } from "@db/services/scheduled-agent-run-leases";
-import type { getGatewayModel } from "@db/services/settings";
+import type { getSelectedModel } from "@db/services/settings";
+import { directGeminiModelId } from "@shared/model/selection";
 
 const services = vi.hoisted(() => ({
-  getModel: vi.fn<typeof getGatewayModel>(),
+  getModel: vi.fn<typeof getSelectedModel>(),
   isActive: vi.fn<typeof isScheduledAgentRunLeaseActive>(),
+}));
+interface GoogleEnv {
+  GOOGLE_GENERATIVE_AI_API_KEY: string | undefined;
+}
+const googleEnv = vi.hoisted<GoogleEnv>(() => ({
+  GOOGLE_GENERATIVE_AI_API_KEY: "test-google-key",
 }));
 
 vi.mock("@db/services/scheduled-agent-run-leases", () => ({
   isScheduledAgentRunLeaseActive: services.isActive,
 }));
 vi.mock("@db/services/settings", () => ({
-  getGatewayModel: services.getModel,
+  getSelectedModel: services.getModel,
 }));
+vi.mock("@shared/environment", () => ({ env: googleEnv }));
 
 import agent from "@agent/agent";
 
@@ -23,6 +31,7 @@ const retryLeaseToken = "00000000-0000-4000-8000-000000000003";
 
 beforeEach(() => {
   vi.clearAllMocks();
+  googleEnv.GOOGLE_GENERATIVE_AI_API_KEY = "test-google-key";
   services.getModel.mockResolvedValue("openai/gpt-5.6-sol-fast");
 });
 
@@ -55,6 +64,31 @@ describe("root agent model resolution", () => {
       agent.model.events["step.started"]?.({}, scheduledWorkerContext())
     ).rejects.toThrow("The scheduled run lease is no longer active.");
     expect(services.getModel).not.toHaveBeenCalled();
+  });
+
+  it("uses a direct Gemini model only when the workspace selects it", async () => {
+    services.isActive.mockResolvedValue(true);
+    services.getModel.mockResolvedValue(directGeminiModelId);
+
+    const selected = await agent.model.events["step.started"]?.(
+      {},
+      scheduledWorkerContext()
+    );
+
+    expect(selected).toMatchObject({
+      model: { modelId: "gemini-3.5-flash-lite" },
+      modelContextWindowTokens: 1_048_576,
+    });
+  });
+
+  it("fails closed when a selected direct model has no API key", async () => {
+    services.isActive.mockResolvedValue(true);
+    services.getModel.mockResolvedValue(directGeminiModelId);
+    googleEnv.GOOGLE_GENERATIVE_AI_API_KEY = undefined;
+
+    await expect(
+      agent.model.events["step.started"]?.({}, scheduledWorkerContext())
+    ).rejects.toThrow("GOOGLE_GENERATIVE_AI_API_KEY is required");
   });
 });
 

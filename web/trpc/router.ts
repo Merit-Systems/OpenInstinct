@@ -1,14 +1,16 @@
 import { gateway } from "ai";
+import { TRPCError } from "@trpc/server";
 import { revokeToken, startAuthorization } from "@vercel/connect";
 import { z } from "zod";
 import { listBrowserTraces } from "@db/services/browser-traces";
 import { saveChat } from "@db/services/chats";
 import { replaceUserProfile } from "@db/services/user-profile";
-import { selectGatewayModel } from "@db/services/settings";
+import { selectModel } from "@db/services/settings";
 import { deleteVaultItem, saveVaultItem } from "@db/services/vault";
 import type { AccessScope } from "@shared/identity/access-scope";
 import { saveChatSchema } from "@shared/chat/schema";
 import { env } from "@shared/environment";
+import { directGeminiModelId } from "@shared/model/selection";
 import {
   googleWorkspaceSubject,
   googleWorkspaceTokenParams,
@@ -50,9 +52,19 @@ export const appRouter = createTRPCRouter({
   settings: {
     selectModel: protectedProcedure
       .input(z.object({ modelId: z.string().trim().min(1).max(300) }))
-      .mutation(({ ctx, input }) =>
-        selectGatewayModel(ctx.scope, input.modelId)
-      ),
+      .mutation(({ ctx, input }) => {
+        if (
+          input.modelId === directGeminiModelId &&
+          !env.GOOGLE_GENERATIVE_AI_API_KEY
+        ) {
+          throw new TRPCError({
+            code: "PRECONDITION_FAILED",
+            message:
+              "Set GOOGLE_GENERATIVE_AI_API_KEY before selecting Gemini.",
+          });
+        }
+        return selectModel(ctx.scope, input.modelId);
+      }),
   },
   userProfile: {
     update: protectedProcedure
@@ -102,7 +114,24 @@ async function startGoogleWorkspaceAuthorization(
 }
 
 async function readModelCatalog() {
-  const { models } = await gateway.getAvailableModels();
+  const directModels = env.GOOGLE_GENERATIVE_AI_API_KEY
+    ? [
+        {
+          id: directGeminiModelId,
+          name: "Gemini 3.5 Flash-Lite (direct)",
+          ownedBy: "google",
+          pricing: undefined,
+        },
+      ]
+    : [];
+
+  let models;
+  try {
+    ({ models } = await gateway.getAvailableModels());
+  } catch (error) {
+    if (directModels.length > 0) return directModels;
+    throw error;
+  }
 
   return z
     .array(
@@ -118,8 +147,9 @@ async function readModelCatalog() {
           .optional(),
       })
     )
-    .parse(
-      models
+    .parse([
+      ...directModels,
+      ...models
         .filter((model) => model.modelType === "language")
         .map((model) => ({
           id: model.id,
@@ -131,8 +161,8 @@ async function readModelCatalog() {
                 output: perMillion(model.pricing.output),
               }
             : undefined,
-        }))
-    );
+        })),
+    ]);
 }
 
 function perMillion(value: string) {
