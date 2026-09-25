@@ -271,6 +271,9 @@ describe("schedule tools", () => {
     expect(interactiveSend.inputSchema.safeParse(reply).success).toBe(true);
     expect(debugSend.inputSchema.safeParse(reply).success).toBe(true);
     expect(reportSend.inputSchema.safeParse(reply).success).toBe(true);
+    expect(
+      JSON.stringify(z.toJSONSchema(interactiveSend.inputSchema))
+    ).not.toContain('"oneOf"');
   });
 
   it("owns web schedules by their Eve session", async () => {

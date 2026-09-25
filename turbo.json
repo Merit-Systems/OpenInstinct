@@ -9,6 +9,7 @@
         "DATABASE_URL",
         "EVE_NEXT_*",
         "*_CONNECTOR_UID",
+        "GOOGLE_GENERATIVE_AI_API_KEY",
         "KERNEL_*",
         "LINQ_*",
         "NODE_ENV",
@@ -24,6 +25,7 @@
         "BLOB_*",
         "DATABASE_URL",
         "*_CONNECTOR_UID",
+        "GOOGLE_GENERATIVE_AI_API_KEY",
         "KERNEL_*",
         "LINQ_*",
         "NODE_ENV",
@@ -44,6 +46,7 @@
         "BLOB_*",
         "DATABASE_URL",
         "*_CONNECTOR_UID",
+        "GOOGLE_GENERATIVE_AI_API_KEY",
         "KERNEL_*",
         "LINQ_*",
         "NODE_ENV",
@@ -53,7 +56,8 @@
       "persistent": true
     },
     "deploy:app": {
-      "cache": false
+      "cache": false,
+      "passThroughEnv": ["GOOGLE_GENERATIVE_AI_API_KEY"]
     },
     "format:check": {
       "outputs": []
@@ -71,6 +75,7 @@
         "BLOB_*",
         "DATABASE_URL",
         "*_CONNECTOR_UID",
+        "GOOGLE_GENERATIVE_AI_API_KEY",
         "KERNEL_*",
         "LINQ_*",
         "NODE_ENV",

@@ -7,6 +7,7 @@ const applicationEnvironment = [
   "BLOB_*",
   "DATABASE_URL",
   "*_CONNECTOR_UID",
+  "GOOGLE_GENERATIVE_AI_API_KEY",
   "KERNEL_*",
   "LINQ_*",
   "NODE_ENV",

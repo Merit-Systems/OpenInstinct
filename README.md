@@ -192,7 +192,8 @@ development is a manual path and requires:
 - Docker Desktop or another running Docker Compose installation
 - Kernel credentials from a [Kernel API key](https://kernel.sh) or a linked
   Vercel Marketplace resource
-- AI Gateway access from an API key or a linked Vercel project's OIDC token
+- AI Gateway access from an API key or a linked Vercel project's OIDC token, or
+  a Google AI Studio key for direct Gemini chat
 
 First clone and install the application:
 
@@ -202,13 +203,14 @@ cd OpenInstinct
 pnpm install --frozen-lockfile
 ```
 
-For fully manual setup, copy the environment template and add your Kernel and AI
-Gateway keys:
+For fully manual setup, copy the environment template and add your Kernel key
+plus either an AI Gateway key or a Google AI Studio key:
 
 ```bash
 cp .env.example .env.local
 
-# Set KERNEL_API_KEY and AI_GATEWAY_API_KEY in .env.local.
+# Set KERNEL_API_KEY and AI_GATEWAY_API_KEY or GOOGLE_GENERATIVE_AI_API_KEY
+# in .env.local.
 ```
 
 If you already use a Vercel project, link it to pull AI Gateway access. If that
@@ -234,11 +236,26 @@ using an externally managed database instead. If `KERNEL_API_KEY` is missing,
 `pnpm dev` stops before starting Docker and points back to the recommended
 Vercel flow or the manual `.env.local` setup.
 
-Local development otherwise uses the same vault, Kernel browser, and AI Gateway
-path as the Vercel deployment. Better Auth and vault encryption use stable
+Local development otherwise uses the same vault and Kernel browser path as the
+Vercel deployment. Better Auth and vault encryption use stable
 local-only defaults when their variables are unset. Vercel deployments
 provision them automatically in private Blob; other production hosts require
 explicit secrets.
+
+### Direct Gemini chat
+
+To use Gemini without routing root conversations through AI Gateway, set
+`GOOGLE_GENERATIVE_AI_API_KEY` in `.env.local` or your deployment's encrypted
+environment, restart or redeploy, then choose **Gemini 3.5 Flash-Lite (direct)**
+under **Workspace → AI model**. The selection applies to root chat and iMessage
+turns. Existing AI Gateway model selections stay unchanged until you choose the
+direct option, and a missing Google key fails closed instead of falling back to
+AI Gateway. Google controls this API's [pricing and data-use terms](https://ai.google.dev/gemini-api/docs/pricing).
+
+The browser subagent still uses its AI Gateway model, and Eve's gateway-backed
+`web_search` tool is not supported by the direct Google provider. Configure AI
+Gateway too if you need browser delegation or web search; direct Gemini is a
+chat option, not a replacement for those capabilities.
 
 > [!WARNING]
 > This is not software intended for production use.

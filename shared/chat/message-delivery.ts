@@ -63,6 +63,21 @@ export const sendMessageOutputSchema = z.discriminatedUnion("kind", [
   linkOutputSchema,
 ]);
 
+// Gemini function declarations require an object schema rather than oneOf.
+// Keep the stricter union above as the authority before executing a tool call.
+export const sendMessageInputSchema = z.object({
+  attachments: messageOutputFields.attachments,
+  kind: z.enum(["message", "link"]),
+  replyTo: z
+    .object({
+      kind: z.enum(["current", "task", "automation"]),
+      id: z.string().optional(),
+    })
+    .optional(),
+  text: messageOutputFields.text,
+  url: nativeLinkSchema.optional(),
+});
+
 export const sendMessageToolResultSchema = z.object({
   kind: z.literal("tool-result"),
   output: sendMessageOutputSchema,

@@ -18,6 +18,7 @@ import {
 import { Button } from "@web/components/ui/button";
 import { api } from "@web/trpc/client";
 import type { RouterOutputs } from "@web/trpc/types";
+import { directGeminiModelId } from "@shared/model/selection";
 
 type ModelCatalogItem = RouterOutputs["models"]["list"][number];
 
@@ -77,7 +78,11 @@ export function ModelSelector({ modelId }: { readonly modelId: string }) {
         }
       >
         <ModelSelectorLogo
-          provider={providerLogo(modelId.split("/", 1)[0] ?? modelId)}
+          provider={providerLogo(
+            modelId === directGeminiModelId
+              ? "google"
+              : (modelId.split("/", 1)[0] ?? modelId)
+          )}
         />
         Choose
         <ChevronsUpDownIcon />
