@@ -1,3 +1,5 @@
+import { env } from "@shared/environment";
+import { defineDynamic } from "eve/tools";
 import { defineTool, toolOutput, toolOutputPart } from "eve/tools";
 import type { ComputerBatchParams } from "@onkernel/sdk/resources/browsers/computer";
 import { z } from "zod";
@@ -101,7 +103,7 @@ const outputSchema = z.object({
   screenshotBase64: z.string().optional(),
 });
 
-export default defineTool({
+const kernelTool = defineTool({
   description:
     "Execute a bounded batch of computer actions on one browser session. Prefer one batch over repeated calls, keep sleep actions at or below two seconds, and include a screenshot last only when visual inspection is needed; screenshots are delivered directly to the vision model.",
   inputSchema,
@@ -270,3 +272,10 @@ function toBatchAction(
   }
   throw new Error("Unsupported computer action.");
 }
+
+export default defineDynamic({
+  events: {
+    "session.started": () =>
+      env.BROWSER_PROVIDER === "notte" ? null : kernelTool,
+  },
+});

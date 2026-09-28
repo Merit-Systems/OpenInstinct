@@ -107,7 +107,9 @@ describe("root and worker capability boundaries", () => {
     ]) {
       const source = readFileSync(`${workerTools}/${tool}.ts`, "utf8");
       expect(source).toContain("defineTool(");
-      expect(source).not.toContain("defineDynamic(");
+      expect(source.includes("defineDynamic(")).toBe(
+        tool === "computer_action" || tool === "capture_browser_image"
+      );
       expect(source).toContain("requireWorkerScope(context)");
     }
     expect(existsSync(`${workerRoot}/hooks/session-owner.ts`)).toBe(true);
@@ -137,7 +139,7 @@ describe("root and worker capability boundaries", () => {
     );
     expect(workerInstructions).toContain("such as Google Flights");
     expect(workerInstructions).toContain(
-      "Use `playwright_execute` as the primary browser execution surface"
+      "When `playwright_execute` is available, use it as the primary browser execution surface"
     );
     expect(workerInstructions).toContain(
       "Prefer one bounded program per page state"

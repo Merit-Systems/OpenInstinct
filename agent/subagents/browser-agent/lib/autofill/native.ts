@@ -1,3 +1,4 @@
+import { notteCdpUrl } from "../notte";
 import Kernel from "@onkernel/sdk";
 import { z } from "zod";
 import { env } from "@shared/environment";
@@ -611,10 +612,17 @@ async function withKernelPage<T>(
     readonly sessionId: readonly string[];
   }) => Promise<T>
 ) {
-  const browser = await new Kernel({
-    apiKey: env.KERNEL_API_KEY,
-  }).browsers.retrieve(browserSessionId, {}, { signal });
-  const connection = await CdpConnection.connect(browser.cdp_ws_url, signal);
+  const cdpUrl =
+    env.BROWSER_PROVIDER === "notte"
+      ? await notteCdpUrl(browserSessionId, signal)
+      : (
+          await new Kernel({ apiKey: env.KERNEL_API_KEY }).browsers.retrieve(
+            browserSessionId,
+            {},
+            { signal }
+          )
+        ).cdp_ws_url;
+  const connection = await CdpConnection.connect(cdpUrl, signal);
 
   try {
     const { targetInfos } = targetListSchema.parse(

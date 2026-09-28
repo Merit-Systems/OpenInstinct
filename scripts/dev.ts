@@ -154,7 +154,16 @@ function childExitCode(child: ChildProcess) {
   });
 }
 
-function requireKernelApiKey() {
+function requireBrowserApiKey() {
+  const provider = inheritedEnvironment.BROWSER_PROVIDER;
+  if (provider === "notte") {
+    if (inheritedEnvironment.NOTTE_API_KEY?.trim()) return;
+    throw new Error(
+      "NOTTE_API_KEY is required when BROWSER_PROVIDER=notte. Set it in .env.local and run pnpm dev again."
+    );
+  }
+  if (provider !== undefined && provider !== "" && provider !== "kernel")
+    throw new Error("BROWSER_PROVIDER must be kernel or notte.");
   if (inheritedEnvironment.KERNEL_API_KEY?.trim()) return;
 
   throw new Error(
@@ -168,7 +177,7 @@ function requireKernelApiKey() {
 }
 
 try {
-  requireKernelApiKey();
+  requireBrowserApiKey();
   composeAttempted = true;
   let shouldContinue = await run(
     "docker",

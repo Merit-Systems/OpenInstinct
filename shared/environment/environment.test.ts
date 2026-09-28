@@ -16,6 +16,8 @@ describe("environment", () => {
     for (const [name, value] of Object.entries(requiredEnvironment)) {
       vi.stubEnv(name, value);
     }
+    vi.stubEnv("BROWSER_PROVIDER", "");
+    vi.stubEnv("NOTTE_API_KEY", "");
     vi.stubEnv("LINQ_CONNECTOR", "");
     vi.stubEnv("LINQ_PHONE_NUMBER", "");
   });
@@ -29,6 +31,34 @@ describe("environment", () => {
     const { env } = await import("@shared/environment");
 
     expect(env).toMatchObject(requiredEnvironment);
+  });
+
+  it("defaults to Kernel", async () => {
+    const { env } = await import("@shared/environment");
+    expect(env.BROWSER_PROVIDER).toBe("kernel");
+  });
+
+  it("accepts Notte without a Kernel key", async () => {
+    vi.stubEnv("BROWSER_PROVIDER", "notte");
+    vi.stubEnv("NOTTE_API_KEY", "test-notte-key");
+    vi.stubEnv("KERNEL_API_KEY", "");
+    const { env } = await import("@shared/environment");
+    expect(env.BROWSER_PROVIDER).toBe("notte");
+    expect(env.KERNEL_API_KEY).toBeUndefined();
+  });
+
+  it("requires the selected provider's key", async () => {
+    vi.stubEnv("BROWSER_PROVIDER", "notte");
+    await expect(import("@shared/environment")).rejects.toThrow(
+      "Invalid environment variables"
+    );
+  });
+
+  it("rejects an unknown browser provider", async () => {
+    vi.stubEnv("BROWSER_PROVIDER", "other");
+    await expect(import("@shared/environment")).rejects.toThrow(
+      "Invalid environment variables"
+    );
   });
 
   it("provides the Google connector default without enabling Linq", async () => {

@@ -1,3 +1,13 @@
+import { env } from "@shared/environment";
+import { BrowserExecutor } from "@onkernel/browser-loop";
+import {
+  ensureNotteProfile,
+  isNotteSession,
+  notteCdpUrl,
+  retrieveNotteBrowser,
+  startNotteBrowser,
+  stopNotteBrowser,
+} from "../lib/notte";
 import { createHash } from "node:crypto";
 import { ConflictError, NotFoundError } from "@onkernel/sdk";
 import type {
@@ -50,6 +60,14 @@ const manageBrowsers = defineTool({
   async execute(input, context) {
     const scope = await requireWorkerScope(context);
     const signal = context.abortSignal;
+    if (env.BROWSER_PROVIDER === "notte") {
+      return manageNotteBrowsers(input, context, scope);
+    }
+    if (input.session_id && isNotteSession(input.session_id)) {
+      throw new Error(
+        "This session belongs to Notte. Restore BROWSER_PROVIDER=notte to manage it."
+      );
+    }
 
     switch (input.action) {
       case "create": {
@@ -114,7 +132,9 @@ const manageBrowsers = defineTool({
           : create();
       }
       case "list": {
-        const records = await listBrowserSessions(scope);
+        const records = (await listBrowserSessions(scope)).filter(
+          ({ sessionId }) => !isNotteSession(sessionId)
+        );
         const includeDeleted = input.status !== "active";
         const browsers = await Promise.all(
           records.map(async ({ sessionId }) => {
@@ -296,4 +316,163 @@ async function findActiveProfileWriter(
     }
   }
   return undefined;
+}
+
+async function manageNotteBrowsers(
+  input: z.infer<typeof inputSchema>,
+  context: Parameters<typeof requireWorkerScope>[0] & {
+    abortSignal?: AbortSignal;
+  },
+  scope: Awaited<ReturnType<typeof requireWorkerScope>>
+) {
+  const signal = context.abortSignal;
+  if (input.action === "create") {
+    const viewport = browserViewport(input);
+    // Serialize profile lookup/creation and writer checks across app instances.
+    return withBrowserProfileWriteLock(scope, async () => {
+      const records = (await listBrowserSessions(scope)).filter(
+        ({ sessionId }) => sessionId.startsWith("notte:write:")
+      );
+      if (input.save_changes) {
+        const writers = await Promise.all(
+          records.map(async ({ sessionId }) => {
+            try {
+              return await retrieveNotteBrowser(sessionId, signal);
+            } catch (error) {
+              if (!isNotFoundError(error)) throw error;
+              return undefined;
+            }
+          })
+        );
+        if (writers.some((browser) => browser?.status === "active")) {
+          throw new Error(
+            "Another Notte browser is saving this workspace profile. Delete it before creating a writer."
+          );
+        }
+      }
+      const browser = await startNotteBrowser(
+        {
+          profileId: await ensureNotteProfile(scope.workspaceId, signal),
+          writable: input.save_changes ?? false,
+          timeoutSeconds: input.timeout_seconds ?? browserTimeoutFloorSeconds,
+          viewport,
+        },
+        signal
+      );
+      try {
+        if (input.start_url) {
+          const executor = new BrowserExecutor(
+            await notteCdpUrl(browser.session_id, signal)
+          );
+          try {
+            await executor.execute(
+              { type: "browser_navigate", url: input.start_url },
+              signal
+            );
+          } finally {
+            executor.close();
+          }
+        }
+        await createBrowserSession(scope, {
+          createdAt: browser.created_at,
+          sessionId: browser.session_id,
+          workerSessionId: context.session.id,
+        });
+      } catch (error) {
+        // Cleanup must still run when the originating turn has been cancelled.
+        await stopNotteBrowser(browser.session_id).catch(() => undefined);
+        throw error;
+      }
+      const domain = input.start_url
+        ? domainFromUrl(input.start_url)
+        : undefined;
+      if (domain)
+        await recordBrowserTraceDomains(scope, context.session.id, [
+          domain,
+        ]).catch(() => undefined);
+      return {
+        browser: describeNotteBrowser(browser),
+        next_actions: [
+          "Use browser_snapshot, browser_find, browser_text, browser_act and browser_wait_for to inspect and control this Notte browser over CDP.",
+          "Use fill_from_vault for secure autofill. Create with save_changes: true before login and delete the writer to persist it.",
+          "Remote playwright_execute, computer_action and capture_browser_image are unavailable with Notte. Use the live-view URL for human takeover when needed.",
+          "Delete this browser with manage_browsers when finished.",
+        ],
+      };
+    });
+  }
+  if (input.action === "list") {
+    const records = (await listBrowserSessions(scope)).filter(({ sessionId }) =>
+      isNotteSession(sessionId)
+    );
+    const browsers = await Promise.all(
+      records.map(async ({ sessionId }) => {
+        try {
+          return describeNotteBrowser(
+            await retrieveNotteBrowser(sessionId, signal)
+          );
+        } catch (error) {
+          if (!isNotFoundError(error)) throw error;
+          await deleteBrowserSession(scope, sessionId);
+          return undefined;
+        }
+      })
+    );
+    const filtered = browsers.filter(
+      (browser) =>
+        browser &&
+        (!input.status ||
+          input.status === "all" ||
+          browser.status === input.status)
+    );
+    const offset = input.offset ?? 0;
+    const end = offset + (input.limit ?? 100);
+    return {
+      items: filtered.slice(offset, end),
+      has_more: filtered.length > end,
+      next_offset: filtered.length > end ? end : null,
+    };
+  }
+  const id = requireSessionId(input.session_id);
+  await requireOwnedBrowserSession(scope, id);
+  if (!isNotteSession(id))
+    throw new Error(
+      "This session belongs to Kernel. Restore BROWSER_PROVIDER=kernel to manage it."
+    );
+  if (input.action === "delete") {
+    await disposeBrowserLoopSession(id);
+    try {
+      await stopNotteBrowser(id, signal);
+    } catch (error) {
+      if (!isNotFoundError(error)) throw error;
+    }
+    await deleteBrowserSession(scope, id);
+    return "Browser session deleted successfully";
+  }
+  if (input.action === "update" && browserViewport(input)) {
+    throw new Error(
+      "Set the Notte viewport when creating the browser; resizing an existing session is not supported."
+    );
+  }
+  try {
+    return describeNotteBrowser(await retrieveNotteBrowser(id, signal));
+  } catch (error) {
+    if (!isNotFoundError(error)) throw error;
+    await disposeBrowserLoopSession(id);
+    await deleteBrowserSession(scope, id);
+    throw new Error("Notte browser no longer exists. Create a fresh browser.", {
+      cause: error,
+    });
+  }
+}
+
+function describeNotteBrowser(
+  browser: Awaited<ReturnType<typeof retrieveNotteBrowser>>
+) {
+  return {
+    session_id: browser.session_id,
+    status: browser.status,
+    browser_live_view_url: browser.browser_live_view_url,
+    viewport: browser.viewport,
+  };
 }
