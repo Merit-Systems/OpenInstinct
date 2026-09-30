@@ -182,6 +182,23 @@ Gotchas:
 - Sending email and creating confirmed calendar events always require approval.
   Calendar events with attendees send Google invitations.
 
+## You.com web search
+
+OpenInstinct can search the web through [You.com](https://you.com) by setting
+one environment variable. With `YOU_API_KEY` set, the agent connects to the
+You.com MCP server and gains its search tools for public research and
+current facts; eve lists the connection and its tools automatically. Without
+the key, nothing changes: the connection is omitted entirely and the agent
+keeps its built-in search behavior.
+
+```bash
+vercel env add YOU_API_KEY production --value <you-com-api-key> --yes
+```
+
+Keys are available from the [You.com API dashboard](https://api.you.com).
+The key is sent only as a bearer token to `https://api.you.com/mcp`; it never
+enters conversation history or the model context.
+
 ## Local development
 
 The **Deploy with Vercel** flow above is the simplest way to run OpenInstinct. It

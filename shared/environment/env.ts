@@ -91,6 +91,9 @@ export const env = createEnv({
         "LINQ_PHONE_NUMBER must use E.164 format"
       )
       .optional(),
+    // Optional You.com web search connection for the agent. Set to expose the
+    // You.com MCP search tools; unset, the agent keeps its built-in behavior.
+    YOU_API_KEY: requiredValue.optional(),
     NODE_ENV: z
       .enum(["development", "production", "test"])
       .default("production"),
