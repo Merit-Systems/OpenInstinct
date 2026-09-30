@@ -64,6 +64,26 @@ Treat the private Blob store as production key material: deleting it loses the
 automatically generated encryption key, and rotating that key requires
 re-encrypting existing vault values.
 
+### Deploying with the Vercel CLI
+
+The deploy button sets the project's Framework Preset to Next.js for you. A
+project created with the Vercel CLI (`vercel project add` / `vercel link`)
+defaults to **Other**, which builds green but silently drops the Next.js
+output: every app route returns `404 x-vercel-error: NOT_FOUND` while
+`/eve/v1/health` still answers. Set the preset to Next.js before the first
+Git deploy, either in the project settings or with:
+
+```bash
+vercel api /v9/projects/<project-id> --method PATCH --field framework=nextjs
+```
+
+Provisioning Neon through the CLI (`vercel integration add neon ...`) also
+writes third-party agent skills under `agent/skills/` and a root
+`skills-lock.json`. Eve loads every skill in `agent/skills/`, so the assistant
+quietly gains Neon database-administration skills. Both paths are gitignored;
+delete `agent/skills/` and `skills-lock.json` after provisioning unless you
+want the agent to keep them.
+
 ### Blob storage
 
 The one-click deploy creates and connects a private Blob store automatically.
