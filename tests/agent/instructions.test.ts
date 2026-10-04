@@ -110,6 +110,21 @@ describe("agent instructions", () => {
     expect(await resolve({}, dynamicContext("scheduled-result"))).toBeNull();
   });
 
+  it("approves Link purchases for the checkout the worker keeps open", async () => {
+    const resolve = workerCoordination.events["turn.started"];
+    expect(resolve).toBeDefined();
+    if (!resolve) return;
+
+    const selected = await resolve({}, dynamicContext("linq"));
+    expect(selected?.content).toContain(
+      "setting `merchant_url` to the worker's reported checkout URL"
+    );
+    expect(selected?.content).toContain("keep that checkout open for approval");
+    expect(selected?.content).toContain(
+      "unless the worker's latest result says it kept the browser open"
+    );
+  });
+
   it("keeps resumed scheduled turns in worker mode", async () => {
     const resolve = roleInstructions.events["turn.started"];
     expect(resolve).toBeDefined();
