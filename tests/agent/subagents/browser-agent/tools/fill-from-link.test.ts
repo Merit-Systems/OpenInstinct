@@ -380,6 +380,40 @@ describe("Link browser bridge", () => {
     expect(fill).not.toHaveBeenCalled();
   });
 
+  it.each([
+    [
+      "bound",
+      "Each binding must identify one visible payment input in the approved checkout; binding 2 matched 0.",
+    ],
+    ["native", "Card autofill left required fields empty: security code."],
+  ])(
+    "surfaces a %s fill's checkout-state failure without its cause",
+    async (path, message) => {
+      const bound = path === "bound";
+      (bound ? fillFields : fill).mockRejectedValueOnce(
+        new Autofill.PaymentFillError(message)
+      );
+      const result = fillFromLink.execute(
+        bound
+          ? {
+              ...input,
+              pageUrl: "https://shop.example/checkout",
+              fields: [
+                { field: "number", selector: "#number" },
+                { field: "expiration", selector: "#expiry", format: "MM/YY" },
+                { field: "cvc", selector: "#cvc" },
+              ],
+            }
+          : input,
+        context
+      );
+      await expect(result).rejects.toThrow(
+        `${message} Link card filling could not be confirmed.`
+      );
+      await expect(result).rejects.not.toHaveProperty("cause");
+    }
+  );
+
   it("does not return or retry an ambiguous injector error", async () => {
     fill.mockRejectedValueOnce(new Error("4242424242424242"));
     const result = fillFromLink.execute(input, context);

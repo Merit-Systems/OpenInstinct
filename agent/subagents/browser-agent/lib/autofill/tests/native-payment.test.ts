@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
-import { fillWithKernelNativeAutofill } from "../native";
+import { fillWithKernelNativeAutofill, PaymentFillError } from "../native";
 import { frameOriginExpression } from "../login";
 
 vi.mock("@onkernel/sdk", () => ({
@@ -19,6 +19,12 @@ const commands: z.infer<typeof commandSchema>[] = [];
 let pageOrigin = "https://shop.example";
 let frameOrigin = "https://shop.example";
 let failFill = false;
+const filledCard = {
+  number: "filled",
+  expiry: "filled",
+  securityCode: "filled",
+};
+let cardStatuses: Record<string, string>[] = [];
 
 class BrowserSocket extends EventTarget {
   constructor() {
@@ -57,6 +63,10 @@ class BrowserSocket extends EventTarget {
         const expression = z.string().parse(command.params?.expression);
         if (expression === frameOriginExpression)
           result = { result: { value: frameOrigin } };
+        else if (expression.includes("securityCode"))
+          result = {
+            result: { value: cardStatuses.shift() ?? filledCard },
+          };
         else if (expression.includes("flatMap"))
           result = {
             result: {
@@ -109,6 +119,7 @@ beforeEach(() => {
   pageOrigin = "https://shop.example";
   frameOrigin = pageOrigin;
   failFill = false;
+  cardStatuses = [];
   vi.stubGlobal("WebSocket", BrowserSocket);
 });
 afterEach(() => vi.unstubAllGlobals());
@@ -132,6 +143,41 @@ describe("native payment injection", () => {
       expiryYear: "2035",
     });
     expect(result).toEqual({ filledClaims: 5, origin: "https://shop.example" });
+  });
+  it("waits for Chromium to apply the card before confirming it", async () => {
+    cardStatuses = [
+      { number: "empty", expiry: "empty", securityCode: "empty" },
+      filledCard,
+    ];
+    await expect(fillWithKernelNativeAutofill(input)).resolves.toEqual({
+      filledClaims: 5,
+      origin: "https://shop.example",
+    });
+    expect(cardStatuses).toHaveLength(0);
+  });
+  it("reports annotated card fields left empty without retrying", async () => {
+    cardStatuses = Array.from({ length: 8 }, () => ({
+      number: "filled",
+      expiry: "absent",
+      securityCode: "empty",
+    }));
+    const result = fillWithKernelNativeAutofill(input);
+    await expect(result).rejects.toBeInstanceOf(PaymentFillError);
+    await expect(result).rejects.toThrow(
+      "Card autofill left required fields empty: security code."
+    );
+    expect(
+      commands.filter(({ method }) => method === "Autofill.trigger")
+    ).toHaveLength(1);
+  });
+  it("does not require card fields that carry no autocomplete annotation", async () => {
+    cardStatuses = [
+      { number: "absent", expiry: "absent", securityCode: "absent" },
+    ];
+    await expect(fillWithKernelNativeAutofill(input)).resolves.toEqual({
+      filledClaims: 5,
+      origin: "https://shop.example",
+    });
   });
   it("rechecks the top-level merchant origin before injection", async () => {
     pageOrigin = "https://other.example";

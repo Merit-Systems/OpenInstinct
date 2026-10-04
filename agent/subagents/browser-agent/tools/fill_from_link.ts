@@ -15,6 +15,7 @@ import {
   currentKernelPageOrigin,
   fillWithKernelNativeAutofill,
   fillKernelPaymentFields,
+  PaymentFillError,
 } from "../lib/autofill/native";
 
 const paymentFieldSchema = z.strictObject({
@@ -257,9 +258,12 @@ export default defineTool({
         currency: input.currency,
         filledClaims: result.filledClaims,
       };
-    } catch {
+    } catch (error) {
+      // Other injector errors may echo browser state, so only a
+      // PaymentFillError's checkout-state message reaches the worker.
+      // oxlint-disable-next-line eslint/preserve-caught-error -- The cause is withheld for the same reason.
       throw new Error(
-        "Link card filling could not be confirmed. Check field bindings and the current checkout without reading payment values; do not submit or retry blindly."
+        `${error instanceof PaymentFillError ? `${error.message} ` : ""}Link card filling could not be confirmed. Check field bindings and the current checkout without reading payment values; do not submit or retry blindly.`
       );
     }
   },

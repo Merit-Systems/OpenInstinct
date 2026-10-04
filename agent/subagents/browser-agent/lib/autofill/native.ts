@@ -90,6 +90,10 @@ const loginControlDescriptorsSchema = z.array(
   })
 );
 
+// A payment fill failure whose message describes only checkout state, never
+// card values or page content, so callers may show it to the worker.
+export class PaymentFillError extends Error {}
+
 const cardTokens = [
   "cc-name",
   "cc-number",
@@ -213,6 +217,8 @@ export async function fillWithKernelNativeAutofill({
           lastError = error;
           continue;
         }
+        if (kind === "payment")
+          await confirmNativeCardFill(connection, control);
         return { filledClaims: claims.length, origin };
       }
       /* oxlint-enable eslint/no-await-in-loop */
@@ -224,6 +230,76 @@ export async function fillWithKernelNativeAutofill({
     },
     pageUrl
   );
+}
+
+const cardFillStatusSchema = z.record(
+  z.enum(["number", "expiry", "securityCode"]),
+  z.enum(["absent", "empty", "filled"])
+);
+
+// Chromium applies an autofill asynchronously after Autofill.trigger returns.
+// Wait briefly for the card form's annotated fields, then report any that
+// stayed empty. Unannotated fields cannot be checked and are not required.
+async function confirmNativeCardFill(
+  connection: CdpConnection,
+  control: {
+    readonly executionContextId: number;
+    readonly index: number;
+    readonly sessionId: string;
+  }
+) {
+  let status: z.infer<typeof cardFillStatusSchema> | undefined;
+  /* oxlint-disable eslint/no-await-in-loop -- Each check waits for Chromium to apply the fill before reading the next status. */
+  for (let attempt = 0; attempt < 8; attempt += 1) {
+    if (attempt > 0)
+      await new Promise((resolve) => {
+        setTimeout(resolve, 250);
+      });
+    status = cardFillStatusSchema.parse(
+      evaluatedValueSchema.parse(
+        await connection.send(
+          "Runtime.evaluate",
+          {
+            contextId: control.executionContextId,
+            expression: nativeCardFillStatusExpression(control.index),
+            returnByValue: true,
+          },
+          control.sessionId
+        )
+      ).result.value
+    );
+    if (!Object.values(status).includes("empty")) return;
+  }
+  /* oxlint-enable eslint/no-await-in-loop */
+  const empty = (
+    [
+      ["number", "card number"],
+      ["expiry", "expiration"],
+      ["securityCode", "security code"],
+    ] as const
+  ).flatMap(([field, label]) => (status?.[field] === "empty" ? [label] : []));
+  throw new PaymentFillError(
+    `Card autofill left required fields empty: ${empty.join(", ")}.`
+  );
+}
+
+function nativeCardFillStatusExpression(index: number) {
+  return `(() => {
+    const anchor = document.querySelectorAll("input, select, textarea").item(${String(index)});
+    const root = anchor?.form || anchor?.closest("form") || document;
+    const fields = Array.from(root.querySelectorAll("input, select")).flatMap((element) => {
+      const token = (element.autocomplete || "").toLowerCase().split(/\\s+/).filter(Boolean).pop() || "";
+      return token.startsWith("cc-") ? [{ token, filled: element.value.trim().length > 0 }] : [];
+    });
+    const state = (...tokens) => {
+      const matches = fields.filter((field) => tokens.includes(field.token));
+      if (matches.length === 0) return "absent";
+      return matches.some((field) => field.filled) ? "filled" : "empty";
+    };
+    const parts = [state("cc-exp"), state("cc-exp-month"), state("cc-exp-year")].filter((part) => part !== "absent");
+    const expiry = parts.length === 0 ? "absent" : parts.includes("empty") ? "empty" : "filled";
+    return { number: state("cc-number"), expiry, securityCode: state("cc-csc") };
+  })()`;
 }
 
 const paymentFrameOrigins = new Set([
@@ -270,7 +346,7 @@ export async function fillKernelPaymentFields({
     page.username ||
     page.password
   ) {
-    throw new Error(
+    throw new PaymentFillError(
       "Payment field bindings require the approved HTTPS checkout."
     );
   }
@@ -286,11 +362,12 @@ export async function fillKernelPaymentFields({
       frameSessions,
     }) => {
       if (origin !== expectedOrigin)
-        throw new Error(
+        throw new PaymentFillError(
           "The checkout no longer matches the approved merchant."
         );
       const topSessionId = sessionId[0];
-      if (!topSessionId) throw new Error("The checkout page is unavailable.");
+      if (!topSessionId)
+        throw new PaymentFillError("The checkout page is unavailable.");
       const topWorld = isolatedWorldSchema.parse(
         await connection.send(
           "Page.createIsolatedWorld",
@@ -401,7 +478,7 @@ export async function fillKernelPaymentFields({
                     )
                   );
                   if (!evaluated.result.objectId)
-                    throw new Error("A payment input disappeared.");
+                    throw new PaymentFillError("A payment input disappeared.");
                   const { node } = describedNodeSchema.parse(
                     await connection.send(
                       "DOM.describeNode",
@@ -438,11 +515,12 @@ export async function fillKernelPaymentFields({
             ).values(),
           ];
           if (candidates.length !== 1)
-            throw new Error(
-              "Each binding must identify one visible payment input in the approved checkout."
+            throw new PaymentFillError(
+              `Each binding must identify one visible payment input in the approved checkout; binding ${String(bindingIndex + 1)} matched ${String(candidates.length)}.`
             );
           const candidate = candidates[0];
-          if (!candidate) throw new Error("A payment input is unavailable.");
+          if (!candidate)
+            throw new PaymentFillError("A payment input is unavailable.");
           return candidate;
         });
         if (
@@ -453,7 +531,9 @@ export async function fillKernelPaymentFields({
             )
           ).size !== controls.length
         ) {
-          throw new Error("Payment bindings must target distinct inputs.");
+          throw new PaymentFillError(
+            "Payment bindings must target distinct inputs."
+          );
         }
         /* oxlint-disable eslint/no-await-in-loop -- Payment fields are written once in order; any uncertain field stops the operation. */
         for (const [index, control] of controls.entries()) {
@@ -469,9 +549,12 @@ export async function fillKernelPaymentFields({
             )
           ).result.value;
           if (topUrl !== pageUrl)
-            throw new Error("The checkout changed before payment filling.");
+            throw new PaymentFillError(
+              "The checkout changed before payment filling."
+            );
           const field = fields[index];
-          if (!field) throw new Error("A payment binding is unavailable.");
+          if (!field)
+            throw new PaymentFillError("A payment binding is unavailable.");
           if (
             !(await isPaymentFrameVisible(
               connection,
@@ -481,7 +564,9 @@ export async function fillKernelPaymentFields({
               frameSessions
             ))
           ) {
-            throw new Error("A payment frame became hidden before filling.");
+            throw new PaymentFillError(
+              "A payment frame became hidden before filling."
+            );
           }
           const result = evaluatedBooleanSchema.parse(
             await connection.send(
@@ -502,7 +587,7 @@ export async function fillKernelPaymentFields({
             )
           );
           if (!result.result.value)
-            throw new Error(
+            throw new PaymentFillError(
               "A payment field rejected filling; inspect the existing checkout before continuing."
             );
         }
