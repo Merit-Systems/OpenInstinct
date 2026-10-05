@@ -1,52 +1,72 @@
-import { defineSchedule, type ScheduleToFn } from "eve/schedules";
-import scheduledRunChannel from "@agent/channels/scheduled-run";
+import type { RouteHandlerArgs, defineChannel } from "eve/channels";
+import type { ScheduleToFn } from "eve/schedules";
 import { dispatchScheduledReport } from "@agent/lib/schedules/report";
 import { postScheduledReport } from "@agent/lib/schedules/request";
 import {
   claimReadyScheduledAgentRuns,
-  listRecoverableScheduledReports,
+  type listRecoverableScheduledReports,
   materializeDueScheduledAgentRuns,
   releaseScheduledAgentRun,
   setScheduledRunSession,
 } from "@db/services/scheduled-agent-jobs";
+import {
+  scheduledJobWakeups,
+  observeScheduledRun,
+  scheduledRunWakeups,
+} from "@db/services/scheduled-agent-wakeups";
+import type { ScheduledWakeup } from "@shared/schedules/wakeups";
 
 const workerStartupLimitMs = 5 * 60_000;
 
-export default defineSchedule({
-  cron: "* * * * *",
-  run({ to, waitUntil }) {
-    waitUntil(dispatchDueWork(to));
-  },
-});
-
-async function dispatchDueWork(to: ScheduleToFn) {
+export async function dispatchScheduledWakeup(
+  delivery: Pick<RouteHandlerArgs, "to" | "attachSession">,
+  wakeup: ScheduledWakeup,
+  workerChannel: ReturnType<typeof defineChannel>
+) {
   const now = new Date();
-  const materializedRunIds = await materializeDueScheduledAgentRuns({
-    limit: 25,
-    now,
-  });
-  const runs = await claimReadyScheduledAgentRuns({
-    leaseForMs: workerStartupLimitMs,
-    limit: 25,
-    now,
-  });
-  const reports = await listRecoverableScheduledReports(now, 25);
-  if (materializedRunIds.length > 0 || runs.length > 0 || reports.length > 0) {
-    console.info("[scheduled-run] schedule tick found work", {
-      claimedRunCount: runs.length,
-      materializedRunCount: materializedRunIds.length,
-      recoverableReportCount: reports.length,
+  if (new Date(wakeup.at) > now) return { wakeups: [wakeup], result: {} };
+  if (wakeup.kind === "legacy-run")
+    return {
+      wakeups: await observeScheduledRun(wakeup.runId, wakeup.deadline),
+      result: {},
+    };
+  if (wakeup.kind === "job") {
+    await materializeDueScheduledAgentRuns({
+      limit: 1,
+      now,
+      job: {
+        id: wakeup.jobId,
+        revision: wakeup.revision,
+        at: new Date(wakeup.at),
+      },
     });
+    return {
+      wakeups: await scheduledJobWakeups(wakeup.jobId),
+      result: {},
+    };
   }
-  await Promise.all([
-    ...runs.map((claim) => executeScheduledRun(to, claim)),
-    ...reports.map((report) => dispatchRecoverableReport(to, report)),
-  ]);
+  if (wakeup.kind === "run") {
+    const claims = await claimReadyScheduledAgentRuns({
+      limit: 1,
+      now,
+      leaseForMs: workerStartupLimitMs,
+      wakeup,
+    });
+    await Promise.all(
+      claims.map((claim) =>
+        executeScheduledRun(delivery.to, claim, workerChannel)
+      )
+    );
+  } else {
+    await dispatchScheduledReport(delivery, wakeup.runId, wakeup.sequence);
+  }
+  return { wakeups: await scheduledRunWakeups(wakeup.runId), result: {} };
 }
 
 async function executeScheduledRun(
   to: ScheduleToFn,
-  claim: Awaited<ReturnType<typeof claimReadyScheduledAgentRuns>>[number]
+  claim: Awaited<ReturnType<typeof claimReadyScheduledAgentRuns>>[number],
+  workerChannel: ReturnType<typeof defineChannel>
 ) {
   const leaseToken = claim.run.leaseToken;
   if (!leaseToken) throw new Error("A scheduled run claim requires a lease.");
@@ -57,8 +77,8 @@ async function executeScheduledRun(
     scheduledFor: claim.run.scheduledFor.toISOString(),
   });
   try {
-    const session = await to(scheduledRunChannel, {
-      restart: claim.run.workerSessionId !== null,
+    const session = await to(workerChannel, {
+      restart: claim.run.attempts > 1 || claim.run.workerSessionId !== null,
       runId: claim.run.id,
     }).send(scheduledRunPrompt(claim), {
       auth: scheduledWorkerAuth(claim),

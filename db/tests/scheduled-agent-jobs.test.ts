@@ -32,6 +32,9 @@ describe("scheduled agent jobs", () => {
       "0010_rapid_cerise.sql",
       "0011_faulty_unicorn.sql",
       "0012_harsh_domino.sql",
+      "0013_last_christian_walker.sql",
+      "0014_chief_tigra.sql",
+      "0015_scheduled-wakeups.sql",
     ]) {
       await applyMigration(client, migration);
     }
@@ -493,11 +496,21 @@ describe("scheduled agent jobs", () => {
       })
     ).toEqual([]);
 
+    await jobs.updateScheduledAgentJob(
+      alice,
+      aliceConversation,
+      created.id,
+      { status: "active" },
+      new Date("2026-09-09T12:00:00.000Z")
+    );
     const [acceptedRun] = await pgliteDatabase
       .insert(schema.scheduledAgentRuns)
       .values({
         attempts: 1,
         jobId: created.id,
+        jobRevision: (
+          await jobs.getScheduledAgentJob(alice, aliceConversation, created.id)
+        )?.revision,
         leaseExpiresAt: new Date("2026-09-09T13:05:00.000Z"),
         leaseToken: "00000000-0000-4000-8000-000000000010",
         scheduledFor: new Date("2026-09-09T13:00:00.000Z"),
@@ -520,6 +533,9 @@ describe("scheduled agent jobs", () => {
       .values({
         attempts: 3,
         jobId: created.id,
+        jobRevision: (
+          await jobs.getScheduledAgentJob(alice, aliceConversation, created.id)
+        )?.revision,
         leaseExpiresAt: new Date("2026-09-09T14:05:00.000Z"),
         leaseToken: "00000000-0000-4000-8000-000000000011",
         scheduledFor: new Date("2026-09-09T14:00:00.000Z"),

@@ -70,12 +70,15 @@ describe("auth proxy matcher", () => {
     expect(getAuthSession).not.toHaveBeenCalled();
   });
 
-  it("allows the schedule dispatcher without a browser session in development", async () => {
-    const response = await proxy(
-      new NextRequest("http://localhost:3000/eve/v1/dev/schedules/dynamic")
-    );
+  it.each(["/api/scheduled-wakeups", "/api/scheduled-wakeups/migrate"])(
+    "allows durable scheduling operations at %s without a browser session",
+    async (path) => {
+      const response = await proxy(
+        new NextRequest("http://localhost:3000" + path)
+      );
 
-    expect(response.headers.get("x-middleware-next")).toBe("1");
-    expect(getAuthSession).not.toHaveBeenCalled();
-  });
+      expect(response.headers.get("x-middleware-next")).toBe("1");
+      expect(getAuthSession).not.toHaveBeenCalled();
+    }
+  );
 });

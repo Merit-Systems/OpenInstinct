@@ -1,5 +1,11 @@
+import type { performScheduledCommand } from "@agent/lib/schedules/request";
+import type {
+  scheduledJobWakeups,
+  scheduledRunWakeups,
+  observeScheduledRun,
+} from "@db/services/scheduled-agent-wakeups";
 import type { Session } from "eve/channels";
-import type { ScheduleHandlerArgs, ScheduleToFn } from "eve/schedules";
+import type { ScheduleToFn } from "eve/schedules";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type {
   claimReadyScheduledAgentRuns,
@@ -39,15 +45,30 @@ vi.mock("@db/services/scheduled-agent-jobs", () => ({
 vi.mock("@agent/channels/linq", () => ({ default: { channel: "linq" } }));
 vi.mock("@agent/lib/schedules/request", () => ({
   postScheduledReport: requests.report,
+  performScheduledCommand: vi
+    .fn<typeof performScheduledCommand>()
+    .mockResolvedValue({}),
 }));
 vi.mock("@agent/channels/scheduled-run", () => ({
   default: { channel: "scheduled-run" },
 }));
 
-import dynamicSchedule from "@agent/schedules/dynamic";
+vi.mock("@db/services/scheduled-agent-wakeups", () => ({
+  scheduledJobWakeups: vi
+    .fn<typeof scheduledJobWakeups>()
+    .mockResolvedValue([]),
+  scheduledRunWakeups: vi
+    .fn<typeof scheduledRunWakeups>()
+    .mockResolvedValue([]),
+  observeScheduledRun: vi
+    .fn<typeof observeScheduledRun>()
+    .mockResolvedValue([]),
+}));
+import scheduledRunChannel from "@agent/channels/scheduled-run";
+import { dispatchScheduledWakeup } from "@agent/lib/schedules/wake";
 import { dispatchScheduledReport } from "@agent/lib/schedules/report";
 
-describe("dynamic schedule dispatch", () => {
+describe("scheduled wakeup dispatch", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     services.materialize.mockResolvedValue([]);
@@ -123,17 +144,19 @@ describe("dynamic schedule dispatch", () => {
     });
   });
 
-  it("keeps Eve debug reports on its active-session callback", async () => {
+  it("attaches Eve report wakeups to the active debug session", async () => {
     const report = scheduledReport();
     services.listReports.mockResolvedValue([
       { conversationChannel: "eve", runId: report.run.id },
     ]);
+    report.job.conversationChannel = "eve";
+    services.claimReports.mockResolvedValue(report);
     const to = vi.fn<ScheduleToFn>();
 
-    await runSchedule(to);
+    const attachSession = await runSchedule(to);
 
     expect(to).not.toHaveBeenCalled();
-    expect(requests.report).toHaveBeenCalledExactlyOnceWith(report.run.id);
+    expect(attachSession).toHaveBeenCalledWith(report.job.conversationId);
   });
 
   it("reports a worker that exhausts its dispatch attempts", async () => {
@@ -161,7 +184,11 @@ describe("dynamic schedule dispatch", () => {
       "Workflow did not accept the candidate."
     );
     expect(requests.report).not.toHaveBeenCalled();
-    expect(services.claimReports).toHaveBeenCalledExactlyOnceWith(claim.run.id);
+    expect(services.claimReports).toHaveBeenCalledExactlyOnceWith(
+      claim.run.id,
+      expect.any(Date),
+      undefined
+    );
   });
 });
 
@@ -258,21 +285,43 @@ describe("scheduled report delivery", () => {
 });
 
 async function runSchedule(to: ScheduleToFn) {
-  let task: Promise<unknown> | undefined;
-  const args: ScheduleHandlerArgs = {
-    appAuth: {
-      attributes: {},
-      authenticator: "test",
-      principalId: "test-app",
-      principalType: "app",
+  const attachSession = vi
+    .fn<(id: string) => Session>()
+    .mockImplementation((id) =>
+      workerSession(
+        id,
+        vi
+          .fn<Session["send"]>()
+          .mockResolvedValue({ sessionId: id, status: "accepted" })
+      )
+    );
+  await dispatchScheduledWakeup(
+    { to, attachSession },
+    {
+      kind: "run",
+      runId: "00000000-0000-4000-8000-000000000001",
+      attempts: 0,
+      leaseToken: null,
+      at: "2000-01-01T00:00:00.000Z",
     },
-    to,
-    waitUntil(backgroundTask) {
-      task = backgroundTask;
-    },
-  };
-  dynamicSchedule.run(args);
-  await task;
+    scheduledRunChannel
+  );
+  await Promise.all(
+    (await services.listReports()).map((report) =>
+      dispatchScheduledWakeup(
+        { to, attachSession },
+        {
+          kind: "report",
+          runId: report.runId,
+          sequence: 1,
+          leaseToken: null,
+          at: "2000-01-01T00:00:00.000Z",
+        },
+        scheduledRunChannel
+      )
+    )
+  );
+  return attachSession;
 }
 
 const resultOutcome = {
@@ -314,6 +363,7 @@ function scheduledClaim(): Awaited<
       nextRunAt: new Date("2026-09-03T13:00:00.000Z"),
       prompt: "Watch the price.",
       replyAnchorMessageId: null,
+      lastMutationId: null,
       revision: 0,
       status: "active",
       timing: {
@@ -332,12 +382,14 @@ function scheduledClaim(): Awaited<
       deferredCompletionTurnId: null,
       id: "00000000-0000-4000-8000-000000000002",
       pendingInputRequests: null,
+      jobRevision: 0,
       jobId: "00000000-0000-4000-8000-000000000001",
       lastError: null,
       leaseExpiresAt: new Date("2026-09-02T13:05:00.000Z"),
       leaseToken: "00000000-0000-4000-8000-000000000003",
       outcome: null,
       reportStatus: "not_ready",
+      reportRetryAt: null,
       reportSequence: 0,
       reportLeaseExpiresAt: null,
       reportLeaseToken: null,
@@ -346,6 +398,7 @@ function scheduledClaim(): Awaited<
       startedAt: null,
       status: "running",
       updatedAt: new Date("2026-09-02T13:00:00.000Z"),
+      wakeupManaged: true,
       workerSessionId: null,
     },
   };
@@ -360,6 +413,7 @@ function scheduledReport(): NonNullable<
     run: {
       ...claim.run,
       outcome: resultOutcome,
+      reportRetryAt: null,
       reportSequence: 1,
       reportStatus: "queued",
       reportLeaseToken: "00000000-0000-4000-8000-000000000004",

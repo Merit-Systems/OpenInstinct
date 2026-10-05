@@ -1,9 +1,9 @@
+import { performScheduledCommand } from "./request";
 import type { AttachSessionFn } from "eve/channels";
 import type { ScheduleToFn } from "eve/schedules";
 import {
   claimScheduledReport,
   finalizeScheduledReport,
-  releaseScheduledReport,
 } from "@db/services/scheduled-agent-jobs";
 import linq from "../../channels/linq";
 
@@ -16,9 +16,10 @@ export async function dispatchScheduledReport(
     readonly attachSession?: AttachSessionFn;
     readonly to: ScheduleToFn;
   },
-  runId: string
+  runId: string,
+  sequence?: number
 ) {
-  const claimed = await claimScheduledReport(runId);
+  const claimed = await claimScheduledReport(runId, new Date(), sequence);
   const leaseToken = claimed?.run.reportLeaseToken;
   if (!claimed || !leaseToken) return;
   console.info("[scheduled-run] dispatching report", {
@@ -71,14 +72,15 @@ export async function dispatchScheduledReport(
       runId: claimed.run.id,
     });
   } catch (error) {
-    const released = await releaseScheduledReport(
-      claimed.run.id,
+    await performScheduledCommand({
+      kind: "release-report",
+      runId: claimed.run.id,
       leaseToken,
-      error instanceof Error ? error.message : String(error)
-    );
+      message: error instanceof Error ? error.message : String(error),
+      at: new Date().toISOString(),
+    });
     console.warn("[scheduled-run] report dispatch failed", {
       cause: error,
-      released,
       reportSequence: claimed.run.reportSequence,
       runId: claimed.run.id,
     });

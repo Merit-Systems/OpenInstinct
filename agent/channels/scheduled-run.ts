@@ -2,6 +2,15 @@ import { defineChannel, POST } from "eve/channels";
 import { localDev, routeAuth, vercelOidc } from "eve/channels/auth";
 import { parseInputResponses, resolveTextToResponses } from "eve/client";
 import { z } from "zod";
+import { authorizeScheduledRequest } from "@db/services/auth/scheduled-requests";
+import { applyScheduledCommand } from "@agent/lib/schedules/commands";
+import { dispatchScheduledWakeup } from "@agent/lib/schedules/wake";
+import {
+  scheduledCommandSchema,
+  scheduledWakeupSchema,
+  scheduledResponseSchema,
+} from "@shared/schedules/wakeups";
+import { performScheduledCommand } from "@agent/lib/schedules/request";
 import { dispatchScheduledReport } from "@agent/lib/schedules/report";
 import {
   claimScheduledAgentRunInput,
@@ -21,7 +30,7 @@ const respondSchema = z.strictObject({
 });
 const internalRouteAuth = [vercelOidc(), localDev()];
 
-export default defineChannel({
+const scheduledRunChannel = defineChannel({
   audience({ caller }) {
     return caller.type === "principal" && caller.principal.kind === "user"
       ? "private"
@@ -41,6 +50,37 @@ export default defineChannel({
     });
   },
   routes: [
+    POST("/internal/scheduled-run/command", async (request) => {
+      const denied = await authorizeScheduledRequest(request);
+      if (denied) return denied;
+      const command = scheduledCommandSchema.safeParse(
+        await request.json().catch(() => null)
+      );
+      if (!command.success) return new Response(null, { status: 400 });
+      return Response.json(
+        scheduledResponseSchema.parse(await applyScheduledCommand(command.data))
+      );
+    }),
+    POST(
+      "/internal/scheduled-run/wake",
+      async (request, delivery): Promise<Response> => {
+        const denied = await authorizeScheduledRequest(request);
+        if (denied) return denied;
+        const wakeup = scheduledWakeupSchema.safeParse(
+          await request.json().catch(() => null)
+        );
+        if (!wakeup.success) return new Response(null, { status: 400 });
+        return Response.json(
+          scheduledResponseSchema.parse(
+            await dispatchScheduledWakeup(
+              delivery,
+              wakeup.data,
+              scheduledRunChannel
+            )
+          )
+        );
+      }
+    ),
     POST(
       "/internal/scheduled-run/report",
       async (request, { attachSession, to, waitUntil }) => {
@@ -61,6 +101,11 @@ export default defineChannel({
         const auth = await routeAuth(request, internalRouteAuth);
         if (auth instanceof Response) return auth;
         const input = respondSchema.parse(await request.json());
+        await performScheduledCommand({
+          kind: "observe",
+          runId: input.runId,
+          at: new Date().toISOString(),
+        });
         const claimed = await claimScheduledAgentRunInput(
           input.runId,
           input.leaseToken
@@ -122,3 +167,5 @@ export default defineChannel({
     ),
   ],
 });
+
+export default scheduledRunChannel;

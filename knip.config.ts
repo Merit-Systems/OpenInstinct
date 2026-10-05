@@ -9,7 +9,7 @@ export default {
     "agent/instrumentation/**/*.ts",
     "agent/memory/**/*.ts",
     "agent/subagents/**/*.ts",
-    "agent/schedules/**/*.ts",
+    "app/api/scheduled-wakeups/workflows.ts",
     "agent/tools/**/*.ts",
     "db/drizzle.config.ts",
     // Drizzle consumes every table and relation exported by this schema barrel.

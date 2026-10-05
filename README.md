@@ -288,6 +288,40 @@ local-only defaults when their variables are unset. Vercel deployments
 provision them automatically in private Blob; other production hosts require
 explicit secrets.
 
+## Scheduled wakeups
+
+User schedules use independent Workflow timers. Creating or changing a schedule
+starts a durable registration operation; each timer sleeps until its saved due
+time, then claims the occurrence and registers the next one. Worker outcomes and
+questions enqueue reporting immediately. Startup recovery and report retries use
+their own timers. There is no Vercel Cron Job to configure.
+
+The Next app owns the clock at `/api/scheduled-wakeups`; Eve owns the authenticated
+callbacks under `/internal/scheduled-run/`. Vercel routes those callbacks to the
+generated `eve` service. Local Next proxies them to its current Eve server.
+Self-hosted Next uses Eve's default production port, `4274`; set
+`SCHEDULED_RUN_ORIGIN` when the Eve server runs at another origin. Production
+timers target `VERCEL_PROJECT_PRODUCTION_URL`, so execution reaches the current
+deployment. Preview timers retain their preview destination.
+
+For an existing installation, deploy the additive database migration and the new
+code through Git, then arm existing schedules and pending deliveries from a
+checkout linked to that Vercel project:
+
+```bash
+pnpm exec vercel env run --environment production -- pnpm schedules:migrate https://your-project.vercel.app
+```
+
+The migration operation is durable and can be retried. Timer registrations,
+occurrences, revisions, and leases prevent duplicate execution. Its dedicated
+backfill endpoint accepts Vercel CLI developer tokens for this project; normal
+commands and worker callbacks require runtime credentials. Existing active
+scheduled workers receive a bounded compatibility observer because their pinned
+older hooks cannot enqueue reports. New workers report through events. Let older
+interactive turns finish or hand off before cutover: their old schedule tools
+cannot register new timers. Keep the previous deployment available until its
+scheduled workers have settled.
+
 > [!WARNING]
 > This is not software intended for production use.
 

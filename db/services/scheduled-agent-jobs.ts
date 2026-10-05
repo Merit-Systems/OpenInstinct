@@ -38,6 +38,7 @@ const exhaustedRunOutcome = {
 } satisfies ScheduledRunOutcome;
 
 export interface CreateScheduledAgentJob {
+  readonly id?: string;
   readonly conversationChannel: "eve" | "linq";
   readonly conversationId: string;
   readonly missedRunPolicy: "catch_up" | "run_latest";
@@ -71,11 +72,16 @@ export async function createScheduledAgentJob(
   input: CreateScheduledAgentJob,
   now = new Date()
 ) {
+  if (input.id) {
+    const existing = await getScheduledAgentJob(scope, input, input.id);
+    if (existing) return existing;
+  }
   const nextRunAt = computeNextRun(input.timing, now);
   if (!nextRunAt) throw new Error("That schedule has no future occurrence.");
   const [job] = await db
     .insert(scheduledAgentJobs)
     .values({
+      id: input.id,
       createdAt: now,
       createdByUserId: scope.userId,
       conversationChannel: input.conversationChannel,
@@ -89,9 +95,37 @@ export async function createScheduledAgentJob(
       updatedAt: now,
       workspaceId: scope.workspaceId,
     })
+    .onConflictDoNothing({ target: scheduledAgentJobs.id })
     .returning();
+  if (!job && input.id) {
+    const existing = await getScheduledAgentJob(scope, input, input.id);
+    if (existing) return existing;
+  }
   if (!job) throw new Error("The schedule could not be created.");
   return parseJob(job);
+}
+
+export async function getScheduledAgentJob(
+  scope: AccessScope,
+  conversation: Pick<
+    CreateScheduledAgentJob,
+    "conversationChannel" | "conversationId"
+  >,
+  id: string
+) {
+  const job = await db.query.scheduledAgentJobs.findFirst({
+    where: and(
+      eq(scheduledAgentJobs.id, id),
+      eq(scheduledAgentJobs.workspaceId, scope.workspaceId),
+      eq(scheduledAgentJobs.createdByUserId, scope.userId),
+      eq(
+        scheduledAgentJobs.conversationChannel,
+        conversation.conversationChannel
+      ),
+      eq(scheduledAgentJobs.conversationId, conversation.conversationId)
+    ),
+  });
+  return job ? parseJob(job) : undefined;
 }
 
 export async function listScheduledAgentJobs(
@@ -137,22 +171,17 @@ export async function updateScheduledAgentJob(
   >,
   id: string,
   patch: UpdateScheduledAgentJob,
-  now = new Date()
+  now = new Date(),
+  mutation?: { readonly id: string; readonly revision: number }
 ) {
-  const current = await db.query.scheduledAgentJobs.findFirst({
-    where: and(
-      eq(scheduledAgentJobs.id, id),
-      eq(scheduledAgentJobs.workspaceId, scope.workspaceId),
-      eq(scheduledAgentJobs.createdByUserId, scope.userId),
-      eq(
-        scheduledAgentJobs.conversationChannel,
-        conversation.conversationChannel
-      ),
-      eq(scheduledAgentJobs.conversationId, conversation.conversationId),
-      sql`${scheduledAgentJobs.status} <> 'deleted'`
-    ),
-  });
+  const current = await getScheduledAgentJob(scope, conversation, id);
   if (!current) return undefined;
+  if (mutation && current.lastMutationId === mutation.id) return current;
+  if (
+    current.status === "deleted" ||
+    (mutation && current.revision !== mutation.revision)
+  )
+    return undefined;
   const timing = patch.timing ?? scheduleTimingSchema.parse(current.timing);
   const status = patch.status ?? current.status;
   const shouldRecompute =
@@ -172,16 +201,27 @@ export async function updateScheduledAgentJob(
     .set({
       ...patch,
       nextRunAt,
+      lastMutationId: mutation?.id,
       revision: sql`${scheduledAgentJobs.revision} + 1`,
       timing,
       updatedAt: now,
     })
-    .where(eq(scheduledAgentJobs.id, current.id))
+    .where(
+      and(
+        eq(scheduledAgentJobs.id, current.id),
+        eq(scheduledAgentJobs.revision, current.revision)
+      )
+    )
     .returning();
   return job ? parseJob(job) : undefined;
 }
 
 export async function materializeDueScheduledAgentRuns(options: {
+  readonly job?: {
+    readonly id: string;
+    readonly revision: number;
+    readonly at: Date;
+  };
   readonly limit: number;
   readonly now: Date;
 }) {
@@ -191,13 +231,20 @@ export async function materializeDueScheduledAgentRuns(options: {
       .from(scheduledAgentJobs)
       .where(
         and(
+          options.job
+            ? and(
+                eq(scheduledAgentJobs.id, options.job.id),
+                eq(scheduledAgentJobs.revision, options.job.revision),
+                eq(scheduledAgentJobs.nextRunAt, options.job.at)
+              )
+            : undefined,
           eq(scheduledAgentJobs.status, "active"),
           lte(scheduledAgentJobs.nextRunAt, options.now)
         )
       )
       .orderBy(asc(scheduledAgentJobs.nextRunAt))
       .limit(options.limit)
-      .for("update", { skipLocked: true });
+      .for("update", options.job ? {} : { skipLocked: true });
     const createdRunIds = await Promise.all(
       due.map(async (job) => {
         if (!job.nextRunAt) return undefined;
@@ -212,6 +259,7 @@ export async function materializeDueScheduledAgentRuns(options: {
           .values({
             createdAt: options.now,
             jobId: job.id,
+            jobRevision: job.revision,
             scheduledFor,
             updatedAt: options.now,
           })
@@ -236,11 +284,46 @@ export async function materializeDueScheduledAgentRuns(options: {
 }
 
 export async function claimReadyScheduledAgentRuns(options: {
+  readonly wakeup?: {
+    readonly runId: string;
+    readonly attempts: number;
+    readonly leaseToken: string | null;
+  };
   readonly leaseForMs: number;
   readonly limit: number;
   readonly now: Date;
 }) {
   return db.transaction(async (transaction) => {
+    await transaction
+      .update(scheduledAgentRuns)
+      .set({
+        status: "completed",
+        reportStatus: "not_needed",
+        completedAt: options.now,
+        outcome: {
+          kind: "nothing_to_report",
+          reason: "The schedule changed before worker dispatch.",
+        } satisfies ScheduledRunOutcome,
+        leaseToken: null,
+        leaseExpiresAt: null,
+        retryAt: null,
+        updatedAt: options.now,
+      })
+      .where(
+        and(
+          options.wakeup
+            ? eq(scheduledAgentRuns.id, options.wakeup.runId)
+            : undefined,
+          or(
+            eq(scheduledAgentRuns.status, "queued"),
+            and(
+              eq(scheduledAgentRuns.status, "running"),
+              isNull(scheduledAgentRuns.workerSessionId)
+            )
+          ),
+          sql`exists (select 1 from ${scheduledAgentJobs} where ${scheduledAgentJobs.id} = ${scheduledAgentRuns.jobId} and (${scheduledAgentJobs.status} in ('paused', 'deleted') or ${scheduledAgentJobs.revision} <> ${scheduledAgentRuns.jobRevision}))`
+        )
+      );
     const ready = await transaction
       .select({ job: scheduledAgentJobs, run: scheduledAgentRuns })
       .from(scheduledAgentRuns)
@@ -250,6 +333,20 @@ export async function claimReadyScheduledAgentRuns(options: {
       )
       .where(
         and(
+          inArray(scheduledAgentJobs.status, ["active", "completed"]),
+          or(
+            isNull(scheduledAgentRuns.jobRevision),
+            eq(scheduledAgentRuns.jobRevision, scheduledAgentJobs.revision)
+          ),
+          options.wakeup
+            ? and(
+                eq(scheduledAgentRuns.id, options.wakeup.runId),
+                eq(scheduledAgentRuns.attempts, options.wakeup.attempts),
+                options.wakeup.leaseToken
+                  ? eq(scheduledAgentRuns.leaseToken, options.wakeup.leaseToken)
+                  : isNull(scheduledAgentRuns.leaseToken)
+              )
+            : undefined,
           or(
             eq(scheduledAgentRuns.status, "queued"),
             and(
@@ -266,7 +363,12 @@ export async function claimReadyScheduledAgentRuns(options: {
       )
       .orderBy(asc(scheduledAgentRuns.scheduledFor))
       .limit(options.limit)
-      .for("update", { of: scheduledAgentRuns, skipLocked: true });
+      .for(
+        "update",
+        options.wakeup
+          ? { of: [scheduledAgentJobs, scheduledAgentRuns] }
+          : { of: [scheduledAgentJobs, scheduledAgentRuns], skipLocked: true }
+      );
     if (ready.length === 0) return [];
     const exhausted = ready.filter(({ run }) => run.attempts >= 3);
     if (exhausted.length > 0) {
@@ -279,6 +381,7 @@ export async function claimReadyScheduledAgentRuns(options: {
           outcome: exhaustedRunOutcome,
           reportSequence: sql`${scheduledAgentRuns.reportSequence} + 1`,
           reportStatus: "pending",
+          reportRetryAt: null,
           retryAt: null,
           status: "dead_letter",
           updatedAt: options.now,
@@ -298,6 +401,7 @@ export async function claimReadyScheduledAgentRuns(options: {
     await transaction
       .update(scheduledAgentRuns)
       .set({
+        wakeupManaged: true,
         attempts: sql`${scheduledAgentRuns.attempts} + 1`,
         deferredCompletionTurnId: null,
         leaseExpiresAt,
@@ -312,6 +416,7 @@ export async function claimReadyScheduledAgentRuns(options: {
       job: parseJob(job),
       run: parseRun({
         ...run,
+        wakeupManaged: true,
         attempts: run.attempts + 1,
         leaseExpiresAt,
         leaseToken,
@@ -387,6 +492,7 @@ export async function waitForScheduledAgentRunInput(
       leaseExpiresAt: null,
       reportSequence: sql`${scheduledAgentRuns.reportSequence} + 1`,
       reportStatus: "pending",
+      reportRetryAt: null,
       status: "waiting_for_input",
       updatedAt: now,
     })
@@ -579,6 +685,7 @@ export async function completeScheduledAgentRun(
     .update(scheduledAgentRuns)
     .set({
       completedAt,
+      reportRetryAt: null,
       deferredCompletionTurnId: null,
       pendingInputRequests: null,
       lastError: null,
@@ -655,14 +762,21 @@ export async function releaseScheduledAgentRun(
       )
     )
     .returning({ status: scheduledAgentRuns.status });
-  return released?.status;
+  return released?.status === "queued" || released?.status === "dead_letter"
+    ? released.status
+    : undefined;
 }
 
-export async function claimScheduledReport(runId: string, now = new Date()) {
+export async function claimScheduledReport(
+  runId: string,
+  now = new Date(),
+  sequence?: number
+) {
   const reportLeaseToken = randomUUID();
   const [claimed] = await db
     .update(scheduledAgentRuns)
     .set({
+      reportRetryAt: null,
       reportLeaseExpiresAt: new Date(now.getTime() + 5 * 60_000),
       reportLeaseToken,
       reportStatus: "queued",
@@ -676,7 +790,20 @@ export async function claimScheduledReport(runId: string, now = new Date()) {
           "dead_letter",
           "waiting_for_input",
         ]),
-        eq(scheduledAgentRuns.reportStatus, "pending")
+        sequence === undefined
+          ? undefined
+          : eq(scheduledAgentRuns.reportSequence, sequence),
+        or(
+          isNull(scheduledAgentRuns.reportRetryAt),
+          lte(scheduledAgentRuns.reportRetryAt, now)
+        ),
+        or(
+          eq(scheduledAgentRuns.reportStatus, "pending"),
+          and(
+            eq(scheduledAgentRuns.reportStatus, "queued"),
+            lte(scheduledAgentRuns.reportLeaseExpiresAt, now)
+          )
+        )
       )
     )
     .returning();
@@ -734,6 +861,7 @@ export async function listRecoverableScheduledReports(
           reportLeaseExpiresAt: null,
           reportLeaseToken: null,
           reportStatus: "pending",
+          reportRetryAt: null,
           updatedAt: now,
         })
         .where(
@@ -757,7 +885,8 @@ export async function listRecoverableScheduledReports(
 export async function releaseScheduledReport(
   runId: string,
   leaseToken: string,
-  errorMessage: string
+  errorMessage: string,
+  now = new Date()
 ) {
   const [run] = await db
     .update(scheduledAgentRuns)
@@ -766,7 +895,8 @@ export async function releaseScheduledReport(
       reportLeaseExpiresAt: null,
       reportLeaseToken: null,
       reportStatus: "pending",
-      updatedAt: new Date(),
+      reportRetryAt: new Date(now.getTime() + 60_000),
+      updatedAt: now,
     })
     .where(
       and(

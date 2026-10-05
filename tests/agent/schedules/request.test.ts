@@ -1,3 +1,4 @@
+import type { getInstallationSecrets } from "@db/services/installation-secrets";
 import type { readFile } from "node:fs/promises";
 import type { getVercelOidcToken } from "@vercel/oidc";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -21,6 +22,15 @@ const mocks = vi.hoisted(() => {
   };
 });
 
+vi.mock("@db/services/installation-secrets", () => ({
+  getInstallationSecrets: vi
+    .fn<typeof getInstallationSecrets>()
+    .mockResolvedValue({
+      betterAuthSecret: "test-auth-secret",
+      secretEncryptionKey: "test-key",
+      version: 1,
+    }),
+}));
 vi.mock("node:fs/promises", () => ({ readFile: mocks.readFile }));
 vi.mock("@vercel/oidc", () => ({ getVercelOidcToken: mocks.getToken }));
 vi.mock("@shared/environment", () => ({ env: mocks.env }));
@@ -28,7 +38,7 @@ vi.mock("@shared/environment/origin", () => ({
   applicationOrigin: () => "https://example.com",
 }));
 
-import { postScheduledRunRoute } from "@agent/lib/schedules/request";
+import { postScheduledRunRoute } from "@db/services/auth/scheduled-requests";
 
 describe("scheduled run requests", () => {
   beforeEach(() => {

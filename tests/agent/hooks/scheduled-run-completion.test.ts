@@ -1,3 +1,10 @@
+import type { ScheduledCommand } from "@shared/schedules/wakeups";
+import type {
+  backfillScheduledWakeups,
+  observeScheduledRun,
+  scheduledJobWakeups,
+  scheduledRunWakeups,
+} from "@db/services/scheduled-agent-wakeups";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { HookContext } from "eve/hooks";
 import type {
@@ -23,6 +30,28 @@ vi.mock("@db/services/scheduled-agent-jobs", () => ({
   releaseScheduledAgentRun: services.release,
   waitForScheduledAgentRunInput: services.waitForInput,
 }));
+
+vi.mock("@db/services/scheduled-agent-wakeups", () => ({
+  backfillScheduledWakeups: vi.fn<typeof backfillScheduledWakeups>(),
+  observeScheduledRun: vi.fn<typeof observeScheduledRun>(),
+  scheduledJobWakeups: vi
+    .fn<typeof scheduledJobWakeups>()
+    .mockResolvedValue([]),
+  scheduledRunWakeups: vi
+    .fn<typeof scheduledRunWakeups>()
+    .mockResolvedValue([]),
+}));
+vi.mock(import("@agent/lib/schedules/request"), async (importOriginal) => {
+  const original = await importOriginal();
+  return {
+    ...original,
+    performScheduledCommand: async (command: ScheduledCommand) => {
+      const { applyScheduledCommand } =
+        await import("@agent/lib/schedules/commands");
+      return (await applyScheduledCommand(command)).result;
+    },
+  };
+});
 
 import completionHook from "@agent/hooks/scheduled-run-completion";
 
@@ -149,6 +178,7 @@ describe("scheduled run completion hook", () => {
         deferredCompletionTurnId: null,
         id: runId,
         pendingInputRequests: null,
+        jobRevision: 0,
         jobId: "00000000-0000-4000-8000-000000000003",
         lastError: null,
         leaseExpiresAt: null,
@@ -159,6 +189,7 @@ describe("scheduled run completion hook", () => {
           urgency: "normal",
         },
         reportStatus: "pending",
+        reportRetryAt: null,
         reportSequence: 1,
         reportLeaseExpiresAt: null,
         reportLeaseToken: null,
@@ -167,6 +198,7 @@ describe("scheduled run completion hook", () => {
         startedAt: new Date("2026-09-01T13:00:00.000Z"),
         status: "completed",
         updatedAt: new Date("2026-09-01T13:02:00.000Z"),
+        wakeupManaged: true,
         workerSessionId: "worker-session",
       },
     });
@@ -349,12 +381,14 @@ describe("scheduled run completion hook", () => {
       id: runId,
       deferredCompletionTurnId: null,
       pendingInputRequests: [request],
+      jobRevision: 0,
       jobId: "00000000-0000-4000-8000-000000000003",
       lastError: null,
       leaseExpiresAt: null,
       leaseToken,
       outcome: null,
       reportStatus: "pending",
+      reportRetryAt: null,
       reportSequence: 1,
       reportLeaseExpiresAt: null,
       reportLeaseToken: null,
@@ -363,6 +397,7 @@ describe("scheduled run completion hook", () => {
       startedAt: new Date("2026-09-01T13:00:00.000Z"),
       status: "waiting_for_input",
       updatedAt: new Date("2026-09-01T13:01:00.000Z"),
+      wakeupManaged: true,
       workerSessionId: "worker-session",
     });
     const handler = completionHook.events?.["input.requested"];

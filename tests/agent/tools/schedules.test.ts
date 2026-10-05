@@ -1,3 +1,10 @@
+import type { ScheduledCommand } from "@shared/schedules/wakeups";
+import type {
+  backfillScheduledWakeups,
+  observeScheduledRun,
+  scheduledJobWakeups,
+  scheduledRunWakeups,
+} from "@db/services/scheduled-agent-wakeups";
 import type {
   DynamicResolveContext,
   ToolContext,
@@ -7,6 +14,7 @@ import { z } from "zod";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type {
   createScheduledAgentJob,
+  getScheduledAgentJob,
   getScheduledAgentRunInput,
   getScheduledAgentRunInputForReport,
   listScheduledAgentJobs,
@@ -15,6 +23,7 @@ import type {
 
 const services = vi.hoisted(() => ({
   create: vi.fn<typeof createScheduledAgentJob>(),
+  get: vi.fn<typeof getScheduledAgentJob>(),
   getInput: vi.fn<typeof getScheduledAgentRunInput>(),
   getInputForReport: vi.fn<typeof getScheduledAgentRunInputForReport>(),
   list: vi.fn<typeof listScheduledAgentJobs>(),
@@ -23,11 +32,34 @@ const services = vi.hoisted(() => ({
 
 vi.mock("@db/services/scheduled-agent-jobs", () => ({
   createScheduledAgentJob: services.create,
+  getScheduledAgentJob: services.get,
   getScheduledAgentRunInput: services.getInput,
   getScheduledAgentRunInputForReport: services.getInputForReport,
   listScheduledAgentJobs: services.list,
   updateScheduledAgentJob: services.update,
 }));
+
+vi.mock("@db/services/scheduled-agent-wakeups", () => ({
+  backfillScheduledWakeups: vi.fn<typeof backfillScheduledWakeups>(),
+  observeScheduledRun: vi.fn<typeof observeScheduledRun>(),
+  scheduledJobWakeups: vi
+    .fn<typeof scheduledJobWakeups>()
+    .mockResolvedValue([]),
+  scheduledRunWakeups: vi
+    .fn<typeof scheduledRunWakeups>()
+    .mockResolvedValue([]),
+}));
+vi.mock(import("@agent/lib/schedules/request"), async (importOriginal) => {
+  const original = await importOriginal();
+  return {
+    ...original,
+    performScheduledCommand: async (command: ScheduledCommand) => {
+      const { applyScheduledCommand } =
+        await import("@agent/lib/schedules/commands");
+      return (await applyScheduledCommand(command)).result;
+    },
+  };
+});
 
 import messaging from "@agent/tools/messaging";
 import schedules, {
@@ -39,6 +71,7 @@ import schedules, {
 describe("schedule tools", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    services.get.mockResolvedValue(scheduledJob());
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(null)));
   });
 
@@ -146,7 +179,7 @@ describe("schedule tools", () => {
     ]);
     expect(services.create).toHaveBeenCalledExactlyOnceWith(
       { userId: "user-1", workspaceId: "workspace-1" },
-      {
+      expect.objectContaining({
         conversationChannel: "linq",
         conversationId: "linq:dm:chat-1",
         missedRunPolicy: "run_latest",
@@ -158,7 +191,8 @@ describe("schedule tools", () => {
           localTime: "09:00",
           timezone: "America/New_York",
         },
-      }
+      }),
+      expect.any(Date)
     );
     expect(result).toEqual(scheduleSummary(job));
   });
@@ -208,7 +242,9 @@ describe("schedule tools", () => {
         conversationId: "linq:dm:chat-1",
       },
       job.id,
-      { status: "paused" }
+      { status: "paused" },
+      expect.any(Date),
+      expect.objectContaining({ revision: job.revision })
     );
     expect(result).toEqual(scheduleSummary(job));
   });
@@ -301,7 +337,8 @@ describe("schedule tools", () => {
       expect.objectContaining({
         conversationChannel: "eve",
         conversationId: "session-1",
-      })
+      }),
+      expect.any(Date)
     );
   });
 });
@@ -437,6 +474,7 @@ function scheduledJob(
     nextRunAt: new Date("2026-09-02T13:00:00.000Z"),
     prompt: "Send the morning summary.",
     replyAnchorMessageId: null,
+    lastMutationId: null,
     revision: 0,
     status: "active",
     timing: {

@@ -13,6 +13,7 @@ const applicationEnvironment = [
   "STRIPE_PUBLISHABLE_KEY",
   "NODE_ENV",
   "SECRET_ENCRYPTION_KEY",
+  "SCHEDULED_RUN_ORIGIN",
   "VERCEL_*",
 ];
 const runtimeEnvironment = applicationEnvironment;
