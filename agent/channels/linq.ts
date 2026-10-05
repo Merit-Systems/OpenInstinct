@@ -1,10 +1,13 @@
 import type { LinqAPIV3 } from "@linqapp/sdk";
 import type { AdapterPostableMessage } from "chat";
+import type { Message, Thread } from "chat";
+import { createMemoryState } from "@chat-adapter/state-memory";
+import { createLinqAdapter } from "@linqapp/chat-sdk-adapter";
 import {
   defaultLinqAuth,
-  linqChannel,
   type LinqChannelCredentials,
 } from "eve/channels/linq";
+import { chatSdkChannel } from "eve/channels/chat-sdk";
 import { vercelOidc } from "eve/channels/auth";
 import { z } from "zod";
 import { resolveLinqReplyTarget } from "@agent/lib/reply-targets";
@@ -13,6 +16,7 @@ import { getAuth } from "@db/services/auth";
 import { sendMessageToolResultSchema } from "@shared/chat/message-delivery";
 import { accessScopeForUser } from "@shared/identity/access-scope";
 import { normalizeAuthPhoneNumber } from "@shared/identity/phone-number";
+import { linqMessageContent } from "@agent/lib/linq/content";
 import { prepareLinqImageArtifactDelivery } from "../lib/linq-image-artifact/delivery";
 import {
   extractImageArtifactMarkdownReferences,
@@ -36,14 +40,6 @@ const verifiedPhoneUserSchema = z.object({
 const unavailableReplyTargetSchema = z.object({
   status: z.union([z.literal(400), z.literal(404)]),
 });
-const incomingReplySchema = z.object({
-  reply_to: z
-    .object({
-      message_id: z.uuid(),
-      part_index: z.number().int().nonnegative().optional(),
-    })
-    .nullish(),
-});
 
 type LinqMessageContent = Parameters<
   LinqAPIV3["chats"]["messages"]["send"]
@@ -58,13 +54,17 @@ export const linqWebhookVerifier: NonNullable<
   LinqChannelCredentials["webhookVerifier"]
 > = async (request) => (await trustedForwarder(request)) ?? false;
 
-const credentials = {
-  ...linqCredentials,
+const linqAdapter = createLinqAdapter({
+  credentials: async () => ({ apiKey: await linqCredentials.apiKey() }),
   webhookVerifier: env.LINQ_CONNECTOR ? linqWebhookVerifier : () => false,
-} satisfies LinqChannelCredentials;
+});
 
-export default linqChannel({
-  credentials,
+const linq = chatSdkChannel({
+  adapters: { linq: linqAdapter },
+  state: createMemoryState(),
+  userName: "eve",
+  concurrency: "concurrent",
+  streaming: false,
   events: {
     async "authorization.required"(event, context, session) {
       const { thread } = context;
@@ -302,55 +302,59 @@ export default linqChannel({
       await releaseScheduledReportDelivery(session, event.message);
     },
   },
-  async onMessage(context, message) {
-    if (message.author.isBot) return null;
-
-    const auth = defaultLinqAuth(message);
-    const authorUserName = z.string().safeParse(message.author.userName);
-    const phoneNumber = authorUserName.success
-      ? normalizeAuthPhoneNumber(authorUserName.data)
-      : undefined;
-    const verifiedUserId = phoneNumber
-      ? await findVerifiedAuthUserIdByPhoneNumber(phoneNumber)
-      : undefined;
-    if (!verifiedUserId || !phoneNumber) {
-      // Phone possession is the only sign-in factor, so a handle that is not
-      // linked to a verified user is unauthenticated: never mint a principal
-      // or a workspace for it.
-      console.warn("[linq] ignoring message from an unlinked handle", {
-        threadId: context.thread.id,
-      });
-      return null;
-    }
-    const principalId = `better-auth:${verifiedUserId}`;
-    const scope = accessScopeForUser(principalId);
-    const reply = incomingReplySchema.safeParse(message.raw);
-    const references = [
-      `[Message: ${JSON.stringify({ messageId: message.id, sender: "user" })}]`,
-    ];
-    if (reply.success && reply.data.reply_to) {
-      references.push(
-        `[Reply to: ${JSON.stringify({ messageId: reply.data.reply_to.message_id, partIndex: reply.data.reply_to.part_index })}]`
-      );
-    }
-    return {
-      context: references,
-      auth: {
-        ...auth,
-        attributes: {
-          ...auth.attributes,
-          conversationChannel: "linq",
-          conversationId: context.thread.id,
-          linqThreadId: context.thread.id,
-          linqMessageId: message.id,
-          phoneNumber,
-          workspaceId: scope.workspaceId,
-        },
-        principalId,
-      },
-    };
-  },
 });
+
+async function onMessage(thread: Thread, message: Message) {
+  if (message.author.isBot || message.author.isMe) return;
+
+  const auth = defaultLinqAuth(message);
+  const authorUserName = z.string().safeParse(message.author.userName);
+  const phoneNumber = authorUserName.success
+    ? normalizeAuthPhoneNumber(authorUserName.data)
+    : undefined;
+  const verifiedUserId = phoneNumber
+    ? await findVerifiedAuthUserIdByPhoneNumber(phoneNumber)
+    : undefined;
+  if (!verifiedUserId || !phoneNumber) {
+    // Phone possession is the only sign-in factor, so a handle that is not
+    // linked to a verified user is unauthenticated: never mint a principal
+    // or a workspace for it.
+    console.warn("[linq] ignoring message from an unlinked handle", {
+      threadId: thread.id,
+    });
+    return;
+  }
+  const principalId = `better-auth:${verifiedUserId}`;
+  const scope = accessScopeForUser(principalId);
+  const content = linqMessageContent(message);
+  if (!content.length) return;
+  try {
+    await linqAdapter.markRead(thread.id, message.id);
+  } catch {
+    // A read receipt must not prevent dispatch.
+  }
+  await linq.send(content, {
+    thread,
+    auth: {
+      ...auth,
+      attributes: {
+        ...auth.attributes,
+        conversationChannel: "linq",
+        conversationId: thread.id,
+        linqThreadId: thread.id,
+        linqMessageId: message.id,
+        phoneNumber,
+        workspaceId: scope.workspaceId,
+      },
+      principalId,
+    },
+  });
+}
+
+linq.bot.onDirectMessage(onMessage);
+linq.bot.onNewMessage(/[\s\S]*/, onMessage);
+
+export default linq.channel;
 
 async function sendLinqMessage({
   outgoing,

@@ -1,38 +1,51 @@
-import type { LinqChannelConfig } from "eve/channels/linq";
+import type * as ChatSdkModule from "eve/channels/chat-sdk";
+import type {
+  ChatSdkChannelConfig,
+  ChatSdkChannelBridge,
+} from "eve/channels/chat-sdk";
+import type { createLinqAdapter } from "@linqapp/chat-sdk-adapter";
 import { Message } from "chat";
+import type { Thread } from "chat";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type * as EnvModule from "@shared/environment";
-// oxlint-disable-next-line import/no-unassigned-import -- Loads the production module so the mocked channel factory can capture its configuration.
-import "@agent/channels/linq";
+import { linqWebhookVerifier } from "@agent/channels/linq";
 
-interface AuthUserRow {
-  readonly id: string;
-  readonly phoneNumberVerified: boolean;
-}
-
+type LinqBridge = ChatSdkChannelBridge<{
+  linq: ReturnType<typeof createLinqAdapter>;
+}>;
 const capture = vi.hoisted(() => ({
-  // SAFETY: The mocked channel factory replaces this value during module loading.
-  config: undefined as LinqChannelConfig | undefined,
-  findOne: vi.fn<() => Promise<AuthUserRow | null>>(),
+  // SAFETY: The actual bridge's handler registration supplies this callback.
+  onMessage: undefined as
+    | Parameters<LinqBridge["bot"]["onNewMessage"]>[1]
+    | undefined,
+  findOne:
+    vi.fn<() => Promise<{ id: string; phoneNumberVerified: boolean } | null>>(),
+  send: vi.fn<LinqBridge["send"]>(),
 }));
-
 vi.mock("@shared/environment", async (importOriginal) => {
   const original = await importOriginal<typeof EnvModule>();
-  return {
-    ...original,
-    env: { ...original.env, LINQ_CONNECTOR: "linq/test" },
-  };
+  return { ...original, env: { ...original.env, LINQ_CONNECTOR: "linq/test" } };
 });
 vi.mock("@vercel/connect/eve", () => ({
   connectLinqCredentials: () => ({ apiKey: async () => "linq-test-api-key" }),
 }));
-vi.mock(import("eve/channels/linq"), async (importOriginal) => {
-  const original = await importOriginal();
+vi.mock("eve/channels/chat-sdk", async (importOriginal) => {
+  const original = await importOriginal<typeof ChatSdkModule>();
   return {
     ...original,
-    linqChannel(config: LinqChannelConfig) {
-      capture.config = config;
-      return original.linqChannel(config);
+    chatSdkChannel(
+      config: ChatSdkChannelConfig<{
+        linq: ReturnType<typeof createLinqAdapter>;
+      }>
+    ) {
+      const bridge = original.chatSdkChannel(config);
+      vi.spyOn(bridge.bot, "onNewMessage").mockImplementation(
+        (_pattern, handler) => {
+          capture.onMessage = handler;
+        }
+      );
+      vi.spyOn(config.adapters.linq, "markRead").mockResolvedValue(undefined);
+      return { ...bridge, send: capture.send };
     },
   };
 });
@@ -41,91 +54,88 @@ vi.mock("@db/services/auth", () => ({
     $context: Promise.resolve({ adapter: { findOne: capture.findOne } }),
   }),
 }));
-
-const verifier = capture.config?.credentials?.webhookVerifier;
-const onMessage = capture.config?.onMessage;
-if (!verifier || !onMessage) {
-  throw new Error("The Linq channel must verify webhooks and route messages.");
-}
+const onMessage = capture.onMessage;
+if (!onMessage)
+  throw new Error("The Linq bridge must register its inbound handler.");
 
 describe("Linq inbound authentication", () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
-
   it("rejects a webhook without a forwarder credential", async () => {
     const request = new Request("https://assistant.example/eve/v1/linq", {
       body: "{}",
       method: "POST",
     });
-    await expect(verifier(request, new Uint8Array())).resolves.toBe(false);
+    await expect(linqWebhookVerifier(request, new Uint8Array())).resolves.toBe(
+      false
+    );
   });
-
   it("rejects a webhook with a malformed bearer token", async () => {
     const request = new Request("https://assistant.example/eve/v1/linq", {
       body: "{}",
       headers: { authorization: "Bearer aaa.bbb.ccc" },
       method: "POST",
     });
-    await expect(verifier(request, new Uint8Array())).resolves.toBe(false);
+    await expect(linqWebhookVerifier(request, new Uint8Array())).resolves.toBe(
+      false
+    );
   });
-
-  it("drops messages from handles that are not linked to a verified user", async () => {
+  it("drops unlinked handles before dispatch", async () => {
     capture.findOne.mockResolvedValue(null);
-
-    await expect(
-      onMessage(threadContext(), linqMessage("+15550100011"))
-    ).resolves.toBeNull();
+    await onMessage(thread(), linqMessage("+15550100011"));
+    expect(capture.send).not.toHaveBeenCalled();
     expect(capture.findOne).toHaveBeenCalledExactlyOnceWith({
       model: "user",
       where: [{ field: "phoneNumber", value: "+15550100011" }],
     });
   });
-
-  it("drops messages from handles whose user has not verified the phone", async () => {
+  it("drops handles whose user has not verified the phone", async () => {
     capture.findOne.mockResolvedValue({
       id: "user-1",
       phoneNumberVerified: false,
     });
-
-    await expect(
-      onMessage(threadContext(), linqMessage("+15550100011"))
-    ).resolves.toBeNull();
+    await onMessage(thread(), linqMessage("+15550100011"));
+    expect(capture.send).not.toHaveBeenCalled();
   });
-
-  it("scopes a verified handle to that user's own workspace", async () => {
+  it("scopes a verified handle and embeds annotations in the dispatched message", async () => {
     capture.findOne.mockResolvedValue({
       id: "user-1",
       phoneNumberVerified: true,
     });
-
-    const result = await onMessage(
-      threadContext(),
-      linqMessage("+15550100011")
+    await onMessage(
+      thread(),
+      linqMessage("+15550100011", {
+        parts: [{ type: "text", value: "list my vault items" }],
+      })
     );
-
-    expect(result?.auth?.principalId).toBe("better-auth:user-1");
-    expect(result?.auth?.attributes).toMatchObject({
+    expect(capture.send).toHaveBeenCalledOnce();
+    const [content, options] = capture.send.mock.calls[0] ?? [];
+    expect(content).toEqual([
+      {
+        type: "text",
+        text: '[Message: {"messageId":"message-1","sender":"user"}]\n[Parts: [{"partIndex":0,"type":"text","value":"list my vault items"}]]',
+      },
+      { type: "text", text: "list my vault items" },
+    ]);
+    expect(options?.auth?.principalId).toBe("better-auth:user-1");
+    expect(options?.auth?.attributes).toMatchObject({
       conversationChannel: "linq",
-      conversationId: "linq:dm:chat-1",
+      conversationId: "linq:chat-1",
       linqMessageId: "message-1",
       phoneNumber: "+15550100011",
     });
-    expect(result?.auth?.attributes.workspaceId).toMatch(
+    expect(options?.auth?.attributes.workspaceId).toMatch(
       /^personal:[0-9a-f]{32}$/
     );
-    expect(result?.context).toEqual([
-      '[Message: {"messageId":"message-1","sender":"user"}]',
-    ]);
   });
-
-  it("supplies the older quoted message ID alongside the incoming reply", async () => {
+  it("embeds the older quoted message and part index in the same content label", async () => {
     capture.findOne.mockResolvedValue({
       id: "user-1",
       phoneNumberVerified: true,
     });
-    const result = await onMessage(
-      threadContext(),
+    await onMessage(
+      thread(),
       linqMessage("+15550100011", {
         reply_to: {
           message_id: "00000000-0000-4000-8000-000000000002",
@@ -133,45 +143,38 @@ describe("Linq inbound authentication", () => {
         },
       })
     );
-    expect(result?.context).toEqual([
-      '[Message: {"messageId":"message-1","sender":"user"}]',
-      '[Reply to: {"messageId":"00000000-0000-4000-8000-000000000002","partIndex":2}]',
+    expect(capture.send.mock.calls[0]?.[0]).toEqual([
+      {
+        type: "text",
+        text: '[Message: {"messageId":"message-1","sender":"user"}]\n[Reply to: {"messageId":"00000000-0000-4000-8000-000000000002","partIndex":2}]',
+      },
+      { type: "text", text: "list my vault items" },
     ]);
-    expect(result?.auth?.attributes.linqMessageId).toBe("message-1");
   });
-
-  it("does not present a malformed reply target as a usable message ID", async () => {
+  it("keeps the body and current ID if raw references are malformed", async () => {
     capture.findOne.mockResolvedValue({
       id: "user-1",
       phoneNumberVerified: true,
     });
-    const result = await onMessage(
-      threadContext(),
-      linqMessage("+15550100011", {
-        reply_to: { message_id: "invented-message", part_index: -1 },
-      })
+    await onMessage(
+      thread(),
+      linqMessage("+15550100011", { reply_to: { part_index: -1 } })
     );
-    expect(result?.context).toEqual([
-      '[Message: {"messageId":"message-1","sender":"user"}]',
+    expect(capture.send.mock.calls[0]?.[0]).toEqual([
+      {
+        type: "text",
+        text: '[Message: {"messageId":"message-1","sender":"user"}]',
+      },
+      { type: "text", text: "list my vault items" },
     ]);
   });
 });
 
-type InboundContext = Parameters<
-  NonNullable<LinqChannelConfig["onMessage"]>
->[0];
-
-interface ThreadIdentity {
-  readonly thread: Pick<InboundContext["thread"], "id">;
+function thread(): Thread {
+  // SAFETY: Inbound routing and the mocked send boundary read only this thread ID.
+  // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- Constructing a complete SDK thread adds unrelated provider operations.
+  return { id: "linq:chat-1" } as Thread;
 }
-
-function threadContext(): InboundContext {
-  const identity: ThreadIdentity = { thread: { id: "linq:dm:chat-1" } };
-  // SAFETY: The inbound policy reads only the thread id from this context.
-  // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- A complete Chat SDK thread mock would add unrelated methods.
-  return identity as InboundContext;
-}
-
 function linqMessage(handle: string, raw: Message["raw"] = {}) {
   return new Message({
     attachments: [],
@@ -184,12 +187,9 @@ function linqMessage(handle: string, raw: Message["raw"] = {}) {
     },
     formatted: { children: [], type: "root" },
     id: "message-1",
-    metadata: {
-      dateSent: new Date("2026-09-03T00:00:00.000Z"),
-      edited: false,
-    },
+    metadata: { dateSent: new Date("2026-09-03T00:00:00.000Z"), edited: false },
     raw,
     text: "list my vault items",
-    threadId: "linq:dm:chat-1",
+    threadId: "linq:chat-1",
   });
 }

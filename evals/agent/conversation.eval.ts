@@ -97,6 +97,44 @@ const textEvals = cases.map((testCase) =>
 
 const reactionEvals = [
   defineEval({
+    description:
+      "Retains message IDs and indexed part metadata for later turns",
+    tags: [...agentEvalTags, "conversation", "reaction", "message-history"],
+    async test(t) {
+      const messageId = "00000000-0000-4000-8000-000000000001";
+      const url = "https://media.example/second-photo.png";
+      const first = await t.send([
+        {
+          type: "text",
+          text: `[Message: ${JSON.stringify({ messageId, sender: "user" })}]\n[Parts: ${JSON.stringify(
+            [
+              { partIndex: 0, type: "text", value: "two photos" },
+              {
+                partIndex: 1,
+                type: "media",
+                url: "https://media.example/first-photo.png",
+              },
+              { partIndex: 2, type: "media", url },
+            ]
+          )}]`,
+        },
+        { type: "text", text: "I sent two photos. Just reply noted." },
+      ]);
+      first.expectOk();
+      await requireDeliveredText(t, first);
+      const recalled = await first.session.send(
+        "From my previous message's metadata, give the message ID and the URL for partIndex 2 as plain text. Do not open the URL."
+      );
+      recalled.expectOk();
+      recalled.succeeded();
+      const text = await requireDeliveredText(t, recalled);
+      t.check(text, includes(messageId));
+      t.check(text, includes(url));
+      recalled.notCalledTool("run_browser");
+      recalled.notCalledTool("web_fetch");
+    },
+  }),
+  defineEval({
     description: "Uses a reaction for a lightweight acknowledgement",
     tags: [...agentEvalTags, "conversation", "reaction", "smoke"],
     async test(t) {
@@ -137,12 +175,13 @@ const reactionEvals = [
     tags: [...agentEvalTags, "conversation", "reaction", "reaction-target"],
     async test(t) {
       const older = "00000000-0000-4000-8000-000000000001";
-      const turn = await t.send("like this old message", {
-        clientContext: [
-          '[Message: {"messageId":"00000000-0000-4000-8000-000000000002","sender":"user"}]',
-          `[Reply to: ${JSON.stringify({ messageId: older })}]`,
-        ],
-      });
+      const turn = await t.send([
+        {
+          type: "text",
+          text: `[Message: {"messageId":"00000000-0000-4000-8000-000000000002","sender":"user"}]\n[Reply to: ${JSON.stringify({ messageId: older })}]`,
+        },
+        { type: "text", text: "like this old message" },
+      ]);
       turn.expectOk();
       turn.succeeded();
       turn.calledTool("react_to_message", {
@@ -167,11 +206,13 @@ const reactionEvals = [
     tags: [...agentEvalTags, "conversation", "reaction", "reaction-target"],
     async test(t) {
       const messageId = "00000000-0000-4000-8000-000000000002";
-      const turn = await t.send("React to this message with 👀", {
-        clientContext: [
-          `[Message: ${JSON.stringify({ messageId, sender: "user" })}]`,
-        ],
-      });
+      const turn = await t.send([
+        {
+          type: "text",
+          text: `[Message: ${JSON.stringify({ messageId, sender: "user" })}]`,
+        },
+        { type: "text", text: "React to this message with 👀" },
+      ]);
       turn.expectOk();
       turn.succeeded();
       turn.calledTool("react_to_message", {

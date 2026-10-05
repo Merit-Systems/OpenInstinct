@@ -18,6 +18,9 @@ importers:
       '@better-auth/core':
         specifier: 1.7.5
         version: 1.7.5(@better-auth/utils@0.4.2)(@better-fetch/fetch@1.3.2)(@opentelemetry/api@1.9.1)(better-call@1.4.0(zod@4.5.4))(jose@6.2.10)(kysely@0.29.5)(nanostores@1.5.2)
+      '@chat-adapter/state-memory':
+        specifier: 4.41.0
+        version: 4.41.0(ai@7.0.120(zod@4.5.4))(zod@4.5.4)
       '@googleapis/calendar':
         specifier: ^16.0.0
         version: 16.0.0
@@ -96,6 +99,9 @@ importers:
       better-auth:
         specifier: 1.7.5
         version: 1.7.5(@opentelemetry/api@1.9.1)(drizzle-kit@0.31.10)(drizzle-orm@0.45.2(@electric-sql/pglite@0.5.8)(@neondatabase/serverless@1.1.0)(@opentelemetry/api@1.9.1)(@types/pg@8.23.1)(kysely@0.29.5)(pg@8.23.0))(next@16.3.3(@babel/core@7.29.7)(@opentelemetry/api@1.9.1)(@types/node@24.13.3)(react-dom@19.2.8(react@19.2.8))(react@19.2.8))(pg@8.23.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(vitest@4.1.11(@edge-runtime/vm@3.2.0)(@opentelemetry/api@1.9.1)(@types/node@24.13.3)(vite@8.2.2(@types/node@24.13.3)(esbuild@0.27.0)(jiti@2.7.0)(tsx@4.21.0)(yaml@2.9.0)))
+      chat:
+        specifier: 4.41.0
+        version: 4.41.0(ai@7.0.120(zod@4.5.4))(zod@4.5.4)
       class-variance-authority:
         specifier: 0.7.1
         version: 0.7.1
@@ -178,9 +184,6 @@ importers:
       '@types/react-dom':
         specifier: 19.2.5
         version: 19.2.5(@types/react@19.2.18)
-      chat:
-        specifier: 4.41.0
-        version: 4.41.0(ai@7.0.120(zod@4.5.4))(zod@4.5.4)
       drizzle-kit:
         specifier: ^0.31.10
         version: 0.31.10
@@ -611,6 +614,10 @@ packages:
 
   '@bytecodealliance/preview2-shim@0.17.6':
     resolution: {integrity: sha512-n3cM88gTen5980UOBAD6xDcNNL3ocTK8keab21bpx1ONdA+ARj7uD1qoFxOWCyKlkpSi195FH+GeAut7Oc6zZw==}
+
+  '@chat-adapter/state-memory@4.41.0':
+    resolution: {integrity: sha512-Px+csQMhc0/Z1SauPdzV8ar9GJ4EoCThFi2a+e3HcrcYTdwLSNhT/h4MJrfaA3/8PCOO4Y4EvanwGVYzcLbhhA==}
+    engines: {node: '>=20'}
 
   '@chevrotain/types@11.1.2':
     resolution: {integrity: sha512-U+HFai5+zmJCkK86QsaJtoITlboZHBqrVketcO2ROv865xfCMSFpELQoz1GkX5GzME8pTa+3kbKrZHQtI0gdbw==}
@@ -7839,6 +7846,15 @@ snapshots:
   '@braintree/sanitize-url@7.1.2': {}
 
   '@bytecodealliance/preview2-shim@0.17.6': {}
+
+  '@chat-adapter/state-memory@4.41.0(ai@7.0.120(zod@4.5.4))(zod@4.5.4)':
+    dependencies:
+      chat: 4.41.0(ai@7.0.120(zod@4.5.4))(zod@4.5.4)
+    transitivePeerDependencies:
+      - ai
+      - supports-color
+      - workflow
+      - zod
 
   '@chevrotain/types@11.1.2': {}
 

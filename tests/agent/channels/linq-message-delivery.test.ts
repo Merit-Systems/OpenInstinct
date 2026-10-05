@@ -1,4 +1,5 @@
-import type { LinqChannelConfig } from "eve/channels/linq";
+import type * as ChatSdkModule from "eve/channels/chat-sdk";
+import type { ChatSdkChannelConfig } from "eve/channels/chat-sdk";
 import {
   createLinqAdapter,
   type LinqSendOptions,
@@ -34,7 +35,9 @@ const linqChannelCapture = vi.hoisted(() => ({
   // SAFETY: This mutable test capture stores only API keys from the typed SDK constructor mock.
   clientApiKeys: [] as string[],
   // SAFETY: The mocked channel factory replaces this value during module loading.
-  config: undefined as LinqChannelConfig | undefined,
+  config: undefined as
+    | ChatSdkChannelConfig<{ linq: ReturnType<typeof createLinqAdapter> }>
+    | undefined,
   images: new Map<string, BrowserImage>(),
   readImage: vi.fn<
     (
@@ -99,13 +102,17 @@ vi.mock("@linqapp/sdk", () => ({
     };
   },
 }));
-vi.mock(import("eve/channels/linq"), async (importOriginal) => {
-  const original = await importOriginal();
+vi.mock("eve/channels/chat-sdk", async (importOriginal) => {
+  const original = await importOriginal<typeof ChatSdkModule>();
   return {
     ...original,
-    linqChannel(config: LinqChannelConfig) {
+    chatSdkChannel(
+      config: ChatSdkChannelConfig<{
+        linq: ReturnType<typeof createLinqAdapter>;
+      }>
+    ) {
       linqChannelCapture.config = config;
-      return original.linqChannel(config);
+      return original.chatSdkChannel(config);
     },
   };
 });
