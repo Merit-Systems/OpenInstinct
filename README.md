@@ -37,7 +37,7 @@ See [Vercel's cron limits](https://vercel.com/docs/cron-jobs/usage-and-pricing).
 Choose the free plans for Kernel and Neon during deployment.
 [Kernel](https://kernel.sh/pricing) includes free usage credits, and
 [AI Gateway](https://vercel.com/docs/ai-gateway/pricing) includes credits for
-eligible models. [Linq's managed connector](https://vercel.com/docs/connect/pricing)
+eligible models. [Linq's managed connector](https://vercel.com/connect/linq)
 and [private Blob storage](https://vercel.com/docs/vercel-blob/usage-and-pricing)
 are billed through Vercel; Blob usage draws from your Pro usage credit.
 Free plans and credits have limits, and usage can incur additional charges.
