@@ -26,6 +26,7 @@ const paymentFieldSchema = z.strictObject({
     "exp_year",
     "expiration",
     "cvc",
+    "postal_code",
   ]),
   selector: z.string().trim().min(1).max(1000),
   frameUrl: z.url().max(4000).optional(),
@@ -79,7 +80,7 @@ const inputSchema = z
 
 export default defineTool({
   description:
-    "Fill a standard card checkout with an approved Link spend request. Supply only its ID, an owned browser session, and the total amount in minor units and lowercase currency just observed at checkout. The tool retrieves credentials for the signed-in user's wallet, verifies approval and merchant origin, and fills them server-side. Never provide or read card details. For hosted payment fields, supply the exact current pageUrl and CSS field bindings observed without reading values; optional frameUrl disambiguates inputs across frames. Combined expiration requires MM/YY or MM/YYYY. Supported processor frames include Braintree, Shopify, PayPal card fields, and Stripe. Without bindings, focus a same-origin card field for native autofill. This does not submit a purchase; verify the merchant and total again before submitting. Shared Payment Tokens, Link Pay Tokens, and recurring requests are unsupported here.",
+    "Fill a standard card checkout with an approved Link spend request. Supply only its ID, an owned browser session, and the total amount in minor units and lowercase currency just observed at checkout. The tool retrieves credentials and billing ZIP from the signed-in user's wallet, verifies approval and merchant origin, and fills them server-side. Never provide or read card details, or substitute a personal/shipping ZIP for the card's billing ZIP. For hosted payment fields, supply the exact current pageUrl and CSS field bindings observed without reading values; include postal_code for a billing ZIP input and optional frameUrl to disambiguate inputs across frames. Combined expiration requires MM/YY or MM/YYYY. Supported processor frames include Braintree, Shopify, PayPal card fields, and Stripe. Without bindings, focus a same-origin card field for native autofill. This does not submit a purchase; verify the merchant and total again before submitting. Shared Payment Tokens, Link Pay Tokens, and recurring requests are unsupported here.",
   inputSchema,
   outputSchema: z.object({
     success: z.literal(true),
@@ -179,7 +180,14 @@ export default defineTool({
         cvc: z.string().regex(/^\d{3,4}$/u),
         exp_month: z.number().int().min(1).max(12),
         exp_year: z.number().int().min(2000).max(2100),
-        billing_address: z.object({ name: z.string().trim().min(1) }),
+        billing_address: z.object({
+          name: z.string().trim().min(1),
+          postal_code: z
+            .string()
+            .trim()
+            .transform((value) => value || undefined)
+            .optional(),
+        }),
         valid_until: z.string().optional(),
       })
       .safeParse(request.card);
@@ -189,6 +197,14 @@ export default defineTool({
       );
     }
     const card = parsed.data;
+    if (
+      input.fields?.some(({ field }) => field === "postal_code") &&
+      !card.billing_address.postal_code
+    ) {
+      throw new Error(
+        "Link has not supplied this card's billing ZIP. Ask the coordinator for the card's billing ZIP; do not substitute personal or shipping information."
+      );
+    }
     const now = Date.now();
     const validUntil =
       card.valid_until === undefined
@@ -213,6 +229,9 @@ export default defineTool({
         ["cc-exp-month", String(card.exp_month).padStart(2, "0")],
         ["cc-exp-year", String(card.exp_year)],
         ["cc-csc", card.cvc],
+        ...(card.billing_address.postal_code
+          ? [["postal-code", card.billing_address.postal_code] as const]
+          : []),
       ] as const
     ).map(([token, value]) => ({ id: randomUUID(), token, value }));
 
@@ -224,6 +243,19 @@ export default defineTool({
             pageUrl: z.url().parse(input.pageUrl),
             expectedOrigin: origin,
             fields: input.fields.map((binding) => {
+              if (binding.field === "postal_code") {
+                const value = card.billing_address.postal_code;
+                if (!value)
+                  throw new Error(
+                    "Link has not supplied this card's billing ZIP."
+                  );
+                return {
+                  selector: binding.selector,
+                  frameUrl: binding.frameUrl,
+                  value,
+                  token: "postal-code",
+                };
+              }
               const values = {
                 name: card.billing_address.name,
                 number: card.number,

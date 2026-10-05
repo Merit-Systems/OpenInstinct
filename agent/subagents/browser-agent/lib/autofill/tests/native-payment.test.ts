@@ -35,11 +35,33 @@ class CardInput {
   visible = true;
   readonly style = { display: "block", visibility: "visible" };
   form: { querySelectorAll: () => CardInput[] } | null = null;
+  id = "";
+  name = "";
+  labels: { textContent: string }[] = [];
+  dataset: Record<string, string> = {};
+  events: string[] = [];
+  #value: string;
 
   constructor(
     readonly autocomplete: string,
-    readonly value = "filled"
-  ) {}
+    value = "filled"
+  ) {
+    this.#value = value;
+  }
+
+  get value() {
+    return this.#value;
+  }
+  set value(value: string) {
+    this.#value = value;
+  }
+  getAttribute() {
+    return null;
+  }
+  dispatchEvent(event: Event) {
+    this.events.push(event.type);
+    return true;
+  }
 
   getClientRects() {
     return this.visible ? [{}] : [];
@@ -83,6 +105,24 @@ function evaluateCardStatus(script: string, callOnAnchor: boolean) {
       anchor,
       document,
       HTMLInputElement: CardInput,
+      getComputedStyle: (element: CardInput) => element.style,
+    })
+  );
+}
+
+function evaluateBillingPostalCode(script: string, args: unknown[]) {
+  const controls = cardForm ?? [new CardInput("cc-number")];
+  const anchor = controls[0];
+  if (!anchor) throw new Error("The fixture requires a card input.");
+  anchor.form = { querySelectorAll: () => controls };
+  anchor.isConnected = true;
+  return z.json().parse(
+    runInNewContext(`(${script}).call(anchor, ...args)`, {
+      anchor,
+      args,
+      location: { origin: frameOrigin },
+      HTMLInputElement: CardInput,
+      Event,
       getComputedStyle: (element: CardInput) => element.style,
     })
   );
@@ -149,16 +189,23 @@ class BrowserSocket extends EventTarget {
       case "DOM.resolveNode":
         result = { object: { objectId: "card-anchor" } };
         break;
-      case "Runtime.callFunctionOn":
+      case "Runtime.callFunctionOn": {
+        const script = z.string().parse(command.params?.functionDeclaration);
         result = {
           result: {
-            value: evaluateCardStatus(
-              z.string().parse(command.params?.functionDeclaration),
-              true
-            ),
+            value: script.includes("candidates.length")
+              ? evaluateBillingPostalCode(
+                  script,
+                  z
+                    .array(z.object({ value: z.json() }))
+                    .parse(command.params?.arguments)
+                    .map(({ value }) => value)
+                )
+              : evaluateCardStatus(script, true),
           },
         };
         break;
+      }
     }
     queueMicrotask(() =>
       this.dispatchEvent(
@@ -203,6 +250,116 @@ beforeEach(() => {
 afterEach(() => vi.unstubAllGlobals());
 
 describe("native payment injection", () => {
+  it("overwrites a personal ZIP with the credential's billing ZIP without exposing it", async () => {
+    const zip = new CardInput("billing postal-code", "10001");
+    cardForm = [new CardInput("cc-number"), new CardInput("cc-exp"), zip];
+    const result = await fillWithKernelNativeAutofill({
+      ...input,
+      claims: [
+        ...input.claims,
+        { id: "zip", token: "postal-code", value: "94107" },
+      ],
+    });
+    expect(zip.value).toBe("94107");
+    expect(zip.dataset.vaultSecret).toBe("true");
+    expect(zip.events).toEqual(["input", "change"]);
+    expect(result).toEqual({ filledClaims: 6, origin: "https://shop.example" });
+    expect(JSON.stringify(result)).not.toContain("94107");
+  });
+
+  it("recognizes an unannotated billing ZIP input", async () => {
+    const zip = new CardInput("", "10001");
+    zip.id = "BillingZip";
+    cardForm = [new CardInput("cc-number"), zip];
+    await fillWithKernelNativeAutofill({
+      ...input,
+      claims: [
+        ...input.claims,
+        { id: "zip", token: "postal-code", value: "94107" },
+      ],
+    });
+    expect(zip.value).toBe("94107");
+  });
+
+  it.each(["ZIP Code", "Postal Code", "Postcode"])(
+    "recognizes an unannotated %s label among other metadata",
+    async (label) => {
+      const zip = new CardInput("off", "10001");
+      zip.id = "field-x";
+      zip.name = "field-x";
+      zip.labels = [{ textContent: label }];
+      cardForm = [new CardInput("cc-number"), zip];
+      await fillWithKernelNativeAutofill({
+        ...input,
+        claims: [
+          ...input.claims,
+          { id: "zip", token: "postal-code", value: "94107" },
+        ],
+      });
+      expect(zip.value).toBe("94107");
+    }
+  );
+
+  it("does not keep a personal ZIP when an unannotated ZIP Code lacks a credential value", async () => {
+    const zip = new CardInput("off", "10001");
+    zip.id = "zip";
+    zip.name = "zip";
+    zip.labels = [{ textContent: "ZIP Code" }];
+    cardForm = [new CardInput("cc-number"), zip];
+    await expect(fillWithKernelNativeAutofill(input)).rejects.toThrow(
+      "billing ZIP that the payment credential has not supplied"
+    );
+    expect(commands.some(({ method }) => method === "Autofill.trigger")).toBe(
+      false
+    );
+  });
+
+  it("stops before card filling when the credential lacks a required billing ZIP", async () => {
+    const zip = new CardInput("billing postal-code", "10001");
+    cardForm = [new CardInput("cc-number"), zip];
+    await expect(fillWithKernelNativeAutofill(input)).rejects.toThrow(
+      "billing ZIP that the payment credential has not supplied"
+    );
+    expect(zip.value).toBe("10001");
+    expect(commands.some(({ method }) => method === "Autofill.trigger")).toBe(
+      false
+    );
+  });
+
+  it("does not fill ambiguous billing ZIP controls", async () => {
+    cardForm = [
+      new CardInput("cc-number"),
+      new CardInput("billing postal-code", ""),
+      new CardInput("billing postal-code", ""),
+    ];
+    await expect(
+      fillWithKernelNativeAutofill({
+        ...input,
+        claims: [
+          ...input.claims,
+          { id: "zip", token: "postal-code", value: "94107" },
+        ],
+      })
+    ).rejects.toThrow("Billing ZIP is ambiguous");
+    expect(commands.some(({ method }) => method === "Autofill.trigger")).toBe(
+      false
+    );
+  });
+
+  it("keeps shipping ZIP separate from the card's billing ZIP", async () => {
+    const shipping = new CardInput("shipping postal-code", "10001");
+    cardForm = [new CardInput("cc-number"), shipping];
+    await fillWithKernelNativeAutofill({
+      ...input,
+      claims: [
+        ...input.claims,
+        { id: "zip", token: "postal-code", value: "94107" },
+      ],
+    });
+    expect(shipping.value).toBe("10001");
+    expect(shipping.events).toEqual([]);
+  });
+
   it("marks controls before sending card fields through CDP and returns only a receipt", async () => {
     const result = await fillWithKernelNativeAutofill(input);
     const fillIndex = commands.findIndex(
