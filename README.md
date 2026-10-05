@@ -147,6 +147,27 @@ but cannot receive them.
 
 </details>
 
+### Blooio iMessage
+
+[Blooio](https://blooio.com) is an optional iMessage provider. Leave it unset to
+keep the Linq line from the deploy button. When `LINQ_CONNECTOR` is unset and
+`BLOOIO_API_KEY` is set, sign-in codes and the assistant's iMessage thread use
+Blooio's [v4 API](https://api.blooio.com).
+
+1. Create an API key in the Blooio dashboard.
+2. Set `BLOOIO_API_KEY`. Set `BLOOIO_FROM_NUMBER` when the key can send from
+   more than one number; otherwise OpenInstinct uses the key's active number.
+3. Create a webhook for `https://<your-host>/webhooks/blooio` and set
+   `BLOOIO_WEBHOOK_SECRET` to the signing secret returned at creation.
+   Unsigned deliveries are rejected.
+4. Redeploy and sign in with your phone number. After the code verifies, text
+   the Blooio number from that phone. OpenInstinct ignores messages from
+   numbers that are not linked to a verified account.
+
+Scheduled reminders created in a Blooio thread are delivered back to that
+thread. Linq remains the path used for sign-in when both providers are
+configured.
+
 ## Google Workspace connection
 
 OpenInstinct can use a user's Gmail, Calendar, and read-only Contacts through a

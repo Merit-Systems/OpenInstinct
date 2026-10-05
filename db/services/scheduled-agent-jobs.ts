@@ -38,7 +38,7 @@ const exhaustedRunOutcome = {
 } satisfies ScheduledRunOutcome;
 
 export interface CreateScheduledAgentJob {
-  readonly conversationChannel: "eve" | "linq";
+  readonly conversationChannel: "blooio" | "eve" | "linq";
   readonly conversationId: string;
   readonly missedRunPolicy: "catch_up" | "run_latest";
   readonly prompt: string;

@@ -100,7 +100,8 @@ function dispatchRecoverableReport(
   to: ScheduleToFn,
   report: Awaited<ReturnType<typeof listRecoverableScheduledReports>>[number]
 ) {
-  return report.conversationChannel === "linq"
+  return report.conversationChannel === "linq" ||
+    report.conversationChannel === "blooio"
     ? dispatchScheduledReport({ to }, report.runId)
     : postScheduledReport(report.runId);
 }

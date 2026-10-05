@@ -53,6 +53,8 @@ export default async function Page({ searchParams }: PageProps<"/">) {
 
       <ChannelsSection
         browserReady={browserReady}
+        blooioConfigured={env.BLOOIO_API_KEY !== undefined}
+        blooioPhoneNumber={env.BLOOIO_FROM_NUMBER}
         linqConfigured={env.LINQ_CONNECTOR !== undefined}
         linqPhoneNumber={env.LINQ_PHONE_NUMBER}
       />
@@ -179,10 +181,14 @@ async function readGoogleWorkspaceConnection(
 }
 
 export function ChannelsSection({
+  blooioConfigured = false,
+  blooioPhoneNumber,
   browserReady,
   linqConfigured,
   linqPhoneNumber,
 }: {
+  readonly blooioConfigured?: boolean;
+  readonly blooioPhoneNumber?: string;
   readonly browserReady: boolean;
   readonly linqConfigured: boolean;
   readonly linqPhoneNumber?: string;
@@ -205,11 +211,15 @@ export function ChannelsSection({
             WebChat
           </Button>
         )}
-        {linqConfigured && linqPhoneNumber ? (
+        {(linqConfigured && linqPhoneNumber) ||
+        (blooioConfigured && blooioPhoneNumber) ? (
           <Button
             nativeButton={false}
             render={
-              <a aria-label="Open iMessage" href={`sms:${linqPhoneNumber}`} />
+              <a
+                aria-label="Open iMessage"
+                href={`sms:${linqPhoneNumber ?? blooioPhoneNumber}`}
+              />
             }
             variant="surface"
           >
@@ -225,6 +235,8 @@ export function ChannelsSection({
       </div>
       <p className="type-caption text-muted-foreground">
         {channelAvailabilityMessage({
+          blooioConfigured,
+          blooioPhoneNumber,
           browserReady,
           linqConfigured,
           linqPhoneNumber,
@@ -235,23 +247,35 @@ export function ChannelsSection({
 }
 
 function channelAvailabilityMessage({
+  blooioConfigured = false,
+  blooioPhoneNumber,
   browserReady,
   linqConfigured,
   linqPhoneNumber,
 }: {
+  readonly blooioConfigured?: boolean;
+  readonly blooioPhoneNumber?: string;
   readonly browserReady: boolean;
   readonly linqConfigured: boolean;
   readonly linqPhoneNumber?: string;
 }) {
+  const imessagePhone =
+    linqConfigured && linqPhoneNumber
+      ? linqPhoneNumber
+      : blooioConfigured
+        ? blooioPhoneNumber
+        : undefined;
   return [
     browserReady
       ? "WebChat is ready."
       : "KERNEL_API_KEY is required to enable WebChat.",
-    linqConfigured && linqPhoneNumber
-      ? `iMessage opens ${linqPhoneNumber}.`
+    imessagePhone
+      ? `iMessage opens ${imessagePhone}.`
       : linqConfigured
         ? "Linq is connected. Use its assigned line to start an iMessage."
-        : "Set up Linq to enable iMessage.",
+        : blooioConfigured
+          ? "Blooio is connected. Use its sending number to start an iMessage."
+          : "Set up Linq or Blooio to enable iMessage.",
   ].join(" ");
 }
 

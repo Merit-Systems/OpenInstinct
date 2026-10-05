@@ -2,6 +2,7 @@ import type { SessionContext } from "eve/context";
 import { z } from "zod";
 
 const scheduledReportIdentitySchema = z.object({
+  blooioReplyAnchorMessageId: z.string().min(1).optional(),
   linqReplyAnchorMessageId: z.string().min(1).optional(),
   scheduleId: z.uuid(),
   scheduledReportLeaseToken: z.uuid(),
@@ -39,7 +40,9 @@ export function scheduledReportIdentity(
   const identity = scheduledReportIdentitySchema.safeParse(caller.attributes);
   return identity.success
     ? {
-        replyAnchorMessageId: identity.data.linqReplyAnchorMessageId,
+        replyAnchorMessageId:
+          identity.data.linqReplyAnchorMessageId ??
+          identity.data.blooioReplyAnchorMessageId,
         scheduleId: identity.data.scheduleId,
         leaseToken: identity.data.scheduledReportLeaseToken,
         runId: identity.data.scheduledRunId,

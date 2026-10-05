@@ -8,6 +8,7 @@ export async function proxy(request: NextRequest) {
     // The contact route verifies its signed URL; Linq downloads without cookies.
     pathname === "/contacts/openinstinct.vcf" ||
     pathname.startsWith("/api/auth/") ||
+    pathname === "/webhooks/blooio" ||
     pathname === "/eve/v1/health" ||
     pathname.startsWith("/internal/scheduled-run/") ||
     pathname === "/eve/v1/dev/schedules/dynamic"

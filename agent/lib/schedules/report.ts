@@ -5,6 +5,7 @@ import {
   finalizeScheduledReport,
   releaseScheduledReport,
 } from "@db/services/scheduled-agent-jobs";
+import blooio from "../../channels/blooio";
 import linq from "../../channels/linq";
 
 type ClaimedScheduledReport = NonNullable<
@@ -46,6 +47,18 @@ export async function dispatchScheduledReport(
           adapterName: "linq",
           threadId: claimed.job.conversationId,
         })
+        .send(prompt, options);
+      console.info("[scheduled-run] report session accepted", {
+        channel: claimed.job.conversationChannel,
+        reportSequence: claimed.run.reportSequence,
+        runId: claimed.run.id,
+        sessionId: session.id,
+      });
+      return;
+    }
+    if (claimed.job.conversationChannel === "blooio") {
+      const session = await delivery
+        .to(blooio, { conversationId: claimed.job.conversationId })
         .send(prompt, options);
       console.info("[scheduled-run] report session accepted", {
         channel: claimed.job.conversationChannel,
@@ -125,14 +138,19 @@ function scheduledReportAttributes(
     ["scheduledRunId", claimed.run.id],
     ["workspaceId", claimed.job.workspaceId],
   ]);
-  if (
-    claimed.job.conversationChannel === "linq" &&
-    claimed.job.replyAnchorMessageId
-  ) {
-    attributes.set(
-      "linqReplyAnchorMessageId",
-      claimed.job.replyAnchorMessageId
-    );
+  if (claimed.job.replyAnchorMessageId) {
+    if (claimed.job.conversationChannel === "linq") {
+      attributes.set(
+        "linqReplyAnchorMessageId",
+        claimed.job.replyAnchorMessageId
+      );
+    }
+    if (claimed.job.conversationChannel === "blooio") {
+      attributes.set(
+        "blooioReplyAnchorMessageId",
+        claimed.job.replyAnchorMessageId
+      );
+    }
   }
   if (claimed.run.workerSessionId) {
     attributes.set("scheduledRunSessionId", claimed.run.workerSessionId);

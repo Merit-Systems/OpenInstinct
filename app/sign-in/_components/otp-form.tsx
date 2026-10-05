@@ -19,11 +19,15 @@ import { Input } from "@web/components/ui/input";
 import { PhoneNumberField } from "./phone-field";
 
 export function PhoneOtpAuthForm({
+  blooioPhoneNumber,
   callbackUrl,
   linqPhoneNumber,
+  provider = "linq",
 }: {
+  readonly blooioPhoneNumber?: string;
   readonly callbackUrl: string;
   readonly linqPhoneNumber?: string;
+  readonly provider?: "blooio" | "linq";
 }) {
   const sendOtp = useMutation({
     mutationFn: async (phoneNumberValue: string) => {
@@ -57,7 +61,11 @@ export function PhoneOtpAuthForm({
 
   return (
     <>
-      <FirstTimeLinqSetup phoneNumber={linqPhoneNumber} />
+      {provider === "blooio" ? (
+        <BlooioSignInNote phoneNumber={blooioPhoneNumber} />
+      ) : (
+        <FirstTimeLinqSetup phoneNumber={linqPhoneNumber} />
+      )}
       <form
         className="mt-4"
         onSubmit={(event) => {
@@ -154,6 +162,33 @@ function VerificationCodeForm({
   );
 }
 
+function BlooioSignInNote({ phoneNumber }: { readonly phoneNumber?: string }) {
+  return (
+    <Alert className="mt-6" variant="information">
+      <MessageSquareIcon />
+      <AlertTitle>Code arrives by iMessage</AlertTitle>
+      <AlertDescription>
+        <p>Blooio texts the sign-in code to the number you enter below.</p>
+        {phoneNumber ? (
+          <Button
+            className="mt-3 w-full"
+            nativeButton={false}
+            render={
+              <a
+                aria-label="Message Blooio in Messages"
+                href={`sms:${phoneNumber}`}
+              />
+            }
+            variant="outline"
+          >
+            Message {phoneNumber}
+          </Button>
+        ) : null}
+      </AlertDescription>
+    </Alert>
+  );
+}
+
 function FirstTimeLinqSetup({
   phoneNumber,
 }: {
@@ -202,7 +237,9 @@ export function phoneOtpErrorMessage(error: {
   readonly code?: string;
   readonly message?: string;
 }) {
-  return error.code?.startsWith("LINQ_") && error.message
+  return (error.code?.startsWith("LINQ_") ||
+    error.code?.startsWith("BLOOIO_")) &&
+    error.message
     ? error.message
     : "Unable to send a code. Please try again.";
 }

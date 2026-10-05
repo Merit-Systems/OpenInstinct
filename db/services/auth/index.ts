@@ -9,6 +9,8 @@ import { account, db, session, user, verification } from "@db";
 import { betterAuthBaseURL } from "@shared/environment/origin";
 import { env, localPhoneAuthBypassEnabled } from "@shared/environment";
 import { getInstallationSecrets } from "@db/services/installation-secrets";
+import { BlooioApiError } from "@shared/blooio/api";
+import { blooioOtpFailure, sendBlooioSignInCode } from "./blooio";
 import { LinqDeliveryError, linqOtpFailure, sendLinqText } from "./linq";
 import { isE164PhoneNumber } from "@shared/identity/phone-number";
 
@@ -133,12 +135,16 @@ export async function sendPhoneCode({
   readonly code: string;
   readonly to: string;
 }) {
-  if (!env.LINQ_CONNECTOR) {
+  if (!env.LINQ_CONNECTOR && !env.BLOOIO_API_KEY) {
     throw new APIError("SERVICE_UNAVAILABLE", {
-      code: "LINQ_NOT_CONFIGURED",
+      code: "MESSAGING_NOT_CONFIGURED",
       message:
-        "iMessage sign-in is not configured. Attach a Linq connector to this deployment.",
+        "iMessage sign-in is not configured. Attach a Linq connector or set BLOOIO_API_KEY.",
     });
+  }
+
+  if (!env.LINQ_CONNECTOR) {
+    return sendBlooioPhoneCode({ code, to });
   }
 
   try {
@@ -169,6 +175,37 @@ export async function sendPhoneCode({
       code: "LINQ_CONNECTOR_UNAVAILABLE",
       message:
         "This deployment cannot access its Linq connector. Check LINQ_CONNECTOR and the connector's Vercel project attachment.",
+    });
+  }
+}
+
+async function sendBlooioPhoneCode({
+  code,
+  to,
+}: {
+  readonly code: string;
+  readonly to: string;
+}) {
+  try {
+    await sendBlooioSignInCode({
+      idempotencyKey: `auth-otp-${createHash("sha256")
+        .update(`${to}\u0000${code}`)
+        .digest("hex")}`,
+      message: `Local Vault Assistant sign-in code: ${code}. Expires in 5 minutes.`,
+      to,
+    });
+  } catch (error) {
+    if (error instanceof BlooioApiError) {
+      const failure = blooioOtpFailure(error);
+      throw new APIError("BAD_GATEWAY", {
+        code: failure.code,
+        message: failure.message,
+      });
+    }
+    throw new APIError("BAD_GATEWAY", {
+      code: "BLOOIO_UNAVAILABLE",
+      message:
+        "This deployment cannot reach Blooio. Check BLOOIO_API_KEY and try again.",
     });
   }
 }
