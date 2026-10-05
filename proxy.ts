@@ -10,7 +10,8 @@ export async function proxy(request: NextRequest) {
     pathname.startsWith("/api/auth/") ||
     pathname === "/eve/v1/health" ||
     pathname.startsWith("/internal/scheduled-run/") ||
-    pathname === "/eve/v1/dev/schedules/dynamic"
+    pathname === "/api/scheduled-wakeups" ||
+    pathname.startsWith("/.well-known/workflow/")
   ) {
     return NextResponse.next();
   }

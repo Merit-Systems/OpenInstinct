@@ -1,6 +1,7 @@
 import { relations, sql } from "drizzle-orm";
 import type { InputRequest } from "eve/client";
 import {
+  boolean,
   check,
   foreignKey,
   index,
@@ -13,6 +14,20 @@ import {
   uuid,
 } from "drizzle-orm/pg-core";
 import { workspaceMemberships } from "./workspaces";
+
+export const scheduledWakeupRegistrations = pgTable(
+  "scheduled_wakeup_registrations",
+  {
+    key: text("key").primaryKey(),
+    owner: text("owner").notNull(),
+    leaseExpiresAt: timestamp("lease_expires_at", {
+      mode: "date",
+      precision: 3,
+      withTimezone: true,
+    }).notNull(),
+    workflowRunId: text("workflow_run_id"),
+  }
+);
 
 export const scheduledAgentJobs = pgTable(
   "scheduled_agent_jobs",
@@ -49,6 +64,7 @@ export const scheduledAgentJobs = pgTable(
     }),
     lastError: text("last_error"),
     revision: integer("revision").notNull().default(0),
+    lastMutationId: uuid("last_mutation_id"),
     createdAt: timestamp("created_at", {
       mode: "date",
       precision: 3,
@@ -107,6 +123,7 @@ export const scheduledAgentRuns = pgTable(
   "scheduled_agent_runs",
   {
     id: uuid("id").defaultRandom().primaryKey(),
+    jobRevision: integer("job_revision"),
     jobId: uuid("job_id")
       .notNull()
       .references(() => scheduledAgentJobs.id, { onDelete: "cascade" }),
@@ -127,6 +144,7 @@ export const scheduledAgentRuns = pgTable(
       .notNull()
       .default("queued"),
     workerSessionId: text("worker_session_id"),
+    wakeupManaged: boolean("wakeup_managed").notNull().default(false),
     deferredCompletionTurnId: text("deferred_completion_turn_id"),
     pendingInputRequests: jsonb("pending_input_requests").$type<
       readonly InputRequest[]
@@ -146,6 +164,11 @@ export const scheduledAgentRuns = pgTable(
       .default("not_ready"),
     reportSequence: integer("report_sequence").notNull().default(0),
     attempts: integer("attempts").notNull().default(0),
+    reportRetryAt: timestamp("report_retry_at", {
+      mode: "date",
+      precision: 3,
+      withTimezone: true,
+    }),
     retryAt: timestamp("retry_at", {
       mode: "date",
       precision: 3,

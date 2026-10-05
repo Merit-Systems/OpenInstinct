@@ -42,6 +42,7 @@ describe("database migrations", () => {
     await applyMigration(database, "0012_harsh_domino.sql");
     await applyMigration(database, "0013_last_christian_walker.sql");
     await applyMigration(database, "0014_chief_tigra.sql");
+    await applyMigration(database, "0015_scheduled-wakeups.sql");
 
     const tables = await database.query<{ count: number }>(
       `SELECT count(*)::int AS count
@@ -63,6 +64,7 @@ describe("database migrations", () => {
            'chats',
            'scheduled_agent_jobs',
            'scheduled_agent_runs',
+           'scheduled_wakeup_registrations',
            'encrypted_secrets',
            'user',
            'session',
@@ -72,7 +74,7 @@ describe("database migrations", () => {
     );
     const pendingConstraints = await pendingConstraintCount(database);
 
-    expect(tables.rows[0]?.count).toBe(20);
+    expect(tables.rows[0]?.count).toBe(21);
     expect(pendingConstraints).toBe(0);
     await expect(
       database.query("SELECT id FROM vault_items WHERE id = 'contact-1'")

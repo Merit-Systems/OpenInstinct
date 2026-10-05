@@ -1,21 +1,21 @@
+import { postScheduledRunRoute } from "@db/services/auth/scheduled-requests";
+import { createHash } from "node:crypto";
 import { defineDynamic, defineTool, type ToolContext } from "eve/tools";
 import { z } from "zod";
 import { resolveModeValue } from "@agent/lib/mode";
 import { scheduledReportIdentity } from "@agent/lib/schedules/identity";
-import { postScheduledRunRoute } from "@agent/lib/schedules/request";
+import { performScheduledCommand } from "@agent/lib/schedules/request";
 import {
   scheduleListSummary,
   scheduleOwner,
   scheduleReplyAnchor,
-  scheduleSummary,
 } from "@agent/lib/schedules/tools";
 import { scheduleTimingSchema } from "@shared/schedules/timing";
 import {
-  createScheduledAgentJob,
+  getScheduledAgentJob,
   getScheduledAgentRunInput,
   getScheduledAgentRunInputForReport,
   listScheduledAgentJobs,
-  updateScheduledAgentJob,
 } from "@db/services/scheduled-agent-jobs";
 
 export const createSchedule = defineTool({
@@ -28,15 +28,18 @@ export const createSchedule = defineTool({
   }),
   async execute(input, context) {
     const owner = scheduleOwner(context);
-    return scheduleSummary(
-      await createScheduledAgentJob(owner.scope, {
-        ...owner.conversation,
-        missedRunPolicy: input.missedRunPolicy,
-        prompt: input.prompt,
+    const result = await performScheduledCommand({
+      kind: "create",
+      ...owner,
+      at: new Date().toISOString(),
+      input: {
+        ...input,
+        id: scheduledMutationId(context),
         replyAnchorMessageId: scheduleReplyAnchor(context),
-        timing: input.timing,
-      })
-    );
+      },
+    });
+    if (!result.job) throw new Error("The schedule could not be created.");
+    return result.job;
   },
 });
 
@@ -71,14 +74,27 @@ export const updateSchedule = defineTool({
   inputSchema: updateScheduleInputSchema,
   async execute({ id, ...patch }, context) {
     const owner = scheduleOwner(context);
-    const job = await updateScheduledAgentJob(
+    const current = await getScheduledAgentJob(
       owner.scope,
       owner.conversation,
-      id,
-      patch
+      id
     );
-    if (!job) throw new Error("Schedule not found.");
-    return scheduleSummary(job);
+    if (!current || current.status === "deleted")
+      throw new Error("Schedule not found.");
+    const result = await performScheduledCommand({
+      kind: "update",
+      ...owner,
+      at: new Date().toISOString(),
+      id,
+      patch,
+      expectedRevision: current.revision,
+      mutationId: scheduledMutationId(context),
+    });
+    if (!result.job)
+      throw new Error(
+        "The schedule changed before this update. List schedules and try again."
+      );
+    return result.job;
   },
 });
 
@@ -146,4 +162,20 @@ async function pendingScheduledRun(context: ToolContext, runId: string) {
     },
   });
   return resolvePending?.();
+}
+
+function scheduledMutationId(context: ToolContext) {
+  const bytes = createHash("sha256")
+    .update(context.session.id + ":" + context.callId)
+    .digest();
+  bytes[6] = ((bytes[6] ?? 0) & 15) | 64;
+  bytes[8] = ((bytes[8] ?? 0) & 63) | 128;
+  const hex = bytes.subarray(0, 16).toString("hex");
+  return [
+    hex.slice(0, 8),
+    hex.slice(8, 12),
+    hex.slice(12, 16),
+    hex.slice(16, 20),
+    hex.slice(20),
+  ].join("-");
 }

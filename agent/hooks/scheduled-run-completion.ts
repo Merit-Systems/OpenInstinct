@@ -1,13 +1,13 @@
 import { defineHook } from "eve/hooks";
 import { browserTaskReceiptSchema } from "@agent/lib/browser-task";
+import { performScheduledCommand } from "@agent/lib/schedules/request";
+import type { ScheduledRunOutcome } from "@shared/schedules/outcome";
+import type { InputRequest } from "eve/client";
 import { scheduledRunIdentity } from "@agent/lib/schedules/identity";
 import { scheduledRunOutcomeSchema } from "@shared/schedules/outcome";
 import {
-  completeScheduledAgentRun,
   deferScheduledAgentRunCompletion,
   markScheduledAgentRunStarted,
-  releaseScheduledAgentRun,
-  waitForScheduledAgentRunInput,
 } from "@db/services/scheduled-agent-jobs";
 
 const workerRuntimeLimitMs = 6 * 60 * 60_000;
@@ -142,13 +142,13 @@ export default defineHook({
       }
       console.info("[scheduled-run] worker completed", {
         outcomeKind: outcome.kind,
-        reportStatus: completed.run.reportStatus,
-        runId: completed.run.id,
+        reportStatus: completed.reportStatus,
+        runId: identity.runId,
         sessionId: ctx.session.id,
       });
-      if (completed.run.reportStatus === "pending") {
+      if (completed.reportStatus === "pending") {
         console.info("[scheduled-run] completion report queued", {
-          runId: completed.run.id,
+          runId: identity.runId,
           sessionId: ctx.session.id,
         });
       }
@@ -214,4 +214,57 @@ function logDeadLetterReportQueued(
     runId,
     sessionId,
   });
+}
+
+async function completeScheduledAgentRun(
+  runId: string,
+  leaseToken: string,
+  turnId: string,
+  outcome: ScheduledRunOutcome,
+  at: Date
+) {
+  const result = await performScheduledCommand({
+    kind: "complete",
+    runId,
+    leaseToken,
+    turnId,
+    outcome,
+    at: at.toISOString(),
+  });
+  return result.status === "stale" ? undefined : result;
+}
+
+async function waitForScheduledAgentRunInput(
+  runId: string,
+  leaseToken: string,
+  requests: readonly InputRequest[],
+  at: Date
+) {
+  const result = await performScheduledCommand({
+    kind: "input",
+    runId,
+    leaseToken,
+    requests: [...requests],
+    at: at.toISOString(),
+  });
+  return result.reportStatus
+    ? { id: runId, reportStatus: result.reportStatus }
+    : undefined;
+}
+
+async function releaseScheduledAgentRun(
+  runId: string,
+  leaseToken: string,
+  message: string,
+  at: Date
+) {
+  return (
+    await performScheduledCommand({
+      kind: "release",
+      runId,
+      leaseToken,
+      message,
+      at: at.toISOString(),
+    })
+  ).nextStatus;
 }

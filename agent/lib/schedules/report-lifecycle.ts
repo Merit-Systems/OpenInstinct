@@ -1,8 +1,6 @@
+import { performScheduledCommand } from "./request";
 import type { SessionContext } from "eve/context";
-import {
-  finalizeScheduledReport,
-  releaseScheduledReport,
-} from "@db/services/scheduled-agent-jobs";
+import { finalizeScheduledReport } from "@db/services/scheduled-agent-jobs";
 import { scheduledReportIdentity } from "@agent/lib/schedules/identity";
 
 export function scheduledReportFromSession(session: SessionContext) {
@@ -36,13 +34,14 @@ export async function releaseScheduledReportDelivery(
 ) {
   const report = scheduledReportFromSession(session);
   if (report) {
-    const released = await releaseScheduledReport(
-      report.runId,
-      report.leaseToken,
-      errorMessage
-    );
+    await performScheduledCommand({
+      kind: "release-report",
+      runId: report.runId,
+      leaseToken: report.leaseToken,
+      message: errorMessage,
+      at: new Date().toISOString(),
+    });
     console.warn("[scheduled-run] report turn failed", {
-      released,
       runId: report.runId,
       sessionId: session.session.id,
     });
