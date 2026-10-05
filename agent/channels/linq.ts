@@ -113,7 +113,15 @@ export default linqChannel({
             "react_to_message requires an active Linq conversation thread."
           );
         }
-        const messageId = context.thread.toJSON().currentMessage?.id;
+        // The thread is a persisted snapshot; auth identifies this incoming message.
+        const target = resolveLinqReplyTarget(
+          { kind: "current" },
+          session.session.auth
+        );
+        const messageId =
+          target?.conversationId === context.thread.id
+            ? target.messageId
+            : undefined;
         if (!messageId) {
           throw new Error("react_to_message requires a current Linq message.");
         }
