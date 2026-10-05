@@ -71,10 +71,8 @@ const channel = eveChannel({
   auth: authenticate,
   events: {
     async "action.result"(event, _channel, session) {
-      if (
-        event.status === "completed" &&
-        sendMessageToolResultSchema.safeParse(event.result).success
-      ) {
+      const message = sendMessageToolResultSchema.safeParse(event.result);
+      if (event.status === "completed" && message.success) {
         await finalizeScheduledReportDelivery(session);
       }
     },

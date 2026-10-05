@@ -12,6 +12,36 @@ type ToolResultOutput = Extract<
 >["output"];
 
 describe("iMessage event projection", () => {
+  it("displays the contact introduction and download attachment in browser chat", () => {
+    const events = [
+      toolResult("share_contact", {
+        kind: "message",
+        text: "Save my contact.",
+        attachments: [
+          {
+            kind: "file",
+            mimeType: "text/vcard",
+            name: "OpenInstinct.vcf",
+            url: "https://example.com/contacts/openinstinct.vcf?signed=true",
+          },
+        ],
+      }),
+    ];
+    expect(sentMessages(events).get("turn-1:assistant")).toEqual([
+      expect.objectContaining({
+        parts: [
+          expect.objectContaining({ type: "text", text: "Save my contact." }),
+          expect.objectContaining({
+            type: "file",
+            filename: "OpenInstinct.vcf",
+            mediaType: "text/vcard",
+            url: "https://example.com/contacts/openinstinct.vcf?signed=true",
+          }),
+        ],
+      }),
+    ]);
+    expect(sentMessages([toolResult("share_contact", null)]).size).toBe(0);
+  });
   it("projects only successful send_message results", () => {
     const events = [
       completedMessage("Internal terminal output", "2026-09-01T12:00:00.000Z"),

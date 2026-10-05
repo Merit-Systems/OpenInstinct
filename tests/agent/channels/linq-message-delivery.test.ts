@@ -30,7 +30,6 @@ type NativeMessageOptions = Parameters<
 >[2];
 
 const rawMessage = (id: string) => ({ id });
-
 const linqChannelCapture = vi.hoisted(() => ({
   // SAFETY: This mutable test capture stores only API keys from the typed SDK constructor mock.
   clientApiKeys: [] as string[],
@@ -220,6 +219,27 @@ describe("Linq message delivery", () => {
     expect(post).toHaveBeenCalledExactlyOnceWith({ raw: message });
   });
 
+  it("does not resend share_contact output from the channel event", async () => {
+    const event = sendMessageResult({
+      kind: "message",
+      text: "Save my contact.",
+      attachments: [
+        {
+          kind: "file",
+          url: "https://example.com/contacts/openinstinct.vcf?signed=true",
+        },
+      ],
+    });
+    if (event.result.kind !== "tool-result")
+      throw new Error("Expected tool result.");
+    event.result.toolName = "share_contact";
+    const { context, post } = handlerContext();
+    await handleActionResult(event, context, sessionContext());
+    expect(post).not.toHaveBeenCalled();
+    expect(linqChannelCapture.postMessage).not.toHaveBeenCalled();
+    expect(linqChannelCapture.sendNativeMessage).not.toHaveBeenCalled();
+  });
+
   it("delivers authorization text and its native link as separate messages accepted by Linq", async () => {
     const { context, post } = handlerContext();
     const event = authorizationEvent();
@@ -240,7 +260,8 @@ describe("Linq message delivery", () => {
             },
           ],
         },
-      }
+      },
+      undefined
     );
     expect(linqChannelCapture.sendNativeMessage).toHaveBeenNthCalledWith(
       2,
@@ -256,7 +277,8 @@ describe("Linq message delivery", () => {
             },
           ],
         },
-      }
+      },
+      undefined
     );
     expect(context.state.pendingAuthMessageIds).toEqual({
       link: "native-text-message",
