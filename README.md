@@ -48,12 +48,12 @@ Purchases approved through Link are paid from your wallet.
 1. Click **Deploy with Vercel** above and select a **Pro** team. The guided flow
    connects [Kernel](https://kernel.sh) for cloud browsers,
    [Neon](https://neon.tech) for Postgres, private Vercel Blob storage, a managed
-   [Linq](https://linq.app) line for iMessage, and Vercel AI Gateway for models.
-2. Complete the [Linq phone verification](#linq-imessage-setup), then open your
-   deployed app and sign in with your phone number.
+   [Linq](https://linqapp.com) line for iMessage, and Vercel AI Gateway for models.
+2. Complete the [Linq phone verification](#linq-imessage-setup), then
+   open your deployed app and sign in with your phone number.
 3. Optionally set up a [Link wallet](#link-wallet) for purchases or
-   [Google Workspace](#google-workspace-connection) for Gmail, Calendar, and
-   Contacts.
+   [Google Workspace](#google-workspace-connection) for Gmail, Calendar,
+   and Contacts.
 
 On first use, OpenInstinct creates independent Better Auth and vault-encryption
 keys in the private Blob store. The deploy flow supplies the application URL
@@ -348,6 +348,6 @@ explicit secrets.
 
 <div align="center">
 
-Built on [Vercel](https://vercel.com) · [Kernel](https://kernel.sh) · [Linq](https://linq.app) · [Neon](https://neon.tech)
+Built on [Vercel](https://vercel.com) · [Kernel](https://kernel.sh) · [Linq](https://linqapp.com) · [Neon](https://neon.tech)
 
 </div>
