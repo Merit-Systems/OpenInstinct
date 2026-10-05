@@ -1,5 +1,4 @@
-import { connectLinqCredentials } from "@vercel/connect/eve";
-import { LinqAPIV3 } from "@linqapp/sdk";
+import type { LinqAPIV3 } from "@linqapp/sdk";
 import type { AdapterPostableMessage } from "chat";
 import {
   defaultLinqAuth,
@@ -21,7 +20,10 @@ import {
   stripImageArtifactMarkdownReferences,
 } from "../lib/linq-image-artifact/markdown";
 import { env } from "@shared/environment";
-import { contactDelivery } from "@agent/lib/contact-card";
+import {
+  linqCredentials,
+  sendNativeLinqMessage,
+} from "@agent/lib/linq/transport";
 import {
   finalizeScheduledReportDelivery,
   releaseScheduledReportDelivery,
@@ -49,21 +51,10 @@ export const linqWebhookVerifier: NonNullable<
   LinqChannelCredentials["webhookVerifier"]
 > = async (request) => (await trustedForwarder(request)) ?? false;
 
-const credentials = (
-  env.LINQ_CONNECTOR
-    ? {
-        ...connectLinqCredentials(env.LINQ_CONNECTOR),
-        webhookVerifier: linqWebhookVerifier,
-      }
-    : {
-        apiKey() {
-          throw new Error(
-            "LINQ_CONNECTOR is not configured for this deployment."
-          );
-        },
-        webhookVerifier: () => false,
-      }
-) satisfies LinqChannelCredentials;
+const credentials = {
+  ...linqCredentials,
+  webhookVerifier: env.LINQ_CONNECTOR ? linqWebhookVerifier : () => false,
+} satisfies LinqChannelCredentials;
 
 export default linqChannel({
   credentials,
@@ -98,14 +89,10 @@ export default linqChannel({
             .join("\n\n"),
         },
       ];
-      const apiKey = await credentials.apiKey();
-      const client = new LinqAPIV3({ apiKey });
       const idempotencyKey = `authorization:${session.session.id}:${event.attemptId ?? `${event.turnId}:${event.name}`}`;
-      const result = await client.chats.messages.send(chatId, {
-        message: {
-          parts,
-          idempotency_key: `${idempotencyKey}:prompt`,
-        },
+      const result = await sendNativeLinqMessage(chatId, {
+        parts,
+        idempotency_key: `${idempotencyKey}:prompt`,
       });
       context.state.pendingAuthMessageIds = {
         ...context.state.pendingAuthMessageIds,
@@ -113,11 +100,9 @@ export default linqChannel({
       };
       // Linq requires a native link to be the message's only part.
       if (event.authorization?.url)
-        await client.chats.messages.send(chatId, {
-          message: {
-            parts: [{ type: "link", value: event.authorization.url }],
-            idempotency_key: `${idempotencyKey}:link`,
-          },
+        await sendNativeLinqMessage(chatId, {
+          parts: [{ type: "link", value: event.authorization.url }],
+          idempotency_key: `${idempotencyKey}:link`,
         });
     },
     async "action.result"(event, context, session) {
@@ -151,17 +136,11 @@ export default linqChannel({
       }
 
       const message = sendMessageToolResultSchema.safeParse(event.result);
-      if (event.status === "completed" && message.success) {
-        const isContact = message.data.toolName === "share_contact";
-        if (isContact && contactDelivery.get()?.sent) return;
-        const completeDelivery = async () => {
-          if (isContact) {
-            contactDelivery.update((delivery) =>
-              delivery ? { ...delivery, sent: true } : delivery
-            );
-          }
-          await finalizeScheduledReportDelivery(session);
-        };
+      if (
+        event.status === "completed" &&
+        message.success &&
+        message.data.toolName === "send_message"
+      ) {
         const { thread } = context;
         if (!thread) {
           throw new Error(
@@ -177,11 +156,9 @@ export default linqChannel({
           replyTarget?.conversationId === thread.id
             ? replyTarget.messageId
             : undefined;
-        const idempotencyKey = isContact
-          ? `openinstinct-contact:${session.session.id}`
-          : report
-            ? `scheduled-report:${report.runId}:${String(report.sequence)}`
-            : undefined;
+        const idempotencyKey = report
+          ? `scheduled-report:${report.runId}:${String(report.sequence)}`
+          : undefined;
         const adapter = context.bot.getAdapter("linq");
         const post = idempotencyKey
           ? (content: AdapterPostableMessage) =>
@@ -212,8 +189,6 @@ export default linqChannel({
         if (message.data.output.kind === "link") {
           const { url } = message.data.output;
           const chatId = resolveExistingChatId();
-          const apiKey = await credentials.apiKey();
-          const client = new LinqAPIV3({ apiKey });
           const sendLink = (replyToMessageId?: string) => {
             const nativeMessage: LinqMessageContent = {
               parts: [{ type: "link", value: url }],
@@ -224,11 +199,7 @@ export default linqChannel({
             if (replyToMessageId) {
               nativeMessage.reply_to = { message_id: replyToMessageId };
             }
-            return client.chats.messages.send(
-              chatId,
-              { message: nativeMessage },
-              undefined
-            );
+            return sendNativeLinqMessage(chatId, nativeMessage);
           };
           try {
             await sendLink(requestedReplyMessageId);
@@ -244,7 +215,7 @@ export default linqChannel({
             });
             await sendLink();
           }
-          await completeDelivery();
+          await finalizeScheduledReportDelivery(session);
           return;
         }
 
@@ -260,10 +231,10 @@ export default linqChannel({
               postReply,
               replyToMessageId: requestedReplyMessageId,
             });
-            await completeDelivery();
+            await finalizeScheduledReportDelivery(session);
             return;
           }
-          await completeDelivery();
+          await finalizeScheduledReportDelivery(session);
           return;
         }
 
@@ -292,7 +263,7 @@ export default linqChannel({
             postReply,
             replyToMessageId: requestedReplyMessageId,
           });
-          await completeDelivery();
+          await finalizeScheduledReportDelivery(session);
           return;
         }
 
@@ -327,7 +298,7 @@ export default linqChannel({
           postReply,
           replyToMessageId: requestedReplyMessageId,
         });
-        await completeDelivery();
+        await finalizeScheduledReportDelivery(session);
       }
     },
     async "message.completed"(event, _context, session) {

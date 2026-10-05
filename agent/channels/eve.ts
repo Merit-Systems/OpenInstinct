@@ -13,7 +13,6 @@ import {
 } from "@shared/identity/access-scope";
 import { getAuthSession } from "@db/services/auth/session";
 import { sendMessageToolResultSchema } from "@shared/chat/message-delivery";
-import { contactDelivery } from "@agent/lib/contact-card";
 import {
   finalizeScheduledReportDelivery,
   releaseScheduledReportDelivery,
@@ -74,11 +73,6 @@ const channel = eveChannel({
     async "action.result"(event, _channel, session) {
       const message = sendMessageToolResultSchema.safeParse(event.result);
       if (event.status === "completed" && message.success) {
-        if (message.data.toolName === "share_contact") {
-          contactDelivery.update((delivery) =>
-            delivery ? { ...delivery, sent: true } : delivery
-          );
-        }
         await finalizeScheduledReportDelivery(session);
       }
     },
