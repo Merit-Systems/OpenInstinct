@@ -144,6 +144,31 @@ describe("vault browser autofill", () => {
       "cc-number": "4111111111111111",
       "postal-code": "10001",
     });
+    const nativeClaims = await provider.materializeClaims(
+      scope,
+      "real-card-id",
+      {
+        availableTokens: new Set(nativeAutofillTokens.payment),
+        origin: "https://merchant.example",
+        surface: {
+          ...paymentSurface,
+          fields: nativeAutofillTokens.payment.map((token) => ({
+            score: 100,
+            token,
+          })),
+        },
+      }
+    );
+    expect(
+      Object.fromEntries(nativeClaims.map(({ token, value }) => [token, value]))
+    ).toEqual({
+      "cc-name": "Grace Hopper",
+      "cc-number": "4111111111111111",
+      "cc-exp-month": "09",
+      "cc-exp-year": "2031",
+      "cc-csc": "321",
+      "postal-code": "10001",
+    });
   });
 
   it("keeps structured logins bound to their saved origin", async () => {

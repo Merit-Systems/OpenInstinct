@@ -126,7 +126,7 @@ export const nativeAutofillTokens = {
   address: Object.keys(addressTokenToChromiumField),
   contact: Object.keys(contactTokenToChromiumField),
   login: nativeLoginAutofillTokens,
-  payment: [...cardTokens],
+  payment: [...cardTokens, "postal-code"],
 } as const;
 
 type NativeAutofillKind = "address" | "contact" | "login" | "payment";
@@ -201,6 +201,13 @@ export async function fillWithKernelNativeAutofill({
       for (const control of controls) {
         try {
           await markNativeAutofilledControls(connection, control);
+          if (kind === "payment")
+            await fillNativeBillingPostalCode(
+              connection,
+              control,
+              claims.find(({ token }) => token === "postal-code")?.value,
+              expectedOrigin
+            );
           await connection.send(
             "Autofill.trigger",
             {
@@ -231,6 +238,91 @@ export async function fillWithKernelNativeAutofill({
     pageUrl
   );
 }
+
+async function fillNativeBillingPostalCode(
+  connection: CdpConnection,
+  control: Awaited<ReturnType<typeof inspectControls>>[number],
+  postalCode: string | undefined,
+  expectedOrigin: string
+) {
+  const { object } = resolvedNodeSchema.parse(
+    await connection.send(
+      "DOM.resolveNode",
+      {
+        backendNodeId: control.backendNodeId,
+        executionContextId: control.executionContextId,
+      },
+      control.sessionId
+    )
+  );
+  try {
+    const status = z
+      .enum(["absent", "filled", "missing", "ambiguous", "changed"])
+      .parse(
+        evaluatedValueSchema.parse(
+          await connection.send(
+            "Runtime.callFunctionOn",
+            {
+              objectId: object.objectId,
+              arguments: [
+                { value: postalCode ?? null },
+                { value: expectedOrigin },
+              ],
+              functionDeclaration: nativeBillingPostalCodeFunction,
+              returnByValue: true,
+            },
+            control.sessionId
+          )
+        ).result.value
+      );
+    if (status === "missing")
+      throw new PaymentFillError(
+        "The checkout requires a billing ZIP that the payment credential has not supplied; do not substitute personal or shipping information."
+      );
+    if (status === "ambiguous")
+      throw new PaymentFillError(
+        "Billing ZIP is ambiguous; supply an explicit postal_code field binding."
+      );
+    if (status === "changed")
+      throw new PaymentFillError(
+        "The checkout changed before billing ZIP filling; inspect it before continuing."
+      );
+  } finally {
+    await connection
+      .send(
+        "Runtime.releaseObject",
+        { objectId: object.objectId },
+        control.sessionId
+      )
+      .catch(() => undefined);
+  }
+}
+
+const nativeBillingPostalCodeFunction = `function(postalCode, expectedOrigin) {
+    if (!this.isConnected || location.origin !== expectedOrigin) return "changed";
+    const root = this.form || this.closest("form") || this.ownerDocument;
+    const candidates = Array.from(root.querySelectorAll("input")).filter((element) => {
+      if (!(element instanceof HTMLInputElement) || element.matches(":disabled") || element.readOnly) return false;
+      if (!["text", "tel", "number", "password"].includes(element.type)) return false;
+      const style = getComputedStyle(element);
+      if (style.display === "none" || style.visibility === "hidden" || element.getClientRects().length === 0) return false;
+      const autocomplete = (element.autocomplete || "").toLowerCase().split(/\\s+/);
+      if (autocomplete.includes("shipping")) return false;
+      const metadata = [element.id, element.name, element.getAttribute("aria-label"), ...Array.from(element.labels || [], (label) => label.textContent)].filter(Boolean).map((value) => value.toLowerCase().replace(/[\\s_-]/g, ""));
+      if (metadata.some((value) => /shipping/.test(value))) return false;
+      return autocomplete.at(-1) === "postal-code" || metadata.some((value) => /billing.*(?:zip|postal|postcode)|^(?:zip(?:code)?|postal(?:code)?|postcode)$/.test(value));
+    });
+    if (candidates.length === 0) return "absent";
+    if (candidates.length !== 1) return "ambiguous";
+    if (!postalCode) return "missing";
+    const element = candidates[0];
+    element.dataset.vaultSecret = "true";
+    const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value").set;
+    setter.call(element, postalCode);
+    element.dispatchEvent(new Event("input", { bubbles: true }));
+    element.dispatchEvent(new Event("change", { bubbles: true }));
+    return this.isConnected && element.isConnected && location.origin === expectedOrigin && element.value === postalCode ? "filled" : "changed";
+  }`;
 
 const cardFillStatusSchema = z
   .record(

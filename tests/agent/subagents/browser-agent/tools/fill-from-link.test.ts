@@ -244,6 +244,106 @@ describe("Link browser bridge", () => {
     );
   });
 
+  it("fills the billing ZIP from the approved Link card without returning it", async () => {
+    const request = approvedRequest();
+    fetchMock.mockResolvedValue(
+      Response.json({
+        ...request,
+        card: {
+          ...request.card,
+          billing_address: {
+            ...request.card?.billing_address,
+            postal_code: " 94107 ",
+          },
+        },
+      })
+    );
+    const boundInput = {
+      ...input,
+      pageUrl: "https://shop.example/checkout",
+      fields: [
+        { field: "number" as const, selector: "#number" },
+        { field: "exp_month" as const, selector: "#month" },
+        { field: "exp_year" as const, selector: "#year" },
+        { field: "cvc" as const, selector: "#cvc" },
+        { field: "name" as const, selector: "#name" },
+        { field: "postal_code" as const, selector: "#BillingZip" },
+      ],
+    };
+    const schema = fillFromLink.inputSchema;
+    if (!(schema instanceof z.ZodType))
+      throw new Error("Missing field schema.");
+    expect(schema.safeParse(boundInput).success).toBe(true);
+    const output = await fillFromLink.execute(boundInput, context);
+    expect(fillFields.mock.calls[0]?.[0].fields).toContainEqual({
+      selector: "#BillingZip",
+      frameUrl: undefined,
+      value: "94107",
+      token: "postal-code",
+    });
+    expect(fill).not.toHaveBeenCalled();
+    expect(JSON.stringify(output)).not.toMatch(/94107|4242424242424242|098/u);
+  });
+
+  it.each([undefined, "", "   "])(
+    "stops before filling when Link omits a bound billing ZIP: %j",
+    async (postalCode) => {
+      const request = approvedRequest();
+      fetchMock.mockResolvedValue(
+        Response.json({
+          ...request,
+          card: {
+            ...request.card,
+            billing_address: {
+              ...request.card?.billing_address,
+              postal_code: postalCode,
+            },
+          },
+        })
+      );
+      await expect(
+        fillFromLink.execute(
+          {
+            ...input,
+            pageUrl: "https://shop.example/checkout",
+            fields: [
+              { field: "number", selector: "#number" },
+              { field: "expiration", selector: "#expiry", format: "MM/YY" },
+              { field: "cvc", selector: "#cvc" },
+              { field: "postal_code", selector: "#BillingZip" },
+            ],
+          },
+          context
+        )
+      ).rejects.toThrow("Link has not supplied this card's billing ZIP");
+      expect(fillFields).not.toHaveBeenCalled();
+      expect(fill).not.toHaveBeenCalled();
+    }
+  );
+
+  it("passes the Link billing ZIP to native autofill as a private claim", async () => {
+    const request = approvedRequest();
+    fetchMock.mockResolvedValue(
+      Response.json({
+        ...request,
+        card: {
+          ...request.card,
+          billing_address: {
+            ...request.card?.billing_address,
+            postal_code: "K1A 0B1",
+          },
+        },
+      })
+    );
+    const output = await fillFromLink.execute(input, context);
+    expect(fill.mock.calls[0]?.[0].claims).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ token: "postal-code", value: "K1A 0B1" }),
+      ])
+    );
+    expect(JSON.stringify(output)).not.toContain("K1A 0B1");
+  });
+
   it("redacts and does not retry an uncertain hosted-field fill", async () => {
     fillFields.mockRejectedValueOnce(new Error("4242424242424242"));
     const result = fillFromLink.execute(
