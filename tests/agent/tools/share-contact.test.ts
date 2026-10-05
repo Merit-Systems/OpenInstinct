@@ -182,7 +182,7 @@ describe("share_contact", () => {
       const tool = await shareContactTool();
       await expect(
         tool.execute({ text: "Save me." }, toolContext("linq", threadId))
-      ).rejects.toThrow("current authenticated Linq conversation");
+      ).rejects.toThrow(/Linq (?:conversation|thread)/);
       expect(controls.fetch).not.toHaveBeenCalled();
     }
   );

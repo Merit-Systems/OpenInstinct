@@ -1,13 +1,8 @@
 import { AlertCircleIcon, BrainIcon, LoaderCircleIcon } from "lucide-react";
-import { Fragment, useMemo } from "react";
-import {
-  imessageTimestamps,
-  messageTimestamps,
-  sentMessages,
-} from "../../_lib/message-events";
-import { messagesForTraceView, type TraceView } from "../../_lib/trace-view";
+import { useMemo } from "react";
+import type { TraceView } from "../../_lib/trace-view";
 import { getLatestTurnFailure } from "../../_lib/turn-failure";
-import { messagePresentations } from "../../_lib/message-presentation";
+import { conversationRows } from "../../_lib/conversation-rows";
 import {
   Conversation,
   ConversationContent,
@@ -60,23 +55,8 @@ export function ChatConversation({
   const errorMessage =
     (agent.error ? toErrorMessage(agent.error) : undefined) ?? turnFailure;
   const messages = useMemo(
-    () => messagesForTraceView(agent.data.messages, agent.events, traceView),
+    () => conversationRows(agent.data.messages, agent.events, traceView),
     [agent.data.messages, agent.events, traceView]
-  );
-  const timestamps = useMemo(
-    () =>
-      traceView === "imessage"
-        ? imessageTimestamps(agent.events)
-        : messageTimestamps(agent.events),
-    [agent.events, traceView]
-  );
-  const { presentations, handledReactionCallIds } = useMemo(
-    () => messagePresentations(messages, agent.events),
-    [messages, agent.events]
-  );
-  const deliveredMessages = useMemo(
-    () => sentMessages(agent.events, handledReactionCallIds),
-    [agent.events, handledReactionCallIds]
   );
 
   return (
@@ -116,44 +96,17 @@ export function ChatConversation({
             return null;
           }
 
-          const deliveries =
-            traceView === "imessage"
-              ? deliveredMessages.get(message.id)
-              : undefined;
-          if (deliveries) {
-            return (
-              <Fragment key={message.id}>
-                {deliveries.map((delivery) => (
-                  <AgentMessage
-                    canRespond={!isBusy && agent.status !== "resuming"}
-                    isStreaming={false}
-                    key={delivery.id}
-                    message={{ ...message, id: delivery.id }}
-                    onInputResponses={(responses) => agent.respond(responses)}
-                    sentMessageParts={delivery.parts}
-                    timestamp={delivery.timestamp}
-                    userVisibleOnly
-                  />
-                ))}
-              </Fragment>
-            );
-          }
-
           return (
             <AgentMessage
               canRespond={!isBusy && agent.status !== "resuming"}
               isStreaming={
-                agent.status === "streaming" && index === messages.length - 1
+                traceView === "trace" &&
+                agent.status === "streaming" &&
+                index === messages.length - 1
               }
               key={message.id}
               message={message}
               onInputResponses={(responses) => agent.respond(responses)}
-              presentation={
-                traceView === "imessage"
-                  ? presentations.get(message.id)
-                  : undefined
-              }
-              timestamp={timestamps.get(message.id)}
               userVisibleOnly={traceView === "imessage"}
             />
           );

@@ -8,7 +8,7 @@ import { Message } from "chat";
 import type { Thread } from "chat";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type * as EnvModule from "@shared/environment";
-import { linqWebhookVerifier } from "@agent/channels/linq";
+import { linqWebhookVerifier } from "@agent/lib/linq/transport";
 
 type LinqBridge = ChatSdkChannelBridge<{
   linq: ReturnType<typeof createLinqAdapter>;
@@ -54,6 +54,8 @@ vi.mock("@db/services/auth", () => ({
     $context: Promise.resolve({ adapter: { findOne: capture.findOne } }),
   }),
 }));
+// Load the channel after installing the bridge capture.
+await import("@agent/channels/linq");
 const onMessage = capture.onMessage;
 if (!onMessage)
   throw new Error("The Linq bridge must register its inbound handler.");

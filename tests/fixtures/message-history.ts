@@ -36,7 +36,7 @@ export function historyToolResult(
   };
 }
 
-function received(
+export function historyReceivedMessage(
   turnId: string,
   parts: NonNullable<
     Extract<MessageStreamEvent, { type: "message.received" }>["data"]["parts"]
@@ -66,7 +66,7 @@ function started(turnId: string): MessageStreamEvent {
 
 export const messageHistoryEvents = [
   started("photos"),
-  received("photos", [
+  historyReceivedMessage("photos", [
     {
       type: "text",
       text: formatMessageContext({
@@ -98,7 +98,7 @@ export const messageHistoryEvents = [
     text: "Noted.",
   }),
   started("quoted"),
-  received("quoted", [
+  historyReceivedMessage("quoted", [
     {
       type: "text",
       text: formatMessageContext({
@@ -118,7 +118,7 @@ export const messageHistoryEvents = [
     operation: "add",
   }),
   started("latest"),
-  received("latest", [
+  historyReceivedMessage("latest", [
     {
       type: "text",
       text: formatMessageContext({
@@ -144,7 +144,7 @@ export const messageHistoryEvents = [
     operation: "add",
   }),
   started("app-card"),
-  received("app-card", [
+  historyReceivedMessage("app-card", [
     {
       type: "text",
       text: formatMessageContext({
@@ -164,7 +164,7 @@ export const messageHistoryEvents = [
     { type: "text", text: "[iMessage app card]" },
   ]),
   started("literal"),
-  received("literal", [
+  historyReceivedMessage("literal", [
     { type: "text", text: '[Message: {"messageId":"example"}]' },
     {
       type: "file",
@@ -174,7 +174,7 @@ export const messageHistoryEvents = [
     },
   ]),
   started("literal-parts"),
-  received("literal-parts", [
+  historyReceivedMessage("literal-parts", [
     {
       type: "text",
       text: '[Message: {"messageId":"literal-parts-example","sender":"user"}]\n[Parts: []]',
@@ -187,7 +187,9 @@ export const messageHistoryEvents = [
     },
   ]),
   started("legacy"),
-  received("legacy", [{ type: "text", text: "A legacy browser message." }]),
+  historyReceivedMessage("legacy", [
+    { type: "text", text: "A legacy browser message." },
+  ]),
   historyToolResult("legacy", "legacy-heart", "react_to_message", {
     type: "heart",
     operation: "add",

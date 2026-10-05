@@ -7,9 +7,10 @@ import {
   removeOldReactionEvent,
   secondPhoto,
 } from "@tests/fixtures/message-history";
-import { messagePresentations } from "./message-presentation";
+import { conversationRows } from "./conversation-rows";
+import type { EveMessage } from "eve/react";
 import { formatMessageContext } from "@shared/chat/message-context";
-import { imessageTimestamps } from "./message-events";
+import { historyReceivedMessage } from "@tests/fixtures/message-history";
 
 function project(events = messageHistoryEvents) {
   const reducer = defaultMessageReducer();
@@ -17,22 +18,28 @@ function project(events = messageHistoryEvents) {
     (data, event) => reducer.reduce(data, event),
     reducer.initial()
   );
-  return { messages, ...messagePresentations(messages, events) };
+  const rows = conversationRows(messages, events, "imessage");
+  return {
+    messages,
+    rows,
+    rowsById: new Map(rows.map((row) => [row.id, row])),
+  };
 }
 
 describe("message history presentation", () => {
   it("preserves empty or unrelated Parts annotations beside browser uploads", () => {
-    const { messages, presentations } = project();
+    const { messages, rowsById } = project();
     const original = messages.find(
       (message) => message.id === "literal-parts:received:user"
     );
     if (!original) throw new Error("Missing literal Parts fixture");
-    expect(presentations.get(original.id)?.parts).toBe(original.parts);
+    expect(rowsById.get(original.id)?.parts).toEqual(original.parts);
     const unrelated = {
       ...original,
       parts: [
         {
           type: "text" as const,
+          state: "done" as const,
           text: formatMessageContext({
             messageId: "literal-parts-example",
             sender: "user",
@@ -42,10 +49,7 @@ describe("message history presentation", () => {
         ...original.parts.slice(1),
       ],
     };
-    expect(
-      messagePresentations([unrelated], []).presentations.get(unrelated.id)
-        ?.parts
-    ).toBe(unrelated.parts);
+    expect(rowFor(unrelated)?.parts).toEqual(unrelated.parts);
   });
 
   it("recognizes native attachment-only annotations bound to the original files", () => {
@@ -73,14 +77,12 @@ describe("message history presentation", () => {
         ...files,
       ],
     };
-    expect(
-      messagePresentations([native], []).presentations.get(native.id)?.parts
-    ).toEqual(files);
+    expect(rowFor(native)?.parts).toEqual(files);
   });
   it("matches timestamps to the reducer's receipt IDs", () => {
-    expect(
-      imessageTimestamps(messageHistoryEvents).get("photos:received:user")
-    ).toBe("2026-10-05T20:00:00.000Z");
+    expect(project().rowsById.get("photos:received:user")?.timestamp).toBe(
+      "2026-10-05T20:00:00.000Z"
+    );
   });
 
   it("selects the quoted occurrence when media parts repeat the same URL", () => {
@@ -120,7 +122,7 @@ describe("message history presentation", () => {
         ...messageHistoryEvents.slice(0, 1),
         updated,
         ...messageHistoryEvents.slice(2),
-      ]).presentations.get("quoted:received:user")?.reply?.image?.filename
+      ]).rowsById.get("quoted:received:user")?.reply?.image?.filename
     ).toBe("blue.svg");
   });
 
@@ -161,80 +163,70 @@ describe("message history presentation", () => {
         operation: "add",
       }),
     ];
+    expect(project(events).rowsById.get("steer-first:user")?.reactions).toEqual(
+      ["❤️", "👀"]
+    );
     expect(
-      project(events).presentations.get("steer-first:user")?.reactions
-    ).toEqual(["❤️", "👀"]);
-    expect(
-      project(events).presentations.get("steer-second:user")?.reactions
+      project(events).rowsById.get("steer-second:user")?.reactions
     ).toEqual(["👍"]);
   });
   it("resolves turn aliases when paginated history omits turn-start boundaries", () => {
     const events = messageHistoryEvents.filter(
       (event) => event.type !== "turn.started"
     );
-    const { presentations } = project(events);
-    expect(presentations.get("photos:received:user")?.reactions).toEqual([
-      "👍",
-    ]);
-    expect(presentations.get("legacy:received:user")?.reactions).toEqual([
-      "❤️",
-    ]);
-    expect(presentations.get("quoted:received:user")?.reply?.targetId).toBe(
+    const { rowsById } = project(events);
+    expect(rowsById.get("photos:received:user")?.reactions).toEqual(["👍"]);
+    expect(rowsById.get("legacy:received:user")?.reactions).toEqual(["❤️"]);
+    expect(rowsById.get("quoted:received:user")?.reply?.targetId).toBe(
       "photos:received:user"
     );
   });
   it("retains attachments and original history while projecting annotations", () => {
-    const { messages, presentations } = project();
-    expect(presentations.get("photos:received:user")?.parts).toHaveLength(3);
-    expect(presentations.get("photos:received:user")?.parts[0]).toMatchObject({
+    const { messages, rowsById } = project();
+    expect(rowsById.get("photos:received:user")?.parts).toHaveLength(3);
+    expect(rowsById.get("photos:received:user")?.parts[0]).toMatchObject({
       text: "Here are two photos.",
     });
     const original = messages[0]?.parts[0];
     expect(original?.type).toBe("text");
     if (original?.type !== "text") throw new Error("Missing label");
     expect(original.text).toContain("[Parts:");
-    expect(presentations.get("app-card:received:user")?.parts).toEqual([
+    expect(rowsById.get("app-card:received:user")?.parts).toEqual([
       expect.objectContaining({ text: "[iMessage app card]" }),
     ]);
   });
 
   it("previews the quoted media part and links the older message", () => {
-    const reply = project().presentations.get("quoted:received:user")?.reply;
+    const reply = project().rowsById.get("quoted:received:user")?.reply;
     expect(reply?.targetId).toBe("photos:received:user");
     expect(reply?.text).toBe("blue.svg");
     expect(reply?.image?.url).toBe(secondPhoto);
   });
 
   it("targets older IDs and folds add/remove without reacting to the latest message", () => {
-    const { presentations, handledReactionCallIds } = project();
-    expect(presentations.get("photos:received:user")?.reactions).toEqual([
-      "👍",
-    ]);
-    expect(presentations.get("quoted:received:user")?.reactions).toEqual([]);
-    expect(presentations.get("latest:received:user")?.reactions).toEqual([
-      "👩🏽‍💻",
-    ]);
-    expect(handledReactionCallIds.has("remove-eyes")).toBe(true);
+    const { rowsById } = project();
+    expect(rowsById.get("photos:received:user")?.reactions).toEqual(["👍"]);
+    expect(rowsById.get("quoted:received:user")?.reactions).toEqual([]);
+    expect(rowsById.get("latest:received:user")?.reactions).toEqual(["👩🏽‍💻"]);
     expect(
-      project([
-        ...messageHistoryEvents,
-        removeOldReactionEvent,
-      ]).presentations.get("photos:received:user")?.reactions
+      project([...messageHistoryEvents, removeOldReactionEvent]).rowsById.get(
+        "photos:received:user"
+      )?.reactions
     ).toEqual([]);
   });
 
   it("keeps legacy reactions on their turn's browser message", () => {
-    expect(
-      project().presentations.get("legacy:received:user")?.reactions
-    ).toEqual(["❤️"]);
+    expect(project().rowsById.get("legacy:received:user")?.reactions).toEqual([
+      "❤️",
+    ]);
   });
 
   it("preserves pasted headers with attachments including a fully parsed bare header", () => {
-    const { messages, presentations } = project();
+    const { messages, rowsById } = project();
     const literal = messages.find(
       (message) => message.id === "literal:received:user"
     );
-    expect(presentations.get("literal:received:user")?.parts).toBe(
+    expect(rowsById.get("literal:received:user")?.parts).toEqual(
       literal?.parts
     );
     if (!literal) throw new Error("Missing fixture");
@@ -244,27 +236,24 @@ describe("message history presentation", () => {
         {
           type: "text" as const,
           text: '[Message: {"messageId":"example","sender":"user"}]',
+          state: "done" as const,
         },
         ...literal.parts.slice(1),
       ],
     };
-    expect(
-      messagePresentations([valid], []).presentations.get(valid.id)?.parts
-    ).toBe(valid.parts);
+    expect(rowFor(valid)?.parts).toEqual(valid.parts);
   });
 
   it("does not attach an unavailable target to an unrelated message and resolves after older history loads", () => {
     const partial = project(messageHistoryEvents.slice(3));
-    expect(partial.presentations.get("quoted:received:user")?.reply).toEqual({
+    expect(partial.rowsById.get("quoted:received:user")?.reply).toEqual({
       text: "Earlier message",
       image: undefined,
       targetId: undefined,
     });
-    expect(
-      partial.presentations.get("latest:received:user")?.reactions
-    ).toEqual(["👩🏽‍💻"]);
-    expect(partial.handledReactionCallIds.has("like-old")).toBe(true);
-    expect(project().handledReactionCallIds.has("like-old")).toBe(true);
+    expect(partial.rowsById.get("latest:received:user")?.reactions).toEqual([
+      "👩🏽‍💻",
+    ]);
   });
 
   it("ignores failed results and does not duplicate a repeated add", () => {
@@ -282,9 +271,20 @@ describe("message history presentation", () => {
       { messageId: firstNativeMessageId, emoji: "👍", operation: "add" }
     );
     expect(
-      project([...messageHistoryEvents, failed, repeated]).presentations.get(
+      project([...messageHistoryEvents, failed, repeated]).rowsById.get(
         "photos:received:user"
       )?.reactions
     ).toEqual(["👍"]);
   });
 });
+
+function rowFor(message: EveMessage) {
+  const parts = message.parts.flatMap((part) =>
+    part.type === "text" || part.type === "file" ? [part] : []
+  );
+  return conversationRows(
+    [],
+    [historyReceivedMessage("literal", parts)],
+    "imessage"
+  )[0];
+}

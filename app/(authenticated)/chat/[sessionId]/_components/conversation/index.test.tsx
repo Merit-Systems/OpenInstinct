@@ -70,7 +70,10 @@ describe("chat conversation", () => {
         ],
       },
       error: undefined,
-      events: [sendMessageResult("The visible iMessage response.")],
+      events: [
+        delivery("turn-1", "What happened?"),
+        sendMessageResult("The visible iMessage response."),
+      ],
       respond: async () => undefined,
       status: "ready",
     } satisfies Pick<
@@ -100,6 +103,7 @@ describe("chat conversation", () => {
       role: "assistant",
     } satisfies EveMessage;
     const events = [
+      delivery("visible-turn", "Keep this visible"),
       workerReceipt("task_worker"),
       workerCancellation("task_worker"),
       delivery("task-delivery", cancellationText),
@@ -128,7 +132,7 @@ describe("chat conversation", () => {
     const agent = {
       data: { messages: [message("turn-1:user", "Try this")] },
       error: new Error("Internal runtime failure"),
-      events: [],
+      events: [delivery("turn-1", "Try this")],
       respond: async () => undefined,
       status: "error",
     } satisfies Pick<
@@ -203,7 +207,7 @@ function workerCancellation(taskId: string): MessageStreamEvent {
 function delivery(turnId: string, messageText: string): MessageStreamEvent {
   return {
     data: { message: messageText, sequence: 0, turnId },
-    meta: { at: "2026-08-27T20:00:01.000Z", id: "delivery" },
+    meta: { at: "2026-08-27T20:00:01.000Z", id: `receipt-${turnId}` },
     type: "message.received",
   };
 }

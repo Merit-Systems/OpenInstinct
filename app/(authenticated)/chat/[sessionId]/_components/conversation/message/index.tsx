@@ -1,38 +1,30 @@
 "use client";
 
-import type { EveMessage } from "eve/react";
 import { useState } from "react";
 import { Message, MessageContent } from "@web/components/ai-elements/message";
 import { cn } from "@web/components/class-names";
 import { AgentMessagePart, partKey } from "./parts";
 import type { RespondToAgentInput } from "./types";
-import type { MessagePresentation } from "../../../_lib/message-presentation";
+import type { ConversationRow } from "../../../_lib/conversation-rows";
 
 export function AgentMessage({
   canRespond,
   isStreaming,
   message,
   onInputResponses,
-  presentation,
-  sentMessageParts,
-  timestamp,
   userVisibleOnly = false,
 }: {
   readonly canRespond: boolean;
   readonly isStreaming: boolean;
-  readonly message: EveMessage;
+  readonly message: ConversationRow;
   readonly onInputResponses: RespondToAgentInput;
-  readonly presentation?: MessagePresentation;
-  readonly sentMessageParts?: readonly EveMessage["parts"][number][];
-  readonly timestamp?: string;
   readonly userVisibleOnly?: boolean;
 }) {
   const [optimisticTimestamp] = useState(() => new Date().toISOString());
   const displayedTimestamp =
-    timestamp ?? (message.role === "user" ? optimisticTimestamp : undefined);
-  const visibleParts = userVisibleOnly
-    ? userVisibleParts(message, sentMessageParts, presentation)
-    : message.parts;
+    message.timestamp ??
+    (message.role === "user" ? optimisticTimestamp : undefined);
+  const visibleParts = message.parts;
   const lastTextIndex = visibleParts.reduce(
     (last, part, index) => (part.type === "text" ? index : last),
     -1
@@ -50,9 +42,7 @@ export function AgentMessage({
       from={message.role}
     >
       <MessageContent>
-        {presentation?.reply ? (
-          <ReplyPreview reply={presentation.reply} />
-        ) : null}
+        {message.reply ? <ReplyPreview reply={message.reply} /> : null}
         {visibleParts.map((part, index) =>
           hasAssistantText && part.type === "reasoning" ? null : (
             <AgentMessagePart
@@ -70,7 +60,7 @@ export function AgentMessage({
           )
         )}
       </MessageContent>
-      {presentation?.reactions.length ? (
+      {message.reactions?.length ? (
         <ul
           aria-label="Reactions"
           className={cn(
@@ -78,7 +68,7 @@ export function AgentMessage({
             message.role === "user" ? "ml-auto" : "mr-auto"
           )}
         >
-          {presentation.reactions.map((emoji) => (
+          {message.reactions.map((emoji) => (
             <li
               key={emoji}
               aria-label={`Reaction ${emoji}`}
@@ -107,24 +97,10 @@ export function AgentMessage({
   );
 }
 
-function userVisibleParts(
-  message: EveMessage,
-  sentMessageParts?: readonly EveMessage["parts"][number][],
-  presentation?: MessagePresentation
-) {
-  if (message.role === "user") {
-    return (presentation?.parts ?? message.parts).filter(
-      (part) => part.type === "text" || part.type === "file"
-    );
-  }
-
-  return sentMessageParts ?? [];
-}
-
 function ReplyPreview({
   reply,
 }: {
-  readonly reply: NonNullable<MessagePresentation["reply"]>;
+  readonly reply: NonNullable<ConversationRow["reply"]>;
 }) {
   const content = (
     <>

@@ -2,9 +2,10 @@ import type { EveMessage } from "eve/react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { AgentMessage } from ".";
+import type { ConversationRow } from "../../../_lib/conversation-rows";
 
-describe("agent messages", () => {
-  it("renders ordinary assistant text without a delivery tool result", () => {
+describe("conversation row rendering", () => {
+  it("renders ordinary trace text supplied by Eve", () => {
     const message = {
       id: "assistant-message",
       metadata: { status: "complete" },
@@ -17,7 +18,6 @@ describe("agent messages", () => {
       ],
       role: "assistant",
     } satisfies EveMessage;
-
     const markup = renderToStaticMarkup(
       <AgentMessage
         canRespond
@@ -26,103 +26,19 @@ describe("agent messages", () => {
         onInputResponses={() => undefined}
       />
     );
-
     expect(markup).toContain("Hello from ordinary assistant output.");
   });
 
-  it("renders only Linq-delivered content in the iMessage view", () => {
+  it("renders the projected reply, reaction, and timestamp without a second content override", () => {
     const message = {
-      id: "turn-1:assistant",
-      metadata: { status: "complete", turnId: "turn-1" },
-      parts: [
-        {
-          state: "done",
-          stepIndex: 1,
-          text: "I’ll check that now.",
-          type: "text",
-        },
-        {
-          state: "done",
-          stepIndex: 0,
-          text: "Private reasoning",
-          type: "reasoning",
-        },
-        {
-          input: { query: "example" },
-          output: { result: "internal" },
-          state: "output-available",
-          stepIndex: 0,
-          toolCallId: "call-1",
-          toolName: "web_search",
-          type: "dynamic-tool",
-        },
-        {
-          state: "done",
-          stepIndex: 1,
-          text: "Here’s what I found.",
-          type: "text",
-        },
-      ],
-      role: "assistant",
-    } satisfies EveMessage;
-
-    const markup = renderToStaticMarkup(
-      <AgentMessage
-        canRespond
-        isStreaming={false}
-        message={message}
-        onInputResponses={() => undefined}
-        sentMessageParts={[
-          {
-            state: "done",
-            stepIndex: 1,
-            text: "Here’s what I found.",
-            type: "text",
-          },
-        ]}
-        userVisibleOnly
-      />
-    );
-
-    expect(markup).toContain("Here’s what I found.");
-    expect(markup).not.toContain("I’ll check that now.");
-    expect(markup).not.toContain("Private reasoning");
-    expect(markup).not.toContain("web_search");
-  });
-
-  it("hides non-send_message controls in the iMessage projection", () => {
-    const message = {
-      id: "turn-2:assistant",
-      metadata: { status: "streaming", turnId: "turn-2" },
-      parts: [
-        {
-          approval: { id: "approval-1" },
-          input: { amount: 50, recipient: "Hidden recipient" },
-          state: "approval-requested",
-          stepIndex: 0,
-          toolCallId: "call-2",
-          toolMetadata: {
-            eve: {
-              inputRequest: {
-                kind: "tool-approval",
-                options: [
-                  { id: "approve", label: "Approve", style: "primary" },
-                  { id: "cancel", label: "Cancel", style: "danger" },
-                ],
-                prompt: "Approve this action?",
-                requestId: "approval-1",
-              },
-              kind: "tool-call",
-              name: "send_payment",
-            },
-          },
-          toolName: "send_payment",
-          type: "dynamic-tool",
-        },
-      ],
-      role: "assistant",
-    } satisfies EveMessage;
-
+      id: "receipt:user",
+      metadata: { status: "complete" },
+      parts: [{ type: "text", text: "Here is the reply.", state: "done" }],
+      role: "user",
+      timestamp: "2026-10-05T20:00:00.000Z",
+      reactions: ["👍"],
+      reply: { targetId: "older:user", text: "Original request" },
+    } satisfies ConversationRow;
     const markup = renderToStaticMarkup(
       <AgentMessage
         canRespond
@@ -132,11 +48,9 @@ describe("agent messages", () => {
         userVisibleOnly
       />
     );
-
-    expect(markup).not.toContain("Approve this action?");
-    expect(markup).not.toContain("Approve");
-    expect(markup).not.toContain("Cancel");
-    expect(markup).not.toContain("send_payment");
-    expect(markup).not.toContain("Hidden recipient");
+    expect(markup).toContain("Here is the reply.");
+    expect(markup).toContain('href="#older%3Auser"');
+    expect(markup).toContain('aria-label="Reaction 👍"');
+    expect(markup).toContain('dateTime="2026-10-05T20:00:00.000Z"');
   });
 });

@@ -1,11 +1,13 @@
 import { connectLinqCredentials } from "@vercel/connect/eve";
 import { createLinqAdapter } from "@linqapp/chat-sdk-adapter";
+import { vercelOidc } from "eve/channels/auth";
+import type { LinqChannelCredentials } from "eve/channels/linq";
 import { LinqAPIV3 } from "@linqapp/sdk";
 import { z } from "zod";
 import { env } from "@shared/environment";
 import type { reactToMessageInputSchema } from "@shared/chat/reaction";
 
-export const linqCredentials = env.LINQ_CONNECTOR
+const linqCredentials = env.LINQ_CONNECTOR
   ? connectLinqCredentials(env.LINQ_CONNECTOR)
   : {
       apiKey() {
@@ -14,6 +16,16 @@ export const linqCredentials = env.LINQ_CONNECTOR
         );
       },
     };
+
+const authenticateWebhook = vercelOidc();
+export const linqWebhookVerifier: NonNullable<
+  LinqChannelCredentials["webhookVerifier"]
+> = async (request) => (await authenticateWebhook(request)) ?? false;
+
+export const linqAdapter = createLinqAdapter({
+  credentials: async () => ({ apiKey: await linqCredentials.apiKey() }),
+  webhookVerifier: env.LINQ_CONNECTOR ? linqWebhookVerifier : () => false,
+});
 
 export async function sendNativeLinqMessage(
   chatId: string,
@@ -37,8 +49,7 @@ export async function sendNativeLinqReaction(
     })
     .parse(reaction.messageId);
   const apiKey = await linqCredentials.apiKey();
-  const adapter = createLinqAdapter({ credentials: () => ({ apiKey }) });
-  const { chatId, pendingHandle } = adapter.decodeThreadId(threadId);
+  const { chatId, pendingHandle } = linqAdapter.decodeThreadId(threadId);
   if (!chatId || pendingHandle) {
     throw new Error("Reactions require an existing Linq conversation.");
   }
@@ -49,8 +60,8 @@ export async function sendNativeLinqReaction(
   }
   signal.throwIfAborted();
   if (reaction.operation === "remove") {
-    await adapter.removeReaction(threadId, messageId, reaction.emoji);
+    await linqAdapter.removeReaction(threadId, messageId, reaction.emoji);
   } else {
-    await adapter.addReaction(threadId, messageId, reaction.emoji);
+    await linqAdapter.addReaction(threadId, messageId, reaction.emoji);
   }
 }

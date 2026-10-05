@@ -13,7 +13,7 @@ describe("compiled channel compatibility", () => {
     if (!isCompiledChannel(eve))
       throw new Error("Expected a compiled channel.");
 
-    expect(eve.adapter["action.result"]).toBeTypeOf("function");
+    expect(eve.adapter["action.result"]).toBeUndefined();
     expect(eve.adapter["message.completed"]).toBeTypeOf("function");
     expect(eve.adapter["turn.failed"]).toBeTypeOf("function");
   });

@@ -17,7 +17,7 @@ import {
 import { Badge } from "@web/components/ui/badge";
 import { Button } from "@web/components/ui/button";
 import { getLatestTurnFailure } from "../../_lib/turn-failure";
-import { messageTimestamps } from "../../_lib/message-events";
+import { conversationRows } from "../../_lib/conversation-rows";
 import type { SubagentStatus } from "@app/_lib/subagent-sessions";
 import { AgentMessage } from "../conversation/message";
 
@@ -50,7 +50,10 @@ export function SubagentTrace({
       ),
     [events]
   );
-  const timestamps = useMemo(() => messageTimestamps(events), [events]);
+  const rows = useMemo(
+    () => conversationRows(data.messages, events, "trace"),
+    [data.messages, events]
+  );
   const isRunning = status === "starting" || status === "working";
   const turnFailure = useMemo(() => getLatestTurnFailure(events), [events]);
   const error = streamError ?? turnFailure;
@@ -91,14 +94,13 @@ export function SubagentTrace({
             {isLoadingOlder ? "Loading…" : "Load older messages"}
           </Button>
         ) : null}
-        {data.messages.map((message, index) => (
+        {rows.map((message, index) => (
           <AgentMessage
             canRespond={false}
-            isStreaming={isRunning && index === data.messages.length - 1}
+            isStreaming={isRunning && index === rows.length - 1}
             key={message.id}
             message={message}
             onInputResponses={() => undefined}
-            timestamp={timestamps.get(message.id)}
           />
         ))}
         {(isLoading || isRunning) && data.messages.length === 0 ? (

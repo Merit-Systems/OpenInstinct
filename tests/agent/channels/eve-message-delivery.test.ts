@@ -1,5 +1,7 @@
 import type { EveChannelInput } from "eve/channels/eve";
+import type { DynamicResolveContext, ToolContext } from "eve/tools";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import messaging from "@agent/tools/messaging";
 import type {
   finalizeScheduledReport,
   releaseScheduledReport,
@@ -33,44 +35,76 @@ vi.mock("@db/services/scheduled-agent-jobs", () => ({
 await import("@agent/channels/eve");
 
 const events = channelCapture.configs[0]?.events;
-const handleActionResult = events?.["action.result"];
 const handleMessageCompleted = events?.["message.completed"];
-if (!handleActionResult || !handleMessageCompleted) {
+if (!handleMessageCompleted) {
   throw new Error("The Eve channel must configure scheduled report delivery.");
 }
 
-type ActionParameters = Parameters<typeof handleActionResult>;
+type ActionParameters = Parameters<typeof handleMessageCompleted>;
 
 describe("Eve scheduled report delivery", () => {
+  it("awaits browser report finalization without calling the provider", async () => {
+    const finalized = Promise.withResolvers<boolean>();
+    delivery.finalize.mockImplementation(() => finalized.promise);
+    const session = scheduledReportSession();
+    const resolve = messaging.events["turn.started"];
+    if (!resolve) throw new Error("Expected messaging resolver");
+    const tools = await resolve(
+      { type: "turn.started", data: { turnId: "turn-1", sequence: 0 } },
+      {
+        channel: { kind: "channel:eve", metadata: {} },
+        model: null,
+        messages: [],
+        session: session.session,
+      } satisfies DynamicResolveContext
+    );
+    if (!tools || !("send_message" in tools))
+      throw new Error("Expected reporting tool");
+    const fetchSpy = vi.spyOn(globalThis, "fetch");
+    const completed = vi.fn<() => void>();
+    try {
+      const pending = Promise.resolve(
+        tools.send_message.execute(
+          { kind: "message", text: "The price fell." },
+          {
+            ...session,
+            callId: "report-call",
+            toolName: "send_message",
+            abortSignal: new AbortController().signal,
+            async getToken() {
+              throw new Error("Unexpected provider authorization");
+            },
+            requireAuth() {
+              throw new Error("Unexpected provider authorization");
+            },
+          } satisfies ToolContext
+        )
+      ).then(completed);
+      await vi.waitFor(() => {
+        expect(delivery.finalize).toHaveBeenCalledExactlyOnceWith(
+          "00000000-0000-4000-8000-000000000002",
+          "00000000-0000-4000-8000-000000000004",
+          "delivered"
+        );
+      });
+      expect(completed).not.toHaveBeenCalled();
+      expect(fetchSpy).not.toHaveBeenCalled();
+      finalized.resolve(true);
+      await pending;
+      expect(completed).toHaveBeenCalledOnce();
+      expect(fetchSpy).not.toHaveBeenCalled();
+    } finally {
+      fetchSpy.mockRestore();
+    }
+  });
   beforeEach(() => {
     vi.clearAllMocks();
     delivery.finalize.mockResolvedValue(true);
     delivery.release.mockResolvedValue(true);
   });
 
-  it("finalizes a report when send_message completes", async () => {
-    await handleActionResult(
-      {
-        result: {
-          callId: "call-send-message",
-          kind: "tool-result",
-          output: { kind: "message", text: "The price fell." },
-          toolName: "send_message",
-        },
-        sequence: 0,
-        status: "completed",
-        stepIndex: 0,
-        turnId: "turn-1",
-      },
-      {},
-      scheduledReportSession()
-    );
-
-    expect(delivery.finalize).toHaveBeenCalledExactlyOnceWith(
-      "00000000-0000-4000-8000-000000000002",
-      "00000000-0000-4000-8000-000000000004",
-      "delivered"
-    );
+  it("does not register a second tool-result finalizer", () => {
+    expect(events["action.result"]).toBeUndefined();
   });
 
   it("suppresses a report when the turn finishes without send_message", async () => {
@@ -103,6 +137,9 @@ function scheduledReportSession() {
       auth: {
         current: {
           attributes: {
+            conversationChannel: "eve",
+            conversationId: "session-1",
+            workspaceId: "workspace-1",
             scheduleId: "00000000-0000-4000-8000-000000000001",
             scheduledReportLeaseToken: "00000000-0000-4000-8000-000000000004",
             scheduledReportSequence: "1",
