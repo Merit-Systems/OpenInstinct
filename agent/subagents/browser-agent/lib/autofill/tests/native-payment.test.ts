@@ -1,6 +1,7 @@
+import { runInNewContext } from "node:vm";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
-import { fillWithKernelNativeAutofill } from "../native";
+import { fillWithKernelNativeAutofill, PaymentFillError } from "../native";
 import { frameOriginExpression } from "../login";
 
 vi.mock("@onkernel/sdk", () => ({
@@ -19,6 +20,73 @@ const commands: z.infer<typeof commandSchema>[] = [];
 let pageOrigin = "https://shop.example";
 let frameOrigin = "https://shop.example";
 let failFill = false;
+const filledCard = {
+  number: "filled",
+  expiry: "filled",
+  securityCode: "filled",
+};
+let cardStatuses: Record<string, string>[] = [];
+class CardInput {
+  disabled = false;
+  disabledByFieldset = false;
+  readOnly = false;
+  type = "text";
+  isConnected = true;
+  visible = true;
+  readonly style = { display: "block", visibility: "visible" };
+  form: { querySelectorAll: () => CardInput[] } | null = null;
+
+  constructor(
+    readonly autocomplete: string,
+    readonly value = "filled"
+  ) {}
+
+  getClientRects() {
+    return this.visible ? [{}] : [];
+  }
+
+  closest() {
+    return this.form;
+  }
+
+  matches(selector: string) {
+    return (
+      selector === ":disabled" && (this.disabled || this.disabledByFieldset)
+    );
+  }
+}
+
+let cardForm: CardInput[] | undefined;
+let insertedForm = false;
+let detachedAnchor = false;
+
+function evaluateCardStatus(script: string, callOnAnchor: boolean) {
+  if (!cardForm) return cardStatuses.shift() ?? filledCard;
+  const controls = cardForm;
+  const anchor = controls[0];
+  if (!anchor) throw new Error("The fixture requires a card input.");
+  anchor.form = { querySelectorAll: () => controls };
+  anchor.isConnected = !detachedAnchor;
+  class NodeList extends Array<CardInput> {
+    item(index: number) {
+      return this[index] ?? null;
+    }
+  }
+  const unrelated = new CardInput("cc-number", "");
+  unrelated.form = { querySelectorAll: () => [unrelated] };
+  const document = {
+    querySelectorAll: () =>
+      new NodeList(...(insertedForm ? [unrelated, ...controls] : controls)),
+  };
+  return z.json().parse(
+    runInNewContext(callOnAnchor ? `(${script}).call(anchor)` : script, {
+      anchor,
+      document,
+      HTMLInputElement: CardInput,
+      getComputedStyle: (element: CardInput) => element.style,
+    })
+  );
+}
 
 class BrowserSocket extends EventTarget {
   constructor() {
@@ -57,6 +125,10 @@ class BrowserSocket extends EventTarget {
         const expression = z.string().parse(command.params?.expression);
         if (expression === frameOriginExpression)
           result = { result: { value: frameOrigin } };
+        else if (expression.includes("securityCode"))
+          result = {
+            result: { value: evaluateCardStatus(expression, false) },
+          };
         else if (expression.includes("flatMap"))
           result = {
             result: {
@@ -73,6 +145,19 @@ class BrowserSocket extends EventTarget {
       }
       case "DOM.describeNode":
         result = { node: { backendNodeId: 1 } };
+        break;
+      case "DOM.resolveNode":
+        result = { object: { objectId: "card-anchor" } };
+        break;
+      case "Runtime.callFunctionOn":
+        result = {
+          result: {
+            value: evaluateCardStatus(
+              z.string().parse(command.params?.functionDeclaration),
+              true
+            ),
+          },
+        };
         break;
     }
     queueMicrotask(() =>
@@ -109,6 +194,10 @@ beforeEach(() => {
   pageOrigin = "https://shop.example";
   frameOrigin = pageOrigin;
   failFill = false;
+  cardStatuses = [];
+  cardForm = undefined;
+  insertedForm = false;
+  detachedAnchor = false;
   vi.stubGlobal("WebSocket", BrowserSocket);
 });
 afterEach(() => vi.unstubAllGlobals());
@@ -132,6 +221,136 @@ describe("native payment injection", () => {
       expiryYear: "2035",
     });
     expect(result).toEqual({ filledClaims: 5, origin: "https://shop.example" });
+  });
+  it("waits for Chromium to apply the card before confirming it", async () => {
+    cardStatuses = [
+      { number: "empty", expiry: "empty", securityCode: "empty" },
+      filledCard,
+    ];
+    await expect(fillWithKernelNativeAutofill(input)).resolves.toEqual({
+      filledClaims: 5,
+      origin: "https://shop.example",
+    });
+    expect(cardStatuses).toHaveLength(0);
+  });
+  it("reports annotated card fields left empty without retrying", async () => {
+    cardStatuses = Array.from({ length: 8 }, () => ({
+      number: "filled",
+      expiry: "absent",
+      securityCode: "empty",
+    }));
+    const result = fillWithKernelNativeAutofill(input);
+    await expect(result).rejects.toBeInstanceOf(PaymentFillError);
+    await expect(result).rejects.toThrow(
+      "Card autofill left required fields empty: security code."
+    );
+    expect(
+      commands.filter(({ method }) => method === "Autofill.trigger")
+    ).toHaveLength(1);
+  });
+  it("does not require card fields that carry no autocomplete annotation", async () => {
+    cardStatuses = [
+      { number: "absent", expiry: "absent", securityCode: "absent" },
+    ];
+    await expect(fillWithKernelNativeAutofill(input)).resolves.toEqual({
+      filledClaims: 5,
+      origin: "https://shop.example",
+    });
+  });
+  it.each([
+    "hidden",
+    "display",
+    "visibility",
+    "rects",
+    "disabled",
+    "fieldset",
+    "readonly",
+  ])(
+    "does not require a %s card field that native autofill cannot fill",
+    async (kind) => {
+      const unused = new CardInput("cc-csc", "");
+      if (kind === "hidden") unused.type = "hidden";
+      if (kind === "display") unused.style.display = "none";
+      if (kind === "visibility") unused.style.visibility = "hidden";
+      if (kind === "rects") unused.visible = false;
+      if (kind === "disabled") unused.disabled = true;
+      if (kind === "fieldset") unused.disabledByFieldset = true;
+      if (kind === "readonly") unused.readOnly = true;
+      cardForm = [new CardInput("cc-number"), new CardInput("cc-exp"), unused];
+      await expect(fillWithKernelNativeAutofill(input)).resolves.toEqual({
+        filledClaims: 5,
+        origin: "https://shop.example",
+      });
+    }
+  );
+  it("ignores hidden expiration alternatives beside a filled combined field", async () => {
+    const month = new CardInput("cc-exp-month", "");
+    const year = new CardInput("cc-exp-year", "");
+    month.type = "hidden";
+    year.type = "hidden";
+    cardForm = [
+      new CardInput("cc-number"),
+      new CardInput("cc-exp"),
+      month,
+      year,
+    ];
+    await expect(fillWithKernelNativeAutofill(input)).resolves.toHaveProperty(
+      "filledClaims",
+      5
+    );
+  });
+  it("does not let a hidden filled duplicate confirm an empty visible CVC", async () => {
+    const hidden = new CardInput("cc-csc");
+    hidden.type = "hidden";
+    cardForm = [
+      new CardInput("cc-number"),
+      new CardInput("cc-exp"),
+      hidden,
+      new CardInput("cc-csc", ""),
+    ];
+    await expect(fillWithKernelNativeAutofill(input)).rejects.toThrow(
+      "Card autofill left required fields empty: security code."
+    );
+    expect(
+      commands.filter(({ method }) => method === "Autofill.trigger")
+    ).toHaveLength(1);
+  });
+  it("confirms the original input when another form shifts its document index", async () => {
+    cardForm = [new CardInput("cc-number"), new CardInput("cc-exp")];
+    insertedForm = true;
+    await expect(fillWithKernelNativeAutofill(input)).resolves.toHaveProperty(
+      "filledClaims",
+      5
+    );
+    expect(
+      commands.find(({ method }) => method === "DOM.resolveNode")
+    ).toMatchObject({
+      params: { backendNodeId: 1, executionContextId: 1 },
+      sessionId: "cdp-1",
+    });
+    expect(
+      commands.find(({ method }) => method === "Runtime.callFunctionOn")
+    ).toMatchObject({
+      params: { objectId: "card-anchor", returnByValue: true },
+    });
+    expect(commands.at(-2)).toMatchObject({
+      method: "Runtime.releaseObject",
+      params: { objectId: "card-anchor" },
+    });
+  });
+  it("stops without retrying when the actual autofilled input is detached", async () => {
+    cardForm = [new CardInput("cc-number")];
+    detachedAnchor = true;
+    await expect(fillWithKernelNativeAutofill(input)).rejects.toThrow(
+      "The autofilled card input disappeared"
+    );
+    expect(
+      commands.filter(({ method }) => method === "Autofill.trigger")
+    ).toHaveLength(1);
+    expect(commands.at(-2)).toMatchObject({
+      method: "Runtime.releaseObject",
+      params: { objectId: "card-anchor" },
+    });
   });
   it("rechecks the top-level merchant origin before injection", async () => {
     pageOrigin = "https://other.example";

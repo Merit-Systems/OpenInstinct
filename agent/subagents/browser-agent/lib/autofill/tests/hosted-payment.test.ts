@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
-import { fillKernelPaymentFields } from "../native";
+import { fillKernelPaymentFields, PaymentFillError } from "../native";
 import { frameOriginExpression } from "../login";
 
 vi.mock("@onkernel/sdk", () => ({
@@ -280,8 +280,10 @@ describe("hosted payment field injection", () => {
   });
   it("excludes a hidden containing iframe before passing card values", async () => {
     hiddenFrame = true;
-    await expect(fillKernelPaymentFields(input)).rejects.toThrow(
-      "one visible payment input"
+    const result = fillKernelPaymentFields(input);
+    await expect(result).rejects.toBeInstanceOf(PaymentFillError);
+    await expect(result).rejects.toThrow(
+      "one visible payment input in the approved checkout; binding 1 matched 0"
     );
     expect(fills).toBe(0);
     expect(JSON.stringify(commands)).not.toContain("4242424242424242");
