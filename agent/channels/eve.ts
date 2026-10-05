@@ -12,7 +12,6 @@ import {
   type AccessScope,
 } from "@shared/identity/access-scope";
 import { getAuthSession } from "@db/services/auth/session";
-import { sendMessageToolResultSchema } from "@shared/chat/message-delivery";
 import {
   finalizeScheduledReportDelivery,
   releaseScheduledReportDelivery,
@@ -70,12 +69,6 @@ const authenticate: Parameters<typeof routeAuth>[1] = [
 const channel = eveChannel({
   auth: authenticate,
   events: {
-    async "action.result"(event, _channel, session) {
-      const message = sendMessageToolResultSchema.safeParse(event.result);
-      if (event.status === "completed" && message.success) {
-        await finalizeScheduledReportDelivery(session);
-      }
-    },
     async "message.completed"(event, _channel, session) {
       if (event.finishReason === "tool-calls") return;
       if (scheduledReportFromSession(session)) {

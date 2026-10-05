@@ -4,8 +4,45 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { ChatConversation } from ".";
 import type { ChatAgent } from "../chat-agent";
+import { defaultMessageReducer } from "eve/client";
+import { messageHistoryEvents } from "@tests/fixtures/message-history";
 
 describe("chat conversation", () => {
+  it("renders new provider history, attachments, quoted parts, and targeted reactions", () => {
+    const reducer = defaultMessageReducer();
+    const data = messageHistoryEvents.reduce(
+      (state, event) => reducer.reduce(state, event),
+      reducer.initial()
+    );
+    const agent = {
+      data,
+      events: messageHistoryEvents,
+      error: undefined,
+      respond: async () => undefined,
+      status: "ready" as const,
+    };
+    const markup = renderToStaticMarkup(
+      <ChatConversation agent={agent} traceView="imessage" />
+    );
+    expect(markup).toContain("Here are two photos.");
+    expect(markup).toContain('aria-label="Open orange.svg"');
+    expect(markup).toContain('aria-label="Open blue.svg"');
+    expect(markup).toContain('aria-label="Reply to blue.svg"');
+    expect(markup).toContain('href="#photos%3Areceived%3Auser"');
+    expect(markup).toContain('aria-label="Reaction 👍"');
+    expect(markup).toContain('aria-label="Reaction 👩🏽‍💻"');
+    expect(markup).toContain('aria-label="Reaction ❤️"');
+    expect(markup).not.toContain('aria-label="Reaction 👀"');
+    expect(markup).not.toContain("11111111-1111-4111-8111-111111111111");
+    expect(markup).toContain("literal-parts-example");
+    expect(markup).not.toContain("opaque-app-payload");
+    expect(markup).toContain("example");
+    const trace = renderToStaticMarkup(
+      <ChatConversation agent={agent} traceView="trace" />
+    );
+    expect(trace).toContain("[Parts:");
+    expect(trace).toContain("opaque-app-payload");
+  });
   it("shows send_message output instead of assistant stream text", () => {
     const agent = {
       data: {
@@ -33,7 +70,10 @@ describe("chat conversation", () => {
         ],
       },
       error: undefined,
-      events: [sendMessageResult("The visible iMessage response.")],
+      events: [
+        delivery("turn-1", "What happened?"),
+        sendMessageResult("The visible iMessage response."),
+      ],
       respond: async () => undefined,
       status: "ready",
     } satisfies Pick<
@@ -63,6 +103,7 @@ describe("chat conversation", () => {
       role: "assistant",
     } satisfies EveMessage;
     const events = [
+      delivery("visible-turn", "Keep this visible"),
       workerReceipt("task_worker"),
       workerCancellation("task_worker"),
       delivery("task-delivery", cancellationText),
@@ -91,7 +132,7 @@ describe("chat conversation", () => {
     const agent = {
       data: { messages: [message("turn-1:user", "Try this")] },
       error: new Error("Internal runtime failure"),
-      events: [],
+      events: [delivery("turn-1", "Try this")],
       respond: async () => undefined,
       status: "error",
     } satisfies Pick<
@@ -166,7 +207,7 @@ function workerCancellation(taskId: string): MessageStreamEvent {
 function delivery(turnId: string, messageText: string): MessageStreamEvent {
   return {
     data: { message: messageText, sequence: 0, turnId },
-    meta: { at: "2026-08-27T20:00:01.000Z", id: "delivery" },
+    meta: { at: "2026-08-27T20:00:01.000Z", id: `receipt-${turnId}` },
     type: "message.received",
   };
 }

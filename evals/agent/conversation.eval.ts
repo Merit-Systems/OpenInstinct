@@ -1,7 +1,7 @@
 import { defineEval, type EveEvalContext } from "eve/evals";
 import { includes, satisfies } from "eve/evals/expect";
 import { sendMessageOutputSchema } from "@shared/chat/message-delivery";
-import { reactToMessageOutputSchema } from "@shared/chat/reaction";
+import { reactToMessageInputSchema } from "@shared/chat/reaction";
 import {
   agentEvalTags,
   assertPlainTextDelivery,
@@ -97,6 +97,44 @@ const textEvals = cases.map((testCase) =>
 
 const reactionEvals = [
   defineEval({
+    description:
+      "Retains message IDs and indexed part metadata for later turns",
+    tags: [...agentEvalTags, "conversation", "reaction", "message-history"],
+    async test(t) {
+      const messageId = "00000000-0000-4000-8000-000000000001";
+      const url = "https://media.example/second-photo.png";
+      const first = await t.send([
+        {
+          type: "text",
+          text: `[Message: ${JSON.stringify({ messageId, sender: "user" })}]\n[Parts: ${JSON.stringify(
+            [
+              { partIndex: 0, type: "text", value: "two photos" },
+              {
+                partIndex: 1,
+                type: "media",
+                url: "https://media.example/first-photo.png",
+              },
+              { partIndex: 2, type: "media", url },
+            ]
+          )}]`,
+        },
+        { type: "text", text: "I sent two photos. Just reply noted." },
+      ]);
+      first.expectOk();
+      await requireDeliveredText(t, first);
+      const recalled = await first.session.send(
+        "From my previous message's metadata, give the message ID and the URL for partIndex 2 as plain text. Do not open the URL."
+      );
+      recalled.expectOk();
+      recalled.succeeded();
+      const text = await requireDeliveredText(t, recalled);
+      t.check(text, includes(messageId));
+      t.check(text, includes(url));
+      recalled.notCalledTool("run_browser");
+      recalled.notCalledTool("web_fetch");
+    },
+  }),
+  defineEval({
     description: "Uses a reaction for a lightweight acknowledgement",
     tags: [...agentEvalTags, "conversation", "reaction", "smoke"],
     async test(t) {
@@ -107,20 +145,83 @@ const reactionEvals = [
       const thanked = await answered.session.send("perfect, thanks!");
       thanked.expectOk();
       thanked.succeeded();
+      const incoming = thanked.events.findLast(
+        (event) => event.type === "message.received"
+      );
+      if (!incoming)
+        throw new Error(
+          "The acknowledgement requires an incoming message event."
+        );
+      const messageId = `${incoming.data.turnId}:user`;
       thanked.calledTool("react_to_message", {
         count: 1,
         input: (input) => {
-          const parsed = reactToMessageOutputSchema.safeParse(input);
+          const parsed = reactToMessageInputSchema.safeParse(input);
           return (
             parsed.success &&
             parsed.data.operation === "add" &&
-            ["heart", "thumbs_up"].includes(parsed.data.type)
+            parsed.data.messageId === messageId
           );
         },
         status: "completed",
       });
       thanked.notCalledTool("send_message");
       thanked.maxToolCalls(1);
+    },
+  }),
+  defineEval({
+    description:
+      "Reacts to an older quoted message instead of the incoming reply",
+    tags: [...agentEvalTags, "conversation", "reaction", "reaction-target"],
+    async test(t) {
+      const older = "00000000-0000-4000-8000-000000000001";
+      const turn = await t.send([
+        {
+          type: "text",
+          text: `[Message: {"messageId":"00000000-0000-4000-8000-000000000002","sender":"user"}]\n[Reply to: ${JSON.stringify({ messageId: older })}]`,
+        },
+        { type: "text", text: "like this old message" },
+      ]);
+      turn.expectOk();
+      turn.succeeded();
+      turn.calledTool("react_to_message", {
+        count: 1,
+        input: (input) => {
+          const parsed = reactToMessageInputSchema.safeParse(input);
+          return (
+            parsed.success &&
+            parsed.data.messageId === older &&
+            parsed.data.emoji === "👍" &&
+            parsed.data.operation === "add"
+          );
+        },
+        status: "completed",
+      });
+      turn.notCalledTool("send_message");
+      turn.maxToolCalls(1);
+    },
+  }),
+  defineEval({
+    description: "Uses the requested Unicode emoji on the supplied message ID",
+    tags: [...agentEvalTags, "conversation", "reaction", "reaction-target"],
+    async test(t) {
+      const messageId = "00000000-0000-4000-8000-000000000002";
+      const turn = await t.send([
+        {
+          type: "text",
+          text: `[Message: ${JSON.stringify({ messageId, sender: "user" })}]`,
+        },
+        { type: "text", text: "React to this message with 👀" },
+      ]);
+      turn.expectOk();
+      turn.succeeded();
+      turn.calledTool("react_to_message", {
+        count: 1,
+        input: { messageId, emoji: "👀", operation: "add" },
+        status: "completed",
+      });
+      turn.notCalledTool("send_message");
+      turn.maxToolCalls(1);
     },
   }),
   defineEval({
