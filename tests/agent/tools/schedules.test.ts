@@ -239,10 +239,12 @@ describe("schedule tools", () => {
     expect(Object.keys(debugMessaging ?? {}).toSorted()).toEqual([
       "react_to_message",
       "send_message",
+      "share_contact",
     ]);
     expect(Object.keys(interactiveMessaging ?? {}).toSorted()).toEqual([
       "react_to_message",
       "send_message",
+      "share_contact",
     ]);
     const reportSend =
       reportMessaging && !("execute" in reportMessaging)

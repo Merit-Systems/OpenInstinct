@@ -1,5 +1,12 @@
 import { defineDynamic, defineTool, toolOutput } from "eve/tools";
+import { z } from "zod";
 import { resolveModeValue } from "../lib/mode";
+import { contactDelivery } from "@agent/lib/contact-card";
+import { scopeFromPrincipal } from "@agent/lib/principal-scope";
+import { readLinqOnboardingPhoneNumber } from "@db/services/auth/linq";
+import { getInstallationSecrets } from "@db/services/installation-secrets";
+import { openInstinctContactUrl } from "@shared/chat/contact-card";
+import { env } from "@shared/environment";
 import {
   addReactionToMessageOutputSchema,
   reactToMessageOutputSchema,
@@ -17,6 +24,60 @@ function defineSendMessage() {
     toModelOutput() {
       return toolOutput.text(
         "The message was submitted to the active channel. Do not repeat it in assistant text."
+      );
+    },
+  });
+}
+
+function defineShareContact() {
+  return defineTool({
+    availableInSubagents: false,
+    description:
+      "Share OpenInstinct's saveable contact with its phone number and logo in the current conversation. Use when introducing yourself or when the user asks for your contact. Supply a brief natural introduction; it is delivered with OpenInstinct.vcf. The tool resolves the number and attachment URL itself. Successful sharing is suppressed on repeat calls in this session; failed delivery can be retried. The user must tap the attachment to save it, so never claim it was saved. Call directly without a preamble and do not duplicate the introduction or attachment through send_message. Browser chat displays the attachment without sending an iMessage.",
+    inputSchema: z.object({ text: z.string().trim().min(1).max(500) }),
+    async execute({ text }, context) {
+      const caller =
+        context.session.auth.current ?? context.session.auth.initiator;
+      if (!caller)
+        throw new Error("Contact sharing requires an authenticated user.");
+      const { userId } = scopeFromPrincipal(caller);
+      let delivery = contactDelivery.get();
+      if (delivery?.userId !== userId) {
+        const phone =
+          env.LINQ_PHONE_NUMBER ??
+          (env.LINQ_CONNECTOR
+            ? await readLinqOnboardingPhoneNumber(env.LINQ_CONNECTOR)
+            : undefined);
+        if (!phone)
+          throw new Error(
+            "OpenInstinct's Linq number is unavailable. Nothing was sent."
+          );
+        const { betterAuthSecret } = await getInstallationSecrets();
+        delivery = {
+          userId,
+          sent: false,
+          message: {
+            kind: "message",
+            text,
+            attachments: [
+              {
+                kind: "file",
+                mimeType: "text/vcard",
+                name: "OpenInstinct.vcf",
+                url: openInstinctContactUrl(phone, betterAuthSecret),
+              },
+            ],
+          },
+        };
+        contactDelivery.update(() => delivery);
+      }
+      return delivery.sent ? null : delivery.message;
+    },
+    toModelOutput(output) {
+      return toolOutput.text(
+        output
+          ? "The contact and introduction were submitted to the active channel. Do not repeat them or claim the user saved the contact."
+          : "OpenInstinct's contact was already shared in this session. Nothing was sent; do not send it again."
       );
     },
   });
@@ -45,7 +106,11 @@ export default defineDynamic({
         },
       });
 
-      const interactive = { react_to_message, send_message };
+      const interactive = {
+        react_to_message,
+        send_message,
+        share_contact: defineShareContact(),
+      };
 
       type MessagingTools =
         | typeof interactive

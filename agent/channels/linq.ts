@@ -21,6 +21,7 @@ import {
   stripImageArtifactMarkdownReferences,
 } from "../lib/linq-image-artifact/markdown";
 import { env } from "@shared/environment";
+import { contactDelivery } from "@agent/lib/contact-card";
 import {
   finalizeScheduledReportDelivery,
   releaseScheduledReportDelivery,
@@ -151,6 +152,16 @@ export default linqChannel({
 
       const message = sendMessageToolResultSchema.safeParse(event.result);
       if (event.status === "completed" && message.success) {
+        const isContact = message.data.toolName === "share_contact";
+        if (isContact && contactDelivery.get()?.sent) return;
+        const completeDelivery = async () => {
+          if (isContact) {
+            contactDelivery.update((delivery) =>
+              delivery ? { ...delivery, sent: true } : delivery
+            );
+          }
+          await finalizeScheduledReportDelivery(session);
+        };
         const { thread } = context;
         if (!thread) {
           throw new Error(
@@ -166,9 +177,11 @@ export default linqChannel({
           replyTarget?.conversationId === thread.id
             ? replyTarget.messageId
             : undefined;
-        const idempotencyKey = report
-          ? `scheduled-report:${report.runId}:${String(report.sequence)}`
-          : undefined;
+        const idempotencyKey = isContact
+          ? `openinstinct-contact:${session.session.id}`
+          : report
+            ? `scheduled-report:${report.runId}:${String(report.sequence)}`
+            : undefined;
         const adapter = context.bot.getAdapter("linq");
         const post = idempotencyKey
           ? (content: AdapterPostableMessage) =>
@@ -231,7 +244,7 @@ export default linqChannel({
             });
             await sendLink();
           }
-          await finalizeScheduledReportDelivery(session);
+          await completeDelivery();
           return;
         }
 
@@ -247,10 +260,10 @@ export default linqChannel({
               postReply,
               replyToMessageId: requestedReplyMessageId,
             });
-            await finalizeScheduledReportDelivery(session);
+            await completeDelivery();
             return;
           }
-          await finalizeScheduledReportDelivery(session);
+          await completeDelivery();
           return;
         }
 
@@ -279,7 +292,7 @@ export default linqChannel({
             postReply,
             replyToMessageId: requestedReplyMessageId,
           });
-          await finalizeScheduledReportDelivery(session);
+          await completeDelivery();
           return;
         }
 
@@ -314,7 +327,7 @@ export default linqChannel({
           postReply,
           replyToMessageId: requestedReplyMessageId,
         });
-        await finalizeScheduledReportDelivery(session);
+        await completeDelivery();
       }
     },
     async "message.completed"(event, _context, session) {

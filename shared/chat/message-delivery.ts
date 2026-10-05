@@ -66,5 +66,5 @@ export const sendMessageOutputSchema = z.discriminatedUnion("kind", [
 export const sendMessageToolResultSchema = z.object({
   kind: z.literal("tool-result"),
   output: sendMessageOutputSchema,
-  toolName: z.literal("send_message"),
+  toolName: z.enum(["send_message", "share_contact"]),
 });

@@ -1,4 +1,5 @@
 import type { LinqChannelConfig } from "eve/channels/linq";
+import type * as EveContext from "eve/context";
 import {
   createLinqAdapter,
   type LinqSendOptions,
@@ -9,6 +10,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type * as Blob from "@vercel/blob";
 import type * as EnvModule from "@shared/environment";
 import { sendMessageOutputSchema } from "@shared/chat/message-delivery";
+import { contactDelivery } from "@agent/lib/contact-card";
 import type { AccessScope } from "@shared/identity/access-scope";
 import type {
   finalizeScheduledReport,
@@ -30,6 +32,28 @@ type NativeMessageOptions = Parameters<
 >[2];
 
 const rawMessage = (id: string) => ({ id });
+const stateControls = vi.hoisted(() => ({
+  // SAFETY: The mock adds only zero-argument state reset callbacks.
+  reset: [] as (() => void)[],
+}));
+vi.mock("eve/context", async (importOriginal) => {
+  const original = await importOriginal<typeof EveContext>();
+  return {
+    ...original,
+    defineState<T>(_name: string, initial: () => T) {
+      let value = initial();
+      stateControls.reset.push(() => {
+        value = initial();
+      });
+      return {
+        get: () => value,
+        update(update: (current: T) => T) {
+          value = update(value);
+        },
+      };
+    },
+  };
+});
 
 const linqChannelCapture = vi.hoisted(() => ({
   // SAFETY: This mutable test capture stores only API keys from the typed SDK constructor mock.
@@ -176,6 +200,7 @@ interface LinqTestMessage {
 
 describe("Linq message delivery", () => {
   beforeEach(() => {
+    for (const reset of stateControls.reset) reset();
     vi.clearAllMocks();
     linqChannelCapture.sendNativeMessage
       .mockReset()
@@ -218,6 +243,60 @@ describe("Linq message delivery", () => {
     );
 
     expect(post).toHaveBeenCalledExactlyOnceWith({ raw: message });
+  });
+
+  it("retries contact delivery with the same key and suppresses successful repeats", async () => {
+    const output = sendMessageOutputSchema.parse({
+      kind: "message",
+      text: "Save my contact.",
+      attachments: [
+        {
+          kind: "file",
+          mimeType: "text/vcard",
+          name: "OpenInstinct.vcf",
+          url: "https://example.com/contacts/openinstinct.vcf?signed=true",
+        },
+      ],
+    });
+    contactDelivery.update(() => ({
+      userId: "user-1",
+      message: output,
+      sent: false,
+    }));
+    const event = sendMessageResult(output);
+    if (event.result.kind !== "tool-result")
+      throw new Error("Expected tool result.");
+    event.result.toolName = "share_contact";
+    const { context, post } = handlerContext();
+    linqChannelCapture.postMessage.mockRejectedValueOnce(
+      new Error("Provider unavailable")
+    );
+    await expect(
+      handleActionResult(event, context, sessionContext())
+    ).rejects.toThrow("Provider unavailable");
+    expect(contactDelivery.get()?.sent).toBe(false);
+    await handleActionResult(event, context, sessionContext());
+    await handleActionResult(event, context, sessionContext());
+    expect(linqChannelCapture.postMessage).toHaveBeenCalledTimes(2);
+    for (const call of linqChannelCapture.postMessage.mock.calls) {
+      expect(call).toEqual([
+        "linq:dm:chat-1",
+        {
+          raw: output.kind === "message" ? output.text : "",
+          attachments: [
+            {
+              type: "file",
+              mimeType: "text/vcard",
+              name: "OpenInstinct.vcf",
+              url: "https://example.com/contacts/openinstinct.vcf?signed=true",
+            },
+          ],
+        },
+        { idempotencyKey: "openinstinct-contact:session-1" },
+      ]);
+    }
+    expect(contactDelivery.get()?.sent).toBe(true);
+    expect(post).not.toHaveBeenCalled();
   });
 
   it("delivers authorization text and its native link as separate messages accepted by Linq", async () => {
