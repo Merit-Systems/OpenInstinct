@@ -17,7 +17,8 @@ export default async function AllChatsPage() {
   const chats = await listChats(scope);
   const totalUsage = combineChatUsage(chats.map((chat) => chat.usage));
   const imessageSessionId = chats.find(
-    (chat) => chat.channel === "channel:linq"
+    (chat) =>
+      chat.channel === "channel:linq" || chat.channel === "channel:blooio"
   )?.sessionId;
 
   return (

@@ -8,6 +8,7 @@ const applicationEnvironment = [
   "DATABASE_URL",
   "*_CONNECTOR_UID",
   "KERNEL_*",
+  "BLOOIO_*",
   "LINQ_*",
   "LINK_*",
   "STRIPE_PUBLISHABLE_KEY",

@@ -22,6 +22,7 @@ export default async function SignInPage({
       ? requestedCallback
       : "/";
   const linqConfigured = env.LINQ_CONNECTOR !== undefined;
+  const blooioConfigured = env.BLOOIO_API_KEY !== undefined;
   const linqPhoneNumber =
     localPhoneAuthBypassEnabled || !env.LINQ_CONNECTOR
       ? undefined
@@ -39,17 +40,23 @@ export default async function SignInPage({
             Enter your phone number to sign in.
           </p>
         </div>
-        {!localPhoneAuthBypassEnabled && !linqConfigured ? (
+        {!localPhoneAuthBypassEnabled &&
+        !linqConfigured &&
+        !blooioConfigured ? (
           <p className="type-supporting-body text-muted-foreground">
             iMessage sign-in is not configured for this deployment. Attach a
-            Linq connector through Vercel Connect.
+            Linq connector through Vercel Connect, or set a Blooio API key.
           </p>
         ) : localPhoneAuthBypassEnabled ? (
           <LocalPhoneAuthForm callbackUrl={callbackUrl} />
         ) : (
           <PhoneOtpAuthForm
+            blooioPhoneNumber={
+              linqConfigured ? undefined : env.BLOOIO_FROM_NUMBER
+            }
             callbackUrl={callbackUrl}
             linqPhoneNumber={linqPhoneNumber}
+            provider={linqConfigured ? "linq" : "blooio"}
           />
         )}
       </section>

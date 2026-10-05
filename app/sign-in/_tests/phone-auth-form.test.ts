@@ -30,6 +30,15 @@ describe("phone OTP errors", () => {
     ).toBe("Send a message to the Linq phone number, then try again.");
   });
 
+  it("shows actionable Blooio errors", () => {
+    expect(
+      phoneOtpErrorMessage({
+        code: "BLOOIO_DELIVERY_FAILED",
+        message: "Blooio could not send a sign-in code.",
+      })
+    ).toBe("Blooio could not send a sign-in code.");
+  });
+
   it("does not expose unrelated server errors", () => {
     expect(
       phoneOtpErrorMessage({
@@ -73,6 +82,20 @@ describe("phone OTP errors", () => {
     });
     expect(error).toContain("first-time sign-in steps above");
     expect(error).not.toContain("button");
+  });
+
+  it("tells Blooio sign-in that the code arrives by iMessage", () => {
+    const html = renderForm(
+      createElement(PhoneOtpAuthForm, {
+        blooioPhoneNumber: "+12025550123",
+        callbackUrl: "/",
+        provider: "blooio",
+      })
+    );
+
+    expect(html).toContain("Code arrives by iMessage");
+    expect(html).toContain('href="sms:+12025550123"');
+    expect(html).not.toContain("First time signing in?");
   });
 
   it("does not show Linq setup during local sign-in", () => {

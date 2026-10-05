@@ -9,7 +9,7 @@ import { vercelOidc } from "eve/channels/auth";
 import { z } from "zod";
 import { resolveLinqReplyTarget } from "@agent/lib/reply-targets";
 import { scopeFromPrincipal } from "@agent/lib/principal-scope";
-import { getAuth } from "@db/services/auth";
+import { findVerifiedAuthUserIdByPhoneNumber } from "@db/services/auth/verified-phone";
 import { sendMessageToolResultSchema } from "@shared/chat/message-delivery";
 import { reactToMessageToolResultSchema } from "@shared/chat/reaction";
 import { accessScopeForUser } from "@shared/identity/access-scope";
@@ -30,10 +30,6 @@ import {
   scheduledReportFromSession,
 } from "@agent/lib/schedules/report-lifecycle";
 
-const verifiedPhoneUserSchema = z.object({
-  id: z.string().min(1),
-  phoneNumberVerified: z.literal(true),
-});
 const unavailableReplyTargetSchema = z.object({
   status: z.union([z.literal(400), z.literal(404)]),
 });
@@ -402,15 +398,4 @@ async function sendLinqMessage({
     });
     await post(outgoing);
   }
-}
-
-async function findVerifiedAuthUserIdByPhoneNumber(phoneNumber: string) {
-  const auth = await getAuth();
-  const context = await auth.$context;
-  const user = await context.adapter.findOne({
-    model: "user",
-    where: [{ field: "phoneNumber", value: phoneNumber }],
-  });
-  const parsed = verifiedPhoneUserSchema.safeParse(user);
-  return parsed.success ? parsed.data.id : undefined;
 }

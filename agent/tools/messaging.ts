@@ -5,6 +5,10 @@ import { resolveModeValue } from "../lib/mode";
 import { sendNativeLinqMessage } from "@agent/lib/linq/transport";
 import { scopeFromPrincipal } from "@agent/lib/principal-scope";
 import { readLinqOnboardingPhoneNumber } from "@db/services/auth/linq";
+import {
+  readBlooioSendingNumber,
+  sendBlooioChatMessage,
+} from "@shared/blooio/api";
 import { getInstallationSecrets } from "@db/services/installation-secrets";
 import { openInstinctContactUrl } from "@shared/chat/contact-card";
 import { env } from "@shared/environment";
@@ -52,12 +56,13 @@ function defineShareContact() {
         throw new Error("Contact sharing requires an authenticated user.");
       const { userId } = scopeFromPrincipal(caller);
       const channel = caller.attributes.conversationChannel;
-      if (channel !== "linq" && channel !== "eve") {
+      if (channel !== "linq" && channel !== "blooio" && channel !== "eve") {
         throw new Error(
-          "Contact sharing requires an active Linq or browser conversation."
+          "Contact sharing requires an active Linq, Blooio, or browser conversation."
         );
       }
       let chatId: string | undefined;
+      let blooioChatId: string | undefined;
       if (channel === "linq") {
         // Linq uses linq:<chatId>, with optional :dm/:group on older threads.
         const threadId = z
@@ -76,16 +81,28 @@ function defineShareContact() {
           );
         }
       }
+      if (channel === "blooio") {
+        const threadId = z
+          .string()
+          .startsWith("blooio:")
+          .safeParse(caller.attributes.conversationId);
+        blooioChatId = threadId.success
+          ? threadId.data.slice("blooio:".length)
+          : undefined;
+        if (!threadId.success || !blooioChatId?.startsWith("chat_")) {
+          throw new Error(
+            "Contact sharing requires the current authenticated Blooio conversation."
+          );
+        }
+      }
       let delivery = contactDelivery.get();
       if (delivery?.userId !== userId) {
-        const phone =
-          env.LINQ_PHONE_NUMBER ??
-          (env.LINQ_CONNECTOR
-            ? await readLinqOnboardingPhoneNumber(env.LINQ_CONNECTOR)
-            : undefined);
+        const phone = await contactPhoneNumber(channel);
         if (!phone)
           throw new Error(
-            "OpenInstinct's Linq number is unavailable. Nothing was sent."
+            channel === "blooio" || !env.LINQ_CONNECTOR
+              ? "OpenInstinct's Blooio number is unavailable. Nothing was sent."
+              : "OpenInstinct's Linq number is unavailable. Nothing was sent."
           );
         const { betterAuthSecret } = await getInstallationSecrets();
         delivery = {
@@ -107,6 +124,17 @@ function defineShareContact() {
         contactDelivery.update(() => delivery);
       }
       if (delivery.sent) return null;
+      if (blooioChatId) {
+        const { text: introduction, attachments } = delivery.message;
+        const attachmentUrls = (attachments ?? []).map(({ url }) => url);
+        await sendBlooioChatMessage(
+          blooioChatId,
+          attachmentUrls.length > 0
+            ? { attachments: attachmentUrls, text: introduction }
+            : { text: introduction },
+          `openinstinct-contact:${context.session.id}`
+        );
+      }
       if (chatId) {
         const { text: introduction, attachments } = delivery.message;
         await sendNativeLinqMessage(
@@ -139,17 +167,35 @@ function defineShareContact() {
   });
 }
 
+async function contactPhoneNumber(channel: string) {
+  if (channel === "blooio" || (channel === "eve" && !env.LINQ_CONNECTOR)) {
+    return readBlooioSendingNumber();
+  }
+  return (
+    env.LINQ_PHONE_NUMBER ??
+    (env.LINQ_CONNECTOR
+      ? await readLinqOnboardingPhoneNumber(env.LINQ_CONNECTOR)
+      : undefined)
+  );
+}
+
 export default defineDynamic({
   events: {
     "turn.started": (_event, context) => {
-      const isLinq = context.channel.kind === "channel:linq";
+      const caller =
+        context.session.auth.current ?? context.session.auth.initiator;
+      const isNativeImessage =
+        context.channel.kind === "channel:linq" ||
+        context.channel.kind === "channel:blooio" ||
+        caller?.attributes.conversationChannel === "linq" ||
+        caller?.attributes.conversationChannel === "blooio";
       const send_message = defineSendMessage();
 
       const react_to_message = defineTool({
-        description: isLinq
+        description: isNativeImessage
           ? "Add or remove a native iMessage Tapback on the user's current message. Use this instead of send_message when a reaction fully communicates a lightweight acknowledgement and words would add nothing. Supports thumbs_up, thumbs_down, heart, laugh, exclamation (emphasis), and question."
           : "Acknowledge the user's current message with one compact reaction displayed in the conversation. Use this instead of send_message when the reaction fully communicates the response and words would add nothing. Supports thumbs_up, thumbs_down, heart, laugh, exclamation (emphasis), and question.",
-        inputSchema: isLinq
+        inputSchema: isNativeImessage
           ? reactToMessageOutputSchema
           : addReactionToMessageOutputSchema,
         execute(reaction) {

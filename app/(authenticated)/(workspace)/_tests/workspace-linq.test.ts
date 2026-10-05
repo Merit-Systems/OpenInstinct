@@ -13,7 +13,7 @@ describe("workspace Linq channel", () => {
       })
     );
 
-    expect(html).toContain("Set up Linq to enable iMessage.");
+    expect(html).toContain("Set up Linq or Blooio to enable iMessage.");
     expect(html).not.toContain("+12052611117");
     expect(html).not.toContain("sms:");
   });
@@ -44,6 +44,22 @@ describe("workspace Linq channel", () => {
     expect(html).not.toContain("sms:");
   });
 
+  it("links a Blooio number when Linq is not configured", () => {
+    const html = renderToStaticMarkup(
+      createElement(ChannelsSection, {
+        blooioConfigured: true,
+        blooioPhoneNumber: "+12025550199",
+        browserReady: true,
+        linqConfigured: false,
+        linqPhoneNumber: undefined,
+      })
+    );
+
+    expect(html).toContain("sms:+12025550199");
+    expect(html).toContain("iMessage opens +12025550199.");
+    expect(html).not.toContain("Set up Linq or Blooio");
+  });
+
   it("does not advertise a phone-number override without its connector", () => {
     const html = renderToStaticMarkup(
       createElement(ChannelsSection, {
@@ -53,7 +69,7 @@ describe("workspace Linq channel", () => {
       })
     );
 
-    expect(html).toContain("Set up Linq to enable iMessage.");
+    expect(html).toContain("Set up Linq or Blooio to enable iMessage.");
     expect(html).not.toContain("sms:");
   });
 });

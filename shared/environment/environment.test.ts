@@ -174,6 +174,27 @@ describe("environment", () => {
     expect(env.BLOB_STORE_ID).toBe("store_openinstinct");
   });
 
+  it("accepts a Blooio API key and E.164 sending number", async () => {
+    vi.stubEnv("BLOOIO_API_KEY", "bl_test");
+    vi.stubEnv("BLOOIO_FROM_NUMBER", "+12025550123");
+    vi.stubEnv("BLOOIO_WEBHOOK_SECRET", "whsec_test");
+
+    const { env } = await import("@shared/environment");
+
+    expect(env.BLOOIO_API_KEY).toBe("bl_test");
+    expect(env.BLOOIO_FROM_NUMBER).toBe("+12025550123");
+    expect(env.BLOOIO_WEBHOOK_SECRET).toBe("whsec_test");
+  });
+
+  it("rejects a Blooio sending number outside E.164 format", async () => {
+    vi.stubEnv("BLOOIO_API_KEY", "bl_test");
+    vi.stubEnv("BLOOIO_FROM_NUMBER", "(202) 555-0123");
+
+    await expect(import("@shared/environment")).rejects.toThrow(
+      "Invalid environment variables"
+    );
+  });
+
   it("rejects a Linq phone number outside E.164 format", async () => {
     vi.stubEnv("LINQ_CONNECTOR", "linq/open-instinct");
     vi.stubEnv("LINQ_PHONE_NUMBER", "(202) 555-0123");

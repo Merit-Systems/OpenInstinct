@@ -1,0 +1,2 @@
+ALTER TABLE "scheduled_agent_jobs" DROP CONSTRAINT "scheduled_agent_jobs_conversation_channel_check";--> statement-breakpoint
+ALTER TABLE "scheduled_agent_jobs" ADD CONSTRAINT "scheduled_agent_jobs_conversation_channel_check" CHECK ("scheduled_agent_jobs"."conversation_channel" IN ('blooio', 'eve', 'linq'));
