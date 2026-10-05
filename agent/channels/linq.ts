@@ -11,7 +11,6 @@ import { resolveLinqReplyTarget } from "@agent/lib/reply-targets";
 import { scopeFromPrincipal } from "@agent/lib/principal-scope";
 import { getAuth } from "@db/services/auth";
 import { sendMessageToolResultSchema } from "@shared/chat/message-delivery";
-import { reactToMessageToolResultSchema } from "@shared/chat/reaction";
 import { accessScopeForUser } from "@shared/identity/access-scope";
 import { normalizeAuthPhoneNumber } from "@shared/identity/phone-number";
 import { prepareLinqImageArtifactDelivery } from "../lib/linq-image-artifact/delivery";
@@ -36,6 +35,14 @@ const verifiedPhoneUserSchema = z.object({
 });
 const unavailableReplyTargetSchema = z.object({
   status: z.union([z.literal(400), z.literal(404)]),
+});
+const incomingReplySchema = z.object({
+  reply_to: z
+    .object({
+      message_id: z.uuid(),
+      part_index: z.number().int().nonnegative().optional(),
+    })
+    .nullish(),
 });
 
 type LinqMessageContent = Parameters<
@@ -106,43 +113,6 @@ export default linqChannel({
         });
     },
     async "action.result"(event, context, session) {
-      const reaction = reactToMessageToolResultSchema.safeParse(event.result);
-      if (event.status === "completed" && reaction.success) {
-        if (!context.thread) {
-          throw new Error(
-            "react_to_message requires an active Linq conversation thread."
-          );
-        }
-        // The thread is a persisted snapshot; auth identifies this incoming message.
-        const target = resolveLinqReplyTarget(
-          { kind: "current" },
-          session.session.auth
-        );
-        const messageId =
-          target?.conversationId === context.thread.id
-            ? target.messageId
-            : undefined;
-        if (!messageId) {
-          throw new Error("react_to_message requires a current Linq message.");
-        }
-        const adapter = context.bot.getAdapter("linq");
-        if (reaction.data.output.operation === "remove") {
-          await adapter.removeReaction(
-            context.thread.id,
-            messageId,
-            reaction.data.output.type
-          );
-        } else {
-          await adapter.addReaction(
-            context.thread.id,
-            messageId,
-            reaction.data.output.type
-          );
-        }
-        await finalizeScheduledReportDelivery(session);
-        return;
-      }
-
       const message = sendMessageToolResultSchema.safeParse(event.result);
       if (
         event.status === "completed" &&
@@ -354,7 +324,17 @@ export default linqChannel({
     }
     const principalId = `better-auth:${verifiedUserId}`;
     const scope = accessScopeForUser(principalId);
+    const reply = incomingReplySchema.safeParse(message.raw);
+    const references = [
+      `[Message: ${JSON.stringify({ messageId: message.id, sender: "user" })}]`,
+    ];
+    if (reply.success && reply.data.reply_to) {
+      references.push(
+        `[Reply to: ${JSON.stringify({ messageId: reply.data.reply_to.message_id, partIndex: reply.data.reply_to.part_index })}]`
+      );
+    }
     return {
+      context: references,
       auth: {
         ...auth,
         attributes: {

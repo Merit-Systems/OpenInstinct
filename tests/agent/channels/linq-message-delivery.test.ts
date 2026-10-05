@@ -953,117 +953,39 @@ describe("Linq message delivery", () => {
     });
   });
 
-  it.each([
-    "thumbs_up",
-    "thumbs_down",
-    "heart",
-    "laugh",
-    "exclamation",
-    "question",
-  ] as const)("adds the native %s Tapback", async (type) => {
-    const { addReaction, context, post } = handlerContext();
-
-    await handleActionResult(
-      reactToMessageResult({ operation: "add", type }),
-      context,
-      sessionContext()
-    );
-
-    expect(addReaction).toHaveBeenCalledExactlyOnceWith(
-      "linq:dm:chat-1",
-      "message-1",
-      type
-    );
-    expect(post).not.toHaveBeenCalled();
-  });
-
-  it("removes a native Tapback", async () => {
-    const { context, post, removeReaction } = handlerContext();
-
-    await handleActionResult(
-      reactToMessageResult({ operation: "remove", type: "heart" }),
-      context,
-      sessionContext()
-    );
-
-    expect(removeReaction).toHaveBeenCalledExactlyOnceWith(
-      "linq:dm:chat-1",
-      "message-1",
-      "heart"
-    );
-    expect(post).not.toHaveBeenCalled();
-  });
-
   it.each(["add", "remove"] as const)(
-    "%s targets the incoming message when the thread snapshot is stale",
+    "does not resend a legacy %s reaction from the channel hook",
     async (operation) => {
-      const { addReaction, context, removeReaction } =
-        handlerContext("first-message");
-
+      const { addReaction, context, post, removeReaction } = handlerContext();
       await handleActionResult(
         reactToMessageResult({ operation, type: "thumbs_up" }),
         context,
-        sessionContext("linq-message", undefined, "latest-message")
+        sessionContext()
       );
-
-      const deliver = operation === "add" ? addReaction : removeReaction;
-      const unused = operation === "add" ? removeReaction : addReaction;
-      expect(deliver).toHaveBeenCalledExactlyOnceWith(
-        "linq:dm:chat-1",
-        "latest-message",
-        "thumbs_up"
-      );
-      expect(unused).not.toHaveBeenCalled();
+      expect(addReaction).not.toHaveBeenCalled();
+      expect(removeReaction).not.toHaveBeenCalled();
+      expect(post).not.toHaveBeenCalled();
     }
   );
 
-  it("reacts to the incoming message without a cached current message", async () => {
-    const { addReaction, context } = handlerContext(null);
-
-    await handleActionResult(
-      reactToMessageResult({ operation: "add", type: "thumbs_up" }),
-      context,
-      sessionContext()
-    );
-
-    expect(addReaction).toHaveBeenCalledExactlyOnceWith(
-      "linq:dm:chat-1",
-      "message-1",
-      "thumbs_up"
-    );
-  });
-
-  it("does not react to a cached message without an incoming message ID", async () => {
-    const { addReaction, context, removeReaction } = handlerContext();
-
-    await expect(
-      handleActionResult(
-        reactToMessageResult({ operation: "add", type: "thumbs_up" }),
+  it.each(["add", "remove"] as const)(
+    "does not resend a Unicode %s reaction from the channel hook",
+    async (operation) => {
+      const { addReaction, context, post, removeReaction } = handlerContext();
+      await handleActionResult(
+        reactToMessageResult({
+          operation,
+          messageId: "older-message",
+          emoji: "👀",
+        }),
         context,
-        sessionContext("linq-message", undefined, null)
-      )
-    ).rejects.toThrow("react_to_message requires a current Linq message.");
-
-    expect(addReaction).not.toHaveBeenCalled();
-    expect(removeReaction).not.toHaveBeenCalled();
-  });
-
-  it("rejects an incoming reaction target from a different conversation", async () => {
-    const { addReaction, context, removeReaction } = handlerContext();
-    const session = sessionContext();
-    session.session.auth.current.attributes.conversationId = "linq:other-chat";
-
-    await expect(
-      handleActionResult(
-        reactToMessageResult({ operation: "add", type: "thumbs_up" }),
-        context,
-        session
-      )
-    ).rejects.toThrow("react_to_message requires a current Linq message.");
-
-    expect(addReaction).not.toHaveBeenCalled();
-    expect(removeReaction).not.toHaveBeenCalled();
-  });
+        sessionContext()
+      );
+      expect(addReaction).not.toHaveBeenCalled();
+      expect(removeReaction).not.toHaveBeenCalled();
+      expect(post).not.toHaveBeenCalled();
+    }
+  );
 });
 
 function sendMessageResult(

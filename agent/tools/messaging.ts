@@ -2,16 +2,16 @@ import { defineDynamic, defineTool, toolOutput } from "eve/tools";
 import { defineState } from "eve/context";
 import { z } from "zod";
 import { resolveModeValue } from "../lib/mode";
-import { sendNativeLinqMessage } from "@agent/lib/linq/transport";
+import {
+  sendNativeLinqMessage,
+  sendNativeLinqReaction,
+} from "@agent/lib/linq/transport";
 import { scopeFromPrincipal } from "@agent/lib/principal-scope";
 import { readLinqOnboardingPhoneNumber } from "@db/services/auth/linq";
 import { getInstallationSecrets } from "@db/services/installation-secrets";
 import { openInstinctContactUrl } from "@shared/chat/contact-card";
 import { env } from "@shared/environment";
-import {
-  addReactionToMessageOutputSchema,
-  reactToMessageOutputSchema,
-} from "@shared/chat/reaction";
+import { reactToMessageInputSchema } from "@shared/chat/reaction";
 import { sendMessageOutputSchema } from "@shared/chat/message-delivery";
 
 const contactDelivery = defineState<{
@@ -141,23 +141,53 @@ function defineShareContact() {
 
 export default defineDynamic({
   events: {
-    "turn.started": (_event, context) => {
+    "turn.started": (event, context) => {
       const isLinq = context.channel.kind === "channel:linq";
       const send_message = defineSendMessage();
+      const turn = z
+        .object({ data: z.object({ turnId: z.string() }) })
+        .safeParse(event);
+      const browserTarget =
+        !isLinq && turn.success
+          ? ` The current browser messageId is ${turn.data.data.turnId}:user.`
+          : "";
 
       const react_to_message = defineTool({
-        description: isLinq
-          ? "Add or remove a native iMessage Tapback on the user's current message. Use this instead of send_message when a reaction fully communicates a lightweight acknowledgement and words would add nothing. Supports thumbs_up, thumbs_down, heart, laugh, exclamation (emphasis), and question."
-          : "Acknowledge the user's current message with one compact reaction displayed in the conversation. Use this instead of send_message when the reaction fully communicates the response and words would add nothing. Supports thumbs_up, thumbs_down, heart, laugh, exclamation (emphasis), and question.",
-        inputSchema: isLinq
-          ? reactToMessageOutputSchema
-          : addReactionToMessageOutputSchema,
-        execute(reaction) {
+        availableInSubagents: false,
+        description:
+          "Add or remove a native emoji reaction to a specific message in the current conversation. Set messageId to the exact supplied ID of that message. When the user replies to an older message and asks to react to it, use the supplied Reply to messageId. Never invent an ID or default to the session's first message. Supply exactly one real Unicode emoji, not a name or shortcode. Use a reaction for a lightweight acknowledgement; deliver answers that need words through send_message." +
+          browserTarget,
+        inputSchema: reactToMessageInputSchema,
+        async execute(input, toolContext) {
+          // Runtime validation must survive serialization of the model-facing schema.
+          const reaction = reactToMessageInputSchema.parse(input);
+          if (isLinq) {
+            const caller = toolContext.session.auth.current;
+            const thread = z
+              .string()
+              .startsWith("linq:")
+              .safeParse(caller?.attributes.conversationId);
+            if (
+              caller?.principalType !== "user" ||
+              caller.attributes.conversationChannel !== "linq" ||
+              !thread.success ||
+              caller.attributes.linqThreadId !== thread.data
+            ) {
+              throw new Error(
+                "Reactions require the current authenticated Linq conversation. Nothing was sent."
+              );
+            }
+            await sendNativeLinqReaction(
+              thread.data,
+              reaction,
+              toolContext.abortSignal
+            );
+          }
           return reaction;
         },
         toModelOutput() {
           return toolOutput.text(
-            "The reaction was submitted to the active conversation. Do not repeat it in assistant text."
+            "The reaction was accepted by the active channel. Do not repeat it or duplicate it in assistant text."
           );
         },
       });

@@ -27,6 +27,9 @@ importers:
       '@googleapis/people':
         specifier: ^8.0.0
         version: 8.0.0
+      '@linqapp/chat-sdk-adapter':
+        specifier: 0.5.1
+        version: 0.5.1(patch_hash=78b56cdd08c4250ad2680c094858b28d6d6935538d8e59e6dd578f106c77b9e7)(chat@4.41.0(ai@7.0.120(zod@4.5.4))(zod@4.5.4))
       '@linqapp/sdk':
         specifier: 0.47.1
         version: 0.47.1
@@ -108,6 +111,9 @@ importers:
       drizzle-orm:
         specifier: ^0.45.2
         version: 0.45.2(@electric-sql/pglite@0.5.8)(@neondatabase/serverless@1.1.0)(@opentelemetry/api@1.9.1)(@types/pg@8.23.1)(kysely@0.29.5)(pg@8.23.0)
+      emoji-regex:
+        specifier: 10.6.0
+        version: 10.6.0
       eve:
         specifier: 0.66.3
         version: 0.66.3(patch_hash=b862c976047aef5a3b1a514c2eaf1ae1820d93d46792c0081e9a33f58cd02027)(@opentelemetry/api@1.9.1)(ai@7.0.120(zod@4.5.4))(chat@4.41.0(ai@7.0.120(zod@4.5.4))(zod@4.5.4))
@@ -154,9 +160,6 @@ importers:
       '@electric-sql/pglite':
         specifier: ^0.5.8
         version: 0.5.8
-      '@linqapp/chat-sdk-adapter':
-        specifier: 0.5.1
-        version: 0.5.1(patch_hash=78b56cdd08c4250ad2680c094858b28d6d6935538d8e59e6dd578f106c77b9e7)(chat@4.41.0(ai@7.0.120(zod@4.5.4))(zod@4.5.4))
       '@next/env':
         specifier: 16.3.3
         version: 16.3.3

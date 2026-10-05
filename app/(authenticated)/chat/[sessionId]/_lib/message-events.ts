@@ -1,9 +1,6 @@
 import type { MessageStreamEvent } from "eve/client";
 import type { EveMessagePart } from "eve/react";
-import {
-  reactionTextFor,
-  reactToMessageToolResultSchema,
-} from "@shared/chat/reaction";
+import { reactToMessageToolResultSchema } from "@shared/chat/reaction";
 import { sendMessageToolResultSchema } from "@shared/chat/message-delivery";
 
 export function messageTimestamps(events: readonly MessageStreamEvent[]) {
@@ -56,7 +53,7 @@ export function sentMessages(events: readonly MessageStreamEvent[]) {
       parts.push({
         state: "done",
         stepIndex: event.data.stepIndex,
-        text: reactionTextFor(reaction.output.type),
+        text: reaction.output.emoji,
         type: "text",
       });
     } else if (delivery) {

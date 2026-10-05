@@ -114,6 +114,46 @@ describe("Linq inbound authentication", () => {
     expect(result?.auth?.attributes.workspaceId).toMatch(
       /^personal:[0-9a-f]{32}$/
     );
+    expect(result?.context).toEqual([
+      '[Message: {"messageId":"message-1","sender":"user"}]',
+    ]);
+  });
+
+  it("supplies the older quoted message ID alongside the incoming reply", async () => {
+    capture.findOne.mockResolvedValue({
+      id: "user-1",
+      phoneNumberVerified: true,
+    });
+    const result = await onMessage(
+      threadContext(),
+      linqMessage("+15550100011", {
+        reply_to: {
+          message_id: "00000000-0000-4000-8000-000000000002",
+          part_index: 2,
+        },
+      })
+    );
+    expect(result?.context).toEqual([
+      '[Message: {"messageId":"message-1","sender":"user"}]',
+      '[Reply to: {"messageId":"00000000-0000-4000-8000-000000000002","partIndex":2}]',
+    ]);
+    expect(result?.auth?.attributes.linqMessageId).toBe("message-1");
+  });
+
+  it("does not present a malformed reply target as a usable message ID", async () => {
+    capture.findOne.mockResolvedValue({
+      id: "user-1",
+      phoneNumberVerified: true,
+    });
+    const result = await onMessage(
+      threadContext(),
+      linqMessage("+15550100011", {
+        reply_to: { message_id: "invented-message", part_index: -1 },
+      })
+    );
+    expect(result?.context).toEqual([
+      '[Message: {"messageId":"message-1","sender":"user"}]',
+    ]);
   });
 });
 
@@ -132,7 +172,7 @@ function threadContext(): InboundContext {
   return identity as InboundContext;
 }
 
-function linqMessage(handle: string) {
+function linqMessage(handle: string, raw: Message["raw"] = {}) {
   return new Message({
     attachments: [],
     author: {
@@ -148,7 +188,7 @@ function linqMessage(handle: string) {
       dateSent: new Date("2026-09-03T00:00:00.000Z"),
       edited: false,
     },
-    raw: {},
+    raw,
     text: "list my vault items",
     threadId: "linq:dm:chat-1",
   });

@@ -113,6 +113,32 @@ describe("iMessage event projection", () => {
     expect(sentMessages(events).has("turn-1:assistant")).toBe(false);
   });
 
+  it("projects a new Unicode reaction without changing the emoji", () => {
+    const events = [
+      toolResult("react_to_message", {
+        operation: "add",
+        messageId: "older-message",
+        emoji: "👩🏽‍💻",
+      }),
+    ];
+    expect(sentMessages(events).get("turn-1:assistant")).toEqual([
+      expect.objectContaining({
+        parts: [expect.objectContaining({ text: "👩🏽‍💻" })],
+      }),
+    ]);
+  });
+
+  it("does not project a removed Unicode reaction as a new message", () => {
+    const events = [
+      toolResult("react_to_message", {
+        operation: "remove",
+        messageId: "older-message",
+        emoji: "👀",
+      }),
+    ];
+    expect(sentMessages(events).size).toBe(0);
+  });
+
   it("projects a native link-preview send as its URL", () => {
     const events = [
       toolResult(
