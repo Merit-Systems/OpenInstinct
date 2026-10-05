@@ -7,16 +7,19 @@ if (origin.protocol !== "https:" || origin.username || origin.password) {
   throw new Error("Provide the deployment's HTTPS URL without credentials.");
 }
 const token = await getVercelOidcToken();
-const response = await fetch(new URL("/api/scheduled-wakeups", origin), {
-  body: JSON.stringify({ kind: "backfill" }),
-  headers: {
-    authorization: "Bearer " + token,
-    "content-type": "application/json",
-    "x-vercel-trusted-oidc-idp-token": token,
-  },
-  method: "POST",
-  redirect: "error",
-});
+const response = await fetch(
+  new URL("/api/scheduled-wakeups/migrate", origin),
+  {
+    body: JSON.stringify({ kind: "backfill" }),
+    headers: {
+      authorization: "Bearer " + token,
+      "content-type": "application/json",
+      "x-vercel-trusted-oidc-idp-token": token,
+    },
+    method: "POST",
+    redirect: "error",
+  }
+);
 if (!response.ok)
   throw new Error("Wakeup migration failed (" + String(response.status) + ").");
 scheduledResponseSchema.parse(await response.json());

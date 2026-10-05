@@ -62,6 +62,24 @@ export async function authorizeScheduledRequest(request: Request) {
     : denied;
 }
 
+export async function authorizeScheduledBackfillRequest(request: Request) {
+  const denied = await authorizeScheduledRequest(request);
+  if (!denied || !env.VERCEL_ENV || !env.VERCEL_PROJECT_ID) return denied;
+  // Vercel CLI issues development user tokens, even when pulling production env.
+  // Only the fixed backfill endpoint accepts a developer of this exact project.
+  const auth = await routeAuth(request, [
+    vercelOidc({
+      currentVercelProject: {
+        projectId: env.VERCEL_PROJECT_ID,
+        environment: "development",
+      },
+    }),
+  ]);
+  return !(auth instanceof Response) && auth.principalType === "user"
+    ? undefined
+    : denied;
+}
+
 interface ScheduledRunRequestBodies {
   "/api/scheduled-wakeups": ScheduledCommand;
   "/internal/scheduled-run/command": ScheduledCommand;

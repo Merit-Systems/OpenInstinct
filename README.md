@@ -313,7 +313,9 @@ pnpm exec vercel env run --environment production -- pnpm schedules:migrate http
 ```
 
 The migration operation is durable and can be retried. Timer registrations,
-occurrences, revisions, and leases prevent duplicate execution. Existing active
+occurrences, revisions, and leases prevent duplicate execution. Its dedicated
+backfill endpoint accepts Vercel CLI developer tokens for this project; normal
+commands and worker callbacks require runtime credentials. Existing active
 scheduled workers receive a bounded compatibility observer because their pinned
 older hooks cannot enqueue reports. New workers report through events. Let older
 interactive turns finish or hand off before cutover: their old schedule tools

@@ -70,12 +70,15 @@ describe("auth proxy matcher", () => {
     expect(getAuthSession).not.toHaveBeenCalled();
   });
 
-  it("allows durable scheduling operations without a browser session", async () => {
-    const response = await proxy(
-      new NextRequest("http://localhost:3000/api/scheduled-wakeups")
-    );
+  it.each(["/api/scheduled-wakeups", "/api/scheduled-wakeups/migrate"])(
+    "allows durable scheduling operations at %s without a browser session",
+    async (path) => {
+      const response = await proxy(
+        new NextRequest("http://localhost:3000" + path)
+      );
 
-    expect(response.headers.get("x-middleware-next")).toBe("1");
-    expect(getAuthSession).not.toHaveBeenCalled();
-  });
+      expect(response.headers.get("x-middleware-next")).toBe("1");
+      expect(getAuthSession).not.toHaveBeenCalled();
+    }
+  );
 });
