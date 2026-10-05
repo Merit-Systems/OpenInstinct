@@ -20,6 +20,7 @@ let processorOrigin = "https://assets.braintreegateway.com";
 let processorFragment = "";
 let changedPage = false;
 let omittedChildFrames = false;
+let omittedParentTarget = false;
 let hiddenFrame = false;
 let hideAfterWrite = false;
 let ambiguous = false;
@@ -46,7 +47,13 @@ class BrowserSocket extends EventTarget {
       urlFragment: processorFragment,
     };
     switch (command.method) {
-      case "Target.getTargets":
+      case "Target.getTargets": {
+        const processorTarget = {
+          targetId: "processor-frame",
+          parentFrameId: "main-frame",
+          type: "iframe",
+          url: processorFrame.url,
+        };
         result = {
           targetInfos: [
             {
@@ -54,16 +61,13 @@ class BrowserSocket extends EventTarget {
               type: "page",
               url: "https://shop.example/checkout",
             },
-            {
-              targetId: "processor-frame",
-              parentId: "page-1",
-              parentFrameId: "main-frame",
-              type: "iframe",
-              url: processorFrame.url,
-            },
+            omittedParentTarget
+              ? processorTarget
+              : { ...processorTarget, parentId: "page-1" },
           ],
         };
         break;
+      }
       case "Target.attachToTarget":
         result = {
           sessionId:
@@ -197,6 +201,7 @@ beforeEach(() => {
   processorFragment = "";
   changedPage = false;
   omittedChildFrames = false;
+  omittedParentTarget = false;
   hiddenFrame = false;
   hideAfterWrite = false;
   ambiguous = false;
@@ -210,6 +215,7 @@ afterEach(() => vi.unstubAllGlobals());
 describe("hosted payment field injection", () => {
   it.each([
     "https://assets.braintreegateway.com",
+    "https://checkout.pci.shopifyinc.com",
     "https://checkout.shopifycs.com",
     "https://www.paypal.com",
     "https://js.stripe.com",
@@ -243,6 +249,15 @@ describe("hosted payment field injection", () => {
   });
   it("discovers out-of-process descendants omitted from the main frame tree", async () => {
     omittedChildFrames = true;
+    await expect(fillKernelPaymentFields(input)).resolves.toEqual({
+      filledClaims: 3,
+      origin: "https://shop.example",
+    });
+    expect(fills).toBe(3);
+  });
+  it("discovers out-of-process frames by parent frame when Chromium omits the parent target", async () => {
+    omittedChildFrames = true;
+    omittedParentTarget = true;
     await expect(fillKernelPaymentFields(input)).resolves.toEqual({
       filledClaims: 3,
       origin: "https://shop.example",

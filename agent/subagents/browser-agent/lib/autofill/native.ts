@@ -228,6 +228,7 @@ export async function fillWithKernelNativeAutofill({
 
 const paymentFrameOrigins = new Set([
   "https://assets.braintreegateway.com",
+  "https://checkout.pci.shopifyinc.com",
   "https://checkout.shopifycs.com",
   "https://checkout.shopify.com",
   "https://www.paypal.com",
@@ -1118,10 +1119,13 @@ async function withKernelPage<T>(
           if (parent) frameParents.set(entry.id, parent);
         }
         const frameIds = new Set(frameEntries.map(({ id }) => id));
+        // Chromium omits out-of-process iframes, such as hosted card fields,
+        // from the owning document's frame tree; match them by parent frame.
         for (const iframeTarget of targetInfos.filter(
-          ({ targetId, parentId, type }) =>
+          ({ targetId, parentId, parentFrameId, type }) =>
             type === "iframe" &&
             (frameIds.has(targetId) ||
+              (parentFrameId !== undefined && frameIds.has(parentFrameId)) ||
               (parentId !== undefined && attachedTargets.has(parentId))) &&
             !attachedTargets.has(targetId)
         )) {
