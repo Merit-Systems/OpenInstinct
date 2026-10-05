@@ -1,20 +1,14 @@
 import { messageToUserContent } from "eve/channels/chat-sdk";
 import { z } from "zod";
 import type { Message } from "chat";
+import {
+  formatMessageContext,
+  messagePartReferenceSchema,
+} from "@shared/chat/message-context";
 
 const messageReferencesSchema = z.object({
   parts: z
-    .array(
-      z.object({
-        type: z.string(),
-        value: z.string().optional(),
-        url: z.string().optional(),
-        app: z.unknown().optional(),
-        layout: z.unknown().optional(),
-        fallback_text: z.string().nullish(),
-        interactive: z.boolean().optional(),
-      })
-    )
+    .array(messagePartReferenceSchema.omit({ partIndex: true }))
     .optional(),
   reply_to: z
     .object({
@@ -37,13 +31,20 @@ export function linqMessageContent(message: Message) {
       ? content
       : [{ type: "text" as const, text: content }]
   ).filter((part) => part.type !== "text" || part.text.length > 0);
-  let label = `[Message: ${JSON.stringify({ messageId: message.id, sender: message.author.isMe ? "openinstinct" : "user" })}]`;
-  if (references?.parts) {
-    label += `\n[Parts: ${JSON.stringify(references.parts.map((part, partIndex) => ({ partIndex, ...part })))}]`;
-  }
-  if (references?.reply_to?.message_id) {
-    label += `\n[Reply to: ${JSON.stringify({ messageId: references.reply_to.message_id, partIndex: references.reply_to.part_index })}]`;
-  }
+  const label = formatMessageContext({
+    messageId: message.id,
+    sender: message.author.isMe ? "openinstinct" : "user",
+    parts: references?.parts?.map((part, partIndex) => ({
+      partIndex,
+      ...part,
+    })),
+    replyTo: references?.reply_to?.message_id
+      ? {
+          messageId: references.reply_to.message_id,
+          partIndex: references.reply_to.part_index,
+        }
+      : undefined,
+  });
   if (hasApp && !message.text.trim())
     parts.push({ type: "text", text: "[iMessage app card]" });
   return [{ type: "text" as const, text: label }, ...parts];

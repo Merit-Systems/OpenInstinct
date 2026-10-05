@@ -9,6 +9,7 @@ export function messageTimestamps(events: readonly MessageStreamEvent[]) {
   for (const event of events) {
     if (event.type === "message.received") {
       timestamps.set(`${event.data.turnId}:user`, event.meta.at);
+      timestamps.set(`${event.meta.id}:user`, event.meta.at);
     }
 
     if (
@@ -28,13 +29,17 @@ export function imessageTimestamps(events: readonly MessageStreamEvent[]) {
   for (const event of events) {
     if (event.type === "message.received") {
       timestamps.set(`${event.data.turnId}:user`, event.meta.at);
+      timestamps.set(`${event.meta.id}:user`, event.meta.at);
     }
   }
 
   return timestamps;
 }
 
-export function sentMessages(events: readonly MessageStreamEvent[]) {
+export function sentMessages(
+  events: readonly MessageStreamEvent[],
+  handledReactionCallIds: ReadonlySet<string> = new Set()
+) {
   const messagesByTurn = new Map<
     string,
     { id: string; parts: EveMessagePart[]; timestamp: string }[]
@@ -46,6 +51,7 @@ export function sentMessages(events: readonly MessageStreamEvent[]) {
     const reaction = completedReactionOutput(event);
     const completed = delivery ?? reaction;
     if (!completed) continue;
+    if (reaction && handledReactionCallIds.has(completed.callId)) continue;
 
     const turnMessageId = `${event.data.turnId}:assistant`;
     const parts: EveMessagePart[] = [];

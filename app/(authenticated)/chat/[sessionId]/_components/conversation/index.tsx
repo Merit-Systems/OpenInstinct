@@ -7,6 +7,7 @@ import {
 } from "../../_lib/message-events";
 import { messagesForTraceView, type TraceView } from "../../_lib/trace-view";
 import { getLatestTurnFailure } from "../../_lib/turn-failure";
+import { messagePresentations } from "../../_lib/message-presentation";
 import {
   Conversation,
   ConversationContent,
@@ -69,9 +70,13 @@ export function ChatConversation({
         : messageTimestamps(agent.events),
     [agent.events, traceView]
   );
+  const { presentations, handledReactionCallIds } = useMemo(
+    () => messagePresentations(messages, agent.events),
+    [messages, agent.events]
+  );
   const deliveredMessages = useMemo(
-    () => sentMessages(agent.events),
-    [agent.events]
+    () => sentMessages(agent.events, handledReactionCallIds),
+    [agent.events, handledReactionCallIds]
   );
 
   return (
@@ -143,6 +148,11 @@ export function ChatConversation({
               key={message.id}
               message={message}
               onInputResponses={(responses) => agent.respond(responses)}
+              presentation={
+                traceView === "imessage"
+                  ? presentations.get(message.id)
+                  : undefined
+              }
               timestamp={timestamps.get(message.id)}
               userVisibleOnly={traceView === "imessage"}
             />
