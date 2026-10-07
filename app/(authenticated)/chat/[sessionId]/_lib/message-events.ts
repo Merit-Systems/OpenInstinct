@@ -61,12 +61,7 @@ export function sentMessages(events: readonly MessageStreamEvent[]) {
       });
     } else if (delivery) {
       const { output } = delivery;
-      // Delivered text is plain and reaches the user verbatim. The chat view
-      // renders text parts as Markdown, so keep every line break as a hard break.
-      const text =
-        output.kind === "link"
-          ? output.url
-          : output.text?.replaceAll("\n", "  \n");
+      const text = output.kind === "link" ? output.url : output.text;
       if (text) {
         parts.push({
           state: "done",

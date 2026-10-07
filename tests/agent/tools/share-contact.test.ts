@@ -72,6 +72,25 @@ beforeEach(() => {
 afterEach(() => vi.unstubAllGlobals());
 
 describe("share_contact", () => {
+  it("preserves exact plain text in the send_message producer", async () => {
+    const text =
+      "Keep *literal stars*, `draft` and the spaces  \nbefore this line.";
+    const resolve = messaging.events["turn.started"];
+    if (!resolve) throw new Error("Expected messaging resolver.");
+    const tools = await resolve({}, {
+      channel: { kind: "http", metadata: {} },
+      messages: [],
+      model: null,
+      session: toolContext().session,
+    } satisfies DynamicResolveContext);
+    if (!tools || !("send_message" in tools))
+      throw new Error("Expected send_message.");
+    const input = sendMessageOutputSchema.parse({ kind: "message", text });
+    expect(await tools.send_message.execute(input, toolContext())).toEqual(
+      input
+    );
+  });
+
   it("renders the contact in browser chat and suppresses repeats without sending to Linq", async () => {
     const tool = await shareContactTool();
     const first = await tool.execute(
