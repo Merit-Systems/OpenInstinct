@@ -53,7 +53,10 @@ success rubric. The judge sees the task, worker result, and coordinator response
 a plausible but incomplete answer does not count. Agent time is measured from durable
 `message.received` to the terminal `message.completed` event. LLM cost sums
 `usage.costUsd` from every completed model step; a `~` prefix means at least one
-step did not report cost.
+step did not report cost. Cost comparisons require complete measurements for
+both variants of a shared passing task; incomplete costs stay marked `~` and
+do not contribute to cost deltas. Duration comparisons still include those
+shared passing tasks.
 
 ## Two-revision A/B
 
