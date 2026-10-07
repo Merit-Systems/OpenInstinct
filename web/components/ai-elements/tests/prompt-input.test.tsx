@@ -216,7 +216,9 @@ function submitDraft(
     </PromptInput>
   );
   const { onSubmit: submit } = z
-    .object({ onSubmit: z.function() })
+    .object({
+      onSubmit: z.function({ input: [z.unknown()], output: z.void() }),
+    })
     .parse(captured.forms.at(-1));
   submit({
     currentTarget: form,
