@@ -68,29 +68,6 @@ export async function saveChat(
   if (!(await waitForSessionOwnership(scope, chat.sessionId))) return;
   await ensureScope(scope);
   const now = new Date();
-  const existing = await db
-    .select({ sessionId: chats.sessionId })
-    .from(chats)
-    .where(
-      and(
-        eq(chats.workspaceId, scope.workspaceId),
-        eq(chats.sessionId, chat.sessionId)
-      )
-    );
-  if (existing.length === 0) {
-    await db.insert(chats).values({
-      channel: chat.channel ?? null,
-      costUsd: chat.usage?.costUsd ?? null,
-      createdAt: now,
-      inputTokens: chat.usage?.inputTokens ?? 0,
-      outputTokens: chat.usage?.outputTokens ?? 0,
-      sessionId: chat.sessionId,
-      title: chat.title ?? "New chat",
-      updatedAt: now,
-      workspaceId: scope.workspaceId,
-    });
-    return;
-  }
   const updates: Partial<typeof chats.$inferInsert> = { updatedAt: now };
   if (chat.channel !== undefined) updates.channel = chat.channel;
   if (chat.title !== undefined) updates.title = chat.title;
@@ -100,12 +77,21 @@ export async function saveChat(
     updates.outputTokens = chat.usage.outputTokens;
   }
   await db
-    .update(chats)
-    .set(updates)
-    .where(
-      and(
-        eq(chats.workspaceId, scope.workspaceId),
-        eq(chats.sessionId, chat.sessionId)
-      )
-    );
+    .insert(chats)
+    .values({
+      channel: chat.channel ?? null,
+      costUsd: chat.usage?.costUsd ?? null,
+      createdAt: now,
+      inputTokens: chat.usage?.inputTokens ?? 0,
+      outputTokens: chat.usage?.outputTokens ?? 0,
+      sessionId: chat.sessionId,
+      title: chat.title ?? "New chat",
+      updatedAt: now,
+      workspaceId: scope.workspaceId,
+    })
+    .onConflictDoUpdate({
+      target: chats.sessionId,
+      set: updates,
+      setWhere: eq(chats.workspaceId, scope.workspaceId),
+    });
 }
