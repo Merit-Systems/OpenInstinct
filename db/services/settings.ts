@@ -1,6 +1,7 @@
 import { and, eq } from "drizzle-orm";
 import type { AccessScope } from "@shared/identity/access-scope";
 import { db, settings } from "@db";
+import { ensureScope } from "@db/services/scope";
 
 const gatewayModelKey = "gateway_model";
 const defaultGatewayModel = "openai/gpt-6.1-sol-fast";
@@ -24,6 +25,7 @@ export async function getGatewayModel(scope: AccessScope) {
 }
 
 export async function selectGatewayModel(scope: AccessScope, modelId: string) {
+  await ensureScope(scope);
   await db
     .insert(settings)
     .values({
