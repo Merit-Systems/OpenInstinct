@@ -153,7 +153,7 @@ describe("iMessage event projection", () => {
 
     expect(sentMessages(events).get("turn-1:assistant")).toEqual([
       expect.objectContaining({
-        parts: [expect.objectContaining({ text: "line one  \nline two" })],
+        parts: [expect.objectContaining({ text: "line one\nline two" })],
       }),
     ]);
   });

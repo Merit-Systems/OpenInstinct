@@ -4,8 +4,57 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { ChatConversation } from ".";
 import type { ChatAgent } from "../chat-agent";
+import { sendMessageOutputSchema } from "@shared/chat/message-delivery";
 
 describe("chat conversation", () => {
+  it.each([
+    "Please keep *literal stars* in the filename.",
+    "Save the `draft` filename.",
+    "#42 is my order number.",
+    "1. First note\n2. Second note",
+    "Line one  \nLine two",
+  ])("renders delivered plain text exactly: %s", async (text) => {
+    const agent = await deliveredAgent(text);
+    const markup = renderToStaticMarkup(
+      <ChatConversation agent={agent} traceView="imessage" />
+    );
+    expect(markup).toContain(text);
+    expect(markup).not.toMatch(/<(?:em|code|ol|h1)[ >]/u);
+  });
+
+  it.each([
+    "https://example.com/report",
+    "See https://example.com/report_2026?view=notes for details.",
+  ])("keeps delivered HTTP URLs tappable: %s", async (text) => {
+    const markup = renderToStaticMarkup(
+      <ChatConversation
+        agent={await deliveredAgent(text)}
+        traceView="imessage"
+      />
+    );
+    expect(markup).toContain('data-streamdown="link"');
+    expect(markup).toContain("https://example.com/report");
+    expect(markup).toContain(
+      text.startsWith("See ") ? "for details." : "https://example.com/report"
+    );
+  });
+
+  it("keeps intentional trace Markdown", () => {
+    const agent = {
+      data: { messages: [message("turn-1:user", "*trace emphasis*")] },
+      error: undefined,
+      events: [],
+      respond: async () => undefined,
+      status: "ready",
+    } satisfies Pick<
+      ChatAgent,
+      "data" | "error" | "events" | "respond" | "status"
+    >;
+    expect(
+      renderToStaticMarkup(<ChatConversation agent={agent} traceView="trace" />)
+    ).toContain("<em>trace emphasis</em>");
+  });
+
   it("shows send_message output instead of assistant stream text", () => {
     const agent = {
       data: {
@@ -108,6 +157,41 @@ describe("chat conversation", () => {
     expect(markup).not.toContain("Internal runtime failure");
   });
 });
+
+async function deliveredAgent(text: string) {
+  const output = sendMessageOutputSchema.parse({ kind: "message", text });
+  return {
+    data: {
+      messages: [
+        { id: "turn-1:assistant", parts: [], role: "assistant" as const },
+      ],
+    },
+    error: undefined,
+    events: [
+      {
+        data: {
+          result: {
+            callId: "call-plain",
+            kind: "tool-result" as const,
+            output,
+            toolName: "send_message",
+          },
+          sequence: 0,
+          status: "completed" as const,
+          stepIndex: 0,
+          turnId: "turn-1",
+        },
+        meta: { at: "2026-10-07T00:00:00.000Z", id: "event-plain" },
+        type: "action.result" as const,
+      },
+    ],
+    respond: async () => undefined,
+    status: "ready" as const,
+  } satisfies Pick<
+    ChatAgent,
+    "data" | "error" | "events" | "respond" | "status"
+  >;
+}
 
 function message(id: string, text: string): EveMessage {
   return {

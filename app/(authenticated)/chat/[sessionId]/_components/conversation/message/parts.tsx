@@ -34,6 +34,24 @@ export function AgentMessagePart({
     case "step-start":
       return null;
     case "text":
+      if (userVisibleOnly) {
+        return (
+          <div className="wrap-break-word whitespace-pre-wrap">
+            {part.text.split(/(https?:\/\/\S+)/iu).map((text, index) =>
+              /^https?:\/\//iu.test(text) ? (
+                <MessageResponse
+                  className="inline [&>p]:inline"
+                  key={`${String(index)}:${text}`}
+                >
+                  {text}
+                </MessageResponse>
+              ) : (
+                text
+              )
+            )}
+          </div>
+        );
+      }
       return (
         <MessageResponse caret="block" isAnimating={showCaret}>
           {part.text}
