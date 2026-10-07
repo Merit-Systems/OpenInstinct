@@ -6,7 +6,7 @@ import {
   ShieldCheckIcon,
   UploadIcon,
 } from "lucide-react";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Alert, AlertDescription, AlertTitle } from "@web/components/ui/alert";
 import { Button } from "@web/components/ui/button";
@@ -37,8 +37,10 @@ export function ChromeImportPanel({ onDone }: { readonly onDone: () => void }) {
   const [error, setError] = useState<string>();
   const [importedCount, setImportedCount] = useState<number>();
   const [inputKey, setInputKey] = useState(0);
+  const fileSelection = useRef(0);
 
   const chooseFile = async (file?: File) => {
+    const selectionId = ++fileSelection.current;
     importPasswords.reset();
     setError(undefined);
     setImportedCount(undefined);
@@ -51,8 +53,11 @@ export function ChromeImportPanel({ onDone }: { readonly onDone: () => void }) {
     }
 
     try {
-      setSelection(parseChromePasswordsCsv(await file.text()));
+      const csv = await file.text();
+      if (selectionId !== fileSelection.current) return;
+      setSelection(parseChromePasswordsCsv(csv));
     } catch (parseError) {
+      if (selectionId !== fileSelection.current) return;
       setError(
         parseError instanceof Error
           ? parseError.message
@@ -77,6 +82,7 @@ export function ChromeImportPanel({ onDone }: { readonly onDone: () => void }) {
   };
 
   const reset = () => {
+    fileSelection.current += 1;
     importPasswords.reset();
     setSelection(undefined);
     setFileName("");
