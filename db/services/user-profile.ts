@@ -48,13 +48,25 @@ export async function patchUserProfile(
   input: UserProfilePatch
 ) {
   const patch = userProfilePatchSchema.parse(input);
-  const profile = parseUserProfile({
-    ...(await readUserProfile(scope)),
-    ...patch,
-  });
+  if (patch.countryCode) patch.countryCode = patch.countryCode.toUpperCase();
   await ensureScope(scope);
-  await writeUserProfile(scope, profile);
-  return profile;
+  const updatedAt = new Date();
+  // A field patch must not replace values read before another conversation's update.
+  const [profile] = await db
+    .insert(userProfiles)
+    .values({
+      ...emptyUserProfile,
+      ...patch,
+      updatedAt,
+      workspaceId: scope.workspaceId,
+    })
+    .onConflictDoUpdate({
+      target: userProfiles.workspaceId,
+      set: { ...patch, updatedAt },
+    })
+    .returning(selection);
+  if (!profile) throw new Error("Personal Info could not be updated.");
+  return parseUserProfile(profile);
 }
 
 async function writeUserProfile(scope: AccessScope, profile: UserProfile) {
