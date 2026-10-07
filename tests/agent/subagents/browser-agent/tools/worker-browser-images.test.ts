@@ -65,6 +65,7 @@ const captureBrowserImage = await captureBrowserImageDefinition.events[
 ]?.(
   {},
   {
+    model: null,
     session: { id: "test", auth: { current: null, initiator: null } },
     channel: {},
     messages: [],

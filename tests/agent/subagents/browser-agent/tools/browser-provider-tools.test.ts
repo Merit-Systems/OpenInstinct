@@ -19,6 +19,7 @@ vi.mock("@shared/environment", async (importOriginal) => {
   };
 });
 const context = {
+  model: null,
   session: { id: "test", auth: { current: null, initiator: null } },
   channel: {},
   messages: [],
