@@ -28,7 +28,14 @@ export async function findWorkstreams(
         query
           ? or(
               ilike(workstreams.id, pattern),
-              sql`${workstreams.content}::text ILIKE ${pattern}`
+              sql`EXISTS (
+                SELECT 1
+                FROM jsonb_path_query(
+                  ${workstreams.content},
+                  'strict $.** ? (@.type() == "string")'
+                ) AS text_values(value)
+                WHERE value #>> '{}' ILIKE ${pattern}
+              )`
             )
           : undefined
       )

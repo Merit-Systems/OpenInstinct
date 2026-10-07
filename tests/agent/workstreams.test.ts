@@ -414,6 +414,105 @@ describe("workstream memory", () => {
   });
 });
 
+describe("workstream original text search", () => {
+  it.each([
+    {
+      query: '"Quarterly Report"',
+      savedContent: { ...content, title: 'Read "Quarterly Report"' },
+    },
+    {
+      query: String.raw`C:\Users\Alex\Documents\plan.md`,
+      savedContent: {
+        ...content,
+        sources: [
+          {
+            observation: "Review the local planning document.",
+            observedAt: "2026-09-08T12:00:00Z",
+            reference: String.raw`C:\Users\Alex\Documents\plan.md`,
+          },
+        ],
+      },
+    },
+    {
+      query: "First step:\nReview notes",
+      savedContent: { ...content, notes: "First step:\nReview notes" },
+    },
+  ])(
+    "finds saved text $query through the actual memory tools",
+    async ({ query, savedContent }) => {
+      const ctx = context("text-search");
+      const tools = await workstreamMemory.provider.tools(ctx);
+      if (!tools) throw new Error("Expected interactive workstream tools.");
+      await tools.save.execute(
+        { id: "saved-text", expectedRevision: 0, content: savedContent },
+        { ...ctx, callId: "save", toolName: "workstreams__save" }
+      );
+      const page = await tools.find.execute(
+        { query, offset: 0 },
+        { ...ctx, callId: "find", toolName: "workstreams__find" }
+      );
+      expect(page).toMatchObject({
+        items: [{ id: "saved-text" }],
+        nextOffset: null,
+      });
+    }
+  );
+
+  it("keeps ordinary text and SQL wildcard characters literal", async () => {
+    await saveWorkstream(
+      alice,
+      "key-a",
+      {
+        id: "literal-progress",
+        expectedRevision: 0,
+        content: { ...content, notes: "Progress: 50% for release_1." },
+      },
+      "save-progress",
+      "text-search"
+    );
+    const pages = await Promise.all(
+      ["Progress", "50%", "release_1"].map((query) =>
+        findWorkstreams(alice, "key-a", { query })
+      )
+    );
+    expect(pages.map((page) => page.items.length)).toEqual([1, 1, 1]);
+    expect(
+      (await findWorkstreams(alice, "key-a", { query: "releaseX1" })).items
+    ).toHaveLength(0);
+  });
+
+  it("paginates the matching original text before limiting results", async () => {
+    await Promise.all(
+      Array.from({ length: 21 }, (_, index) =>
+        saveWorkstream(
+          alice,
+          "key-a",
+          {
+            id: `quoted-item-${String(index)}`,
+            expectedRevision: 0,
+            content: { ...content, title: 'Read "Quarterly Report"' },
+          },
+          `save-${String(index)}`,
+          "text-search"
+        )
+      )
+    );
+    const query = '"Quarterly Report"';
+    const first = await findWorkstreams(alice, "key-a", { query });
+    expect(first.items).toHaveLength(20);
+    expect(first.nextOffset).toBe(20);
+    const second = await findWorkstreams(alice, "key-a", {
+      query,
+      offset: first.nextOffset ?? 0,
+    });
+    expect(second.items).toHaveLength(1);
+    expect(second.nextOffset).toBeNull();
+    expect(
+      new Set([...first.items, ...second.items].map((item) => item.id)).size
+    ).toBe(21);
+  });
+});
+
 function context(sessionId: string, authenticator = "authjs") {
   return {
     abortSignal: new AbortController().signal,
