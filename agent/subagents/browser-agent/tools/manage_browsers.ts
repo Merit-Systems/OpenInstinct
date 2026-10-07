@@ -142,12 +142,12 @@ const manageBrowsers = defineTool({
         );
         const offset = input.offset ?? 0;
         const limit = input.limit ?? 100;
+        const filtered = browsers.filter((browser) => browser !== null);
+        const end = offset + limit;
         return {
-          has_more: false,
-          items: browsers
-            .filter((browser) => browser !== null)
-            .slice(offset, offset + limit),
-          next_offset: null,
+          has_more: filtered.length > end,
+          items: filtered.slice(offset, end),
+          next_offset: filtered.length > end ? end : null,
         };
       }
       case "get": {
