@@ -73,11 +73,23 @@ export async function readGmailThread(ctx: ToolContext, threadId: string) {
     );
     return {
       id: thread.id ?? threadId,
-      messages: (thread.messages ?? []).slice(-20).map((message) =>
-        Object.assign({}, minimizeMessage(message), {
-          attachments: collectAttachments(message.payload),
-          body: redactGoogleText(plainText(message.payload)),
-        })
+      messages: await Promise.all(
+        (thread.messages ?? []).slice(-20).map(async (message) =>
+          Object.assign({}, minimizeMessage(message), {
+            attachments: collectAttachments(message.payload),
+            body: redactGoogleText(
+              await plainText(message.payload, async (attachmentId) => {
+                if (!message.id)
+                  throw new Error("The Gmail message has no ID.");
+                const { data } = await client.users.messages.attachments.get(
+                  { id: attachmentId, messageId: message.id, userId: "me" },
+                  { signal: ctx.abortSignal }
+                );
+                return data.data ?? "";
+              })
+            ),
+          })
+        )
       ),
     };
   });
@@ -174,20 +186,29 @@ function header(part: GmailPart | undefined, name: string) {
   );
 }
 
-function plainText(part: GmailPart | undefined): string {
-  if (!part) return "";
-  if (part.mimeType === "text/plain" && part.body?.data) {
-    return decodeBase64Url(part.body.data);
+async function plainText(
+  part: GmailPart | undefined,
+  readAttachment: (attachmentId: string) => Promise<string>
+): Promise<string> {
+  if (!part || part.filename) return "";
+  if (part.mimeType === "text/plain" || part.mimeType === "text/html") {
+    let data = part.body?.data;
+    if (!data && part.body?.attachmentId) {
+      data = await readAttachment(part.body.attachmentId);
+    }
+    if (data) {
+      const text = decodeBase64Url(data);
+      return part.mimeType === "text/plain"
+        ? text
+        : text.replace(/<[^>]+>/gu, " ").replace(/\s+/gu, " ");
+    }
   }
+  /* oxlint-disable eslint/no-await-in-loop -- Preserve MIME body order and stop after the first readable body. */
   for (const child of part.parts ?? []) {
-    const text = plainText(child);
+    const text = await plainText(child, readAttachment);
     if (text) return text;
   }
-  if (part.mimeType === "text/html" && part.body?.data) {
-    return decodeBase64Url(part.body.data)
-      .replace(/<[^>]+>/gu, " ")
-      .replace(/\s+/gu, " ");
-  }
+  /* oxlint-enable eslint/no-await-in-loop */
   return "";
 }
 
