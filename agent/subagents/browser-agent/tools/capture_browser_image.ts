@@ -1,3 +1,4 @@
+import { defineDynamic } from "eve/tools";
 import { createHash, randomUUID } from "node:crypto";
 import { del, put } from "@vercel/blob";
 import { defineTool, toolOutput } from "eve/tools";
@@ -53,7 +54,7 @@ const outputSchema = z.object({ image: browserImageArtifactReferenceSchema });
 
 type CaptureInput = z.infer<typeof inputSchema>;
 
-export default defineTool({
+const kernelTool = defineTool({
   description:
     "Capture one durable, user-visible image from an owned browser. Use only when the assignment requests an image or one image materially improves the final result; never persist routine debugging screenshots. Supports viewport or region screenshots, full-page screenshots, rendered element screenshots, and original image resources selected from the current page. Original resource capture falls back to the rendered element when needed. Does not expose private Blob URLs or page credentials.",
   inputSchema,
@@ -366,3 +367,10 @@ async function readBoundedResponse(response: Response) {
   }
   return bytes;
 }
+
+export default defineDynamic({
+  events: {
+    "session.started": () =>
+      env.BROWSER_PROVIDER === "notte" ? null : kernelTool,
+  },
+});

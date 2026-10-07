@@ -60,7 +60,7 @@ Run the validation the task requests. When it does not establish the behavior yo
 - The workspace manager lives on `/` and the agent chat on `/chat`; browser execution belongs only to the declared browser-agent subagent's flat tool surface under `agent/subagents/browser-agent/tools`.
 - Keep each worker browser tool's schema and implementation together. Share the Kernel SDK client through `agent/subagents/browser-agent/lib/kernel.ts`; do not add a Kernel extension or root browser connection.
 - `agent/subagents/browser-agent/lib` is for code genuinely shared by worker tools. Group a shared worker domain in a lower-case folder, such as `trace/domains.ts` or `autofill/provider.ts`; do not use it as a holding area for a tool's one-off logic.
-- Validate runtime environment variables through `shared/environment/env.ts`. `KERNEL_API_KEY` is required by the worker browser tools.
+- Validate runtime environment variables through `shared/environment/env.ts`. `BROWSER_PROVIDER` defaults to `kernel`; worker browser tools require `KERNEL_API_KEY` for Kernel or `NOTTE_API_KEY` for Notte.
 - Run `pnpm check` and `pnpm build` before handing off changes.
 
 ## Code organization

@@ -82,6 +82,41 @@ Treat the private Blob store as production key material: deleting it loses the
 automatically generated encryption key, and rotating that key requires
 re-encrypting existing vault values.
 
+### Notte browser provider
+
+To use [Notte](https://www.notte.cc/) cloud browsers instead of Kernel, set:
+
+```dotenv
+BROWSER_PROVIDER=notte
+NOTTE_API_KEY=your-notte-api-key
+```
+
+`BROWSER_PROVIDER` defaults to `kernel`. With Notte selected, `KERNEL_API_KEY`
+is not required. The one-click Vercel button still provisions Kernel; configure
+these variables yourself for an existing deployment or a manual installation.
+
+Notte sessions support the semantic browser tools (`browser_snapshot`,
+`browser_text`, `browser_find`, `browser_act`, `browser_wait_for`), live viewing,
+and the existing secure vault autofill over CDP. Each workspace has its own
+Notte profile; `save_changes: true` persists login state when the browser is
+closed, and only one writer can be active. Read-only sessions can run in parallel.
+CDP connection credentials are kept out of tool results.
+
+Live validation confirmed cookie-backed profile restoration, but a profile
+containing only localStorage did not restore that state. Treat storage-only
+login persistence as unverified until that issue is resolved.
+
+Kernel's remote `playwright_execute`, desktop `computer_action`, and
+`capture_browser_image` tools are omitted from the Notte tool set. Notte workers
+use semantic actions instead and return no image attachments. Set the viewport
+at creation; resizing is not supported. Idle timeouts and maximum session lifetimes are 15–30 minutes (default
+15), subject to the Notte account’s plan limits. These sessions explicitly use direct
+connections without proxies and enable CAPTCHA solving. Trace domains currently
+include the starting URL only for Notte.
+
+Profiles and open sessions stay with their original provider. Finish/delete open
+sessions before switching providers; switching does not migrate saved logins.
+
 ### Blob storage
 
 The deploy button connects a private Blob store. Vercel supplies `BLOB_STORE_ID`
@@ -291,8 +326,8 @@ Local development requires:
 
 - Node.js 24 and pnpm 11.24.0
 - Docker Desktop or another running Docker Compose installation
-- Kernel credentials from a [Kernel API key](https://kernel.sh) or a linked
-  Vercel Marketplace resource
+- Browser credentials: a [Kernel API key](https://kernel.sh), a linked
+  Vercel Marketplace resource, or `BROWSER_PROVIDER=notte` with `NOTTE_API_KEY`
 - AI Gateway access from an API key or a linked Vercel project's OIDC token
 
 First clone and install the application:
@@ -303,13 +338,14 @@ cd OpenInstinct
 pnpm install --frozen-lockfile
 ```
 
-For fully manual setup, copy the environment template and add your Kernel and AI
+For fully manual setup, copy the environment template and add your browser provider and AI
 Gateway keys:
 
 ```bash
 cp .env.example .env.local
 
 # Set KERNEL_API_KEY and AI_GATEWAY_API_KEY in .env.local.
+# For Notte, set BROWSER_PROVIDER=notte and NOTTE_API_KEY instead of KERNEL_API_KEY.
 ```
 
 If you already use a Vercel project, link it to pull AI Gateway access. If that
@@ -331,11 +367,11 @@ pnpm dev
 migrations, and starts the application. Stopping the development process also
 stops and removes the PostgreSQL container; its data remains in the
 `postgres-data` volume for the next run. Run `pnpm dev:app` when intentionally
-using an externally managed database instead. If `KERNEL_API_KEY` is missing,
+using an externally managed database instead. If the selected browser provider's API key is missing,
 `pnpm dev` stops before starting Docker and points back to the recommended
 Vercel flow or the manual `.env.local` setup.
 
-Local development otherwise uses the same vault, Kernel browser, and AI Gateway
+Local development otherwise uses the same vault, selected browser provider, and AI Gateway
 path as the Vercel deployment. Better Auth and vault encryption use stable
 local-only defaults when their variables are unset. Vercel deployments
 provision them automatically in private Blob; other production hosts require

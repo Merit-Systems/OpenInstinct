@@ -58,7 +58,20 @@ vi.mock("@agent/subagents/browser-agent/lib/kernel", () => ({
   },
 }));
 
-import captureBrowserImage from "@agent/subagents/browser-agent/tools/capture_browser_image";
+import captureBrowserImageDefinition from "@agent/subagents/browser-agent/tools/capture_browser_image";
+
+const captureBrowserImage = await captureBrowserImageDefinition.events[
+  "session.started"
+]?.(
+  {},
+  {
+    model: null,
+    session: { id: "test", auth: { current: null, initiator: null } },
+    channel: {},
+    messages: [],
+  }
+);
+if (!captureBrowserImage) throw new Error("Kernel tool is unavailable.");
 
 const scope = { userId: "user-1", workspaceId: "workspace-1" };
 const reservation = {
