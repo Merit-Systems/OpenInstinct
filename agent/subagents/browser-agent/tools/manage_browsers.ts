@@ -133,9 +133,8 @@ const manageBrowsers = defineTool({
               }
               return value;
             } catch (error) {
-              if (isNotFoundError(error)) {
-                await deleteBrowserSession(scope, sessionId);
-              }
+              if (!isNotFoundError(error)) throw error;
+              await deleteBrowserSession(scope, sessionId);
               return null;
             }
           })
