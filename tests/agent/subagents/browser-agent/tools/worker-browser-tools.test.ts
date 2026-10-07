@@ -10,6 +10,7 @@ const computerAction = await computerActionDefinition.events[
 ]?.(
   {},
   {
+    model: null,
     session: { id: "test", auth: { current: null, initiator: null } },
     channel: {},
     messages: [],
