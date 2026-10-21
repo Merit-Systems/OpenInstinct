@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  BookOpenIcon,
   HistoryIcon,
   KeyRoundIcon,
   ListTodoIcon,
@@ -30,6 +31,7 @@ const navigation = [
     id: "personal-info",
     label: "Personal info",
   },
+  { href: "/memory", icon: BookOpenIcon, id: "memory", label: "Memory" },
   { href: "/chat", icon: MessageSquareIcon, id: "chat", label: "Chat" },
   {
     href: "/chat/history",
@@ -40,7 +42,11 @@ const navigation = [
   { href: "/tasks", icon: ListTodoIcon, id: "tasks", label: "Tasks" },
 ] as const;
 
-export function AuthenticatedNavigation() {
+export function AuthenticatedNavigation({
+  memoryVisible = false,
+}: {
+  readonly memoryVisible?: boolean;
+}) {
   const active = activeRoute(usePathname());
 
   return (
@@ -48,20 +54,22 @@ export function AuthenticatedNavigation() {
       <SidebarGroupContent>
         <nav aria-label="Primary">
           <SidebarMenu>
-            {navigation.map((item) => {
-              const Icon = item.icon;
-              return (
-                <SidebarMenuItem key={item.id}>
-                  <SidebarMenuButton
-                    isActive={active === item.id}
-                    render={<Link href={item.href} />}
-                  >
-                    <Icon />
-                    <span>{item.label}</span>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              );
-            })}
+            {navigation
+              .filter((item) => item.id !== "memory" || memoryVisible)
+              .map((item) => {
+                const Icon = item.icon;
+                return (
+                  <SidebarMenuItem key={item.id}>
+                    <SidebarMenuButton
+                      isActive={active === item.id}
+                      render={<Link href={item.href} />}
+                    >
+                      <Icon />
+                      <span>{item.label}</span>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                );
+              })}
           </SidebarMenu>
         </nav>
       </SidebarGroupContent>
@@ -86,6 +94,7 @@ function activeRoute(pathname: string) {
   if (pathname.startsWith("/vault")) return "vault";
   if (pathname === "/link") return "link";
   if (pathname.startsWith("/personal-info")) return "personal-info";
+  if (pathname.startsWith("/memory")) return "memory";
   if (pathname.startsWith("/chat/history")) return "history";
   if (pathname.startsWith("/chat")) return "chat";
   if (pathname.startsWith("/tasks")) return "tasks";

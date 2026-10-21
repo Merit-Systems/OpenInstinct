@@ -12,6 +12,7 @@ import {
   SidebarProvider,
 } from "@web/components/ui/sidebar";
 import { requireRequestScope } from "@web/auth/request-scope";
+import { knowledgeMemoryModeForWorkspace } from "@shared/memory/config";
 import { TRPCProvider } from "@web/trpc/client";
 import { AuthenticatedAccountControl } from "./_components/account-control";
 import {
@@ -22,7 +23,9 @@ import {
 export default async function AuthenticatedLayout({
   children,
 }: LayoutProps<"/">) {
-  await requireRequestScope();
+  const scope = await requireRequestScope();
+  const memoryVisible =
+    knowledgeMemoryModeForWorkspace(scope.workspaceId) !== "off";
 
   return (
     <TRPCProvider>
@@ -39,7 +42,7 @@ export default async function AuthenticatedLayout({
             </SidebarMenu>
           </SidebarHeader>
           <SidebarContent>
-            <AuthenticatedNavigation />
+            <AuthenticatedNavigation memoryVisible={memoryVisible} />
           </SidebarContent>
           <SidebarFooter>
             <AuthenticatedAccountControl />

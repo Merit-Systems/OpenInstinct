@@ -19,8 +19,10 @@ import {
   vaultImportItemsSchema,
 } from "@shared/vault/schema";
 import { createTRPCRouter, protectedProcedure } from "./init";
+import { memoryRouter } from "./memory";
 
 export const appRouter = createTRPCRouter({
+  memory: memoryRouter,
   chats: {
     save: protectedProcedure
       .input(saveChatSchema)

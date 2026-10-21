@@ -1,4 +1,6 @@
 import { existsSync } from "node:fs";
+import { readFile, readdir } from "node:fs/promises";
+import { z } from "zod";
 import { join } from "node:path";
 import { setTimeout } from "node:timers/promises";
 import { defineEval, type EveEvalContext, type EveEvalTurn } from "eve/evals";
@@ -68,6 +70,36 @@ function checkCompletion(
 export default [
   defineEval({
     description:
+      "Captures the original message receipt after memory binding and before first-turn memory controls",
+    async test(t) {
+      const turn = await t.send("Provenance");
+      turn.expectOk();
+      turn.requireToolCall("provenance__verify", { status: "completed" });
+      const receipt = turn.events.find(
+        (event) => event.type === "message.received"
+      );
+      const action = turn.events.find(
+        (event) =>
+          event.type === "action.result" &&
+          event.data.result.kind === "tool-result" &&
+          event.data.result.toolName === "provenance__verify"
+      );
+      if (
+        !receipt ||
+        action?.type !== "action.result" ||
+        action.data.result.kind !== "tool-result"
+      )
+        throw new Error("Expected receipt and memory control output.");
+      t.check(
+        z
+          .object({ kind: z.string(), observedAt: z.string() })
+          .parse(action.data.result.output),
+        equals({ kind: "user", observedAt: receipt.meta.at })
+      );
+    },
+  }),
+  defineEval({
+    description:
       "Completes background browser work and resumes the same structured worker",
     async test(t) {
       const first = await t.send("Start");
@@ -105,6 +137,26 @@ export default [
       t.check(next.agentId, equals(called.agentId));
       t.check(next.childSessionId, equals(called.childSessionId));
       checkCompletion(t, continued.events);
+      const directory = join(".eve", "fixture-memory", first.sessionId);
+      const snapshots = await Promise.all(
+        (await readdir(directory))
+          .filter((file) => !file.endsWith(".receipt.json"))
+          .map(async (file) =>
+            z
+              .array(
+                z.object({ role: z.string(), kind: z.string().nullable() })
+              )
+              .parse(JSON.parse(await readFile(join(directory, file), "utf8")))
+          )
+      );
+      const kinds = new Set(
+        snapshots
+          .flat()
+          .filter((message) => message.role === "user")
+          .map((message) => message.kind)
+      );
+      t.check(kinds.has("user"), equals(true));
+      t.check(kinds.has("execution.background_task"), equals(true));
     },
   }),
   defineEval({

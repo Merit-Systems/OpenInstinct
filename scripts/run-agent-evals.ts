@@ -19,6 +19,7 @@ const inheritedEnvironment = { ...process.env };
 let activeChild: ChildProcess | undefined;
 let composeAttempted = false;
 let interrupted = false;
+let cleanupEnvironment: NodeJS.ProcessEnv | undefined;
 
 for (const signal of ["SIGINT", "SIGTERM", "SIGHUP"] as const) {
   process.once(signal, () => {
@@ -62,6 +63,7 @@ async function runAgentEvals() {
 
     const migrated = await requireSuccess("pnpm", ["db:migrate"], environment);
     if (!migrated) return;
+    cleanupEnvironment = environment;
     const exitCode = await run(
       "pnpm",
       [
@@ -79,16 +81,45 @@ async function runAgentEvals() {
     if (!interrupted) process.exitCode = exitCode ?? 1;
   } finally {
     if (composeAttempted) {
-      const exitCode = await run(
-        "docker",
-        composeArguments("down", "--volumes"),
-        inheritedEnvironment
-      );
-      if (exitCode !== 0) {
+      let preserve = cleanupEnvironment !== undefined && interrupted;
+      if (cleanupEnvironment && !preserve) {
+        try {
+          preserve =
+            (await run(
+              "pnpm",
+              [
+                "exec",
+                "tsx",
+                "scripts/cleanup-memory-evals.ts",
+                composeProject,
+              ],
+              cleanupEnvironment
+            )) !== 0;
+        } catch (error) {
+          preserve = true;
+          console.error("Memory evaluation artifact cleanup failed:", error);
+        }
+      }
+      if (preserve && cleanupEnvironment) {
+        process.exitCode = process.exitCode === 0 ? 1 : (process.exitCode ?? 1);
         console.error(
-          `docker compose teardown exited with ${String(exitCode)}`
+          `Retaining evaluation database and volume for ${composeProject}; memory artifact cleanup is incomplete.`
         );
-        process.exitCode = 1;
+        console.error(
+          `Retry from the repository with the same Blob credentials: DATABASE_URL=${cleanupEnvironment.DATABASE_URL ?? ""} KERNEL_API_KEY=unused-by-agent-evals NODE_ENV=development pnpm exec tsx --env-file-if-exists=.env.local scripts/cleanup-memory-evals.ts ${composeProject} && docker compose --project-name ${composeProject} down --volumes`
+        );
+      } else {
+        const exitCode = await run(
+          "docker",
+          composeArguments("down", "--volumes"),
+          inheritedEnvironment
+        );
+        if (exitCode !== 0) {
+          console.error(
+            `docker compose teardown exited with ${String(exitCode)}`
+          );
+          process.exitCode = 1;
+        }
       }
     }
   }

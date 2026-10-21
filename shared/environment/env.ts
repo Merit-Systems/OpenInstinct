@@ -83,10 +83,26 @@ export const env = createEnv({
     // Optional
     BLOB_READ_WRITE_TOKEN: requiredValue.optional(),
     BLOB_STORE_ID: requiredValue.optional(),
+    EVE_MEMORY_BLOB_STORE_ID: requiredValue.optional(),
+    EVE_MEMORY_BLOB_READ_WRITE_TOKEN: requiredValue.optional(),
     GOOGLE_CONNECTOR_UID: requiredValue.default("google/open-instinct"),
     LINQ_CONNECTOR: requiredValue.optional(),
     LINK_CLIENT_ID: requiredValue.optional(),
     LINK_CLIENT_SECRET: requiredValue.optional(),
+    KNOWLEDGE_MEMORY_MODE: z.enum(["off", "shadow", "enabled"]).default("off"),
+    KNOWLEDGE_MEMORY_WORKSPACES: requiredValue.optional(),
+    KNOWLEDGE_MEMORY_DAILY_TOKENS: z.coerce
+      .number()
+      .int()
+      .min(0)
+      .max(1_000_000_000)
+      .default(250_000),
+    KNOWLEDGE_MEMORY_DAILY_CALLS: z.coerce
+      .number()
+      .int()
+      .min(0)
+      .max(100_000)
+      .default(100),
     STRIPE_PUBLISHABLE_KEY: requiredValue.optional(),
     LINQ_PHONE_NUMBER: requiredValue
       .refine(

@@ -35,6 +35,7 @@ describe("agent eval supervisor", supervisorTestOptions, () => {
       `compose --project-name ${project} port postgres 5432`,
       "pnpm db:migrate postgresql://postgres:postgres@127.0.0.1:49152/open_instinct development unused-by-agent-evals http://127.0.0.1:9 http://127.0.0.1:9",
       "pnpm exec eve eval agent --strict --max-concurrency 1 --tag smoke postgresql://postgres:postgres@127.0.0.1:49152/open_instinct development unused-by-agent-evals http://127.0.0.1:9 http://127.0.0.1:9",
+      `pnpm exec tsx scripts/cleanup-memory-evals.ts ${project} postgresql://postgres:postgres@127.0.0.1:49152/open_instinct development unused-by-agent-evals http://127.0.0.1:9 http://127.0.0.1:9`,
       `compose --project-name ${project} down --volumes`,
     ]);
   });
@@ -91,7 +92,7 @@ describe("agent eval supervisor", supervisorTestOptions, () => {
     ]);
   });
 
-  it("preserves the signal exit code when the eval process is interrupted", async () => {
+  it("preserves the database ledger and signal exit code when evaluation is interrupted", async () => {
     const result = await runSupervisor({
       AI_GATEWAY_API_KEY: "test-gateway-key",
       EVAL_BLOCK_ACTION: "eval",
@@ -105,8 +106,41 @@ describe("agent eval supervisor", supervisorTestOptions, () => {
       `compose --project-name ${project} port postgres 5432`,
       "pnpm db:migrate postgresql://postgres:postgres@127.0.0.1:49152/open_instinct development unused-by-agent-evals http://127.0.0.1:9 http://127.0.0.1:9",
       "pnpm exec eve eval agent --strict --max-concurrency 1 --tag smoke postgresql://postgres:postgres@127.0.0.1:49152/open_instinct development unused-by-agent-evals http://127.0.0.1:9 http://127.0.0.1:9",
-      `compose --project-name ${project} down --volumes`,
     ]);
+    expect(result.stderr).toContain(
+      `Retaining evaluation database and volume for ${project}`
+    );
+    expect(result.stderr).toContain(
+      `scripts/cleanup-memory-evals.ts ${project}`
+    );
+  });
+
+  it.each([
+    ["0", 1],
+    ["7", 7],
+  ] as const)(
+    "retains the database when artifact cleanup fails after eval exit %s",
+    async (evalExit, expectedExit) => {
+      const result = await runSupervisor({
+        AI_GATEWAY_API_KEY: "test-gateway-key",
+        EVAL_CLEANUP_EXIT_CODE: "1",
+        EVAL_EXIT_CODE: evalExit,
+      });
+      expect(result.code).toBe(expectedExit);
+      expect(result.commands).toContain("scripts/cleanup-memory-evals.ts");
+      expect(result.commands).not.toContain("down --volumes");
+      expect(result.stderr).toContain("same Blob credentials");
+    }
+  );
+
+  it("retains the database and signal exit code when cleanup is interrupted", async () => {
+    const result = await runSupervisor({
+      AI_GATEWAY_API_KEY: "test-gateway-key",
+      EVAL_BLOCK_ACTION: "cleanup",
+    });
+    expect(result.code).toBe(130);
+    expect(result.commands).not.toContain("down --volumes");
+    expect(result.stderr).toContain("cleanup is incomplete");
   });
 });
 
@@ -148,6 +182,14 @@ fi
       `#!/bin/sh
 printf 'pnpm %s %s %s %s %s %s\n' "$*" "$DATABASE_URL" "$NODE_ENV" "$KERNEL_API_KEY" "$KERNEL_BASE_URL" "$BETTER_AUTH_URL" >> "$EVAL_SUPERVISOR_LOG"
 if [ "$1" = "exec" ]; then
+  if [ "$2" = "tsx" ]; then
+    if [ "\${EVAL_BLOCK_ACTION:-never}" = "cleanup" ]; then
+      printf ' cleanup started \n' >> "$EVAL_SUPERVISOR_LOG"
+      trap 'exit 130' INT TERM HUP
+      while true; do /bin/sleep 0.1; done
+    fi
+    exit "\${EVAL_CLEANUP_EXIT_CODE:-0}"
+  fi
   if [ "\${EVAL_BLOCK_ACTION:-never}" = "eval" ]; then
     trap 'exit 130' INT TERM HUP
     while true; do /bin/sleep 0.1; done

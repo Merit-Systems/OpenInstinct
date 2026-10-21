@@ -10,6 +10,7 @@ const eveDevServerSchema = z.object({
 });
 
 interface ScheduledRunRequestBodies {
+  "/internal/memory-maintenance/recover": Record<string, never>;
   "/internal/scheduled-run/report": { runId: string };
   "/internal/scheduled-run/respond": {
     answer: string;
@@ -64,5 +65,15 @@ export async function postScheduledReport(runId: string) {
     throw new Error(
       `Scheduled report callback failed (${String(response.status)}).`
     );
+  }
+}
+
+export async function postMemoryRecovery() {
+  const response = await postScheduledRunRoute(
+    "/internal/memory-maintenance/recover",
+    {}
+  );
+  if (!response.ok) {
+    throw new Error(`Memory recovery failed (${String(response.status)}).`);
   }
 }

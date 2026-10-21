@@ -32,6 +32,8 @@ export function fixtureModel(worker: boolean) {
             message: "Verified fixture outcome",
             images: [],
           });
+      } else if (!returned && text === "Provenance") {
+        toolName = "provenance__verify";
       } else if (!returned && /^(Start|Wait|Resume:)/u.test(text)) {
         toolName = "run_browser";
         const assignment = {

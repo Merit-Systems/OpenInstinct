@@ -1,5 +1,5 @@
 import { defineMemory } from "eve/memory";
-import { fileMemory } from "eve/memory/file";
+import { fileMemory, inMemory } from "eve/memory/file";
 import { vercelBlob } from "eve/memory/file/vercel";
 import {
   preserveProfileMemoryCancellation,
@@ -7,14 +7,21 @@ import {
   resolveProfileMemoryScope,
 } from "../lib/profile-memory";
 import { env } from "@shared/environment";
+import { withProfileMemoryMigration } from "../lib/memory/legacy";
 
-const backend = resolveProfileMemoryBackend(env);
+const configuration = resolveProfileMemoryBackend(env);
+const backend =
+  configuration.kind === "vercel-blob"
+    ? vercelBlob(configuration.options)
+    : env.NODE_ENV !== "production"
+      ? inMemory()
+      : vercelBlob({
+          storeId: env.EVE_MEMORY_BLOB_STORE_ID ?? env.BLOB_STORE_ID,
+          token:
+            env.EVE_MEMORY_BLOB_READ_WRITE_TOKEN ?? env.BLOB_READ_WRITE_TOKEN,
+        });
 const provider = preserveProfileMemoryCancellation(
-  backend.kind === "vercel-blob"
-    ? fileMemory({
-        backend: vercelBlob(backend.options),
-      })
-    : fileMemory()
+  withProfileMemoryMigration(fileMemory({ backend }), backend)
 );
 
 export default defineMemory({

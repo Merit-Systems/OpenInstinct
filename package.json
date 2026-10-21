@@ -89,6 +89,8 @@
     "bench:browser": "eve eval browser",
     "bench:compare": "node --experimental-strip-types scripts/compare-browser-benchmarks.ts",
     "bench:dashboard": "portless --name eve-browser-bench next dev evals/browser/dashboard",
+    "bench:memory:scale": "node --experimental-strip-types scripts/run-memory-scale.ts",
+    "bench:memory:scenarios": "node --experimental-strip-types scripts/run-memory-scenarios.ts",
     "bench:seed": "tsx scripts/seed-browser-benchmark-vault.ts",
     "build": "turbo run build:app",
     "build:app": "next build",

@@ -344,6 +344,10 @@ explicit secrets.
 > [!WARNING]
 > This is not software intended for production use.
 
+An optional [knowledge memory system](docs/knowledge-memory.md) adds evidence,
+revision history, linked records and explicit correction/deletion controls.
+It is disabled by default and can be evaluated in shadow mode before rollout.
+
 ---
 
 <div align="center">
