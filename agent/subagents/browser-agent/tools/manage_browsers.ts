@@ -14,22 +14,32 @@ import {
   withBrowserProfileWriteLock,
 } from "@db/services/browsers";
 import { recordBrowserTraceDomains } from "@db/services/browser-traces";
+import { retireBrowserSession } from "../lib/lifecycle/retire";
 import { kernel } from "@agent/subagents/browser-agent/lib/kernel";
 import { requireWorkerScope } from "@agent/subagents/browser-agent/lib/access";
 import { disposeBrowserLoopSession } from "../lib/semantic-loop";
 import { requireOwnedBrowserSession } from "@agent/subagents/browser-agent/lib/owned-browser";
-import {
-  domainFromUrl,
-  harvestBrowserTraceDomains,
-} from "@agent/subagents/browser-agent/lib/trace/domains";
+import { domainFromUrl } from "@agent/subagents/browser-agent/lib/trace/domains";
 
 const browserTimeoutFloorSeconds = 15 * 60;
+const startUrlSchema = z.url().refine((value) => {
+  try {
+    const url = new URL(value);
+    return (
+      ["http:", "https:"].includes(url.protocol) &&
+      !url.username &&
+      !url.password
+    );
+  } catch {
+    return false;
+  }
+}, "Use an HTTP(S) URL without embedded credentials.");
 
 const inputSchema = z.object({
   action: z.enum(["create", "update", "list", "get", "delete"]),
   save_changes: z.boolean().optional(),
   session_id: z.string().optional(),
-  start_url: z.url().optional(),
+  start_url: startUrlSchema.optional(),
   timeout_seconds: z
     .number()
     .int()
@@ -53,6 +63,10 @@ const manageBrowsers = defineTool({
 
     switch (input.action) {
       case "create": {
+        const startUrl =
+          input.start_url === undefined
+            ? undefined
+            : startUrlSchema.parse(input.start_url);
         const create = async () => {
           const profile = await ensureWorkspaceProfile(
             scope.workspaceId,
@@ -75,7 +89,7 @@ const manageBrowsers = defineTool({
                 id: profile.id,
                 save_changes: input.save_changes ?? false,
               },
-              start_url: input.start_url,
+              start_url: startUrl,
               stealth: true,
               telemetry: {
                 browser: { page: { enabled: true } },
@@ -169,19 +183,12 @@ const manageBrowsers = defineTool({
       case "delete": {
         const sessionId = requireSessionId(input.session_id);
         const record = await requireOwnedBrowserSession(scope, sessionId);
-        await harvestBrowserTraceDomains(
+        await retireBrowserSession(
           scope,
           record.workerSessionId ?? context.session.id,
           { createdAt: record.createdAt, sessionId: record.sessionId },
           signal
         );
-        await disposeBrowserLoopSession(sessionId);
-        await kernel.browsers
-          .deleteByID(sessionId, { signal })
-          .catch((cause: unknown) => {
-            if (!isNotFoundError(cause)) throw cause;
-          });
-        await deleteBrowserSession(scope, sessionId);
         return "Browser session deleted successfully";
       }
     }

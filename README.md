@@ -364,3 +364,11 @@ explicit secrets.
 Built on [Vercel](https://vercel.com) · [Kernel](https://kernel.sh) · [Linq](https://linqapp.com) · [Neon](https://neon.tech)
 
 </div>
+
+## Browser runtime checks
+
+See [browser runtime lessons from BELL](docs/browser-runtime-lessons.md) for the
+provider-independent lifecycle improvements, retained architecture, and the
+opt-in Kernel profile-persistence and retirement check. Run it with
+`OPENINSTINCT_LIVE_BROWSER_CHECK=1 pnpm test:browser:live`; it uses a temporary
+profile and verifies cleanup without touching saved user browser state.

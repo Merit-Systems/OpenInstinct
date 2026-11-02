@@ -121,7 +121,8 @@
     "build:eve": "eve build",
     "dev:eve": "eve dev",
     "start:eve": "eve start",
-    "test:runtime": "node --experimental-strip-types scripts/run-runtime-smoke.ts"
+    "test:runtime": "node --experimental-strip-types scripts/run-runtime-smoke.ts",
+    "test:browser:live": "node --env-file-if-exists=.env.local --import tsx scripts/check-browser-lifecycle.ts"
   },
   "version": "0.0.0",
   "type": "module"
