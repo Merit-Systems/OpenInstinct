@@ -91,7 +91,14 @@ function userVisibleParts(
     );
   }
 
-  return sentMessageParts ?? [];
+  return (
+    sentMessageParts ??
+    message.parts.filter(
+      (part) =>
+        part.type === "interaction" ||
+        (part.type === "tool" && part.interaction !== undefined)
+    )
+  );
 }
 
 const timestampFormatter = new Intl.DateTimeFormat(undefined, {

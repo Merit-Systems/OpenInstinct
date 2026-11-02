@@ -93,10 +93,17 @@ export function AgentMessagePart({
       return (
         <Tool
           defaultOpen={
-            status === "approval-requested" || status === "approval-responded"
+            status === "approval-requested" ||
+            status === "approval-responded" ||
+            status === "output-error" ||
+            part.state === "cancelled"
           }
         >
-          <ToolHeader status={status} title={part.name} />
+          <ToolHeader
+            status={status}
+            statusLabel={part.state === "cancelled" ? "Cancelled" : undefined}
+            title={part.name}
+          />
           <ToolContent>
             <ToolInput input={part.input} />
             {interaction ? (
@@ -106,7 +113,21 @@ export function AgentMessagePart({
                 onAnswers={onAnswers}
               />
             ) : null}
-            <ToolOutput errorText={part.error?.message} output={part.output} />
+            {part.state === "cancelled" ? (
+              <output className="type-supporting-body text-muted-foreground">
+                Cancelled before completion.
+              </output>
+            ) : (
+              <ToolOutput
+                errorText={
+                  part.state === "failed"
+                    ? (part.error?.message ??
+                      "The tool call failed without error details.")
+                    : undefined
+                }
+                output={part.output}
+              />
+            )}
           </ToolContent>
         </Tool>
       );
@@ -145,8 +166,9 @@ function toolStatus(part: EveToolPart): ToolStatus {
       return "output-available";
     case "rejected":
       return "output-denied";
-    case "failed":
     case "cancelled":
+      return "output-denied";
+    case "failed":
       return "output-error";
   }
   throw new Error("Unsupported tool call state.");

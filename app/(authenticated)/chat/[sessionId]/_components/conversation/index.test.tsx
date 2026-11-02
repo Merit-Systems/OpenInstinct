@@ -104,7 +104,7 @@ describe("chat conversation", () => {
     expect(markup).not.toContain("is cancelled");
   });
 
-  it("hides runtime errors from the iMessage transcript", () => {
+  it("shows runtime errors in the default transcript", () => {
     const agent = {
       error: new Error("Internal runtime failure"),
       events: [],
@@ -119,8 +119,60 @@ describe("chat conversation", () => {
     );
 
     expect(markup).toContain("Try this");
-    expect(markup).not.toContain("Request failed");
-    expect(markup).not.toContain("Internal runtime failure");
+    expect(markup).toContain("Request failed");
+    expect(markup).toContain("Internal runtime failure");
+  });
+  it("shows a native question once alongside multiple delivered messages in the default view", () => {
+    const events = [
+      ...settledCall("ack-1", "send_message", {
+        kind: "message",
+        text: "First acknowledgment",
+      }),
+      ...settledCall("ack-2", "send_message", {
+        kind: "message",
+        text: "Second acknowledgment",
+      }),
+    ];
+    const agent = {
+      error: undefined,
+      events,
+      status: "ready",
+      respond: async () => undefined,
+      view: viewOf(events),
+      messages: [
+        {
+          id: "turn-1:assistant",
+          role: "assistant",
+          parts: [
+            {
+              type: "interaction",
+              interactionId: "question-1",
+              status: "open",
+              stepIndex: 0,
+              turnId: "turn-1",
+              request: {
+                kind: "question",
+                prompt: "Choose Alpha or Beta.",
+                allowFreeform: true,
+                options: [
+                  { id: "a", label: "Alpha" },
+                  { id: "b", label: "Beta" },
+                ],
+              },
+            },
+          ],
+        },
+      ],
+    } satisfies ConversationAgent;
+    const markup = renderToStaticMarkup(
+      <ChatConversation agent={agent} traceView="imessage" />
+    );
+    expect(markup).toContain("First acknowledgment");
+    expect(markup).toContain("Second acknowledgment");
+    expect(markup.match(/Choose Alpha or Beta\./g)).toHaveLength(2); // Prompt text and radio-group label, rendered once.
+    expect(markup).toContain("Alpha");
+    expect(markup).toContain("Beta");
+    expect(markup).toContain('type="submit"');
   });
 });
 

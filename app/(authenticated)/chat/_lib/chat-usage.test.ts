@@ -1,8 +1,29 @@
 import type { SessionStreamEvent } from "eve/client";
 import { describe, expect, it } from "vitest";
-import { combineChatUsage, summarizeChatUsage } from "./chat-usage";
+import {
+  chatUsageSnapshot,
+  combineChatUsage,
+  summarizeChatUsage,
+} from "./chat-usage";
 
 describe("chat usage", () => {
+  it("keeps a saved total instead of replacing it with a larger but incomplete window", () => {
+    const saved = { costUsd: 0.23, inputTokens: 300000, outputTokens: 1000 };
+    const window = { costUsd: 0.15, inputTokens: 400000, outputTokens: 1000 };
+    expect(chatUsageSnapshot(window, saved, false)).toEqual({
+      usage: saved,
+      label: "Saved usage",
+    });
+    expect(chatUsageSnapshot(window, saved, true)).toEqual({
+      usage: window,
+      label: "Usage",
+    });
+    expect(chatUsageSnapshot(window, undefined, false)).toEqual({
+      usage: window,
+      label: "Loaded usage",
+    });
+  });
+
   it("sums token and complete cost usage across usage records", () => {
     expect(
       summarizeChatUsage([

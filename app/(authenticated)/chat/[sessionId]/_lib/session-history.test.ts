@@ -2,7 +2,10 @@ import type { Fact } from "eve/events";
 import { Client, conversationOf } from "eve/client";
 import { collectSubagentSessions } from "@app/_lib/subagent-sessions";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { readLatestSessionHistory } from "./session-history";
+import {
+  readLatestSessionHistory,
+  readOlderSessionHistory,
+} from "./session-history";
 
 const client = new Client({ baseUrl: "" });
 
@@ -37,20 +40,48 @@ describe("session history", () => {
     );
     expect(requested.pathname).toBe("/eve/v1/session/session%2Fone/stream");
     expect(requested.searchParams.get("startIndex")).toBe("-128");
-    expect(history.startIndex).toBe(4);
-    expect(history.endIndex).toBe(12);
+    expect(history.startIndex).toBe(8);
+    expect(history.endIndex).toBe(24);
     expect(
       history.events
         .filter((event) => event.type === "turn.started")
         .map((event) => event.scope?.turnId)
     ).toEqual(["turn_2", "turn_3", "turn_4", "turn_5"]);
+    expect(
+      conversationOf(history.events)
+        .messages.filter((message) => message.role === "user")
+        .map((message) => message.id)
+    ).toEqual([
+      "delivery_2:user",
+      "delivery_3:user",
+      "delivery_4:user",
+      "delivery_5:user",
+    ]);
+    const older = await readOlderSessionHistory(
+      client.sessions.attach("session/one"),
+      history.startIndex
+    );
+    const combined = [...older.events, ...history.events];
+    expect(
+      conversationOf(combined).messages.filter(
+        (message) => message.role === "user"
+      )
+    ).toHaveLength(6);
+    expect(
+      new Set(
+        combined.map(
+          (event) =>
+            `${String(event.meta.position.line)}:${String(event.meta.position.index)}`
+        )
+      ).size
+    ).toBe(combined.length);
   });
 
   it("retains a continued child's relationship outside the transcript page", async () => {
     const lines = Array.from({ length: 100 }, (_, index) =>
       turnLines(index)
     ).flat();
-    lines[1]?.facts.push({
+    lines[2]?.facts.push({
       type: "child.opened",
       data: {
         name: "browser-agent",
@@ -60,7 +91,7 @@ describe("session history", () => {
       },
       scope: { taskId: "task-1", turnId: "turn_0" },
     });
-    lines[199]?.facts.push(
+    lines[398]?.facts.push(
       {
         type: "model.requested",
         data: { runId: "run-99", owner: { turnId: "turn_99" } },
@@ -117,7 +148,7 @@ describe("session history", () => {
     const history = await readLatestSessionHistory(
       client.sessions.attach("parent-1")
     );
-    expect(history.startIndex).toBe(192);
+    expect(history.startIndex).toBe(384);
     expect(history.events.some((event) => event.type === "child.opened")).toBe(
       false
     );
@@ -134,8 +165,53 @@ describe("session history", () => {
       task: "Continue checkout",
     });
     // Keep the authentic opening position for the parent's authorized child reader.
-    expect(sessions[0]?.opened.meta.position.line).toBe(1);
+    expect(sessions[0]?.opened.meta.position.line).toBe(2);
   });
+
+  it.each([96, 97])(
+    "reads back for turn %i input admitted before the bounded tail",
+    async (queuedTurn) => {
+      const lines = Array.from({ length: 100 }, (_, index) =>
+        turnLines(index)
+      ).flat();
+      const admission = lines[queuedTurn * 4]?.facts.shift();
+      if (admission?.type !== "delivery.admitted")
+        throw new Error("Expected the queued delivery admission.");
+      lines[100]?.facts.push(admission);
+      vi.stubGlobal(
+        "fetch",
+        vi.fn<(input: string | URL) => Promise<Response>>((input) => {
+          const cursor = Number(
+            new URL(input, "http://localhost").searchParams.get("startIndex")
+          );
+          const from = cursor < 0 ? Math.max(0, lines.length + cursor) : cursor;
+          return Promise.resolve(
+            new Response(
+              lines
+                .slice(from)
+                .map((line) => JSON.stringify(line))
+                .join("\n"),
+              {
+                headers: {
+                  "x-eve-stream-tail-index": String(lines.length - 1),
+                  "x-eve-stream-version": "27",
+                },
+              }
+            )
+          );
+        })
+      );
+      const history = await readLatestSessionHistory(
+        client.sessions.attach("queued-input")
+      );
+      expect(history.startIndex).toBe(100);
+      expect(
+        conversationOf(history.events).messages.some(
+          (message) => message.id === `delivery_${String(queuedTurn)}:user`
+        )
+      ).toBe(true);
+    }
+  );
 
   it("rejects a stream response without a durable tail cursor", async () => {
     vi.stubGlobal(
@@ -161,10 +237,17 @@ function turnLines(index: number) {
   const lines: { at: string; facts: Fact[] }[] = [
     {
       at,
+      facts: [{ data: { deliveryId }, type: "delivery.admitted" }],
+    },
+    {
+      at,
       facts: [
-        { data: { deliveryId }, type: "delivery.admitted" },
         {
-          data: { cause: { deliveryId }, follows: null, turnId },
+          data: {
+            cause: { deliveryId },
+            follows: index === 0 ? null : `turn_${String(index - 1)}`,
+            turnId,
+          },
           scope: { turnId },
           type: "turn.started",
         },
@@ -181,6 +264,16 @@ function turnLines(index: number) {
           },
           scope: { turnId },
           type: "delivery.consumed",
+        },
+      ],
+    },
+    {
+      at,
+      facts: [
+        {
+          type: "turn.settled",
+          data: { turnId, outcome: "completed", reply: [] },
+          scope: { turnId },
         },
       ],
     },

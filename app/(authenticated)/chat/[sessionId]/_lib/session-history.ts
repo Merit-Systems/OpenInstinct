@@ -107,12 +107,51 @@ async function extendToTurnBoundary(
     };
   }
 
-  // Start the page on a whole turn, so the fold sees each turn it renders open.
-  const firstTurnLine = startedTurnLines(page.events).at(-turnsPerPage);
-  if (firstTurnLine === undefined || firstTurnLine <= page.startIndex) {
-    return page;
+  // Delivery admission can be on an earlier line than turn.started. The
+  // native projection needs that admission to render the consumed user input.
+  const visibleTurns = page.events
+    .filter((event) => event.type === "turn.started")
+    .slice(-turnsPerPage);
+  const firstTurn = visibleTurns[0];
+  if (!firstTurn) return page;
+  const visibleTurnIds = new Set(
+    visibleTurns.map((event) => event.data.turnId)
+  );
+  const deliveryIds = new Set([
+    ...visibleTurns.flatMap((event) =>
+      "deliveryId" in event.data.cause ? [event.data.cause.deliveryId] : []
+    ),
+    ...page.events.flatMap((event) =>
+      event.type === "delivery.consumed" &&
+      visibleTurnIds.has(event.data.turnId)
+        ? [event.data.deliveryId]
+        : []
+    ),
+  ]);
+  const admissions = new Map<string, number>();
+  const collectAdmissions = (events: readonly SessionStreamEvent[]) => {
+    for (const event of events) {
+      if (
+        event.type === "delivery.admitted" &&
+        deliveryIds.has(event.data.deliveryId)
+      ) {
+        admissions.set(event.data.deliveryId, event.meta.position.line);
+      }
+    }
+  };
+  collectAdmissions(page.events);
+  while (page.startIndex > 0 && admissions.size < deliveryIds.size) {
+    const from = Math.max(0, page.startIndex - linesPerRead);
+    // oxlint-disable-next-line eslint/no-await-in-loop -- Resolve the displayed turns' earlier admissions without fabricating projection events.
+    const older = await readLines(reader, from, page.startIndex, signal);
+    collectAdmissions(older);
+    page = { ...page, events: [...older, ...page.events], startIndex: from };
   }
-
+  const firstLine = Math.min(
+    firstTurn.meta.position.line,
+    ...admissions.values()
+  );
+  if (firstLine <= page.startIndex) return page;
   return {
     ...page,
     childOpenings: [
@@ -120,9 +159,9 @@ async function extendToTurnBoundary(
       ...page.events.filter((event) => event.type === "child.opened"),
     ],
     events: page.events.filter(
-      (event) => event.meta.position.line >= firstTurnLine
+      (event) => event.meta.position.line >= firstLine
     ),
-    startIndex: firstTurnLine,
+    startIndex: firstLine,
   };
 }
 

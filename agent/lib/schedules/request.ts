@@ -60,7 +60,7 @@ export async function postScheduledReport(runId: string) {
     "/internal/scheduled-run/report",
     { runId }
   );
-  if (!response.ok) {
+  if (response.status !== 202) {
     throw new Error(
       `Scheduled report callback failed (${String(response.status)}).`
     );
