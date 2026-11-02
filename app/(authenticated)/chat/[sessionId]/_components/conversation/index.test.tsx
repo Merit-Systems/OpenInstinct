@@ -1,45 +1,51 @@
-import type { MessageStreamEvent } from "eve/client";
+import type { SessionEvent, SessionStreamEvent } from "eve/client";
+import { emptySessionView, foldEvents, type JsonValue } from "eve/events";
 import type { EveMessage } from "eve/react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { ChatConversation } from ".";
 import type { ChatAgent } from "../chat-agent";
 
+type ConversationAgent = Pick<
+  ChatAgent,
+  "error" | "events" | "messages" | "respond" | "status" | "view"
+>;
+
 describe("chat conversation", () => {
   it("shows send_message output instead of assistant stream text", () => {
+    const events = settledCall("call_send_message", "send_message", {
+      kind: "message",
+      text: "The visible iMessage response.",
+    });
     const agent = {
-      data: {
-        messages: [
-          message("turn-1:user", "What happened?"),
-          {
-            id: "turn-1:assistant",
-            metadata: { status: "complete", turnId: "turn-1" },
-            parts: [
-              {
-                state: "done",
-                stepIndex: 0,
-                text: "Internal assistant narration",
-                type: "text",
-              },
-              {
-                state: "done",
-                stepIndex: 1,
-                text: "DELIVERY_COMPLETE",
-                type: "text",
-              },
-            ],
-            role: "assistant",
-          },
-        ],
-      },
+      messages: [
+        message("turn-1:user", "What happened?"),
+        {
+          id: "turn-1:assistant",
+          metadata: { status: "complete", turnId: "turn-1" },
+          parts: [
+            {
+              state: "done",
+              stepIndex: 0,
+              text: "Internal assistant narration",
+              type: "text",
+            },
+            {
+              state: "done",
+              stepIndex: 1,
+              text: "DELIVERY_COMPLETE",
+              type: "text",
+            },
+          ],
+          role: "assistant",
+        },
+      ],
       error: undefined,
-      events: [sendMessageResult("The visible iMessage response.")],
+      events,
       respond: async () => undefined,
       status: "ready",
-    } satisfies Pick<
-      ChatAgent,
-      "data" | "error" | "events" | "respond" | "status"
-    >;
+      view: viewOf(events),
+    } satisfies ConversationAgent;
 
     const markup = renderToStaticMarkup(
       <ChatConversation agent={agent} traceView="imessage" />
@@ -59,24 +65,35 @@ describe("chat conversation", () => {
     const hiddenShell = {
       id: "task-delivery:assistant",
       metadata: { status: "streaming", turnId: "task-delivery" },
-      parts: [{ type: "step-start" }],
+      parts: [],
       role: "assistant",
     } satisfies EveMessage;
     const events = [
-      workerReceipt("task_worker"),
-      workerCancellation("task_worker"),
+      ...settledCall(
+        "call_worker",
+        "browser-agent",
+        { agentId: "agent_worker", status: "working", taskId: "task_worker" },
+        "agent"
+      ),
+      ...settledCall("call_cancel", "task_cancel", {
+        tasks: [
+          {
+            metadata: { name: "browser-agent" },
+            status: "cancelled",
+            taskId: "task_worker",
+          },
+        ],
+      }),
       delivery("task-delivery", cancellationText),
     ];
     const agent = {
-      data: { messages: [visibleMessage, hiddenDelivery, hiddenShell] },
       error: undefined,
       events,
+      messages: [visibleMessage, hiddenDelivery, hiddenShell],
       respond: async () => undefined,
       status: "streaming",
-    } satisfies Pick<
-      ChatAgent,
-      "data" | "error" | "events" | "respond" | "status"
-    >;
+      view: viewOf(events),
+    } satisfies ConversationAgent;
 
     const markup = renderToStaticMarkup(
       <ChatConversation agent={agent} traceView="imessage" />
@@ -89,15 +106,13 @@ describe("chat conversation", () => {
 
   it("hides runtime errors from the iMessage transcript", () => {
     const agent = {
-      data: { messages: [message("turn-1:user", "Try this")] },
       error: new Error("Internal runtime failure"),
       events: [],
+      messages: [message("turn-1:user", "Try this")],
       respond: async () => undefined,
       status: "error",
-    } satisfies Pick<
-      ChatAgent,
-      "data" | "error" | "events" | "respond" | "status"
-    >;
+      view: emptySessionView(),
+    } satisfies ConversationAgent;
 
     const markup = renderToStaticMarkup(
       <ChatConversation agent={agent} traceView="imessage" />
@@ -118,74 +133,60 @@ function message(id: string, text: string): EveMessage {
   };
 }
 
-function workerReceipt(taskId: string): MessageStreamEvent {
-  return {
-    data: {
-      backgroundTask: { status: "working", taskId },
-      callId: "call_worker",
-      output: `{"status":"working","taskId":"${taskId}"}`,
-      subagentName: "browser-agent",
-    },
-    meta: { at: "2026-08-27T20:00:00.000Z", id: "receipt" },
-    type: "subagent.completed",
-  };
-}
-
-function workerCancellation(taskId: string): MessageStreamEvent {
-  return {
-    data: {
-      result: {
-        callId: "call_cancel",
-        kind: "tool-result",
-        output: {
-          tasks: [
-            {
-              metadata: {
-                agentId: "agent_worker",
-                kind: "subagent",
-                mode: "local",
-                name: "browser-agent",
-              },
-              status: "cancelled",
-              taskId,
-            },
-          ],
-        },
-        toolName: "task_cancel",
+function settledCall(
+  callId: string,
+  name: string,
+  output: JsonValue,
+  kind: "agent" | "tool" = "tool"
+) {
+  const scope = { runId: `run_${callId}`, turnId: "turn-1" };
+  return [
+    streamed({
+      data: { owner: { turnId: scope.turnId }, runId: scope.runId },
+      scope,
+      type: "model.requested",
+    }),
+    streamed({
+      data: {
+        callId,
+        capability: { kind, name },
+        input: {},
+        owner: { runId: scope.runId },
       },
-      sequence: 2,
-      status: "completed",
-      stepIndex: 1,
-      turnId: "turn_cancel",
+      scope,
+      type: "call.requested",
+    }),
+    streamed({
+      data: { callId, outcome: "completed", output },
+      scope,
+      type: "call.settled",
+    }),
+  ];
+}
+
+function delivery(name: string, text: string) {
+  return streamed({
+    data: { deliveryId: name, parts: [{ kind: "text", text }], turnId: name },
+    scope: { turnId: name },
+    type: "delivery.consumed",
+  });
+}
+
+let nextLine = 0;
+
+function streamed(fact: SessionEvent): SessionStreamEvent {
+  const line = nextLine;
+  nextLine += 1;
+  return {
+    ...fact,
+    meta: {
+      at: "2026-08-27T20:00:00.000Z",
+      endOfLine: true,
+      position: { index: 0, line },
     },
-    meta: { at: "2026-08-27T20:00:00.500Z", id: "cancel-result" },
-    type: "action.result",
   };
 }
 
-function delivery(turnId: string, messageText: string): MessageStreamEvent {
-  return {
-    data: { message: messageText, sequence: 0, turnId },
-    meta: { at: "2026-08-27T20:00:01.000Z", id: "delivery" },
-    type: "message.received",
-  };
-}
-
-function sendMessageResult(text: string): MessageStreamEvent {
-  return {
-    data: {
-      result: {
-        callId: "call_send_message",
-        kind: "tool-result",
-        output: { kind: "message", text },
-        toolName: "send_message",
-      },
-      sequence: 1,
-      status: "completed",
-      stepIndex: 1,
-      turnId: "turn-1",
-    },
-    meta: { at: "2026-09-01T20:00:00.000Z", id: "send-result" },
-    type: "action.result",
-  };
+function viewOf(events: readonly SessionStreamEvent[]) {
+  return foldEvents(emptySessionView(), events);
 }

@@ -25,17 +25,16 @@ describe("root and worker capability boundaries", () => {
       "calendar.ts",
       "contacts.ts",
       "gmail.ts",
-      "link__create_spend_request.ts",
-      "link__retrieve_spend_request.ts",
       "messaging.ts",
       "run_browser.ts",
       "schedules.ts",
-      "task_cancel.ts",
       "vault.ts",
       "web_fetch.ts",
       "web_search.ts",
     ]);
     expect(existsSync(`${rootTools}/sendMessage.ts`)).toBe(false);
+    // Eve's built-in `eve__task_cancel` replaces the authored cancel tool.
+    expect(existsSync(`${rootTools}/task_cancel.ts`)).toBe(false);
     expect(existsSync("agent/extensions/kernel/extension.ts")).toBe(false);
     expect(existsSync("agent/extensions/kernel/connections/browser.ts")).toBe(
       false
@@ -68,7 +67,6 @@ describe("root and worker capability boundaries", () => {
       "fill_from_link.ts",
       "fill_from_vault.ts",
       "list_vault.ts",
-      "load_skill.ts",
       "manage_browsers.ts",
       "personal_info.ts",
       "read_file.ts",
@@ -85,9 +83,10 @@ describe("root and worker capability boundaries", () => {
     expect(readFileSync(`${workerTools}/personal_info.ts`, "utf8")).toContain(
       "disableTool()"
     );
+    // Skills load through Eve's built-in `eve__skill`, not an authored tool.
+    expect(existsSync(`${workerTools}/load_skill.ts`)).toBe(false);
     for (const tool of [
       "bash",
-      "load_skill",
       "read_file",
       "web_fetch",
       "web_search",
@@ -182,7 +181,7 @@ describe("root and worker capability boundaries", () => {
       "tool supplies the required structured completion schema"
     );
     expect(workerCoordination).toContain(
-      "including when passing an existing `agentId`"
+      "including when passing an existing `taskId`"
     );
     expect(workerCoordination).toContain(
       "calling Eve's native `final_output` tool exactly once"

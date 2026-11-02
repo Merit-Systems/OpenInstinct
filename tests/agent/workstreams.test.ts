@@ -219,9 +219,9 @@ describe("workstream memory", () => {
       "complete",
       "later"
     );
-    const after = await workstreamMemory.provider.recall[
-      "compaction.completed"
-    ](context("later"));
+    const after = await workstreamMemory.provider.recall["turn.started"](
+      context("later")
+    );
     expect(after?.messages[0]?.id).toBe(before?.messages[0]?.id);
     expect(after?.messages[0]?.content).not.toContain("Autumn trip");
     expect(
@@ -417,16 +417,18 @@ describe("workstream memory", () => {
 function context(sessionId: string, authenticator = "authjs") {
   return {
     abortSignal: new AbortController().signal,
-    model: null,
-    channel: {},
+    channel: { kind: "channel:eve", metadata: {} },
     getToken() {
       throw new Error("Token access is outside this test.");
     },
     requireAuth() {
       throw new Error("Auth access is outside this test.");
     },
-    getSandbox() {
+    async getSandbox() {
       throw new Error("Sandbox access is outside this test.");
+    },
+    to() {
+      throw new Error("Cross-channel delivery is outside this test.");
     },
     memory: {
       scope: {
@@ -455,5 +457,5 @@ function context(sessionId: string, authenticator = "authjs") {
   } satisfies MemoryTurnStartedContext &
     MemoryToolsContext &
     MemoryScopeContext &
-    Pick<ToolContext, "getToken" | "requireAuth">;
+    Pick<ToolContext, "getToken" | "requireAuth" | "to">;
 }

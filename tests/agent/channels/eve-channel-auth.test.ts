@@ -117,11 +117,11 @@ describe("Eve channel authentication", () => {
   );
 
   it("fails closed on routes whose subject cannot be resolved", async () => {
-    const route = findRoute("POST", "/eve/v1/task-input/:token");
+    const route = findRoute("POST", "/eve/v1/callback/:token");
 
     const response = await route.handler(
       new Request(
-        "https://assistant.example/eve/v1/task-input/eve:task-input:0123456789abcdef0123456789abcdef",
+        "https://assistant.example/eve/v1/callback/task:task_1:0123456789abcdef0123456789abcdef",
         { body: "{}", method: "POST" }
       ),
       unexpectedRouteContext()
@@ -205,9 +205,7 @@ describe("Eve channel authentication", () => {
         "/eve/v1/callback/task:task_1:0123456789abcdef0123456789abcdef"
       )
     ).toBeUndefined();
-    expect(
-      sessionIdFromPath("/eve/v1/task-input/eve:task-input:abc")
-    ).toBeUndefined();
+    expect(sessionIdFromPath("/eve/v1/health")).toBeUndefined();
     expect(sessionIdFromPath("/eve/v1/session")).toBeUndefined();
   });
 });
@@ -228,8 +226,12 @@ function findRoute(method: string, path: string) {
 function unexpectedRouteContext() {
   return {
     attachSession: unexpectedRouteRequest,
+    describe: unexpectedRouteRequest,
     from: unexpectedRouteRequest,
+    invokeTool: unexpectedRouteRequest,
+    listSkillFiles: unexpectedRouteRequest,
     params: { sessionId: "session/one" },
+    readSkill: unexpectedRouteRequest,
     requestIp: null,
     resolveSession: unexpectedRouteRequest,
     to: unexpectedRouteRequest,

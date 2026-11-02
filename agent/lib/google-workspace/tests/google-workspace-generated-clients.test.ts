@@ -192,12 +192,17 @@ function toolContext() {
     },
     abortSignal: new AbortController().signal,
     callId: "call-1",
+    channel: { kind: "channel:eve", metadata: {} },
     getToken,
+    messages: [],
     requireAuth,
     session: {
       auth: { current: null, initiator: null },
       id: "session-1",
       turn: { id: "turn-1", sequence: 0 },
+    },
+    to() {
+      throw new Error("Cross-channel delivery is outside this focused test.");
     },
     toolName: "google-workspace-test",
   } satisfies ToolContext;

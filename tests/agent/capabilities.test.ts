@@ -1,5 +1,19 @@
-import type { DynamicResolveContext } from "eve/tools";
-import { describe, expect, it } from "vitest";
+import type * as Eve from "eve";
+import type * as EveTools from "eve/tools";
+import { describe, expect, it, vi } from "vitest";
+import {
+  dynamicContextFor,
+  evaluateDynamic,
+  withEvaluableDynamic,
+} from "@tests/helpers/dynamic";
+
+vi.mock("eve", async (importOriginal) =>
+  withEvaluableDynamic(await importOriginal<typeof Eve>())
+);
+vi.mock("eve/tools", async (importOriginal) =>
+  withEvaluableDynamic(await importOriginal<typeof EveTools>())
+);
+
 import personalInfoMemory from "@agent/memory/personal_info";
 import workstreamMemory from "@agent/memory/workstreams";
 import browserAgent from "@agent/subagents/browser-agent/agent";
@@ -67,15 +81,16 @@ async function authoredCapabilities(authenticator: string) {
 
   const resolvedGroups = await Promise.all(
     groupedTools.map(async (definition) => {
-      const resolve = definition.events["turn.started"];
-      const resolved = resolve ? await resolve({}, context) : null;
+      const resolved = await evaluateDynamic(definition, context);
       return resolved && !("execute" in resolved) ? Object.keys(resolved) : [];
     })
   );
   capabilities.push(...resolvedGroups.flat());
 
   const personalInfoTools = await personalInfoMemory.provider.tools({
-    ...context,
+    abortSignal: new AbortController().signal,
+    channel: context.channel,
+    session: context.session,
     memory: {
       scope: {
         key: "personal-info-key",
@@ -84,7 +99,6 @@ async function authoredCapabilities(authenticator: string) {
       },
       slot: "personal_info",
     },
-    turn: { id: "turn-1", input: [], sequence: 1 },
   });
   if (personalInfoTools) {
     capabilities.push(
@@ -93,7 +107,9 @@ async function authoredCapabilities(authenticator: string) {
   }
 
   const workstreamTools = await workstreamMemory.provider.tools({
-    ...context,
+    abortSignal: new AbortController().signal,
+    channel: context.channel,
+    session: context.session,
     memory: {
       scope: {
         key: "workstreams-key",
@@ -102,15 +118,13 @@ async function authoredCapabilities(authenticator: string) {
       },
       slot: "workstreams",
     },
-    turn: { id: "turn-1", input: [], sequence: 1 },
   });
   if (workstreamTools)
     capabilities.push(
       ...Object.keys(workstreamTools).map((name) => `workstreams__${name}`)
     );
 
-  const resolveBrowserAgent = browserAgent.events["turn.started"];
-  if (resolveBrowserAgent && (await resolveBrowserAgent({}, context))) {
+  if (await evaluateDynamic(browserAgent, context)) {
     capabilities.push("browser-agent");
   }
 
@@ -118,21 +132,17 @@ async function authoredCapabilities(authenticator: string) {
 }
 
 function dynamicContext(authenticator: string) {
-  return {
-    model: null,
-    channel: { kind: "channel:linq", metadata: {} },
-    messages: [],
-    session: {
-      auth: {
-        current: {
-          attributes: { workspaceId: "personal:workspace" },
-          authenticator,
-          principalId: "user-1",
-          principalType: "user",
-        },
-        initiator: null,
+  return dynamicContextFor({
+    auth: {
+      current: {
+        attributes: { workspaceId: "personal:workspace" },
+        authenticator,
+        principalId: "user-1",
+        principalType: "user",
       },
-      id: "session-1",
+      initiator: null,
     },
-  } satisfies DynamicResolveContext;
+    channel: { kind: "channel:linq", metadata: {} },
+    sessionId: "session-1",
+  });
 }

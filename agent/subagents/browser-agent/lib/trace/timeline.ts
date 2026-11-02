@@ -1,4 +1,6 @@
-import type { HookEvent } from "eve/hooks";
+import { call, interaction } from "eve/events";
+import { contentText, deliveredText } from "@agent/lib/content-text";
+import type { HookContext, HookEvent } from "eve/hooks";
 import { z } from "zod";
 
 export interface TraceTimelineRow {
@@ -25,10 +27,12 @@ function compactJson(value: Parameters<typeof JSON.stringify>[0]) {
     : serialized;
 }
 
-export function traceTimelineRows(event: HookEvent): TraceTimelineRow[] {
-  const id = event.meta.id;
-  if (!id) return [];
-  const at = event.meta.at;
+export function traceTimelineRows(
+  event: HookEvent,
+  ctx: Pick<HookContext, "now" | "position" | "view">
+): TraceTimelineRow[] {
+  const id = `${String(ctx.position.line)}:${String(ctx.position.index)}`;
+  const at = ctx.now.toISOString();
   const row = (label: string, detail: string): TraceTimelineRow => ({
     at,
     detail: detail.slice(0, detailCharacterLimit),
@@ -38,69 +42,74 @@ export function traceTimelineRows(event: HookEvent): TraceTimelineRow[] {
   });
 
   switch (event.type) {
-    case "message.received":
-      return [row("Task received", event.data.message)];
-    case "actions.requested":
-      return event.data.actions.map((action, index) => ({
-        at,
-        detail: compactJson(action.input),
-        id: `${id}:${String(index)}`,
-        label:
-          action.kind === "tool-call" || action.kind === "workflow-tool-call"
-            ? action.toolName
-            : action.kind === "load-skill"
-              ? "Load skill"
-              : action.name,
-        type: event.type,
-      }));
-    case "action.result": {
-      const result = event.data.result;
-      const name =
-        result.kind === "tool-result"
-          ? result.toolName
-          : result.kind === "subagent-result"
-            ? result.subagentName
-            : "load-skill";
+    case "delivery.consumed":
+      return [row("Task received", deliveredText(event.data.parts))];
+    case "call.requested": {
+      const { capability, input } = event.data;
       return [
         row(
-          `${name} → ${result.isError ? "error" : "result"}`,
-          compactJson(result.output)
+          capability.kind === "skill" ? "Load skill" : capability.name,
+          compactJson(input)
         ),
       ];
     }
-    case "message.completed":
-      return [row("Assistant", event.data.message ?? "")];
-    case "result.completed":
-      return [row("Final output", compactJson(event.data.result))];
-    case "input.requested":
+    case "call.settled": {
+      const name = call(ctx.view, event.data.callId)?.name ?? "call";
+      const failed = event.data.outcome !== "completed";
       return [
         row(
-          "Input requested",
-          `${String(event.data.requests.length)} pending request(s)`
+          `${name} → ${failed ? "error" : "result"}`,
+          compactJson(failed ? event.data.error : event.data.output)
         ),
       ];
-    case "input.resolved":
-      return [row("Input resolved", compactJson(event.data.resolutions))];
-    case "authorization.required":
-      return [row("Authorization required", event.data.name)];
-    case "authorization.completed":
-      return [row("Authorization", event.data.outcome)];
-    case "step.failed":
-      return [row("Step failed", event.data.message)];
-    case "turn.failed":
-      return [row("Turn failed", event.data.message)];
-    case "turn.cancelled":
-      return [row("Turn cancelled", "")];
-    case "turn.completed":
-      return [row("Turn completed", "")];
+    }
+    case "content.completed":
+      if (event.data.kind === "result") {
+        return [row("Final output", compactJson(event.data.value))];
+      }
+      return event.data.kind === "text"
+        ? [row("Assistant", contentText([event.data]))]
+        : [];
+    case "interaction.opened": {
+      const { request } = event.data;
+      return request.kind === "sign-in"
+        ? [row("Authorization required", request.signIn?.name ?? "")]
+        : [row("Input requested", request.prompt)];
+    }
+    case "interaction.settled": {
+      const opened = interaction(ctx.view, event.data.interactionId);
+      return opened?.request.kind === "sign-in"
+        ? [row("Authorization", event.data.outcome)]
+        : [row("Input resolved", compactJson(event.data.response ?? null))];
+    }
+    case "model.settled":
+      return event.data.outcome === "failed"
+        ? [row("Step failed", event.data.error?.message ?? "")]
+        : [];
+    case "turn.settled":
+      switch (event.data.outcome) {
+        case "failed":
+          return [row("Turn failed", event.data.error?.message ?? "")];
+        case "cancelled":
+          return [row("Turn cancelled", "")];
+        default:
+          return [row("Turn completed", "")];
+      }
     case "session.started":
       return [row("Session started", "")];
-    case "session.failed":
-      return [row("Session failed", "")];
-    case "session.completed":
-      return [row("Session completed", "")];
-    case "compaction.requested":
-      return [row("Context compaction", "")];
+    case "session.ended":
+      return [
+        row(
+          event.data.outcome === "failed"
+            ? "Session failed"
+            : "Session completed",
+          ""
+        ),
+      ];
+    case "context.started":
+      return event.data.kind === "compaction"
+        ? [row("Context compaction", "")]
+        : [];
     default:
       return [];
   }

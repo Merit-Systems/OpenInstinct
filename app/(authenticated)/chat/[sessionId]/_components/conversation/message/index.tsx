@@ -11,7 +11,7 @@ export function AgentMessage({
   canRespond,
   isStreaming,
   message,
-  onInputResponses,
+  onAnswers,
   sentMessageParts,
   timestamp,
   userVisibleOnly = false,
@@ -19,7 +19,7 @@ export function AgentMessage({
   readonly canRespond: boolean;
   readonly isStreaming: boolean;
   readonly message: EveMessage;
-  readonly onInputResponses: RespondToAgentInput;
+  readonly onAnswers: RespondToAgentInput;
   readonly sentMessageParts?: readonly EveMessage["parts"][number][];
   readonly timestamp?: string;
   readonly userVisibleOnly?: boolean;
@@ -51,7 +51,7 @@ export function AgentMessage({
             <AgentMessagePart
               canRespond={canRespond}
               key={partKey(part, index)}
-              onInputResponses={onInputResponses}
+              onAnswers={onAnswers}
               part={part}
               showCaret={
                 isStreaming &&

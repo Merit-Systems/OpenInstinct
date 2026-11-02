@@ -1,29 +1,35 @@
+import type { ChatStatus } from "ai";
 import type {
-  CancelSessionResult,
-  InputResponse,
-  MessageStreamEvent,
+  ClientSession,
+  ConversationState,
+  MessageContent,
   RespondTurnOptions,
   SendTurnOptions,
+  SessionStreamEvent,
 } from "eve/client";
-import type { EveMessageData, UseEveAgentStatus } from "eve/react";
-import type { UserContent } from "ai";
+import type { Answer } from "eve/events";
 
-export interface ChatAgent {
-  readonly cancel: () => Promise<CancelSessionResult>;
-  readonly data: EveMessageData;
+/** The AI SDK chat lifecycle, plus the initial catch-up read of a saved session. */
+export type ChatAgentStatus = ChatStatus | "resuming";
+
+export interface ChatAgent extends Pick<
+  ConversationState,
+  "messages" | "view"
+> {
+  readonly cancel: () => ReturnType<ClientSession["cancel"]>;
   readonly error?: Error;
-  readonly events: readonly MessageStreamEvent[];
+  readonly events: readonly SessionStreamEvent[];
   readonly hasOlder: boolean;
   readonly isLoadingOlder: boolean;
   readonly loadOlder: () => Promise<void>;
   readonly respond: <TOutput = unknown>(
-    inputResponses: readonly InputResponse[],
+    answers: readonly Answer[],
     options?: RespondTurnOptions<TOutput>
   ) => Promise<void>;
   readonly resume: () => Promise<void>;
   readonly send: <TOutput = unknown>(
-    message: string | UserContent,
+    message: MessageContent,
     options?: SendTurnOptions<TOutput>
   ) => Promise<void>;
-  readonly status: UseEveAgentStatus;
+  readonly status: ChatAgentStatus;
 }

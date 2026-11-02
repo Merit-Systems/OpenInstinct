@@ -66,7 +66,7 @@ async function executeScheduledRun(
     const persisted = await setScheduledRunSession(
       claim.run.id,
       leaseToken,
-      session.id
+      session.sessionId
     );
     if (!persisted) {
       throw new Error("The scheduled run lease expired during dispatch.");
@@ -74,7 +74,7 @@ async function executeScheduledRun(
     console.info("[scheduled-run] worker session accepted", {
       jobId: claim.job.id,
       runId: claim.run.id,
-      sessionId: session.id,
+      sessionId: session.sessionId,
     });
   } catch (error) {
     console.warn("[scheduled-run] worker dispatch failed", {

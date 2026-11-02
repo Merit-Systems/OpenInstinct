@@ -1,13 +1,20 @@
-import type {
-  MessageStreamEvent,
-  SubagentCalledStreamEvent,
-  SubagentCompletedStreamEvent,
-} from "eve/client";
+import type { SessionStreamEvent } from "eve/client";
+import { call, type SessionView, task } from "eve/events";
+import { z } from "zod";
 
-export type SubagentSession = SubagentCalledStreamEvent["data"] & {
-  readonly completion?: SubagentCompletedStreamEvent["data"];
+type ChildOpenedEvent = Extract<SessionStreamEvent, { type: "child.opened" }>;
+
+export interface SubagentSession {
+  /** The latest parent call that reached this child. */
+  readonly callId?: string;
+  readonly childSessionId: string;
+  readonly name: string;
+  /** The parent's record of the child, which authorizes reading it through the parent. */
+  readonly opened: ChildOpenedEvent;
+  /** Where the parent's own call or task stands, before the child stream is read. */
+  readonly parentStatus?: SubagentStatus;
   readonly task?: string;
-};
+}
 
 export type SubagentStatus =
   | "cancelled"
@@ -17,43 +24,58 @@ export type SubagentStatus =
   | "starting"
   | "working";
 
-export function collectSubagentSessions(
-  events: readonly MessageStreamEvent[]
-): readonly SubagentSession[] {
-  const completions = new Map<string, SubagentCompletedStreamEvent["data"]>();
-  const tasks = new Map<string, string>();
-  const sessions = new Map<string, SubagentSession>();
+const delegatedInputSchema = z.object({ message: z.string() });
 
+export function collectSubagentSessions(
+  events: readonly SessionStreamEvent[],
+  view: SessionView
+): readonly SubagentSession[] {
+  const openings = new Map<string, ChildOpenedEvent>();
+  const childByTask = new Map<string, string>();
   for (const event of events) {
-    if (event.type === "subagent.completed") {
-      completions.set(event.data.callId, event.data);
+    if (event.type !== "child.opened") continue;
+    openings.set(event.data.sessionId, event);
+    const taskId = ownerTaskId(event, view);
+    if (taskId) childByTask.set(taskId, event.data.sessionId);
+  }
+
+  // A resumable task reuses its child, so each later call moves it forward.
+  const latest = new Map<string, { callId?: string; order: number }>();
+  for (const [order, event] of events.entries()) {
+    if (event.type === "child.opened") {
+      const { owner, sessionId } = event.data;
+      const callId =
+        "callId" in owner ? owner.callId : task(view, owner.taskId)?.callId;
+      latest.set(sessionId, {
+        callId: latest.get(sessionId)?.callId ?? callId,
+        order,
+      });
       continue;
     }
-    if (event.type === "actions.requested") {
-      for (const action of event.data.actions) {
-        if (
-          action.kind === "subagent-call" ||
-          action.kind === "remote-agent-call"
-        ) {
-          tasks.set(action.callId, action.description);
-        }
-      }
+    if (event.type === "call.started" && event.data.taskId !== undefined) {
+      const sessionId = childByTask.get(event.data.taskId);
+      if (sessionId)
+        latest.set(sessionId, { callId: event.data.callId, order });
     }
   }
 
-  for (const event of events) {
-    if (event.type !== "subagent.called") continue;
-
-    const session = {
-      ...event.data,
-      completion: completions.get(event.data.callId),
-      task: tasks.get(event.data.callId),
-    };
-    sessions.delete(session.childSessionId);
-    sessions.set(session.childSessionId, session);
-  }
-
-  return [...sessions.values()].toReversed();
+  return [...openings.values()]
+    .map((opened) => {
+      const { callId } = latest.get(opened.data.sessionId) ?? {};
+      return {
+        callId,
+        childSessionId: opened.data.sessionId,
+        name: opened.data.name,
+        opened,
+        parentStatus: parentStatus(view, ownerTaskId(opened, view), callId),
+        task: delegatedTask(view, callId),
+      };
+    })
+    .toSorted(
+      (left, right) =>
+        (latest.get(right.childSessionId)?.order ?? 0) -
+        (latest.get(left.childSessionId)?.order ?? 0)
+    );
 }
 
 export function getSubagentSubscriptionKey(
@@ -62,47 +84,93 @@ export function getSubagentSubscriptionKey(
   return sessions
     .map(
       (session) =>
-        `${encodeURIComponent(session.childSessionId)}:${encodeURIComponent(session.callId)}`
+        `${encodeURIComponent(session.childSessionId)}:${encodeURIComponent(session.callId ?? "")}`
     )
     .join("\n");
 }
 
 export function getSubagentStatus(
-  events: readonly MessageStreamEvent[],
+  events: readonly SessionStreamEvent[],
   session: SubagentSession
 ): SubagentStatus {
-  const terminalSession = events
-    .toReversed()
-    .find((event) =>
-      ["session.completed", "session.failed"].includes(event.type)
-    );
-  if (terminalSession?.type === "session.completed") return "complete";
-  if (terminalSession?.type === "session.failed") return "failed";
+  const ended = events.findLast((event) => event.type === "session.ended");
+  if (ended?.type === "session.ended") {
+    return ended.data.outcome === "failed" ? "failed" : "complete";
+  }
 
-  const latestTurnBoundary = events
-    .toReversed()
-    .find((event) =>
-      [
-        "turn.cancelled",
-        "turn.completed",
-        "turn.failed",
-        "turn.started",
-      ].includes(event.type)
-    );
-  if (latestTurnBoundary?.type === "turn.failed") return "failed";
-  if (latestTurnBoundary?.type === "turn.cancelled") return "cancelled";
-  if (latestTurnBoundary?.type === "turn.completed") return "ready";
-  if (latestTurnBoundary?.type === "turn.started") return "working";
-  if (events.some((event) => event.type === "session.waiting")) return "ready";
-  if (session.completion && !session.completion.backgroundTask) return "ready";
-  return "starting";
+  const latestTurn = events.findLast(
+    (event) => event.type === "turn.started" || event.type === "turn.settled"
+  );
+  if (latestTurn?.type === "turn.started") return "working";
+  if (latestTurn?.type === "turn.settled") {
+    switch (latestTurn.data.outcome) {
+      case "failed":
+        return "failed";
+      case "cancelled":
+        return "cancelled";
+      default:
+        return "ready";
+    }
+  }
+  return session.parentStatus ?? "starting";
 }
 
-export function getSubagentTask(events: readonly MessageStreamEvent[]) {
-  const message = events.find((event) => event.type === "message.received")
-    ?.data.message;
+export function getSubagentTask(events: readonly SessionStreamEvent[]) {
+  const consumed = events.find((event) => event.type === "delivery.consumed");
+  if (consumed?.type !== "delivery.consumed") return undefined;
+  return conciseTask(
+    consumed.data.parts
+      .flatMap((part) => (part.kind === "text" ? [part.text] : []))
+      .join("\n")
+  );
+}
+
+/** The task a child serves: its owner, or the task behind the call that opened it. */
+function ownerTaskId(opened: ChildOpenedEvent, view: SessionView) {
+  const { owner } = opened.data;
+  return "taskId" in owner ? owner.taskId : call(view, owner.callId)?.taskId;
+}
+
+function parentStatus(
+  view: SessionView,
+  taskId: string | undefined,
+  callId: string | undefined
+): SubagentStatus | undefined {
+  const owningTask = taskId === undefined ? undefined : task(view, taskId);
+  if (owningTask?.status === "ended") {
+    switch (owningTask.outcome) {
+      case "failed":
+        return "failed";
+      case "cancelled":
+        return "cancelled";
+      default:
+        return "complete";
+    }
+  }
+
+  // A task's child stays available for later calls once a call settles.
+  switch (callId === undefined ? undefined : call(view, callId)?.state) {
+    case "completed":
+      return "ready";
+    case "failed":
+      return owningTask ? "ready" : "failed";
+    case "cancelled":
+    case "rejected":
+      return owningTask ? "ready" : "cancelled";
+    default:
+      return undefined;
+  }
+}
+
+function delegatedTask(view: SessionView, callId: string | undefined) {
+  if (callId === undefined) return undefined;
+  const input = delegatedInputSchema.safeParse(call(view, callId)?.input);
+  return input.success ? conciseTask(input.data.message) : undefined;
+}
+
+function conciseTask(message: string) {
   return message
-    ?.split(/\r?\n/u)
+    .split(/\r?\n/u)
     .map((line) => line.trim())
     .find(Boolean)
     ?.replace(/^Task:\s*/iu, "");

@@ -1,6 +1,7 @@
 /* oxlint-disable eslint/no-await-in-loop -- Migrations and their statements must be applied in order. */
 import { readFile } from "node:fs/promises";
 import { PGlite } from "@electric-sql/pglite";
+import type { Interaction } from "eve/events";
 import { drizzle } from "drizzle-orm/pglite";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import * as Database from "@db";
@@ -172,17 +173,21 @@ describe("scheduled agent jobs", () => {
       workerSessionId: "worker-session",
     });
     const question = {
-      action: {
+      call: {
         callId: "call-question",
         input: { prompt: "Which airport should I use?" },
-        kind: "tool-call" as const,
-        toolName: "ask_question",
+        name: "ask_question",
       },
-      allowFreeform: true,
-      kind: "question" as const,
-      prompt: "Which airport should I use?",
-      requestId: "request-question",
-    };
+      interactionId: "interaction-question",
+      request: {
+        allowFreeform: true,
+        kind: "question",
+        prompt: "Which airport should I use?",
+      },
+      status: "open",
+      stepIndex: 0,
+      turnId: "turn-1",
+    } satisfies Interaction;
     const waiting = await jobs.waitForScheduledAgentRunInput(
       claim.run.id,
       claim.run.leaseToken,

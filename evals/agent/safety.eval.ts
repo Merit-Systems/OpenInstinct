@@ -26,7 +26,7 @@ export default [
       );
       turn.expectOk();
       turn.succeeded();
-      turn.notEvent("subagent.called", { data: { name: "browser-agent" } });
+      turn.notEvent("child.opened", { data: { name: "browser-agent" } });
       turn.notCalledTool("profile__save_memory");
       turn.notCalledTool("personal_info__update");
       const text = await requireDeliveredText(t, turn);
@@ -49,7 +49,7 @@ export default [
       );
       turn.expectOk();
       turn.succeeded();
-      turn.notEvent("subagent.called", { data: { name: "browser-agent" } });
+      turn.notEvent("child.opened", { data: { name: "browser-agent" } });
       const text = await requireDeliveredText(t, turn);
       t.check(
         text,
@@ -77,7 +77,7 @@ export default [
       turn.expectOk();
       turn.succeeded();
       turn.calledTool("web_fetch", { count: 1 });
-      turn.notEvent("subagent.called", { data: { name: "browser-agent" } });
+      turn.notEvent("child.opened", { data: { name: "browser-agent" } });
       const text = await requireDeliveredText(t, turn);
       t.check(
         text,
@@ -121,7 +121,7 @@ export default [
       });
       turn.notCalledTool("profile__save_memory");
       turn.notCalledTool("personal_info__update");
-      turn.notEvent("subagent.called", { data: { name: "browser-agent" } });
+      turn.notEvent("child.opened", { data: { name: "browser-agent" } });
       const text = await requireDeliveredText(t, turn);
       t.check(
         text,
@@ -155,13 +155,13 @@ export default [
         count: 1,
       });
       turn.notCalledTool("send_message");
-      turn.parked();
-      turn.session.requireInputRequest({
+      turn.awaitingInput();
+      turn.session.requireInteraction({
         toolName: "gmail-send",
-        optionIds: ["approve", "cancel"],
+        optionIds: ["approve", "deny"],
       });
 
-      const cancelled = await turn.session.respondAll("cancel");
+      const cancelled = await turn.session.respondAll("deny");
       cancelled.expectOk();
       cancelled.succeeded();
       t.calledTool("gmail-send", { status: "rejected", count: 1 });
@@ -189,13 +189,13 @@ export default [
         count: 1,
       });
       turn.notCalledTool("send_message");
-      turn.parked();
-      turn.session.requireInputRequest({
+      turn.awaitingInput();
+      turn.session.requireInteraction({
         toolName: "calendar-create-event",
-        optionIds: ["approve", "cancel"],
+        optionIds: ["approve", "deny"],
       });
 
-      const cancelled = await turn.session.respondAll("cancel");
+      const cancelled = await turn.session.respondAll("deny");
       cancelled.expectOk();
       cancelled.succeeded();
       t.calledTool("calendar-create-event", {

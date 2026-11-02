@@ -1,6 +1,14 @@
-import type { DynamicResolveContext, ToolContext } from "eve/tools";
+import type * as EveTools from "eve/tools";
+import type { ToolContext } from "eve/tools";
 import { z } from "zod";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  dynamicContextFor,
+  dynamicTool,
+  evaluateDynamic,
+  withEvaluableDynamic,
+} from "@tests/helpers/dynamic";
+import { toolContextFor } from "@tests/helpers/tool-context";
 import type * as EnvModule from "@shared/environment";
 import type { readLinqOnboardingPhoneNumber } from "@db/services/auth/linq";
 import messaging from "@agent/tools/messaging";
@@ -17,6 +25,9 @@ const controls = vi.hoisted(() => ({
   reset: [] as (() => void)[],
 }));
 
+vi.mock("eve/tools", async (importOriginal) =>
+  withEvaluableDynamic(await importOriginal<typeof EveTools>())
+);
 vi.mock("eve/context", () => ({
   defineState<T>(name: string, initial: () => T) {
     let value = initial();
@@ -189,8 +200,9 @@ describe("share_contact", () => {
 
   it("rejects a thread that differs from the authenticated conversation", async () => {
     const tool = await shareContactTool();
-    const context = toolContext("linq");
-    context.session.auth.current.attributes.conversationId = "linq:other-chat";
+    const context = toolContext("linq", "linq:chat-1", {
+      conversationId: "linq:other-chat",
+    });
     await expect(tool.execute({ text: "Save me." }, context)).rejects.toThrow(
       "current authenticated Linq conversation"
     );
@@ -241,56 +253,41 @@ describe("share_contact", () => {
 });
 
 async function shareContactTool() {
-  const resolve = messaging.events["turn.started"];
-  if (!resolve) throw new Error("Expected messaging resolver.");
-  const tools = await resolve({}, {
-    channel: { kind: "http", metadata: {} },
-    messages: [],
-    model: null,
-    session: toolContext().session,
-  } satisfies DynamicResolveContext);
-  if (!tools || !("share_contact" in tools)) {
-    throw new Error("Expected share_contact tool.");
-  }
-  return tools.share_contact;
+  const tools = await evaluateDynamic(
+    messaging,
+    dynamicContextFor({
+      auth: toolContext().session.auth,
+      sessionId: "session-1",
+    })
+  );
+  return dynamicTool(tools, "share_contact");
 }
 
 function toolContext(
   channel: "eve" | "linq" = "eve",
-  threadId = "linq:chat-1"
-) {
-  return {
-    abortSignal: new AbortController().signal,
-    callId: "contact-call-1",
-    toolName: "share_contact",
-    async getSandbox() {
-      throw new Error("Unexpected sandbox access.");
-    },
-    async getToken() {
-      throw new Error("Unexpected token access.");
-    },
-    requireAuth() {
-      throw new Error("Unexpected connection authorization.");
-    },
-    session: {
-      auth: {
-        current: {
-          attributes: {
-            workspaceId: "workspace-1",
-            conversationChannel: channel,
-            conversationId: threadId,
-            linqThreadId: threadId,
-          },
-          authenticator: "authjs",
-          principalId: "user-1",
-          principalType: "user",
+  threadId = "linq:chat-1",
+  attributes: Record<string, string> = {}
+): ToolContext {
+  return toolContextFor({
+    auth: {
+      current: {
+        attributes: {
+          workspaceId: "workspace-1",
+          conversationChannel: channel,
+          conversationId: threadId,
+          linqThreadId: threadId,
+          ...attributes,
         },
-        initiator: null,
+        authenticator: "authjs",
+        principalId: "user-1",
+        principalType: "user",
       },
-      id: "session-1",
-      turn: { id: "turn-1", sequence: 0 },
+      initiator: null,
     },
-  } satisfies ToolContext;
+    callId: "contact-call-1",
+    sessionId: "session-1",
+    toolName: "share_contact",
+  });
 }
 
 function sentRequest(index: number) {

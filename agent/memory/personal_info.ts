@@ -59,7 +59,6 @@ export default defineMemory({
   namespace: "openinstinct-personal-info-v1",
   provider: defineMemoryProvider({
     recall: {
-      "compaction.completed": recallUserProfile,
       "turn.started": recallUserProfile,
     },
     async tools(context) {

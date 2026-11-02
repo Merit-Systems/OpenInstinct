@@ -113,20 +113,17 @@ export const answerSchedule = defineTool({
   },
 });
 
-export default defineDynamic({
-  events: {
-    "turn.started": (_event, context) =>
-      resolveModeValue(context, {
-        interactive: {
-          "schedules-answer": answerSchedule,
-          "schedules-create": createSchedule,
-          "schedules-list": listSchedules,
-          "schedules-update": updateSchedule,
-        },
-        "scheduled-report": { "schedules-answer": answerSchedule },
-      }),
-  },
-});
+export default defineDynamic((context) =>
+  resolveModeValue(context, {
+    interactive: {
+      "schedules-answer": answerSchedule,
+      "schedules-create": createSchedule,
+      "schedules-list": listSchedules,
+      "schedules-update": updateSchedule,
+    },
+    "scheduled-report": { "schedules-answer": answerSchedule },
+  })
+);
 
 async function pendingScheduledRun(context: ToolContext, runId: string) {
   const resolvePending = resolveModeValue(context, {

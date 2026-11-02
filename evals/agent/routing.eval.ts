@@ -18,7 +18,7 @@ export default [
       turn.succeeded();
       turn.calledTool("web_fetch", { count: 1 });
       turn.notCalledTool("web_search");
-      turn.notEvent("subagent.called", { data: { name: "browser-agent" } });
+      turn.notEvent("child.opened", { data: { name: "browser-agent" } });
       const text = await requireDeliveredText(t, turn);
       t.check(text, includes(/example domain/iu));
       assertPlainTextDelivery(t, text);
@@ -34,7 +34,7 @@ export default [
       turn.expectOk();
       turn.succeeded();
       turn.calledTool("web_search");
-      turn.notEvent("subagent.called", { data: { name: "browser-agent" } });
+      turn.notEvent("child.opened", { data: { name: "browser-agent" } });
       const text = await requireDeliveredText(t, turn);
       t.judge(
         "The response identifies Brooklyn Botanic Garden and gives its official website URL, without claiming to have interacted with the site.",
@@ -55,7 +55,7 @@ export default [
       turn.expectOk();
       turn.succeeded();
       turn.notCalledTool("gmail-send");
-      turn.notEvent("subagent.called", { data: { name: "browser-agent" } });
+      turn.notEvent("child.opened", { data: { name: "browser-agent" } });
       const text = await requireDeliveredText(t, turn);
       t.judge(
         "The response provides a usable two-sentence email draft asking a neighbor to water plants this weekend and does not claim it was sent.",

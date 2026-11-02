@@ -1,4 +1,9 @@
-import type { EveDynamicToolPart, EveMessageInputRequest } from "eve/react";
+import {
+  APPROVE_OPTION_ID,
+  DENY_OPTION_ID,
+  type Interaction,
+  type InteractionOption,
+} from "eve/events";
 import {
   Question,
   QuestionActions,
@@ -12,51 +17,46 @@ import {
 } from "@web/components/ai-elements/question";
 import { Alert, AlertDescription, AlertTitle } from "@web/components/ui/alert";
 import { Button } from "@web/components/ui/button";
-import type { InputResponse } from "eve/client";
 import type { RespondToAgentInput } from "./types";
 
 export function QuestionRequest({
   canRespond,
-  inputRequest,
-  inputResponse,
-  onInputResponses,
+  interaction,
+  onAnswers,
 }: {
   readonly canRespond: boolean;
-  readonly inputRequest: EveMessageInputRequest;
-  readonly inputResponse?: InputResponse;
-  readonly onInputResponses: RespondToAgentInput;
+  readonly interaction: Interaction;
+  readonly onAnswers: RespondToAgentInput;
 }) {
-  const selectedOption = inputRequest.options?.find(
-    (option) => option.id === inputResponse?.optionId
+  const { answer, interactionId, request } = interaction;
+  const options = request.options ?? [];
+  const selectedOption = options.find(
+    (option) => option.id === answer?.optionId
   );
-  const hasOptions = (inputRequest.options?.length ?? 0) > 0;
-  const acceptsFreeform = inputRequest.allowFreeform === true || !hasOptions;
+  const hasOptions = options.length > 0;
+  const acceptsFreeform = request.allowFreeform === true || !hasOptions;
 
   const submitResponse = ({ selectedValues, text }: QuestionResponse) =>
-    onInputResponses([
-      {
-        optionId: selectedValues[0],
-        requestId: inputRequest.requestId,
-        text,
-      },
-    ]);
+    onAnswers([{ interactionId, optionId: selectedValues[0], text }]);
 
   return (
     <Question
       defaultValue={{
-        selectedValues: inputResponse?.optionId ? [inputResponse.optionId] : [],
-        text: inputResponse?.text ?? "",
+        selectedValues: answer?.optionId ? [answer.optionId] : [],
+        text: answer?.text ?? "",
       }}
-      disabled={!canRespond || inputResponse !== undefined}
+      disabled={
+        !canRespond || interaction.status === "settled" || answer !== undefined
+      }
       onSubmit={submitResponse}
     >
-      <QuestionPrompt>{inputRequest.prompt}</QuestionPrompt>
+      <QuestionPrompt>{request.prompt}</QuestionPrompt>
       {hasOptions ? (
         <QuestionOptions
           className="flex-col items-stretch"
-          aria-label={inputRequest.prompt}
+          aria-label={request.prompt}
         >
-          {inputRequest.options?.map((option) => (
+          {options.map((option) => (
             <QuestionOption
               className="justify-start text-left"
               key={option.id}
@@ -77,13 +77,12 @@ export function QuestionRequest({
       {acceptsFreeform ? (
         <QuestionInput aria-label="Answer" placeholder="Type your answer…" />
       ) : null}
-      {inputResponse ? (
+      {answer ? (
         <QuestionDescription>
-          Responded:{" "}
-          {selectedOption?.label ??
-            inputResponse.text ??
-            inputResponse.optionId}
+          Responded: {selectedOption?.label ?? answer.text ?? answer.optionId}
         </QuestionDescription>
+      ) : interaction.status === "settled" ? (
+        <QuestionDescription>No longer needs an answer.</QuestionDescription>
       ) : (
         <QuestionActions>
           <QuestionSubmit>Answer</QuestionSubmit>
@@ -93,47 +92,40 @@ export function QuestionRequest({
   );
 }
 
-export function InputRequestActions({
+/** Approve and deny choices, or the options an approval or budget prompt lists. */
+export function InteractionActions({
   canRespond,
-  onInputResponses,
-  part,
+  interaction,
+  onAnswers,
 }: {
   readonly canRespond: boolean;
-  readonly onInputResponses: RespondToAgentInput;
-  readonly part: EveDynamicToolPart;
+  readonly interaction: Interaction;
+  readonly onAnswers: RespondToAgentInput;
 }) {
-  const inputRequest = part.toolMetadata?.eve?.inputRequest;
-  if (!inputRequest) return null;
-
-  const inputResponse = part.toolMetadata.eve.inputResponse;
-  const selectedOption = inputRequest.options?.find(
-    (option) => option.id === inputResponse?.optionId
+  const { answer, interactionId, request } = interaction;
+  const options = request.options ?? defaultApprovalOptions;
+  const selectedOption = options.find(
+    (option) => option.id === answer?.optionId
   );
 
   return (
     <Alert variant="warning">
-      <AlertTitle>{inputRequest.prompt}</AlertTitle>
+      <AlertTitle>{request.prompt}</AlertTitle>
       <AlertDescription>
-        {inputResponse ? (
+        {answer ? (
           <p>
-            Responded:{" "}
-            {selectedOption?.label ??
-              inputResponse.text ??
-              inputResponse.optionId}
+            Responded: {selectedOption?.label ?? answer.text ?? answer.optionId}
           </p>
+        ) : interaction.status === "settled" ? (
+          <p>No longer needs a response.</p>
         ) : (
           <div className="flex flex-wrap gap-2">
-            {inputRequest.options?.map((option) => (
+            {options.map((option) => (
               <Button
                 disabled={!canRespond}
                 key={option.id}
                 onClick={() => {
-                  void onInputResponses([
-                    {
-                      optionId: option.id,
-                      requestId: inputRequest.requestId,
-                    },
-                  ]);
+                  void onAnswers([{ interactionId, optionId: option.id }]);
                 }}
                 size="sm"
                 type="button"
@@ -148,3 +140,8 @@ export function InputRequestActions({
     </Alert>
   );
 }
+
+const defaultApprovalOptions: readonly InteractionOption[] = [
+  { id: APPROVE_OPTION_ID, label: "Approve", style: "primary" },
+  { id: DENY_OPTION_ID, label: "Deny", style: "danger" },
+];

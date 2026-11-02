@@ -86,7 +86,7 @@ const textEvals = cases.map((testCase) =>
       turn.calledTool("send_message", { count: 1 });
       turn.notCalledTool("web_search");
       turn.notCalledTool("web_fetch");
-      turn.notEvent("subagent.called", { data: { name: "browser-agent" } });
+      turn.notEvent("child.opened", { data: { name: "browser-agent" } });
       turn.maxToolCalls(1);
       const text = await requireDeliveredText(t, turn);
       assertPlainTextDelivery(t, text);

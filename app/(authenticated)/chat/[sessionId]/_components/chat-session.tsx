@@ -41,6 +41,7 @@ export function ChatSession({
         onTraceViewChange={setTraceView}
         sessionId={sessionId}
         traceView={traceView}
+        view={agent.view}
       />
     </div>
   );

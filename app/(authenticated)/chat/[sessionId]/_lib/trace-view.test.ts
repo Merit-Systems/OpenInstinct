@@ -1,4 +1,5 @@
-import type { MessageStreamEvent } from "eve/client";
+import type { SessionEvent, SessionStreamEvent } from "eve/client";
+import { emptySessionView, foldEvents, type JsonValue } from "eve/events";
 import type { EveMessage } from "eve/react";
 import { describe, expect, it } from "vitest";
 import {
@@ -7,22 +8,15 @@ import {
 } from "./trace-view";
 
 describe("trace view", () => {
-  it("hides explicit framework task input without hiding the assistant report", () => {
-    const event = receivedMessage("task-delivery", "A cohort completed.");
-    const background = {
-      ...event,
-      data: { ...event.data, kind: "execution.background_task" as const },
-    };
+  it("keeps ordinary delivered text and its report visible", () => {
+    const events = receivedMessage("task-delivery", "A cohort completed.");
     const messages = [
       userMessage("task-delivery", "A cohort completed."),
       assistantMessage("task-delivery", "Here is the result."),
     ];
-    expect(messagesForTraceView(messages, [background], "imessage")).toEqual([
-      messages[1],
-    ]);
-    expect(messagesForTraceView(messages, [event], "imessage")).toEqual(
-      messages
-    );
+    expect(
+      messagesForTraceView(messages, events, viewOf(events), "imessage")
+    ).toEqual(messages);
   });
 
   it.each([
@@ -39,15 +33,17 @@ describe("trace view", () => {
     "identifies a worker task %s delivery",
     (_label, notification, hidesResponse) => {
       const events = [
-        workerCompletedReceipt("task_worker"),
-        ...(hidesResponse ? [workerCancellationResult("task_worker")] : []),
-        receivedMessage(
+        ...workerReceipt("task_worker"),
+        ...(hidesResponse ? workerCancellationResult("task_worker") : []),
+        ...receivedMessage(
           "task-delivery",
           `Background task task_worker (browser-agent) ${notification}`
         ),
-      ] satisfies MessageStreamEvent[];
+      ];
 
-      expect(backgroundWorkerDeliveryMessageIds(events)).toEqual(
+      expect(
+        backgroundWorkerDeliveryMessageIds(events, viewOf(events))
+      ).toEqual(
         new Set([
           "task-delivery:user",
           ...(hidesResponse ? ["task-delivery:assistant"] : []),
@@ -58,14 +54,14 @@ describe("trace view", () => {
 
   it("identifies authorization delivery for a known worker task", () => {
     const events = [
-      workerActionReceipt("task_worker"),
-      receivedMessage(
+      ...workerReceipt("task_worker"),
+      ...receivedMessage(
         "task-delivery",
         "Background task task_worker needs authorization."
       ),
-    ] satisfies MessageStreamEvent[];
+    ];
 
-    expect(backgroundWorkerDeliveryMessageIds(events)).toEqual(
+    expect(backgroundWorkerDeliveryMessageIds(events, viewOf(events))).toEqual(
       new Set(["task-delivery:user"])
     );
   });
@@ -76,31 +72,34 @@ describe("trace view", () => {
     const ordinaryText =
       "Background task task_someone_else (browser-agent) is cancelled.";
     const events = [
-      workerActionReceipt("task_worker"),
-      workerCancellationResult("task_worker"),
-      receivedMessage("task-delivery", deliveryText),
-      receivedMessage("ordinary-user-message", ordinaryText),
-    ] satisfies MessageStreamEvent[];
+      ...workerReceipt("task_worker"),
+      ...workerCancellationResult("task_worker"),
+      ...receivedMessage("task-delivery", deliveryText),
+      ...receivedMessage("ordinary-user-message", ordinaryText),
+    ];
+    const view = viewOf(events);
     const messages = [
       userMessage("task-delivery", deliveryText),
       userMessage("ordinary-user-message", ordinaryText),
       assistantMessage("task-delivery", "Here is the useful result."),
     ];
 
-    expect(messagesForTraceView(messages, events, "imessage")).toEqual([
+    expect(messagesForTraceView(messages, events, view, "imessage")).toEqual([
       messages[1],
     ]);
-    expect(messagesForTraceView(messages, events, "trace")).toBe(messages);
+    expect(messagesForTraceView(messages, events, view, "trace")).toBe(
+      messages
+    );
   });
 
   it("keeps identical user-authored cancellation text visible", () => {
     const text = "Background task task_worker (browser-agent) is cancelled.";
     const events = [
-      workerActionReceipt("task_worker"),
-      receivedMessage("user-spoof", text),
-      workerCancellationResult("task_worker"),
-      receivedMessage("framework-delivery", text),
-    ] satisfies MessageStreamEvent[];
+      ...workerReceipt("task_worker"),
+      ...receivedMessage("user-spoof", text),
+      ...workerCancellationResult("task_worker"),
+      ...receivedMessage("framework-delivery", text),
+    ];
     const messages = [
       userMessage("user-spoof", text),
       assistantMessage("user-spoof", "Visible reply"),
@@ -108,112 +107,115 @@ describe("trace view", () => {
       assistantMessage("framework-delivery", "Hidden redundant reply"),
     ];
 
-    expect(messagesForTraceView(messages, events, "imessage")).toEqual(
-      messages.slice(0, 2)
-    );
+    expect(
+      messagesForTraceView(messages, events, viewOf(events), "imessage")
+    ).toEqual(messages.slice(0, 2));
   });
 });
 
-function workerCompletedReceipt(taskId: string): MessageStreamEvent {
-  return {
-    data: {
-      backgroundTask: { status: "working", taskId },
-      callId: "call_worker",
-      output: `{"status":"working","taskId":"${taskId}"}`,
-      subagentName: "browser-agent",
-    },
-    meta: { at: "2026-08-27T20:00:00.000Z", id: "receipt" },
-    type: "subagent.completed",
-  };
+/** A legacy browser worker receipt, as saved v26 streams read back in v27. */
+function workerReceipt(taskId: string) {
+  return settledCall("call_worker", "agent", "browser-agent", {
+    agentId: "agent_worker",
+    status: "working",
+    taskId,
+  });
 }
 
-function workerActionReceipt(taskId: string): MessageStreamEvent {
-  return {
-    data: {
-      result: {
-        backgroundTask: { status: "working", taskId },
-        callId: "call_worker",
-        kind: "subagent-result",
-        origin: "child",
-        outcome: {
-          kind: "parked",
-          result: {
-            kind: "succeeded",
-            output: { agentId: "agent_worker", status: "working", taskId },
-          },
-          usageDelta: {
-            cacheReadTokens: 0,
-            cacheWriteTokens: 0,
-            inputTokens: 1,
-            outputTokens: 1,
-          },
+function workerCancellationResult(taskId: string) {
+  return settledCall("call_cancel", "tool", "task_cancel", {
+    tasks: [
+      {
+        metadata: {
+          agentId: "agent_worker",
+          kind: "subagent",
+          mode: "local",
+          name: "browser-agent",
         },
-        output: { agentId: "agent_worker", status: "working", taskId },
-        subagentName: "browser-agent",
+        status: "cancelled",
+        taskId,
       },
-      sequence: 1,
-      status: "completed",
-      stepIndex: 0,
-      turnId: "turn_worker",
+    ],
+  });
+}
+
+function settledCall(
+  callId: string,
+  kind: "agent" | "tool",
+  name: string,
+  output: JsonValue
+) {
+  const scope = { runId: `run_${callId}`, turnId: `turn_${callId}` };
+  return [
+    streamed({
+      data: { owner: { turnId: scope.turnId }, runId: scope.runId },
+      scope,
+      type: "model.requested",
+    }),
+    streamed({
+      data: {
+        callId,
+        capability: { kind, name },
+        input: {},
+        owner: { runId: scope.runId },
+      },
+      scope,
+      type: "call.requested",
+    }),
+    streamed({
+      data: { callId, outcome: "completed", output },
+      scope,
+      type: "call.settled",
+    }),
+  ];
+}
+
+function receivedMessage(name: string, text: string) {
+  return [
+    streamed({
+      data: {
+        deliveryId: name,
+        parts: [{ kind: "text", text }],
+        turnId: name,
+      },
+      scope: { turnId: name },
+      type: "delivery.consumed",
+    }),
+  ];
+}
+
+let nextLine = 0;
+
+function streamed(fact: SessionEvent): SessionStreamEvent {
+  const line = nextLine;
+  nextLine += 1;
+  return {
+    ...fact,
+    meta: {
+      at: "2026-08-27T20:00:00.000Z",
+      endOfLine: true,
+      position: { index: 0, line },
     },
-    meta: { at: "2026-08-27T20:00:00.000Z", id: "worker-receipt" },
-    type: "action.result",
   };
 }
 
-function workerCancellationResult(taskId: string): MessageStreamEvent {
-  return {
-    data: {
-      result: {
-        callId: "call_cancel",
-        kind: "tool-result",
-        output: {
-          tasks: [
-            {
-              metadata: {
-                agentId: "agent_worker",
-                kind: "subagent",
-                mode: "local",
-                name: "browser-agent",
-              },
-              status: "cancelled",
-              taskId,
-            },
-          ],
-        },
-        toolName: "task_cancel",
-      },
-      sequence: 2,
-      status: "completed",
-      stepIndex: 1,
-      turnId: "turn_cancel",
-    },
-    meta: { at: "2026-08-27T20:00:00.500Z", id: "cancel-result" },
-    type: "action.result",
-  };
+function viewOf(events: readonly SessionStreamEvent[]) {
+  return foldEvents(emptySessionView(), events);
 }
 
-function receivedMessage(turnId: string, message: string) {
+function userMessage(name: string, text: string): EveMessage {
   return {
-    data: { message, sequence: 0, turnId },
-    meta: { at: "2026-08-27T20:00:01.000Z", id: `event-${turnId}` },
-    type: "message.received",
-  } satisfies MessageStreamEvent;
-}
-
-function userMessage(turnId: string, text: string): EveMessage {
-  return {
-    id: `${turnId}:user`,
-    metadata: { status: "complete", turnId },
+    id: `${name}:user`,
+    metadata: { status: "complete", turnId: name },
     parts: [{ state: "done", text, type: "text" }],
     role: "user",
   };
 }
 
-function assistantMessage(turnId: string, text: string): EveMessage {
+function assistantMessage(name: string, text: string): EveMessage {
   return {
-    id: `${turnId}:assistant`,
-    metadata: { status: "complete", turnId },
+    id: `${name}:assistant`,
+    metadata: { status: "complete", turnId: name },
     parts: [{ state: "done", stepIndex: 0, text, type: "text" }],
     role: "assistant",
   };

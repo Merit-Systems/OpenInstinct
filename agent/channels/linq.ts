@@ -12,6 +12,7 @@ import { scopeFromPrincipal } from "@agent/lib/principal-scope";
 import { getAuth } from "@db/services/auth";
 import { sendMessageToolResultSchema } from "@shared/chat/message-delivery";
 import { reactToMessageToolResultSchema } from "@shared/chat/reaction";
+import { settledToolResult } from "@agent/lib/settled-tool-result";
 import { accessScopeForUser } from "@shared/identity/access-scope";
 import { normalizeAuthPhoneNumber } from "@shared/identity/phone-number";
 import { prepareLinqImageArtifactDelivery } from "../lib/linq-image-artifact/delivery";
@@ -59,17 +60,26 @@ const credentials = {
 export default linqChannel({
   credentials,
   events: {
-    async "authorization.required"(event, context, session) {
-      const { thread } = context;
-      if (!thread || event.candidateId !== undefined) return;
-      const displayName = event.authorization?.displayName ?? event.name;
+    async "interaction.opened"(event, ctx) {
+      const { origin, request } = event.data;
+      const { thread } = ctx.channel;
+      // Approvals and questions render through the default committed handler;
+      // delegated sign-ins stay out of the root conversation.
+      if (
+        request.kind !== "sign-in" ||
+        !thread ||
+        (origin !== undefined && origin.sessionId !== ctx.session.id)
+      )
+        return;
+      const signIn = request.signIn;
+      const displayName = signIn?.displayName ?? signIn?.name ?? "this account";
       if (!thread.isDM) {
         await thread.post({
           raw: `Connect ${displayName} in a direct message with this agent.`,
         });
         return;
       }
-      const adapter = context.bot.getAdapter("linq");
+      const adapter = ctx.channel.bot.getAdapter("linq");
       const { chatId, pendingHandle } = adapter.decodeThreadId(thread.id);
       if (!chatId || pendingHandle)
         throw new Error(
@@ -79,35 +89,31 @@ export default linqChannel({
         {
           type: "text",
           value: [
-            event.authorization?.instructions ??
-              `Connect ${displayName} to continue.`,
-            event.authorization?.userCode
-              ? `Code: ${event.authorization.userCode}`
-              : undefined,
+            signIn?.instructions ?? `Connect ${displayName} to continue.`,
+            signIn?.userCode ? `Code: ${signIn.userCode}` : undefined,
           ]
             .filter(Boolean)
             .join("\n\n"),
         },
       ];
-      const idempotencyKey = `authorization:${session.session.id}:${event.attemptId ?? `${event.turnId}:${event.name}`}`;
-      const result = await sendNativeLinqMessage(chatId, {
+      const idempotencyKey = `authorization:${ctx.session.id}:${event.data.interactionId}`;
+      await sendNativeLinqMessage(chatId, {
         parts,
         idempotency_key: `${idempotencyKey}:prompt`,
       });
-      context.state.pendingAuthMessageIds = {
-        ...context.state.pendingAuthMessageIds,
-        [event.name]: result.message.id,
-      };
       // Linq requires a native link to be the message's only part.
-      if (event.authorization?.url)
+      if (signIn?.url)
         await sendNativeLinqMessage(chatId, {
-          parts: [{ type: "link", value: event.authorization.url }],
+          parts: [{ type: "link", value: signIn.url }],
           idempotency_key: `${idempotencyKey}:link`,
         });
     },
-    async "action.result"(event, context, session) {
-      const reaction = reactToMessageToolResultSchema.safeParse(event.result);
-      if (event.status === "completed" && reaction.success) {
+    async "call.settled"(event, ctx) {
+      const context = ctx.channel;
+      const session = ctx;
+      const result = settledToolResult(event, ctx.view);
+      const reaction = reactToMessageToolResultSchema.safeParse(result);
+      if (reaction.success) {
         if (!context.thread) {
           throw new Error(
             "react_to_message requires an active Linq conversation thread."
@@ -143,12 +149,8 @@ export default linqChannel({
         return;
       }
 
-      const message = sendMessageToolResultSchema.safeParse(event.result);
-      if (
-        event.status === "completed" &&
-        message.success &&
-        message.data.toolName === "send_message"
-      ) {
+      const message = sendMessageToolResultSchema.safeParse(result);
+      if (message.success && message.data.toolName === "send_message") {
         const { thread } = context;
         if (!thread) {
           throw new Error(
@@ -309,27 +311,31 @@ export default linqChannel({
         await finalizeScheduledReportDelivery(session);
       }
     },
-    async "message.completed"(event, _context, session) {
-      if (event.finishReason === "tool-calls") return;
-      const report = scheduledReportFromSession(session);
-      if (report) {
-        await finalizeScheduledReportDelivery(session, "suppressed");
+    // Linq output is delivered only through send_message, so the default
+    // reply posting is replaced with a no-op.
+    // oxlint-disable-next-line eslint/no-empty-function -- Overriding the built-in handler suppresses automatic reply posting.
+    async "content.completed"() {},
+    async "session.ended"(_event, ctx) {
+      if (scheduledReportFromSession(ctx)) {
+        await finalizeScheduledReportDelivery(ctx, "suppressed");
       }
     },
-    async "session.completed"(_event, _context, session) {
-      const report = scheduledReportFromSession(session);
-      if (report) {
-        await finalizeScheduledReportDelivery(session, "suppressed");
+    async "turn.settled"(event, ctx) {
+      if (event.data.outcome === "completed") {
+        if (scheduledReportFromSession(ctx)) {
+          await finalizeScheduledReportDelivery(ctx, "suppressed");
+        }
+      } else if (event.data.outcome === "cancelled") {
+        await releaseScheduledReportDelivery(
+          ctx,
+          "Scheduled result reporting was cancelled."
+        );
+      } else {
+        await releaseScheduledReportDelivery(
+          ctx,
+          event.data.error?.message ?? "The scheduled report turn failed."
+        );
       }
-    },
-    async "turn.cancelled"(_event, _context, session) {
-      await releaseScheduledReportDelivery(
-        session,
-        "Scheduled result reporting was cancelled."
-      );
-    },
-    async "turn.failed"(event, _context, session) {
-      await releaseScheduledReportDelivery(session, event.message);
     },
   },
   async onMessage(context, message) {

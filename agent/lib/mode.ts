@@ -1,10 +1,10 @@
-import type { DynamicResolveContext } from "eve";
+import type { DynamicContext } from "eve";
 import { defineInstructions } from "eve/instructions";
 
 interface AgentModeContext {
   readonly session: {
     readonly auth: Pick<
-      DynamicResolveContext["session"]["auth"],
+      DynamicContext["session"]["auth"],
       "current" | "initiator"
     >;
   };
@@ -26,17 +26,21 @@ function sessionAgentMode(auth: AgentModeContext["session"]["auth"]) {
   return agentMode(caller?.authenticator);
 }
 
-export function resolveModeValue<T>(
-  context: AgentModeContext,
-  valueByMode: Partial<Record<AgentMode, T>>
-) {
-  return valueByMode[sessionAgentMode(context.session.auth)] ?? null;
+export function resolveModeValue<
+  const V extends Partial<Record<AgentMode, unknown>>,
+>(context: AgentModeContext, valueByMode: V): V[keyof V] | null {
+  const value = valueByMode[sessionAgentMode(context.session.auth)];
+  if (value === undefined) return null;
+  // SAFETY: `value` was read from `valueByMode` under one of its own keys, so it
+  // is one of V's property values.
+  // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- Indexing a generic record by a key union cannot narrow to V[keyof V].
+  return value as V[keyof V];
 }
 
 export function resolveModeInstructions(
-  context: DynamicResolveContext,
+  context: DynamicContext,
   contentByMode: Partial<Record<AgentMode, string>>
 ) {
   const content = resolveModeValue(context, contentByMode);
-  return content === null ? null : defineInstructions({ content });
+  return content == null ? null : defineInstructions({ content });
 }

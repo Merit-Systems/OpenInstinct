@@ -1,4 +1,4 @@
-import type { MessageStreamEvent } from "eve/client";
+import type { SessionStreamEvent } from "eve/client";
 import { useEffect, useMemo, useRef } from "react";
 import { summarizeChatUsage } from "../../../_lib/chat-usage";
 import type { ChatUsage } from "@shared/chat/schema";
@@ -10,7 +10,7 @@ export function useChatUsage({
   initialUsage,
   sessionId,
 }: {
-  readonly events: readonly MessageStreamEvent[];
+  readonly events: readonly SessionStreamEvent[];
   readonly historyComplete: boolean;
   readonly initialUsage?: ChatUsage;
   readonly sessionId?: string;
@@ -22,12 +22,13 @@ export function useChatUsage({
     () => preferCompleteUsage(measuredUsage, initialUsage),
     [initialUsage, measuredUsage]
   );
-  const latestTerminalTurnId = events.findLast(
-    (event) =>
-      event.type === "turn.completed" ||
-      event.type === "turn.failed" ||
-      event.type === "turn.cancelled"
-  )?.meta.id;
+  const latestSettledTurn = events.findLast(
+    (event) => event.type === "turn.settled"
+  );
+  const latestTerminalTurnId =
+    latestSettledTurn?.type === "turn.settled"
+      ? latestSettledTurn.data.turnId
+      : undefined;
 
   useEffect(() => {
     if (

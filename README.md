@@ -201,6 +201,14 @@ Gotchas:
 
 ## Link wallet
 
+> [!NOTE]
+> Link purchases are temporarily disabled. No release of
+> `@stripe/link-integrations-eve` is built for eve 1.0 yet, and eve 1.0 refuses
+> to load extensions built with 0.83 or earlier. Users can still connect a
+> wallet. To re-enable purchases once Stripe ships a 1.0-compatible release,
+> restore `agent/extensions/link.ts`, the `link__*` coordinator tools, and the
+> Link purchase instructions in `agent/instructions/content/worker-coordination.md`.
+
 Link lets users approve purchases from their own wallet. It is optional and
 requires separate setup after deployment; the deploy button does not configure
 it. Stripe currently supports Link Agent Wallet for US and Canadian consumers.
@@ -274,14 +282,19 @@ require additional financial-data scopes and connected-source permissions.
 <details>
 <summary>Eve version and active-session compatibility</summary>
 
-This repository pins Eve `0.66.3` and the published Link extension `0.2.4`.
-The extension's tool contract is supported directly, so it needs no compatibility
-rebuild. Browser work uses the background workflow and `agentId` continuation
-APIs supported by this Eve version.
+This repository pins Eve `1.0.0-rc.1`. Eve 1.0 refuses to load extensions
+built with Eve 0.83 or earlier, so the Link extension is disabled until Stripe
+ships a compatible release (see [Link wallet](#link-wallet)). Browser work uses
+the resumable `run_browser` task: the coordinator continues a worker by its
+`taskId` and stops one with `eve__task_cancel`.
 
-Keep active sessions on their owning deployment until they finish; do not move
-an Eve `0.69` session onto this `0.66.3` deployment. Start a new conversation
-after changing Eve versions.
+Sessions started on Eve 0.69 through 0.83 move to a 1.0 deployment on their
+own when they next receive a message, and Eve compacts their earlier
+conversation. Sessions started on this repository's previous Eve `0.66.3`
+deployment predate 0.69 and never move: keep that deployment running until
+they finish, and start a new conversation for new work. A scheduled run that
+was waiting for the user's answer when you deploy stores the old request
+format; re-run it after the upgrade.
 
 </details>
 

@@ -29,22 +29,18 @@ const relaxedBrowserActTimeoutMs = 8_000;
 const relaxedBrowserActSnapshotCharacters = 4_000;
 const relaxedBrowserActOutputCharacters = 6_000;
 
-export default defineDynamic({
-  events: {
-    "session.started": () => {
-      return Object.fromEntries(
-        allSpecs.map((spec) => [
-          spec.name,
-          defineTool({
-            description: toolDescription(spec),
-            execute: executeSemanticTool,
-            inputSchema: withSessionId(spec),
-            toModelOutput,
-          }),
-        ])
-      );
-    },
-  },
+export default defineDynamic(() => {
+  return Object.fromEntries(
+    allSpecs.map((spec) => [
+      spec.name,
+      defineTool({
+        description: toolDescription(spec),
+        execute: executeSemanticTool,
+        inputSchema: withSessionId(spec),
+        toModelOutput,
+      }),
+    ])
+  );
 });
 
 async function executeSemanticTool(

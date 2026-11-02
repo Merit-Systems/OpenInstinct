@@ -76,22 +76,31 @@ export function sumBrowserActivityDurations(
   return durations;
 }
 
+/**
+ * Classifies a stored trace row by the session event that produced it. Rows
+ * recorded before eve 1.0 keep their v26 event types, so both are recognized.
+ */
 function browserTraceActivityKind(event: {
   readonly label: string;
   readonly type: string;
 }): BrowserActivityKind | null {
-  if (event.type === "actions.requested") {
+  if (event.type === "call.requested" || event.type === "actions.requested") {
     return event.label === "Load skill"
       ? "setup"
       : browserActivityKindForTool(event.label);
   }
   if (
+    event.type === "interaction.opened" ||
     event.type === "input.requested" ||
     event.type === "authorization.required"
   ) {
     return "waiting";
   }
   if (
+    event.type === "delivery.consumed" ||
+    event.type === "content.completed" ||
+    event.type === "call.settled" ||
+    event.type === "interaction.settled" ||
     event.type === "message.received" ||
     event.type === "message.completed" ||
     event.type === "action.result" ||

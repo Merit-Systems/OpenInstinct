@@ -1,5 +1,5 @@
 import { relations, sql } from "drizzle-orm";
-import type { InputRequest } from "eve/client";
+import type { Interaction } from "eve/events";
 import {
   check,
   foreignKey,
@@ -129,7 +129,7 @@ export const scheduledAgentRuns = pgTable(
     workerSessionId: text("worker_session_id"),
     deferredCompletionTurnId: text("deferred_completion_turn_id"),
     pendingInputRequests: jsonb("pending_input_requests").$type<
-      readonly InputRequest[]
+      readonly Interaction[]
     >(),
     outcome: jsonb("outcome"),
     reportStatus: text("report_status", {

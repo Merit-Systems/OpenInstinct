@@ -1,8 +1,13 @@
-import { defineEval } from "eve/evals";
+import { defineEval, type EveEvalTurn } from "eve/evals";
 import { equals, satisfies } from "eve/evals/expect";
 import { sendMessageOutputSchema } from "@shared/chat/message-delivery";
 import { agentEvalTags } from "@evals/agent/shared";
 import { accessScopeForUser } from "@shared/identity/access-scope";
+
+function nextLine(events: EveEvalTurn["events"], fallback = 0) {
+  const last = events.at(-1);
+  return last ? last.meta.position.line + 1 : fallback;
+}
 
 const cases = [
   {
@@ -25,7 +30,8 @@ export default defineEval({
     );
     initial.expectOk();
     initial.succeeded();
-    let mainEventIndex = initial.events.length;
+    // Stream reads resume by line, not by event count.
+    let mainLine = nextLine(initial.events);
     const { createScheduledAgentJob, listScheduledAgentJobs } =
       await import("@db/services/scheduled-agent-jobs");
     const scope = accessScopeForUser("better-auth:browser-benchmark");
@@ -60,7 +66,7 @@ export default defineEval({
         throw new Error("Schedule dispatch did not return a worker session.");
       }
 
-      const worker = await t.target.attachSession(workerSessionId);
+      const worker = await t.target.attach(workerSessionId).nextTurn();
       worker.succeeded();
       worker.outputEquals(testCase.result);
 
@@ -86,9 +92,9 @@ export default defineEval({
       );
       await t.require(reportResponse.status, equals(202));
 
-      const report = await t.target.attachSession(initial.sessionId, {
-        startIndex: mainEventIndex,
-      });
+      const report = await t.target
+        .attach(initial.sessionId, { startIndex: mainLine })
+        .nextTurn();
       report.succeeded();
       if (testCase.expectedDelivery === null) {
         report.notCalledTool("send_message");
@@ -107,7 +113,7 @@ export default defineEval({
         });
       }
       report.notCalledTool("run_browser");
-      mainEventIndex += report.events.length;
+      mainLine = nextLine(report.events, mainLine);
     };
 
     await runCase(cases[0]);

@@ -1,4 +1,4 @@
-import type { MessageStreamEvent } from "eve/client";
+import type { SessionStreamEvent } from "eve/client";
 import { ChevronRightIcon } from "lucide-react";
 import {
   getSubagentTask,
@@ -26,7 +26,7 @@ export function ActivityCard({
   workingCount,
 }: {
   readonly doneCount: number;
-  readonly eventsBySession: ReadonlyMap<string, readonly MessageStreamEvent[]>;
+  readonly eventsBySession: ReadonlyMap<string, readonly SessionStreamEvent[]>;
   readonly onSelect: (sessionId: string) => void;
   readonly onTraceViewChange: (view: TraceView) => void;
   readonly sessions: readonly SubagentSession[];

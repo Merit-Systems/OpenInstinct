@@ -1,6 +1,12 @@
 import { defineChannel, POST } from "eve/channels";
 import { localDev, routeAuth, vercelOidc } from "eve/channels/auth";
-import { parseInputResponses, resolveTextToResponses } from "eve/client";
+import { parseAnswers, SessionNotActiveError } from "eve/client";
+import {
+  APPROVE_OPTION_ID,
+  DENY_OPTION_ID,
+  type Answer,
+  type Interaction,
+} from "eve/events";
 import { z } from "zod";
 import { dispatchScheduledReport } from "@agent/lib/schedules/report";
 import {
@@ -31,7 +37,8 @@ export default defineChannel({
     const target = scheduledRunTargetSchema.parse(input.target);
     const source = from(`scheduled-run:${target.runId}`);
     if (target.restart) {
-      await source.reset({
+      // Retire the overrunning worker; the next send starts a fresh session.
+      await source.end({
         reason: "Scheduled worker exceeded its runtime.",
       });
     }
@@ -71,8 +78,8 @@ export default defineChannel({
         ) {
           return new Response(null, { status: 409 });
         }
-        const responses = parseInputResponses(
-          resolveTextToResponses(input.answer, claimed.run.pendingInputRequests)
+        const responses = parseAnswers(
+          answersFromText(input.answer, claimed.run.pendingInputRequests)
         );
         if (responses.length === 0) {
           await restoreScheduledAgentRunInput(
@@ -83,9 +90,7 @@ export default defineChannel({
           return new Response(null, { status: 422 });
         }
         try {
-          const result = await attachSession(
-            claimed.run.workerSessionId
-          ).respond(responses, {
+          await attachSession(claimed.run.workerSessionId).respond(responses, {
             auth: {
               attributes: {
                 conversationChannel: claimed.job.conversationChannel,
@@ -100,7 +105,10 @@ export default defineChannel({
               principalType: "user",
             },
           });
-          if (result.status !== "accepted") {
+          await finishScheduledAgentRunInput(input.runId, input.leaseToken);
+          return new Response(null, { status: 202 });
+        } catch (error) {
+          if (SessionNotActiveError.is(error)) {
             await restoreScheduledAgentRunInput(
               input.runId,
               input.leaseToken,
@@ -108,9 +116,6 @@ export default defineChannel({
             );
             return new Response(null, { status: 409 });
           }
-          await finishScheduledAgentRunInput(input.runId, input.leaseToken);
-          return new Response(null, { status: 202 });
-        } catch (error) {
           await restoreScheduledAgentRunInput(
             input.runId,
             input.leaseToken,
@@ -122,3 +127,40 @@ export default defineChannel({
     ),
   ],
 });
+
+const approvalAliases = new Map([
+  ["approve", APPROVE_OPTION_ID],
+  ["approved", APPROVE_OPTION_ID],
+  ["yes", APPROVE_OPTION_ID],
+  ["deny", DENY_OPTION_ID],
+  ["denied", DENY_OPTION_ID],
+  ["no", DENY_OPTION_ID],
+]);
+
+// Answers each pending request from the user's text: an option's number, ID,
+// or label selects it, and other text answers requests that accept free text.
+function answersFromText(
+  text: string,
+  requests: readonly Interaction[]
+): Answer[] {
+  const normalized = text.trim().toLowerCase();
+  return requests.flatMap(({ interactionId, request }): Answer[] => {
+    const options = request.options ?? [];
+    if (options.length === 0) return [{ interactionId, text }];
+    const byNumber = /^\d+$/.test(normalized)
+      ? options[Number(normalized) - 1]
+      : undefined;
+    const alias =
+      request.kind === "approval" ? approvalAliases.get(normalized) : undefined;
+    const option =
+      byNumber ??
+      options.find(
+        ({ id, label }) =>
+          id.toLowerCase() === normalized ||
+          label.toLowerCase() === normalized ||
+          id === alias
+      );
+    if (option) return [{ interactionId, optionId: option.id }];
+    return request.allowFreeform ? [{ interactionId, text }] : [];
+  });
+}

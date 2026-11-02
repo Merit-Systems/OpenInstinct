@@ -1,9 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import type { DeliveryConsumed } from "eve/events";
 import type { HookContext } from "eve/hooks";
 import type { saveChat } from "@db/services/chats";
 import type { ensureScope } from "@db/services/scope";
 import type { claimSession } from "@db/services/sessions";
 import sessionOwner from "@agent/hooks/session-owner";
+import { hookContextFor } from "@tests/helpers/hook-context";
 
 const mocks = vi.hoisted(() => ({
   claimSession: vi.fn<typeof claimSession>(),
@@ -17,31 +19,33 @@ vi.mock("@db/services/sessions", () => ({
   claimSession: mocks.claimSession,
 }));
 
-type MessageReceivedHandler = NonNullable<
-  NonNullable<typeof sessionOwner.events>["message.received"]
->;
-
 const scope = { userId: "user-1", workspaceId: "workspace-1" };
-const context = {
-  agent: { name: "test-agent" },
-  channel: { kind: "channel:linq" },
-  async getSandbox() {
-    throw new Error("Sandbox access is outside this focused test.");
+const auth: HookContext["session"]["auth"] = {
+  current: null,
+  initiator: {
+    attributes: { workspaceId: scope.workspaceId },
+    authenticator: "test",
+    principalId: scope.userId,
+    principalType: "user",
   },
-  session: {
-    auth: {
-      current: null,
-      initiator: {
-        attributes: { workspaceId: scope.workspaceId },
-        authenticator: "test",
-        principalId: scope.userId,
-        principalType: "user",
-      },
-    },
-    id: "session-1",
-    turn: { id: "turn-1", sequence: 0 },
+};
+const consumed: DeliveryConsumed = {
+  data: {
+    deliveryId: "delivery-1",
+    parts: [{ kind: "text", text: "hello" }],
+    turnId: "turn-1",
   },
-} satisfies HookContext;
+  scope: { turnId: "turn-1" },
+  type: "delivery.consumed",
+};
+
+function contextFor(kind: HookContext["channel"]["kind"]) {
+  return hookContextFor({
+    auth,
+    channel: { kind, metadata: {} },
+    sessionId: "session-1",
+  });
+}
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -52,18 +56,10 @@ beforeEach(() => {
 
 describe("session ownership hook", () => {
   it("repairs ownership before indexing a received message", async () => {
-    const handler = sessionOwner.events?.["message.received"];
+    const handler = sessionOwner.events["delivery.consumed"];
     expect(handler).toBeDefined();
 
-    const event = {
-      data: { message: "hello", sequence: 0, turnId: "turn-1" },
-      meta: {
-        at: "2026-08-31T00:00:00.000Z",
-        id: "event-1",
-      },
-      type: "message.received",
-    } satisfies Parameters<MessageReceivedHandler>[0];
-    await handler?.(event, context);
+    await handler?.(consumed, contextFor("channel:linq"));
 
     expect(mocks.ensureScope).toHaveBeenCalledWith(scope);
     expect(mocks.claimSession).toHaveBeenCalledWith(scope, "session-1");
@@ -80,22 +76,11 @@ describe("session ownership hook", () => {
   });
 
   it("records the web channel for HTTP messages", async () => {
-    const handler = sessionOwner.events?.["message.received"];
-    const event = {
-      data: { message: "hello", sequence: 0, turnId: "turn-1" },
-      meta: {
-        at: "2026-08-31T00:00:00.000Z",
-        id: "event-1",
-      },
-      type: "message.received",
-    } satisfies Parameters<MessageReceivedHandler>[0];
-    await handler?.(event, {
-      ...context,
-      channel: { kind: "http" },
-    });
+    const handler = sessionOwner.events["delivery.consumed"];
+    await handler?.(consumed, contextFor("channel:eve"));
 
     expect(mocks.saveChat).toHaveBeenCalledWith(scope, {
-      channel: "http",
+      channel: "channel:eve",
       sessionId: "session-1",
     });
   });

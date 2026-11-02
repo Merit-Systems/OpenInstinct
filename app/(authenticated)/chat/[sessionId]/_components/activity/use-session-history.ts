@@ -2,23 +2,37 @@
 
 import {
   Client,
-  isCurrentTurnBoundaryEvent,
-  type MessageStreamEvent,
+  conversationOf,
+  endsTurn,
+  type SessionStreamEvent,
 } from "eve/client";
-import { useEffect, useRef, useState } from "react";
+import { idle } from "eve/events";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
+  appendHistoryEvent,
   readLatestSessionHistory,
   readOlderSessionHistory,
   type SessionHistoryPage,
 } from "../../_lib/session-history";
 
-const client = new Client({ host: "" });
+const client = new Client({ baseUrl: "" });
 
-export function useSessionHistory(sessionId: string) {
+/**
+ * Reads a child session through its parent, which verifies the recorded
+ * `child.opened` relationship before it returns the child's history.
+ */
+export function useSessionHistory(
+  parentSessionId: string,
+  opened: Extract<SessionStreamEvent, { type: "child.opened" }>
+) {
   const [history, setHistory] = useState<SessionHistoryPage>();
   const [error, setError] = useState<string>();
   const [isLoadingOlder, setIsLoadingOlder] = useState(false);
   const historyRef = useRef(history);
+  const reader = useMemo(
+    () => client.sessions.attach(parentSessionId).agent(opened),
+    [opened, parentSessionId]
+  );
 
   useEffect(() => {
     historyRef.current = history;
@@ -27,26 +41,29 @@ export function useSessionHistory(sessionId: string) {
   useEffect(() => {
     const controller = new AbortController();
 
-    void readLatestSessionHistory(sessionId, controller.signal)
+    void readLatestSessionHistory(reader, controller.signal)
       .then(async (latest) => {
         if (controller.signal.aborted) return undefined;
         historyRef.current = latest;
         setHistory(latest);
 
-        const tail = latest.events.at(-1);
-        if (!tail || isCurrentTurnBoundaryEvent(tail)) return undefined;
+        if (
+          latest.events.length === 0 ||
+          idle(conversationOf(latest.events).view)
+        ) {
+          return undefined;
+        }
 
-        const session = client.sessions.attach(sessionId, {
-          streamIndex: latest.endIndex,
-        });
-        let nextIndex = latest.endIndex;
-        for await (const event of session.stream({
+        let turnEnded = false;
+        for await (const event of reader.stream({
           signal: controller.signal,
-          startIndex: nextIndex,
+          startIndex: latest.endIndex,
         })) {
-          nextIndex += 1;
-          appendEvent(setHistory, event, nextIndex);
-          if (isCurrentTurnBoundaryEvent(event)) break;
+          setHistory((current) =>
+            current ? appendHistoryEvent(current, event) : current
+          );
+          turnEnded ||= endsTurn(event);
+          if (turnEnded && event.meta.endOfLine !== false) break;
         }
         return undefined;
       })
@@ -64,17 +81,14 @@ export function useSessionHistory(sessionId: string) {
     return () => {
       controller.abort();
     };
-  }, [sessionId]);
+  }, [reader]);
 
   const loadOlder = async () => {
     const current = historyRef.current;
     if (!current || current.startIndex === 0 || isLoadingOlder) return;
     setIsLoadingOlder(true);
     try {
-      const older = await readOlderSessionHistory(
-        sessionId,
-        current.startIndex
-      );
+      const older = await readOlderSessionHistory(reader, current.startIndex);
       setHistory((latest) =>
         latest
           ? {
@@ -103,26 +117,4 @@ export function useSessionHistory(sessionId: string) {
     isLoadingOlder,
     loadOlder,
   };
-}
-
-function appendEvent(
-  setHistory: React.Dispatch<
-    React.SetStateAction<SessionHistoryPage | undefined>
-  >,
-  event: MessageStreamEvent,
-  endIndex: number
-) {
-  setHistory((current) => {
-    if (!current) return current;
-    if (
-      current.events.some((candidate) => candidate.meta.id === event.meta.id)
-    ) {
-      return { ...current, endIndex };
-    }
-    return {
-      ...current,
-      endIndex,
-      events: [...current.events, event],
-    };
-  });
 }

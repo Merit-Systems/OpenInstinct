@@ -9,7 +9,7 @@ export default defineHook({
     async "session.started"(_event, ctx) {
       await claimOwnedSession(ctx);
     },
-    async "message.received"(_event, ctx) {
+    async "delivery.consumed"(_event, ctx) {
       const scope = await claimOwnedSession(ctx);
       if (!scope) return;
 

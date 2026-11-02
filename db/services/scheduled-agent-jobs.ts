@@ -12,7 +12,7 @@ import {
   or,
   sql,
 } from "drizzle-orm";
-import { isInputRequest, type InputRequest } from "eve/client";
+import type { Interaction } from "eve/events";
 import { z } from "zod";
 import type { AccessScope } from "@shared/identity/access-scope";
 import {
@@ -27,8 +27,24 @@ import {
 } from "@shared/schedules/outcome";
 import { db, scheduledAgentJobs, scheduledAgentRuns } from "@db";
 
+// eve exports the Interaction type without a runtime guard; check the fields
+// the answer route and report prompt read before trusting a stored request.
+const storedInteractionSchema = z.looseObject({
+  interactionId: z.string().min(1),
+  request: z.looseObject({
+    kind: z.string().min(1),
+    options: z
+      .array(z.looseObject({ id: z.string(), label: z.string() }))
+      .optional(),
+    prompt: z.string(),
+  }),
+});
 const pendingInputRequestsSchema = z
-  .array(z.custom<InputRequest>(isInputRequest))
+  .array(
+    z.custom<Interaction>(
+      (value) => storedInteractionSchema.safeParse(value).success
+    )
+  )
   .min(1);
 
 const exhaustedRunOutcome = {
@@ -376,7 +392,7 @@ export async function markScheduledAgentRunStarted(
 export async function waitForScheduledAgentRunInput(
   runId: string,
   leaseToken: string,
-  pendingInputRequests: readonly InputRequest[],
+  pendingInputRequests: readonly Interaction[],
   now = new Date()
 ) {
   const parsedRequests = pendingInputRequestsSchema.parse(pendingInputRequests);

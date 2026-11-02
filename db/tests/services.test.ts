@@ -258,7 +258,7 @@ describe("database services", () => {
         detail: "Order the blue mug",
         id: "evt_01",
         label: "Task received",
-        type: "message.received",
+        type: "delivery.consumed",
       },
     ]);
     await browserTraces.recordBrowserTraceEvents(bob, "worker-alice", [
@@ -267,7 +267,7 @@ describe("database services", () => {
         detail: "intrusion",
         id: "evt_02",
         label: "Task received",
-        type: "message.received",
+        type: "delivery.consumed",
       },
     ]);
     const events = await browserTraces.listBrowserTraceEvents(

@@ -1,4 +1,5 @@
-import type { MessageStreamEvent } from "eve/client";
+import type { SessionEvent, SessionStreamEvent } from "eve/client";
+import { emptySessionView, foldEvents, type JsonValue } from "eve/events";
 import { describe, expect, it } from "vitest";
 import {
   collectSubagentSessions,
@@ -7,133 +8,80 @@ import {
   getSubagentTask,
 } from "./subagent-sessions";
 
-const meta = { at: "2026-08-27T12:00:00.000Z", id: "evt_01" };
-const called = {
-  type: "subagent.called",
-  data: {
-    callId: "call_1",
-    childSessionId: "child_1",
-    childStreamPath: "/eve/v1/session/child_1/stream",
-    name: "researcher",
-    sequence: 0,
-    sessionId: "parent_1",
-    toolName: "researcher",
-    turnId: "turn_1",
-    workflowId: "workflow_1",
-  },
-  meta,
-} satisfies MessageStreamEvent;
-
 describe("collectSubagentSessions", () => {
-  it("joins completions and keeps the latest call for a continued child", () => {
+  it("joins the parent call outcome and keeps the latest call for a continued child", () => {
     const events = [
-      called,
-      {
-        ...called,
-        data: { ...called.data, callId: "call_2" },
-        meta: { ...meta, id: "evt_02" },
-      },
-      {
-        type: "subagent.completed",
-        data: {
-          callId: "call_2",
-          output: "Done",
-          subagentName: "researcher",
-        },
-        meta: { ...meta, id: "evt_03" },
-      },
-    ] satisfies readonly MessageStreamEvent[];
+      ...requestedCall("call_1", { message: "First task" }),
+      started("call_1", "task_1"),
+      taskStarted("task_1", "call_1"),
+      opened("child_1", { taskId: "task_1" }),
+      ...requestedCall("call_2", { message: "Continued task" }),
+      started("call_2", "task_1"),
+      settled("call_2", "Done"),
+    ];
 
-    const sessions = collectSubagentSessions(events);
+    const sessions = collect(events);
 
     expect(sessions).toHaveLength(1);
     expect(sessions[0]?.callId).toBe("call_2");
-    expect(sessions[0]?.completion?.output).toBe("Done");
+    expect(sessions[0]?.parentStatus).toBe("ready");
   });
 
-  it("sorts the most recently called children first", () => {
+  it("sorts the most recently opened children first", () => {
     const events = [
-      called,
-      {
-        ...called,
-        data: {
-          ...called.data,
-          callId: "call_2",
-          childSessionId: "child_2",
-        },
-        meta: { ...meta, id: "evt_02" },
-      },
-    ] satisfies readonly MessageStreamEvent[];
+      opened("child_1", { callId: "call_1" }),
+      opened("child_2", { callId: "call_2" }),
+    ];
 
-    expect(
-      collectSubagentSessions(events).map(
-        ({ childSessionId }) => childSessionId
-      )
-    ).toEqual(["child_2", "child_1"]);
+    expect(collect(events).map(({ childSessionId }) => childSessionId)).toEqual(
+      ["child_2", "child_1"]
+    );
   });
 
-  it("uses the parent action description without reading the child stream", () => {
-    const [session] = collectSubagentSessions([
-      {
-        type: "actions.requested",
-        data: {
-          actions: [
-            {
-              callId: "call_1",
-              description: "Research nearby appointments",
-              input: { task: "Find a slot" },
-              kind: "subagent-call",
-              name: "Research appointments",
-              nodeId: "worker",
-              subagentName: "researcher",
-            },
-          ],
-          sequence: 0,
-          stepIndex: 0,
-          turnId: "turn_1",
-        },
-        meta,
-      },
-      called,
+  it("uses the parent call's message without reading the child stream", () => {
+    const [session] = collect([
+      ...requestedCall("call_1", {
+        message: "Task: Research nearby appointments\n\nFind a slot",
+      }),
+      opened("child_1", { callId: "call_1" }),
     ]);
 
     expect(session?.task).toBe("Research nearby appointments");
   });
 
   it("moves a continued child back to the front", () => {
-    const secondChild = {
-      ...called,
-      data: {
-        ...called.data,
-        callId: "call_2",
-        childSessionId: "child_2",
-      },
-      meta: { ...meta, id: "evt_02" },
-    } satisfies MessageStreamEvent;
-    const continuedFirstChild = {
-      ...called,
-      data: { ...called.data, callId: "call_3" },
-      meta: { ...meta, id: "evt_03" },
-    } satisfies MessageStreamEvent;
+    const events = [
+      ...requestedCall("call_1", { message: "First" }),
+      started("call_1", "task_1"),
+      taskStarted("task_1", "call_1"),
+      opened("child_1", { taskId: "task_1" }),
+      ...requestedCall("call_2", { message: "Second" }),
+      started("call_2", "task_2"),
+      taskStarted("task_2", "call_2"),
+      opened("child_2", { taskId: "task_2" }),
+      ...requestedCall("call_3", { message: "Continue first" }),
+      started("call_3", "task_1"),
+    ];
 
-    expect(
-      collectSubagentSessions([called, secondChild, continuedFirstChild]).map(
-        ({ childSessionId }) => childSessionId
-      )
-    ).toEqual(["child_1", "child_2"]);
+    expect(collect(events).map(({ childSessionId }) => childSessionId)).toEqual(
+      ["child_1", "child_2"]
+    );
   });
 });
 
 describe("getSubagentSubscriptionKey", () => {
   it("changes when a continued child receives a new call", () => {
-    const [first] = collectSubagentSessions([called]);
-    const [continued] = collectSubagentSessions([
-      called,
-      {
-        ...called,
-        data: { ...called.data, callId: "call_2" },
-        meta: { ...meta, id: "evt_02" },
-      },
+    const opening = [
+      ...requestedCall("call_1", { message: "First" }),
+      started("call_1", "task_1"),
+      taskStarted("task_1", "call_1"),
+      opened("child_1", { taskId: "task_1" }),
+    ];
+    const [first] = collect(opening);
+    const [continued] = collect([
+      ...opening,
+      ...requestedCall("call_2", { message: "Continue" }),
+      started("call_2", "task_1"),
     ]);
     if (!first || !continued) {
       throw new Error("Expected collected subagent sessions");
@@ -146,19 +94,12 @@ describe("getSubagentSubscriptionKey", () => {
 });
 
 describe("getSubagentStatus", () => {
-  it("uses the child stream instead of a background receipt", () => {
-    const [session] = collectSubagentSessions([
-      called,
-      {
-        type: "subagent.completed",
-        data: {
-          backgroundTask: { status: "working", taskId: "task_1" },
-          callId: "call_1",
-          output: "Continuing in the background",
-          subagentName: "researcher",
-        },
-        meta: { ...meta, id: "evt_02" },
-      },
+  it("uses the child stream instead of a running parent call", () => {
+    const [session] = collect([
+      ...requestedCall("call_1", { message: "Work" }),
+      started("call_1", "task_1"),
+      taskStarted("task_1", "call_1"),
+      opened("child_1", { taskId: "task_1" }),
     ]);
 
     if (!session) throw new Error("Expected a collected subagent session");
@@ -167,11 +108,15 @@ describe("getSubagentStatus", () => {
     expect(
       getSubagentStatus(
         [
-          {
+          streamed({
+            data: {
+              cause: { deliveryId: "delivery_2" },
+              follows: null,
+              turnId: "turn_2",
+            },
+            scope: { turnId: "turn_2" },
             type: "turn.started",
-            data: { sequence: 0, turnId: "turn_2" },
-            meta: { ...meta, id: "evt_03" },
-          },
+          }),
         ],
         session
       )
@@ -179,41 +124,31 @@ describe("getSubagentStatus", () => {
   });
 
   it.each([
-    ["turn.failed", "failed"],
-    ["turn.cancelled", "cancelled"],
+    [
+      "failed",
+      {
+        error: { code: "failed", message: "Failed" },
+        outcome: "failed",
+        turnId: "turn_1",
+      },
+    ],
+    ["cancelled", { outcome: "cancelled", turnId: "turn_1" }],
   ] as const)(
-    "preserves %s after the session returns to waiting",
-    (type, expected) => {
-      const [session] = collectSubagentSessions([called]);
+    "preserves a %s turn after its delivery settles",
+    (expected, data) => {
+      const [session] = collect([opened("child_1", { callId: "call_1" })]);
       if (!session) throw new Error("Expected a collected subagent session");
-      const turnBoundary =
-        type === "turn.failed"
-          ? {
-              type,
-              data: {
-                code: "failed",
-                message: "Failed",
-                sequence: 0,
-                turnId: "turn_1",
-              },
-              meta: { ...meta, id: "evt_02" },
-            }
-          : {
-              type,
-              data: { sequence: 0, turnId: "turn_1" },
-              meta: { ...meta, id: "evt_02" },
-            };
       const events = [
-        turnBoundary,
-        {
-          type: "session.waiting",
+        streamed({ data, scope: { turnId: "turn_1" }, type: "turn.settled" }),
+        streamed({
           data: {
-            continuationToken: "child_1",
-            wait: "next-user-message",
+            deliveryId: "delivery_1",
+            outcome: "handled",
+            turnId: "turn_1",
           },
-          meta: { ...meta, id: "evt_03" },
-        },
-      ] satisfies readonly MessageStreamEvent[];
+          type: "delivery.settled",
+        }),
+      ];
 
       expect(getSubagentStatus(events, session)).toBe(expected);
     }
@@ -223,22 +158,105 @@ describe("getSubagentStatus", () => {
 describe("getSubagentTask", () => {
   it("keeps a concise original task after a child session is continued", () => {
     const events = [
-      {
-        type: "message.received",
-        data: {
-          message: "Task: First task\n\nFull assignment",
-          sequence: 0,
-          turnId: "turn_1",
-        },
-        meta,
-      },
-      {
-        type: "message.received",
-        data: { message: "Continued task", sequence: 1, turnId: "turn_2" },
-        meta: { ...meta, id: "evt_02" },
-      },
-    ] satisfies readonly MessageStreamEvent[];
+      consumed("turn_1", "Task: First task\n\nFull assignment"),
+      consumed("turn_2", "Continued task"),
+    ];
 
     expect(getSubagentTask(events)).toBe("First task");
   });
 });
+
+function collect(events: readonly SessionStreamEvent[]) {
+  return collectSubagentSessions(
+    events,
+    foldEvents(emptySessionView(), events)
+  );
+}
+
+function requestedCall(callId: string, input: JsonValue) {
+  const scope = { runId: `run_${callId}`, turnId: "turn_parent" };
+  return [
+    streamed({
+      data: { owner: { turnId: scope.turnId }, runId: scope.runId },
+      scope,
+      type: "model.requested",
+    }),
+    streamed({
+      data: {
+        callId,
+        capability: { kind: "tool", name: "run_browser" },
+        input,
+        owner: { runId: scope.runId },
+      },
+      scope,
+      type: "call.requested",
+    }),
+  ];
+}
+
+function started(callId: string, taskId: string) {
+  return streamed({
+    data: { callId, taskId },
+    scope: { turnId: "turn_parent" },
+    type: "call.started",
+  });
+}
+
+function settled(callId: string, output: JsonValue) {
+  return streamed({
+    data: { callId, outcome: "completed", output },
+    scope: { turnId: "turn_parent" },
+    type: "call.settled",
+  });
+}
+
+function taskStarted(taskId: string, callId: string) {
+  return streamed({
+    data: { kind: "tool", name: "run_browser", startedBy: { callId }, taskId },
+    scope: { turnId: "turn_parent" },
+    type: "task.started",
+  });
+}
+
+function opened(
+  sessionId: string,
+  owner: { readonly callId: string } | { readonly taskId: string }
+) {
+  return streamed({
+    data: {
+      name: "browser-agent",
+      owner,
+      sessionId,
+      stream: `/eve/v1/session/${sessionId}/stream`,
+    },
+    scope: { turnId: "turn_parent" },
+    type: "child.opened",
+  });
+}
+
+function consumed(turnId: string, text: string) {
+  return streamed({
+    data: {
+      deliveryId: `delivery_${turnId}`,
+      parts: [{ kind: "text", text }],
+      turnId,
+    },
+    scope: { turnId },
+    type: "delivery.consumed",
+  });
+}
+
+let nextLine = 0;
+
+function streamed(fact: SessionEvent): SessionStreamEvent {
+  const line = nextLine;
+  nextLine += 1;
+  return {
+    ...fact,
+    meta: {
+      at: "2026-08-27T12:00:00.000Z",
+      endOfLine: true,
+      position: { index: 0, line },
+    },
+  };
+}

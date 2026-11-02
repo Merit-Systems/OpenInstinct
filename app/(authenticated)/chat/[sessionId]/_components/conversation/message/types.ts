@@ -1,5 +1,5 @@
-import type { InputResponse } from "eve/client";
+import type { Answer } from "eve/events";
 
 export type RespondToAgentInput = (
-  responses: readonly InputResponse[]
+  answers: readonly Answer[]
 ) => void | Promise<void>;

@@ -2,15 +2,14 @@
 
 import {
   Client,
-  defaultMessageReducer,
-  isCurrentTurnBoundaryEvent,
-  type InputResponse,
-  type MessageStreamEvent,
+  conversationOf,
+  endsTurn,
+  type MessageContent,
   type RespondTurnOptions,
   type SendTurnOptions,
+  type SessionStreamEvent,
 } from "eve/client";
-import type { EveMessageData, UseEveAgentStatus } from "eve/react";
-import type { UserContent } from "ai";
+import { type Answer, idle } from "eve/events";
 import {
   type Dispatch,
   type RefObject,
@@ -22,18 +21,18 @@ import {
   useState,
 } from "react";
 import {
+  appendHistoryEvent,
   readLatestSessionHistory,
   readOlderSessionHistory,
   type SessionHistoryPage,
 } from "../_lib/session-history";
-import type { ChatAgent } from "./chat-agent";
+import type { ChatAgent, ChatAgentStatus } from "./chat-agent";
 
-const client = new Client({ host: "" });
-const messageReducer = defaultMessageReducer();
+const client = new Client({ baseUrl: "" });
 
 export function useSessionAgent(sessionId: string): ChatAgent {
   const [history, setHistory] = useState<SessionHistoryPage>();
-  const [status, setStatus] = useState<UseEveAgentStatus>("resuming");
+  const [status, setStatus] = useState<ChatAgentStatus>("resuming");
   const [error, setError] = useState<Error>();
   const [isLoadingOlder, setIsLoadingOlder] = useState(false);
   const historyRef = useRef(history);
@@ -48,12 +47,13 @@ export function useSessionAgent(sessionId: string): ChatAgent {
       const session = client.sessions.attach(sessionId, {
         streamIndex: startIndex,
       });
-      let nextIndex = startIndex;
+      let turnEnded = false;
       for await (const event of session.stream({ signal, startIndex })) {
-        nextIndex += 1;
-        appendSessionEvent(historyRef, setHistory, event, nextIndex);
+        appendSessionEvent(historyRef, setHistory, event);
         setStatus("streaming");
-        if (isCurrentTurnBoundaryEvent(event)) break;
+        turnEnded ||= endsTurn(event);
+        // Stop only after the whole stored line that ended the turn.
+        if (turnEnded && event.meta.endOfLine !== false) break;
       }
     },
     [sessionId]
@@ -67,20 +67,17 @@ export function useSessionAgent(sessionId: string): ChatAgent {
       const session = client.sessions.attach(sessionId, {
         streamIndex: current.endIndex,
       });
-      let nextIndex = current.endIndex;
-      let latest = current.events.at(-1);
       for await (const event of session.stream({
         follow: false,
         signal,
-        startIndex: nextIndex,
+        startIndex: current.endIndex,
       })) {
-        nextIndex += 1;
-        latest = event;
-        appendSessionEvent(historyRef, setHistory, event, nextIndex);
+        appendSessionEvent(historyRef, setHistory, event);
       }
 
-      if (latest && !isCurrentTurnBoundaryEvent(latest)) {
-        await followActiveTurn(nextIndex, signal);
+      const latest = historyRef.current;
+      if (latest && isWorking(latest.events)) {
+        await followActiveTurn(latest.endIndex, signal);
       }
     },
     [followActiveTurn, sessionId]
@@ -99,13 +96,15 @@ export function useSessionAgent(sessionId: string): ChatAgent {
   useEffect(() => {
     const controller = new AbortController();
 
-    void readLatestSessionHistory(sessionId, controller.signal)
+    void readLatestSessionHistory(
+      client.sessions.attach(sessionId),
+      controller.signal
+    )
       .then(async (latest) => {
         if (controller.signal.aborted) return undefined;
         historyRef.current = latest;
         setHistory(latest);
-        const tail = latest.events.at(-1);
-        if (tail && !isCurrentTurnBoundaryEvent(tail)) {
+        if (isWorking(latest.events)) {
           setStatus("streaming");
           await runOperation(async () => {
             await followActiveTurn(latest.endIndex, controller.signal);
@@ -144,11 +143,13 @@ export function useSessionAgent(sessionId: string): ChatAgent {
 
   const send = useCallback(
     async <TOutput>(
-      message: string | UserContent,
+      message: MessageContent,
       options?: SendTurnOptions<TOutput>
     ) => {
       const activeOperation = operationRef.current;
       if (activeOperation && options?.turnPolicy === "steer") {
+        // A steering message joins the running turn: the active read picks up
+        // its events, and a catch-up read collects anything after that read.
         const current = historyRef.current;
         if (!current) throw new Error("The conversation is still loading.");
         const session = client.sessions.attach(sessionId, {
@@ -168,12 +169,10 @@ export function useSessionAgent(sessionId: string): ChatAgent {
         const session = client.sessions.attach(sessionId, {
           streamIndex: current.endIndex,
         });
-        let nextIndex = current.endIndex;
         try {
-          const response = await session.send(message, options);
-          for await (const event of response) {
-            nextIndex += 1;
-            appendSessionEvent(historyRef, setHistory, event, nextIndex);
+          const delivery = await session.send(message, options);
+          for await (const event of delivery.stream()) {
+            appendSessionEvent(historyRef, setHistory, event);
             setStatus("streaming");
           }
           setStatus("ready");
@@ -189,7 +188,7 @@ export function useSessionAgent(sessionId: string): ChatAgent {
 
   const respond = useCallback(
     async <TOutput>(
-      inputResponses: readonly InputResponse[],
+      answers: readonly Answer[],
       options?: RespondTurnOptions<TOutput>
     ) => {
       await runOperation(async () => {
@@ -200,12 +199,10 @@ export function useSessionAgent(sessionId: string): ChatAgent {
         const session = client.sessions.attach(sessionId, {
           streamIndex: current.endIndex,
         });
-        let nextIndex = current.endIndex;
         try {
-          const response = await session.respond(inputResponses, options);
-          for await (const event of response) {
-            nextIndex += 1;
-            appendSessionEvent(historyRef, setHistory, event, nextIndex);
+          const delivery = await session.respond(answers, options);
+          for await (const event of delivery.stream()) {
+            appendSessionEvent(historyRef, setHistory, event);
             setStatus("streaming");
           }
           setStatus("ready");
@@ -225,7 +222,7 @@ export function useSessionAgent(sessionId: string): ChatAgent {
     setIsLoadingOlder(true);
     try {
       const older = await readOlderSessionHistory(
-        sessionId,
+        client.sessions.attach(sessionId),
         current.startIndex
       );
       setHistory((latest) =>
@@ -245,52 +242,39 @@ export function useSessionAgent(sessionId: string): ChatAgent {
   };
 
   const events = history?.events ?? emptyEvents;
-  const data = useMemo<EveMessageData>(
-    () =>
-      events.reduce(
-        (current, event) => messageReducer.reduce(current, event),
-        messageReducer.initial()
-      ),
-    [events]
-  );
+  const conversation = useMemo(() => conversationOf(events), [events]);
 
   return {
     cancel: async () => await client.sessions.attach(sessionId).cancel(),
-    data,
     error,
     events,
     hasOlder: (history?.startIndex ?? 0) > 0,
     isLoadingOlder,
     loadOlder,
+    messages: conversation.messages,
     respond,
     resume,
     send,
     status,
+    view: conversation.view,
   };
 }
 
-const emptyEvents: readonly MessageStreamEvent[] = [];
+const emptyEvents: readonly SessionStreamEvent[] = [];
+
+/** True while the session has a running turn or task that will record more events. */
+function isWorking(events: readonly SessionStreamEvent[]) {
+  return events.length > 0 && !idle(conversationOf(events).view);
+}
 
 function appendSessionEvent(
   historyRef: RefObject<SessionHistoryPage | undefined>,
   setHistory: Dispatch<SetStateAction<SessionHistoryPage | undefined>>,
-  event: MessageStreamEvent,
-  endIndex: number
+  event: SessionStreamEvent
 ) {
   setHistory((current) => {
     if (!current) return current;
-    let next: SessionHistoryPage;
-    if (
-      current.events.some((candidate) => candidate.meta.id === event.meta.id)
-    ) {
-      next = { ...current, endIndex };
-    } else {
-      next = {
-        ...current,
-        endIndex,
-        events: [...current.events, event],
-      };
-    }
+    const next = appendHistoryEvent(current, event);
     historyRef.current = next;
     return next;
   });

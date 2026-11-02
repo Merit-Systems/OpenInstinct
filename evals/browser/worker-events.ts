@@ -1,103 +1,86 @@
-import type { MessageStreamEvent } from "eve/client";
-import { z } from "zod";
+import type { SessionStreamEvent } from "eve/client";
+import type { CallOutcome } from "eve/events";
 import { taskCompletionOutputSchema } from "@agent/subagents/browser-agent/lib/completion";
 
-const workerTaskNotificationPrefix =
-  /^Background task (\S+) \(browser-agent\) /u;
-const terminalTaskControlSchema = z.object({
-  tasks: z.array(
-    z.object({
-      status: z.enum(["cancelled", "completed", "failed"]),
-      taskId: z.string(),
-    })
-  ),
-});
+const browserWorkerTool = "run_browser";
 
-interface BackgroundWorkerTaskState {
-  output?: string;
-  status?: "cancelled" | "completed" | "failed";
-  taskId: string;
+type BrowserWorkerCallStatus = "cancelled" | "completed" | "failed";
+
+interface BrowserWorkerCallState {
+  output?: unknown;
+  status?: BrowserWorkerCallStatus;
+  taskId?: string;
   terminalAt?: string;
 }
 
 export function measureWorkerTask(
-  events: readonly MessageStreamEvent[],
+  events: readonly SessionStreamEvent[],
   fallbackDurationMs: number
 ) {
-  const start = events.find((event) => event.type === "message.received")?.meta
+  const start = events.find((event) => event.type === "delivery.consumed")?.meta
     .at;
-  const backgroundTasks = readBackgroundWorkerTasks(events);
-  const pendingWorker = backgroundTasks.some(
-    (task) => task.status === undefined
-  );
+  const workerCalls = readBrowserWorkerCalls(events);
+  const pendingWorker = workerCalls.some((call) => call.status === undefined);
   const terminal =
     readTaskCompletion(events)?.completedAt ??
     (pendingWorker
       ? undefined
-      : backgroundTasks.findLast((task) => task.terminalAt)?.terminalAt) ??
+      : workerCalls.findLast((call) => call.terminalAt)?.terminalAt) ??
     events.findLast(
       (event) =>
-        event.type === "session.failed" ||
+        (event.type === "session.ended" && event.data.outcome === "failed") ||
         (!pendingWorker &&
-          (event.type === "turn.failed" || event.type === "turn.cancelled"))
+          event.type === "turn.settled" &&
+          event.data.outcome !== "completed")
     )?.meta.at;
-  let completedSteps = 0;
+  let modelSteps = 0;
   let measuredSteps = 0;
   let costUsd = 0;
-  let measuredInputTokenSteps = 0;
-  let measuredOutputTokenSteps = 0;
   let inputTokens = 0;
   let outputTokens = 0;
 
   for (const event of events) {
-    if (event.type !== "step.completed") continue;
-    completedSteps += 1;
-
-    const cost = event.data.usage?.costUsd;
-    if (cost !== undefined) {
+    if (event.type !== "usage.recorded" || event.data.kind !== "model") {
+      continue;
+    }
+    modelSteps += 1;
+    const { usage } = event.data;
+    inputTokens += usage.inputTokens;
+    outputTokens += usage.outputTokens;
+    if (usage.costUsd !== undefined) {
       measuredSteps += 1;
-      costUsd += cost;
-    }
-    const input = event.data.usage?.inputTokens;
-    if (input !== undefined) {
-      measuredInputTokenSteps += 1;
-      inputTokens += input;
-    }
-    const output = event.data.usage?.outputTokens;
-    if (output !== undefined) {
-      measuredOutputTokenSteps += 1;
-      outputTokens += output;
+      costUsd += usage.costUsd;
     }
   }
 
   return {
-    costComplete: completedSteps > 0 && measuredSteps === completedSteps,
+    costComplete: modelSteps > 0 && measuredSteps === modelSteps,
     costUsd: measuredSteps === 0 ? null : costUsd,
     durationMs:
       start && terminal
         ? elapsedMs(start, terminal)
         : Math.max(0, fallbackDurationMs),
-    inputTokens: measuredInputTokenSteps === 0 ? null : inputTokens,
-    modelSteps: completedSteps,
-    outputTokens: measuredOutputTokenSteps === 0 ? null : outputTokens,
+    inputTokens: modelSteps === 0 ? null : inputTokens,
+    modelSteps,
+    outputTokens: modelSteps === 0 ? null : outputTokens,
   };
 }
 
-export function didCompleteWorker(events: readonly MessageStreamEvent[]) {
+export function didCompleteWorker(events: readonly SessionStreamEvent[]) {
   return readTaskCompletion(events)?.status === "success";
 }
 
-export function didFinishWorker(events: readonly MessageStreamEvent[]) {
-  const backgroundTasks = readBackgroundWorkerTasks(events);
-  if (backgroundTasks.length > 0) {
-    return backgroundTasks.every((task) => task.status !== undefined);
+export function didFinishWorker(events: readonly SessionStreamEvent[]) {
+  const workerCalls = readBrowserWorkerCalls(events);
+  if (workerCalls.length > 0) {
+    return workerCalls.every((call) => call.status !== undefined);
   }
   return readTaskCompletion(events) !== undefined;
 }
 
 export function terminalWorkerMessage(
   message: string | undefined,
-  events: readonly MessageStreamEvent[]
+  events: readonly SessionStreamEvent[]
 ) {
   const completion = readTaskCompletion(events);
   if (completion) return normalizeMessage(completion.message);
@@ -105,23 +88,34 @@ export function terminalWorkerMessage(
   if (message?.trim()) return normalizeMessage(message);
 
   const failure = events.findLast(
-    (event) => event.type === "turn.failed" || event.type === "session.failed"
+    (event) =>
+      (event.type === "turn.settled" || event.type === "session.ended") &&
+      event.data.outcome === "failed"
   );
+  const failureMessage =
+    failure?.type === "turn.settled" || failure?.type === "session.ended"
+      ? failure.data.error?.message
+      : undefined;
 
   return failure
-    ? normalizeMessage(failure.data.message)
+    ? normalizeMessage(failureMessage ?? "The worker failed.")
     : "No terminal message";
 }
 
-export function readTaskCompletion(events: readonly MessageStreamEvent[]) {
-  const backgroundTasks = readBackgroundWorkerTasks(events);
-  if (backgroundTasks.length > 0) {
-    if (backgroundTasks.some((task) => task.status === undefined)) {
+/**
+ * Reads the browser worker's structured completion. A root session reports it
+ * as the settled output of its `run_browser` calls; the worker's own session
+ * reports it as a `result` content part.
+ */
+export function readTaskCompletion(events: readonly SessionStreamEvent[]) {
+  const workerCalls = readBrowserWorkerCalls(events);
+  if (workerCalls.length > 0) {
+    if (workerCalls.some((call) => call.status === undefined)) {
       return undefined;
     }
 
-    const latest = backgroundTasks.at(-1);
-    if (latest?.status === "completed" && latest.output && latest.terminalAt) {
+    const latest = workerCalls.at(-1);
+    if (latest?.status === "completed" && latest.terminalAt) {
       const completion = taskCompletionOutputSchema.safeParse(latest.output);
       if (completion.success) {
         return { ...completion.data, completedAt: latest.terminalAt };
@@ -131,158 +125,70 @@ export function readTaskCompletion(events: readonly MessageStreamEvent[]) {
   }
 
   for (const event of events.toReversed()) {
-    if (event.type === "result.completed") {
-      const completion = taskCompletionOutputSchema.safeParse(
-        event.data.result
-      );
-      if (completion.success) {
-        return { ...completion.data, completedAt: event.meta.at };
-      }
+    if (event.type !== "content.completed" || event.data.kind !== "result") {
       continue;
     }
-
-    if (event.type === "subagent.completed") {
-      if (
-        event.data.subagentName === "browser-agent" &&
-        event.data.backgroundTask === undefined
-      ) {
-        const completion = taskCompletionOutputSchema.safeParse(
-          event.data.output
-        );
-        if (completion.success) {
-          return { ...completion.data, completedAt: event.meta.at };
-        }
-      }
-      continue;
-    }
-
-    if (event.type !== "action.result" || event.data.status !== "completed") {
-      continue;
-    }
-
-    const result = event.data.result;
-    if (result.kind === "subagent-result") {
-      if (
-        result.subagentName === "browser-agent" &&
-        (result.origin !== "child" || result.backgroundTask === undefined)
-      ) {
-        const completion = taskCompletionOutputSchema.safeParse(result.output);
-        if (completion.success) {
-          return { ...completion.data, completedAt: event.meta.at };
-        }
-      }
-      continue;
+    const completion = taskCompletionOutputSchema.safeParse(event.data.value);
+    if (completion.success) {
+      return { ...completion.data, completedAt: event.meta.at };
     }
   }
 
   return undefined;
 }
 
-function readWorkerTaskNotification(event: MessageStreamEvent) {
-  if (event.type !== "message.received") return undefined;
-  const match = workerTaskNotificationPrefix.exec(event.data.message);
-  if (!match) return undefined;
-  const [, taskId] = match;
-  if (!taskId) return undefined;
-  const message = event.data.message.slice(match[0].length);
-
-  if (message === "is cancelled.")
-    return { status: "cancelled" as const, taskId };
-
-  const completedPrefix = "is completed.\n\nResult:\n";
-  if (message.startsWith(completedPrefix)) {
-    return {
-      output: message.slice(completedPrefix.length),
-      status: "completed" as const,
-      taskId,
-    };
-  }
-
-  const failedPrefix = "failed.\n\nError:\n";
-  if (message.startsWith(failedPrefix)) {
-    return {
-      output: message.slice(failedPrefix.length),
-      status: "failed" as const,
-      taskId,
-    };
-  }
-
-  return undefined;
-}
-
-function readBackgroundWorkerTasks(events: readonly MessageStreamEvent[]) {
-  const tasks = new Map<string, BackgroundWorkerTaskState>();
+function readBrowserWorkerCalls(events: readonly SessionStreamEvent[]) {
+  const calls = new Map<string, BrowserWorkerCallState>();
 
   for (const event of events) {
-    const receiptTaskId = readBackgroundWorkerReceiptTaskId(event);
-    if (receiptTaskId) {
-      tasks.set(receiptTaskId, {
-        taskId: receiptTaskId,
-      });
-      continue;
-    }
-
-    const notification = readWorkerTaskNotification(event);
-    if (notification) {
-      const task = tasks.get(notification.taskId);
-      if (task) {
-        tasks.set(notification.taskId, {
-          ...task,
-          output: notification.output,
-          status: notification.status,
-          terminalAt: event.meta.at,
-        });
+    switch (event.type) {
+      case "call.requested":
+        if (
+          event.data.capability.kind === "tool" &&
+          event.data.capability.name === browserWorkerTool
+        ) {
+          calls.set(event.data.callId, {});
+        }
+        break;
+      case "call.started": {
+        const call = calls.get(event.data.callId);
+        if (call && event.data.taskId) call.taskId = event.data.taskId;
+        break;
       }
-      continue;
-    }
-
-    if (
-      event.type !== "action.result" ||
-      event.data.status !== "completed" ||
-      event.data.result.kind !== "tool-result" ||
-      event.data.result.toolName !== "task_cancel"
-    ) {
-      continue;
-    }
-
-    const parsed = terminalTaskControlSchema.safeParse(
-      event.data.result.output
-    );
-    if (!parsed.success) continue;
-    for (const result of parsed.data.tasks) {
-      const task = tasks.get(result.taskId);
-      if (!task) continue;
-      tasks.set(result.taskId, {
-        ...task,
-        status: result.status,
-        terminalAt: event.meta.at,
-      });
+      case "call.settled": {
+        const call = calls.get(event.data.callId);
+        if (!call || call.status) break;
+        call.output = event.data.output;
+        call.status = callStatus(event.data.outcome);
+        call.terminalAt = event.meta.at;
+        break;
+      }
+      case "task.ended":
+        // eve__task_cancel ends the task before its call can reply.
+        for (const call of calls.values()) {
+          if (call.taskId !== event.data.taskId || call.status) continue;
+          call.status = event.data.outcome;
+          call.terminalAt = event.meta.at;
+        }
+        break;
+      default:
+        break;
     }
   }
 
-  return [...tasks.values()];
+  return [...calls.values()];
 }
 
-function readBackgroundWorkerReceiptTaskId(event: MessageStreamEvent) {
-  if (
-    event.type === "subagent.completed" &&
-    event.data.subagentName === "browser-agent" &&
-    event.data.backgroundTask !== undefined
-  ) {
-    return event.data.backgroundTask.taskId;
+function callStatus(outcome: CallOutcome): BrowserWorkerCallStatus {
+  switch (outcome) {
+    case "completed":
+      return "completed";
+    case "interrupted":
+    case "abandoned":
+      return "cancelled";
+    default:
+      return "failed";
   }
-
-  if (
-    event.type === "action.result" &&
-    event.data.result.kind === "subagent-result" &&
-    event.data.result.subagentName === "browser-agent" &&
-    event.data.result.origin === "child" &&
-    event.data.result.backgroundTask !== undefined
-  ) {
-    return event.data.result.backgroundTask.taskId;
-  }
-
-  return undefined;
 }
 
 function elapsedMs(start: string, end: string) {

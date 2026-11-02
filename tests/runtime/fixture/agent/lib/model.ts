@@ -25,8 +25,8 @@ export function fixtureModel(worker: boolean) {
         toolName =
           text.includes("Wait for cancellation") && !returned
             ? "wait_for_cancellation"
-            : "final_output";
-        if (toolName === "final_output")
+            : "eve__reply";
+        if (toolName === "eve__reply")
           input = JSON.stringify({
             status: "success",
             message: "Verified fixture outcome",
@@ -41,12 +41,12 @@ export function fixtureModel(worker: boolean) {
         };
         input = JSON.stringify(
           text.startsWith("Resume:")
-            ? { ...assignment, agentId: text.slice(7) }
+            ? { ...assignment, taskId: text.slice(7) }
             : assignment
         );
       } else if (!returned && text.startsWith("Cancel:")) {
-        toolName = "task_cancel";
-        input = JSON.stringify({ taskIds: [text.slice(7)] });
+        toolName = "eve__task_cancel";
+        input = JSON.stringify({ taskId: text.slice(7) });
       }
       if (toolName && !tools?.some((tool) => tool.name === toolName))
         throw new Error(`Missing fixture tool: ${toolName}`);

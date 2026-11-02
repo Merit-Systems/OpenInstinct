@@ -1,5 +1,4 @@
 import type { SessionAuth } from "eve/context";
-import type { HookContext } from "eve/hooks";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const stateControls = vi.hoisted(() => ({
@@ -27,6 +26,8 @@ import {
   registerBackgroundReplyTarget,
   resolveLinqReplyTarget,
 } from "@agent/lib/reply-targets";
+import { hookContextFor } from "@tests/helpers/hook-context";
+import { viewOf } from "@tests/helpers/session-view";
 
 beforeEach(() => {
   for (const reset of stateControls.reset) reset();
@@ -68,25 +69,34 @@ describe("reply targets", () => {
   });
 
   it("registers background workflow receipts through the public hook", async () => {
-    const handler = backgroundReplyTargetHook.events?.["action.result"];
+    const view = viewOf([
+      [
+        {
+          data: {
+            callId: "call-1",
+            capability: { kind: "tool", name: "run_browser" },
+            input: { task: "Find the receipt." },
+            owner: { runId: "run-1" },
+          },
+          scope: { runId: "run-1", turnId: "turn-1" },
+          type: "call.requested",
+        },
+      ],
+    ]);
+    const handler = backgroundReplyTargetHook.events["call.started"];
     await handler?.(
       {
-        data: {
-          result: {
-            kind: "tool-result",
-            callId: "call-1",
-            toolName: "run_browser",
-            output: { status: "working", taskId: "task-from-hook" },
-          },
-          status: "completed",
-          sequence: 1,
-          turnId: "turn-1",
-          stepIndex: 0,
-        },
-        meta: { at: "2026-09-03T12:00:00.000Z", id: "event-1" },
-        type: "action.result",
+        data: { callId: "call-1", taskId: "task-from-hook" },
+        scope: { runId: "run-1", turnId: "turn-1" },
+        type: "call.started",
       },
-      hookContext(linqAuth("hook-origin"))
+      hookContextFor({
+        agentName: "main",
+        auth: linqAuth("hook-origin"),
+        channel: { kind: "channel:linq", metadata: {} },
+        sessionId: "session-1",
+        view,
+      })
     );
 
     expect(
@@ -167,20 +177,5 @@ function backgroundWakeAuth(): SessionAuth {
   return {
     current: null,
     initiator: linqAuth("origin-message").current,
-  };
-}
-
-function hookContext(auth: SessionAuth): HookContext {
-  return {
-    agent: { name: "main" },
-    channel: { kind: "channel:linq" },
-    async getSandbox() {
-      throw new Error("Sandbox access is outside this focused test.");
-    },
-    session: {
-      auth,
-      id: "session-1",
-      turn: { id: "turn-1", sequence: 0 },
-    },
   };
 }

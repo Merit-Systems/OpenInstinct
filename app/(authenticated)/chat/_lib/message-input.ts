@@ -1,11 +1,11 @@
-import type { UserContent } from "ai";
+import type { MessageContent, MessagePart } from "eve/client";
 import type { PromptInputMessage } from "@web/components/ai-elements/prompt-input";
 
-export function messageContent(message: PromptInputMessage) {
+export function messageContent(message: PromptInputMessage): MessageContent {
   const text = message.text.trim();
   if (message.files.length === 0) return text;
 
-  const parts: UserContent = [];
+  const parts: MessagePart[] = [];
   if (text.length > 0) parts.push({ text, type: "text" });
   for (const file of message.files) {
     parts.push({
