@@ -148,6 +148,26 @@ describe("Kernel browser contract", () => {
     ).toBe(true);
   });
 
+  it.each([
+    "not-a-url",
+    "",
+    "file:///etc/passwd",
+    "javascript:alert(1)",
+    "data:text/html,test",
+    "ftp://example.com/file",
+    "https://user:password@example.com/",
+    "https://user%40example.com:secret@merchant.test/",
+  ])(
+    "rejects unsafe launch URLs before contacting Kernel: %s",
+    async (start_url) => {
+      await expect(
+        manageBrowsers.execute({ action: "create", start_url }, workerContext)
+      ).rejects.toThrow("HTTP(S) URL without embedded credentials");
+      expect(mocks.createBrowser).not.toHaveBeenCalled();
+      expect(mocks.retrieveProfile).not.toHaveBeenCalled();
+    }
+  );
+
   it("starts a read-only persistent-profile browser at the target URL", async () => {
     const result = await manageBrowsers.execute(
       { action: "create", start_url: "https://example.com/checkout" },
