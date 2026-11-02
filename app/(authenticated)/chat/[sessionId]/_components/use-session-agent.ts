@@ -24,6 +24,7 @@ import {
   appendHistoryEvent,
   readLatestSessionHistory,
   readOlderSessionHistory,
+  retainChildOpenings,
   type SessionHistoryPage,
 } from "../_lib/session-history";
 import type { ChatAgent, ChatAgentStatus } from "./chat-agent";
@@ -49,7 +50,7 @@ export function useSessionAgent(sessionId: string): ChatAgent {
       });
       let turnEnded = false;
       for await (const event of session.stream({ signal, startIndex })) {
-        appendSessionEvent(historyRef, setHistory, event);
+        await appendSessionEvent(historyRef, setHistory, event, session);
         setStatus("streaming");
         turnEnded ||= endsTurn(event);
         // Stop only after the whole stored line that ended the turn.
@@ -72,7 +73,7 @@ export function useSessionAgent(sessionId: string): ChatAgent {
         signal,
         startIndex: current.endIndex,
       })) {
-        appendSessionEvent(historyRef, setHistory, event);
+        await appendSessionEvent(historyRef, setHistory, event, session);
       }
 
       const latest = historyRef.current;
@@ -172,7 +173,7 @@ export function useSessionAgent(sessionId: string): ChatAgent {
         try {
           const delivery = await session.send(message, options);
           for await (const event of delivery.stream()) {
-            appendSessionEvent(historyRef, setHistory, event);
+            await appendSessionEvent(historyRef, setHistory, event, session);
             setStatus("streaming");
           }
           setStatus("ready");
@@ -202,7 +203,7 @@ export function useSessionAgent(sessionId: string): ChatAgent {
         try {
           const delivery = await session.respond(answers, options);
           for await (const event of delivery.stream()) {
-            appendSessionEvent(historyRef, setHistory, event);
+            await appendSessionEvent(historyRef, setHistory, event, session);
             setStatus("streaming");
           }
           setStatus("ready");
@@ -229,6 +230,7 @@ export function useSessionAgent(sessionId: string): ChatAgent {
         latest
           ? {
               ...latest,
+              childOpenings: [...older.childOpenings, ...latest.childOpenings],
               events: [...older.events, ...latest.events],
               startIndex: older.startIndex,
             }
@@ -245,6 +247,7 @@ export function useSessionAgent(sessionId: string): ChatAgent {
   const conversation = useMemo(() => conversationOf(events), [events]);
 
   return {
+    childOpenings: history?.childOpenings ?? [],
     cancel: async () => await client.sessions.attach(sessionId).cancel(),
     error,
     events,
@@ -267,14 +270,40 @@ function isWorking(events: readonly SessionStreamEvent[]) {
   return events.length > 0 && !idle(conversationOf(events).view);
 }
 
-function appendSessionEvent(
+async function appendSessionEvent(
   historyRef: RefObject<SessionHistoryPage | undefined>,
   setHistory: Dispatch<SetStateAction<SessionHistoryPage | undefined>>,
-  event: SessionStreamEvent
+  event: SessionStreamEvent,
+  reader: Parameters<typeof readLatestSessionHistory>[0]
 ) {
+  const previous = historyRef.current;
+  const recovered =
+    previous &&
+    event.type === "child.sent" &&
+    !previous.childOpenings.some(
+      (opened) => opened.data.sessionId === event.data.sessionId
+    )
+      ? await retainChildOpenings(
+          { ...previous, events: [event] },
+          reader,
+          previous.events
+        )
+      : undefined;
   setHistory((current) => {
     if (!current) return current;
-    const next = appendHistoryEvent(current, event);
+    const appended = appendHistoryEvent(current, event);
+    const next = recovered
+      ? {
+          ...appended,
+          childOpenings: [
+            ...new Map(
+              [...appended.childOpenings, ...recovered.childOpenings].map(
+                (opened) => [opened.data.sessionId, opened]
+              )
+            ).values(),
+          ],
+        }
+      : appended;
     historyRef.current = next;
     return next;
   });

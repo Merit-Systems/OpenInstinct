@@ -1,17 +1,5 @@
 import { randomUUID } from "node:crypto";
-import {
-  and,
-  asc,
-  desc,
-  eq,
-  inArray,
-  isNotNull,
-  isNull,
-  lte,
-  ne,
-  or,
-  sql,
-} from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNull, lte, or, sql } from "drizzle-orm";
 import type { Interaction } from "eve/events";
 import { z } from "zod";
 import type { AccessScope } from "@shared/identity/access-scope";
@@ -417,29 +405,6 @@ export async function waitForScheduledAgentRunInput(
   return run ? parseRun(run) : undefined;
 }
 
-export async function deferScheduledAgentRunCompletion(
-  runId: string,
-  leaseToken: string,
-  turnId: string,
-  now = new Date()
-) {
-  const [run] = await db
-    .update(scheduledAgentRuns)
-    .set({
-      deferredCompletionTurnId: turnId,
-      updatedAt: now,
-    })
-    .where(
-      and(
-        eq(scheduledAgentRuns.id, runId),
-        eq(scheduledAgentRuns.status, "running"),
-        eq(scheduledAgentRuns.leaseToken, leaseToken)
-      )
-    )
-    .returning({ id: scheduledAgentRuns.id });
-  return run !== undefined;
-}
-
 export async function getScheduledAgentRunInput(
   scope: AccessScope,
   conversation: Pick<
@@ -580,17 +545,9 @@ export async function finishScheduledAgentRunInput(
 export async function completeScheduledAgentRun(
   runId: string,
   leaseToken: string,
-  turnId: string,
   outcome: ScheduledRunOutcome,
   completedAt = new Date()
 ) {
-  const completionCondition =
-    outcome.kind === "nothing_to_report"
-      ? isNull(scheduledAgentRuns.deferredCompletionTurnId)
-      : or(
-          isNull(scheduledAgentRuns.deferredCompletionTurnId),
-          ne(scheduledAgentRuns.deferredCompletionTurnId, turnId)
-        );
   const [run] = await db
     .update(scheduledAgentRuns)
     .set({
@@ -614,24 +571,11 @@ export async function completeScheduledAgentRun(
       and(
         eq(scheduledAgentRuns.id, runId),
         eq(scheduledAgentRuns.status, "running"),
-        eq(scheduledAgentRuns.leaseToken, leaseToken),
-        completionCondition
+        eq(scheduledAgentRuns.leaseToken, leaseToken)
       )
     )
     .returning();
-  if (run) return { status: "completed" as const, run: parseRun(run) };
-  const deferred = await db.query.scheduledAgentRuns.findFirst({
-    columns: { id: true },
-    where: and(
-      eq(scheduledAgentRuns.id, runId),
-      eq(scheduledAgentRuns.status, "running"),
-      eq(scheduledAgentRuns.leaseToken, leaseToken),
-      outcome.kind === "nothing_to_report"
-        ? isNotNull(scheduledAgentRuns.deferredCompletionTurnId)
-        : eq(scheduledAgentRuns.deferredCompletionTurnId, turnId)
-    ),
-  });
-  return deferred ? { status: "deferred" as const } : undefined;
+  return run ? { run: parseRun(run) } : undefined;
 }
 
 export async function releaseScheduledAgentRun(

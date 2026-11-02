@@ -91,8 +91,10 @@ describe("worker input bubbling", () => {
     );
     expect(workerInstructions).toContain("select the relevant compatible item");
     expect(workerInstructions).toContain(
-      "native `final_output` tool exactly once"
+      "structured completion tool Eve supplies"
     );
-    expect(workerInstructions).toContain("End the turn immediately");
+    expect(workerInstructions).toContain(
+      "Follow the structured completion tool's instructions"
+    );
   });
 });

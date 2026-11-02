@@ -128,8 +128,9 @@ describe("root and worker capability boundaries", () => {
       "utf8"
     );
     expect(workerInstructions).not.toContain("`inspect_autofill`");
+    expect(workerInstructions).not.toContain("`final_output`");
     expect(workerInstructions).toContain(
-      "native `final_output` tool exactly once"
+      "structured completion tool Eve supplies"
     );
     expect(workerInstructions).toContain(
       "Never use the browser for general web search"
@@ -184,7 +185,7 @@ describe("root and worker capability boundaries", () => {
       "including when passing an existing `taskId`"
     );
     expect(workerCoordination).toContain(
-      "calling Eve's native `final_output` tool exactly once"
+      "using the completion tool Eve supplies"
     );
     expect(workerConfig).toContain("tool: false");
     expect(workerConfig).not.toContain("outputSchema:");

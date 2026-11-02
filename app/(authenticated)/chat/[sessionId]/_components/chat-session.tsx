@@ -35,6 +35,7 @@ export function ChatSession({
         <ChatInput agent={agent} sessionId={sessionId} />
       </div>
       <SubagentPanel
+        childOpenings={agent.childOpenings}
         events={agent.events}
         historyComplete={!agent.hasOlder}
         initialUsage={initialUsage}

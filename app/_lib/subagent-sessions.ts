@@ -28,11 +28,12 @@ const delegatedInputSchema = z.object({ message: z.string() });
 
 export function collectSubagentSessions(
   events: readonly SessionStreamEvent[],
-  view: SessionView
+  view: SessionView,
+  childOpenings: readonly ChildOpenedEvent[] = []
 ): readonly SubagentSession[] {
   const openings = new Map<string, ChildOpenedEvent>();
   const childByTask = new Map<string, string>();
-  for (const event of events) {
+  for (const event of [...childOpenings, ...events]) {
     if (event.type !== "child.opened") continue;
     openings.set(event.data.sessionId, event);
     const taskId = ownerTaskId(event, view);
@@ -51,6 +52,9 @@ export function collectSubagentSessions(
         order,
       });
       continue;
+    }
+    if (event.type === "child.sent") {
+      latest.set(event.data.sessionId, { callId: event.data.callId, order });
     }
     if (event.type === "call.started" && event.data.taskId !== undefined) {
       const sessionId = childByTask.get(event.data.taskId);
@@ -128,7 +132,10 @@ export function getSubagentTask(events: readonly SessionStreamEvent[]) {
 /** The task a child serves: its owner, or the task behind the call that opened it. */
 function ownerTaskId(opened: ChildOpenedEvent, view: SessionView) {
   const { owner } = opened.data;
-  return "taskId" in owner ? owner.taskId : call(view, owner.callId)?.taskId;
+  return (
+    ("taskId" in owner ? owner.taskId : call(view, owner.callId)?.taskId) ??
+    opened.scope?.taskId
+  );
 }
 
 function parentStatus(

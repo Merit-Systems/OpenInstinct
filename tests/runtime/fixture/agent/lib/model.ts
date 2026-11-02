@@ -21,7 +21,21 @@ export function fixtureModel(worker: boolean) {
         .some((message) => message.role === "tool");
       let toolName: string | undefined;
       let input = "{}";
+      const instructions = prompt
+        .filter((message) => message.role === "system")
+        .map((message) => message.content)
+        .join("\n");
+      if (instructions.includes("`final_output`")) {
+        throw new Error(
+          "Production instructions reference an unavailable completion tool."
+        );
+      }
       if (worker) {
+        if (!instructions.includes("structured completion tool Eve supplies")) {
+          throw new Error(
+            "The runtime fixture must exercise the production completion instructions."
+          );
+        }
         toolName =
           text.includes("Wait for cancellation") && !returned
             ? "wait_for_cancellation"

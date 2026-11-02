@@ -9,6 +9,11 @@ export interface SessionHistoryPage {
   /** The next line to read after this page. */
   readonly endIndex: number;
   readonly events: readonly SessionStreamEvent[];
+  /** Recorded child relationships survive trimming the visible transcript. */
+  readonly childOpenings: readonly Extract<
+    SessionStreamEvent,
+    { type: "child.opened" }
+  >[];
   /** The first line this page holds. */
   readonly startIndex: number;
 }
@@ -22,11 +27,12 @@ export async function readLatestSessionHistory(
   const endIndex = last ? lineAfter(last) : 0;
   const startIndex = events[0]?.meta.position.line ?? endIndex;
 
-  return await extendToTurnBoundary(
-    { endIndex, events, startIndex },
+  const page = await extendToTurnBoundary(
+    { childOpenings: [], endIndex, events, startIndex },
     reader,
     signal
   );
+  return await retainChildOpenings(page, reader, events, signal);
 }
 
 export async function readOlderSessionHistory(
@@ -34,11 +40,12 @@ export async function readOlderSessionHistory(
   before: number,
   signal?: AbortSignal
 ): Promise<SessionHistoryPage> {
-  return await extendToTurnBoundary(
-    { endIndex: before, events: [], startIndex: before },
+  const page = await extendToTurnBoundary(
+    { childOpenings: [], endIndex: before, events: [], startIndex: before },
     reader,
     signal
   );
+  return await retainChildOpenings(page, reader, [], signal);
 }
 
 /** The line a reader resumes from after `event`, once its line is complete. */
@@ -61,9 +68,18 @@ export function appendHistoryEvent(
       candidate.meta.position.line === line &&
       candidate.meta.position.index === index
   );
+  const childOpenings =
+    event.type === "child.opened"
+      ? [
+          ...page.childOpenings.filter(
+            (opened) => opened.data.sessionId !== event.data.sessionId
+          ),
+          event,
+        ]
+      : page.childOpenings;
   return known
     ? { ...page, endIndex }
-    : { ...page, endIndex, events: [...page.events, event] };
+    : { ...page, childOpenings, endIndex, events: [...page.events, event] };
 }
 
 async function extendToTurnBoundary(
@@ -81,6 +97,10 @@ async function extendToTurnBoundary(
     /* oxlint-disable-next-line eslint/no-await-in-loop -- Each backward read starts at the cursor returned by the preceding read. */
     const older = await readLines(reader, from, page.startIndex, signal);
     page = {
+      childOpenings: [
+        ...page.childOpenings,
+        ...older.filter((event) => event.type === "child.opened"),
+      ],
       endIndex: page.endIndex,
       events: [...older, ...page.events],
       startIndex: from,
@@ -95,6 +115,10 @@ async function extendToTurnBoundary(
 
   return {
     ...page,
+    childOpenings: [
+      ...page.childOpenings,
+      ...page.events.filter((event) => event.type === "child.opened"),
+    ],
     events: page.events.filter(
       (event) => event.meta.position.line >= firstTurnLine
     ),
@@ -126,4 +150,40 @@ function startedTurnLines(events: readonly SessionStreamEvent[]) {
   return events.flatMap((event) =>
     event.type === "turn.started" ? [event.meta.position.line] : []
   );
+}
+
+/** Resolve relationships needed by recent calls without rendering older transcript turns. */
+export async function retainChildOpenings(
+  page: SessionHistoryPage,
+  reader: SessionReader,
+  seed: readonly SessionStreamEvent[],
+  signal?: AbortSignal
+): Promise<SessionHistoryPage> {
+  const needed = new Set(
+    page.events.flatMap((event) =>
+      event.type === "child.sent" || event.type === "child.opened"
+        ? [event.data.sessionId]
+        : []
+    )
+  );
+  const openings = new Map<
+    string,
+    SessionHistoryPage["childOpenings"][number]
+  >();
+  const collect = (events: readonly SessionStreamEvent[]) => {
+    for (const event of events) {
+      if (event.type === "child.opened" && needed.has(event.data.sessionId)) {
+        openings.set(event.data.sessionId, event);
+      }
+    }
+  };
+  collect([...seed, ...page.childOpenings, ...page.events]);
+  let before = page.startIndex;
+  while (before > 0 && openings.size < needed.size) {
+    const from = Math.max(0, before - linesPerRead);
+    // oxlint-disable-next-line eslint/no-await-in-loop -- Resolve older relationships through bounded backward reads.
+    collect(await readLines(reader, from, before, signal));
+    before = from;
+  }
+  return { ...page, childOpenings: [...openings.values()] };
 }

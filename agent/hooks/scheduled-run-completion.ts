@@ -1,12 +1,10 @@
 import { openInteractions, reply } from "eve/events";
 import { defineHook } from "eve/hooks";
-import { startedBrowserTaskId } from "@agent/lib/browser-task";
 import { contentText } from "@agent/lib/content-text";
 import { scheduledRunIdentity } from "@agent/lib/schedules/identity";
 import { scheduledRunOutcomeSchema } from "@shared/schedules/outcome";
 import {
   completeScheduledAgentRun,
-  deferScheduledAgentRunCompletion,
   markScheduledAgentRunStarted,
   releaseScheduledAgentRun,
   waitForScheduledAgentRunInput,
@@ -69,26 +67,6 @@ export default defineHook({
         sessionId: ctx.session.id,
       });
     },
-    async "call.started"(event, ctx) {
-      const taskId = startedBrowserTaskId(event, ctx.view);
-      if (!taskId) return;
-      const identity = scheduledRunIdentity(ctx.session.auth);
-      if (!identity) return;
-      const turnId = event.scope?.turnId ?? ctx.session.turn.id;
-      const deferred = await deferScheduledAgentRunCompletion(
-        identity.runId,
-        identity.leaseToken,
-        turnId,
-        ctx.now
-      );
-      console.info("[scheduled-run] worker delegated background work", {
-        deferred,
-        runId: identity.runId,
-        sessionId: ctx.session.id,
-        taskId,
-        turnId,
-      });
-    },
     async "turn.settled"(event, ctx) {
       const identity = scheduledRunIdentity(ctx.session.auth);
       if (!identity) return;
@@ -144,21 +122,9 @@ export default defineHook({
       const completed = await completeScheduledAgentRun(
         identity.runId,
         identity.leaseToken,
-        event.data.turnId,
         outcome,
         ctx.now
       );
-      if (completed?.status === "deferred") {
-        console.info(
-          "[scheduled-run] worker completion deferred for background work",
-          {
-            runId: identity.runId,
-            sessionId: ctx.session.id,
-            turnId: event.data.turnId,
-          }
-        );
-        return;
-      }
       if (!completed) {
         console.warn("[scheduled-run] worker completion missed its lease", {
           runId: identity.runId,

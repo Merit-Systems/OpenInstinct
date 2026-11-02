@@ -127,6 +127,7 @@ export const scheduledAgentRuns = pgTable(
       .notNull()
       .default("queued"),
     workerSessionId: text("worker_session_id"),
+    // Retained for installations still serving pre-1.0 sessions. New runs do not defer by turn.
     deferredCompletionTurnId: text("deferred_completion_turn_id"),
     pendingInputRequests: jsonb("pending_input_requests").$type<
       readonly Interaction[]

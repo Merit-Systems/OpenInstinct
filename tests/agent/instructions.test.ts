@@ -108,7 +108,7 @@ describe("agent instructions", () => {
         "tool supplies the required structured completion schema"
       );
       expect(selected?.content).toContain(
-        "native `final_output` tool exactly once"
+        "using the completion tool Eve supplies"
       );
     }
 

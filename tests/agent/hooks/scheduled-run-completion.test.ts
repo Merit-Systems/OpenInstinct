@@ -8,7 +8,6 @@ import {
 import type { HookContext } from "eve/hooks";
 import type {
   completeScheduledAgentRun,
-  deferScheduledAgentRunCompletion,
   markScheduledAgentRunStarted,
   releaseScheduledAgentRun,
   waitForScheduledAgentRunInput,
@@ -18,7 +17,6 @@ import { viewOf } from "@tests/helpers/session-view";
 
 const services = vi.hoisted(() => ({
   complete: vi.fn<typeof completeScheduledAgentRun>(),
-  deferCompletion: vi.fn<typeof deferScheduledAgentRunCompletion>(),
   markStarted: vi.fn<typeof markScheduledAgentRunStarted>(),
   release: vi.fn<typeof releaseScheduledAgentRun>(),
   waitForInput: vi.fn<typeof waitForScheduledAgentRunInput>(),
@@ -26,7 +24,6 @@ const services = vi.hoisted(() => ({
 
 vi.mock("@db/services/scheduled-agent-jobs", () => ({
   completeScheduledAgentRun: services.complete,
-  deferScheduledAgentRunCompletion: services.deferCompletion,
   markScheduledAgentRunStarted: services.markStarted,
   releaseScheduledAgentRun: services.release,
   waitForScheduledAgentRunInput: services.waitForInput,
@@ -179,7 +176,6 @@ const completedRun = {
 beforeEach(() => {
   vi.clearAllMocks();
   services.markStarted.mockResolvedValue(true);
-  services.deferCompletion.mockResolvedValue(true);
   services.release.mockResolvedValue("queued");
 });
 
@@ -237,7 +233,6 @@ describe("scheduled run completion hook", () => {
 
   it("persists the outcome for durable report delivery", async () => {
     services.complete.mockResolvedValue({
-      status: "completed",
       run: completedRun,
     });
     const { event, view } = settledTurn("turn-1", [
@@ -251,7 +246,6 @@ describe("scheduled run completion hook", () => {
     expect(services.complete).toHaveBeenCalledWith(
       runId,
       leaseToken,
-      "turn-1",
       {
         kind: "result",
         summary: "The price fell to $250.",
@@ -261,93 +255,8 @@ describe("scheduled run completion hook", () => {
     );
   });
 
-  it("defers an interim outcome until background work wakes a later turn", async () => {
-    const view = viewOf([
-      [
-        {
-          data: {
-            cause: { deliveryId: "delivery-1" },
-            follows: null,
-            turnId: "turn-1",
-          },
-          scope: { turnId: "turn-1" },
-          type: "turn.started",
-        },
-      ],
-      [
-        {
-          data: {
-            callId: "call-1",
-            capability: { kind: "tool", name: "run_browser" },
-            input: { task: "Check the price." },
-            owner: { runId: "run-1" },
-          },
-          scope: { runId: "run-1", turnId: "turn-1" },
-          type: "call.requested",
-        },
-      ],
-    ]);
-    await completionHook.events["call.started"]?.(
-      {
-        data: { callId: "call-1", taskId: "task-1" },
-        scope: { runId: "run-1", turnId: "turn-1" },
-        type: "call.started",
-      },
-      workerContext("2026-09-01T13:01:00.000Z", { view })
-    );
-    services.complete.mockResolvedValue({ status: "deferred" });
-
-    const settled = settledTurn("turn-1", []);
-    await completionHook.events["turn.settled"]?.(
-      settled.event,
-      workerContext("2026-09-01T13:01:01.000Z", { view: settled.view })
-    );
-
-    expect(services.deferCompletion).toHaveBeenCalledExactlyOnceWith(
-      runId,
-      leaseToken,
-      "turn-1",
-      new Date("2026-09-01T13:01:00.000Z")
-    );
-    expect(services.complete).toHaveBeenCalledWith(
-      runId,
-      leaseToken,
-      "turn-1",
-      expect.anything(),
-      new Date("2026-09-01T13:01:01.000Z")
-    );
-  });
-
-  it("ignores calls that do not start a browser task", async () => {
-    const view = viewOf([
-      [
-        {
-          data: {
-            callId: "call-1",
-            capability: { kind: "tool", name: "web_search" },
-            input: { query: "price" },
-            owner: { runId: "run-1" },
-          },
-          scope: { runId: "run-1", turnId: "turn-1" },
-          type: "call.requested",
-        },
-      ],
-    ]);
-    await completionHook.events["call.started"]?.(
-      {
-        data: { callId: "call-1", taskId: "task-1" },
-        scope: { runId: "run-1", turnId: "turn-1" },
-        type: "call.started",
-      },
-      workerContext("2026-09-01T13:01:00.000Z", { view })
-    );
-
-    expect(services.deferCompletion).not.toHaveBeenCalled();
-  });
-
   it("ignores narration emitted before a tool call completes", async () => {
     services.complete.mockResolvedValue({
-      status: "completed",
       run: completedRun,
     });
     const { event, view } = settledTurn("turn-1", [
@@ -366,7 +275,6 @@ describe("scheduled run completion hook", () => {
     expect(services.complete).toHaveBeenCalledWith(
       runId,
       leaseToken,
-      "turn-1",
       {
         kind: "result",
         summary: "The price fell to $250.",
@@ -410,7 +318,6 @@ describe("scheduled run completion hook", () => {
     expect(services.complete).toHaveBeenCalledWith(
       runId,
       leaseToken,
-      "turn-1",
       {
         kind: "result",
         summary: "a".repeat(4_000),

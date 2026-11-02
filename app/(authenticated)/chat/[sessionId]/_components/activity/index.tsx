@@ -26,6 +26,7 @@ import { useChatUsage } from "./use-chat-usage";
 const emptyEventsBySession = new Map<string, readonly SessionStreamEvent[]>();
 
 export function SubagentPanel({
+  childOpenings,
   events,
   historyComplete,
   initialUsage,
@@ -34,6 +35,10 @@ export function SubagentPanel({
   traceView,
   view,
 }: {
+  readonly childOpenings: readonly Extract<
+    SessionStreamEvent,
+    { type: "child.opened" }
+  >[];
   readonly events: readonly SessionStreamEvent[];
   readonly historyComplete: boolean;
   readonly initialUsage?: ChatUsage;
@@ -47,8 +52,8 @@ export function SubagentPanel({
   const traceCloseButton = useRef<HTMLButtonElement>(null);
   const restoreFocusId = useRef<string | undefined>(undefined);
   const sessions = useMemo(
-    () => collectSubagentSessions(events, view),
-    [events, view]
+    () => collectSubagentSessions(events, view, childOpenings),
+    [childOpenings, events, view]
   );
   const usage = useChatUsage({
     events,

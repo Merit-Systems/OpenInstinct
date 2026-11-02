@@ -324,52 +324,13 @@ describe("scheduled agent jobs", () => {
       claim.run.leaseToken,
       "replacement-worker-session"
     );
-    expect(
-      await jobs.deferScheduledAgentRunCompletion(
-        claim.run.id,
-        claim.run.leaseToken,
-        "turn-1",
-        new Date("2026-09-01T13:01:59.000Z")
-      )
-    ).toBe(true);
-    expect(
-      await jobs.completeScheduledAgentRun(
-        claim.run.id,
-        claim.run.leaseToken,
-        "turn-1",
-        {
-          kind: "result",
-          summary: "Browser research is still running.",
-          urgency: "normal",
-        },
-        new Date("2026-09-01T13:02:00.000Z")
-      )
-    ).toEqual({ status: "deferred" });
-    expect(
-      await jobs.completeScheduledAgentRun(
-        claim.run.id,
-        claim.run.leaseToken,
-        "turn-2",
-        {
-          kind: "nothing_to_report",
-          reason: "Another background task is still running.",
-        },
-        new Date("2026-09-01T13:02:01.000Z")
-      )
-    ).toEqual({ status: "deferred" });
     const completed = await jobs.completeScheduledAgentRun(
       claim.run.id,
       claim.run.leaseToken,
-      "turn-3",
-      {
-        kind: "result",
-        summary: "The price fell to $250.",
-        urgency: "normal",
-      },
-      new Date("2026-09-01T13:02:02.000Z")
+      { kind: "result", summary: "The price fell to $250.", urgency: "normal" },
+      new Date("2026-09-01T19:08:03.000Z")
     );
     expect(completed).toMatchObject({
-      status: "completed",
       run: {
         deferredCompletionTurnId: null,
         reportSequence: 2,

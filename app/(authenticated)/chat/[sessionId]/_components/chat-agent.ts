@@ -16,6 +16,10 @@ export interface ChatAgent extends Pick<
   ConversationState,
   "messages" | "view"
 > {
+  readonly childOpenings: readonly Extract<
+    SessionStreamEvent,
+    { type: "child.opened" }
+  >[];
   readonly cancel: () => ReturnType<ClientSession["cancel"]>;
   readonly error?: Error;
   readonly events: readonly SessionStreamEvent[];
