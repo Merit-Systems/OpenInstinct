@@ -1,6 +1,7 @@
 "use client";
 
-import type { MessageStreamEvent } from "eve/client";
+import type { SessionStreamEvent } from "eve/client";
+import type { SessionView } from "eve/events";
 import { ListTreeIcon } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@web/components/ui/button";
@@ -22,28 +23,38 @@ import { ActivityCard } from "./card";
 import { TracePreview } from "./preview";
 import { useChatUsage } from "./use-chat-usage";
 
-const emptyEventsBySession = new Map<string, readonly MessageStreamEvent[]>();
+const emptyEventsBySession = new Map<string, readonly SessionStreamEvent[]>();
 
 export function SubagentPanel({
+  childOpenings,
   events,
   historyComplete,
   initialUsage,
   onTraceViewChange,
   sessionId,
   traceView,
+  view,
 }: {
-  readonly events: readonly MessageStreamEvent[];
+  readonly childOpenings: readonly Extract<
+    SessionStreamEvent,
+    { type: "child.opened" }
+  >[];
+  readonly events: readonly SessionStreamEvent[];
   readonly historyComplete: boolean;
   readonly initialUsage?: ChatUsage;
   readonly onTraceViewChange: (view: TraceView) => void;
-  readonly sessionId?: string;
+  readonly sessionId: string;
   readonly traceView: TraceView;
+  readonly view: SessionView;
 }) {
   const [selectedId, setSelectedId] = useState<string>();
   const [mobileOpen, setMobileOpen] = useState(false);
   const traceCloseButton = useRef<HTMLButtonElement>(null);
   const restoreFocusId = useRef<string | undefined>(undefined);
-  const sessions = useMemo(() => collectSubagentSessions(events), [events]);
+  const sessions = useMemo(
+    () => collectSubagentSessions(events, view, childOpenings),
+    [childOpenings, events, view]
+  );
   const usage = useChatUsage({
     events,
     historyComplete,
@@ -174,6 +185,7 @@ export function SubagentPanel({
               closeButtonRef={traceCloseButton}
               key={selected.childSessionId}
               onClose={closeTask}
+              parentSessionId={sessionId}
               session={selected}
             />
           ) : null}
@@ -205,6 +217,7 @@ export function SubagentPanel({
             <TracePreview
               key={selected.childSessionId}
               onClose={closeTask}
+              parentSessionId={sessionId}
               session={selected}
             />
           ) : (

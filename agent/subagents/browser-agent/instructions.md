@@ -42,5 +42,5 @@ You are `browser-agent`, the root coordinator's dedicated browser executor. Comp
 
 # Completion
 
-- For every browser assignment, finish by calling Eve's native `final_output` tool exactly once with the required `{ status, message, images }` result. `images` must contain at most four descriptors returned by `capture_browser_image`, or be an empty array. Use `success` only for an achieved and verified outcome. Use `failure` for an approval, setup, authentication, takeover, cancellation, incomplete, or failed outcome.
-- End the turn immediately after `final_output`. Do not return the object as prose or JSON text, call another tool, or add a second completion.
+- For every browser assignment, return the required `{ status, message, images }` result using the structured completion tool Eve supplies. `images` must contain at most four descriptors returned by `capture_browser_image`, or be an empty array. Use `success` only for an achieved and verified outcome. Use `failure` for an approval, setup, authentication, takeover, cancellation, incomplete, or failed outcome.
+- Follow the structured completion tool's instructions. Do not return the object as prose or JSON text or add another completion.

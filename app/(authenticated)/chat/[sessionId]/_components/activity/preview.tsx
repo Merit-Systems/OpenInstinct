@@ -12,13 +12,15 @@ import { useSessionHistory } from "./use-session-history";
 export function TracePreview({
   closeButtonRef,
   onClose,
+  parentSessionId,
   session,
 }: {
   readonly closeButtonRef?: RefObject<HTMLButtonElement | null>;
   readonly onClose: () => void;
+  readonly parentSessionId: string;
   readonly session: SubagentSession;
 }) {
-  const history = useSessionHistory(session.childSessionId);
+  const history = useSessionHistory(parentSessionId, session.opened);
   const status = getSubagentStatus(history.events, session);
 
   return (

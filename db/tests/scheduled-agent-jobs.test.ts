@@ -1,6 +1,7 @@
 /* oxlint-disable eslint/no-await-in-loop -- Migrations and their statements must be applied in order. */
 import { readFile } from "node:fs/promises";
 import { PGlite } from "@electric-sql/pglite";
+import type { Interaction } from "eve/events";
 import { drizzle } from "drizzle-orm/pglite";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import * as Database from "@db";
@@ -172,17 +173,21 @@ describe("scheduled agent jobs", () => {
       workerSessionId: "worker-session",
     });
     const question = {
-      action: {
+      call: {
         callId: "call-question",
         input: { prompt: "Which airport should I use?" },
-        kind: "tool-call" as const,
-        toolName: "ask_question",
+        name: "ask_question",
       },
-      allowFreeform: true,
-      kind: "question" as const,
-      prompt: "Which airport should I use?",
-      requestId: "request-question",
-    };
+      interactionId: "interaction-question",
+      request: {
+        allowFreeform: true,
+        kind: "question",
+        prompt: "Which airport should I use?",
+      },
+      status: "open",
+      stepIndex: 0,
+      turnId: "turn-1",
+    } satisfies Interaction;
     const waiting = await jobs.waitForScheduledAgentRunInput(
       claim.run.id,
       claim.run.leaseToken,
@@ -319,52 +324,13 @@ describe("scheduled agent jobs", () => {
       claim.run.leaseToken,
       "replacement-worker-session"
     );
-    expect(
-      await jobs.deferScheduledAgentRunCompletion(
-        claim.run.id,
-        claim.run.leaseToken,
-        "turn-1",
-        new Date("2026-09-01T13:01:59.000Z")
-      )
-    ).toBe(true);
-    expect(
-      await jobs.completeScheduledAgentRun(
-        claim.run.id,
-        claim.run.leaseToken,
-        "turn-1",
-        {
-          kind: "result",
-          summary: "Browser research is still running.",
-          urgency: "normal",
-        },
-        new Date("2026-09-01T13:02:00.000Z")
-      )
-    ).toEqual({ status: "deferred" });
-    expect(
-      await jobs.completeScheduledAgentRun(
-        claim.run.id,
-        claim.run.leaseToken,
-        "turn-2",
-        {
-          kind: "nothing_to_report",
-          reason: "Another background task is still running.",
-        },
-        new Date("2026-09-01T13:02:01.000Z")
-      )
-    ).toEqual({ status: "deferred" });
     const completed = await jobs.completeScheduledAgentRun(
       claim.run.id,
       claim.run.leaseToken,
-      "turn-3",
-      {
-        kind: "result",
-        summary: "The price fell to $250.",
-        urgency: "normal",
-      },
-      new Date("2026-09-01T13:02:02.000Z")
+      { kind: "result", summary: "The price fell to $250.", urgency: "normal" },
+      new Date("2026-09-01T19:08:03.000Z")
     );
     expect(completed).toMatchObject({
-      status: "completed",
       run: {
         deferredCompletionTurnId: null,
         reportSequence: 2,

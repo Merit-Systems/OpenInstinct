@@ -15,13 +15,13 @@ export function ChatInput({
   agent,
   sessionId,
 }: {
-  readonly agent: Pick<ChatAgent, "cancel" | "data" | "send" | "status">;
+  readonly agent: Pick<ChatAgent, "cancel" | "messages" | "send" | "status">;
   readonly sessionId?: string;
 }) {
   const { mutate: saveChat } = api.chats.save.useMutation();
   const isBusy = agent.status === "submitted" || agent.status === "streaming";
   const isRestoring =
-    agent.status === "resuming" && agent.data.messages.length === 0;
+    agent.status === "resuming" && agent.messages.length === 0;
   const handleSubmit = async (message: PromptInputMessage) => {
     const text = message.text.trim();
     if (

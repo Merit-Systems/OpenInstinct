@@ -6,6 +6,7 @@ import {
   recordBrowserTraceEvents,
 } from "@db/services/browser-traces";
 import { traceTimelineRows } from "@agent/subagents/browser-agent/lib/trace/timeline";
+import { deliveredText } from "@agent/lib/content-text";
 import { listWorkerBrowserSessions } from "@db/services/browsers";
 import type { AccessScope } from "@shared/identity/access-scope";
 import { scopeFromPrincipal } from "@agent/lib/principal-scope";
@@ -57,32 +58,33 @@ export default defineHook({
         await recordBrowserTraceEvents(
           scope,
           ctx.session.id,
-          traceTimelineRows(event)
+          traceTimelineRows(event, ctx)
         );
       } catch (error) {
         logTraceFailure(ctx.session.id, error);
       }
     },
-    async "message.received"(event, ctx) {
+    async "delivery.consumed"(event, ctx) {
       try {
         const scope = traceScope(ctx);
         if (!scope) return;
         await beginBrowserTrace(scope, {
           sessionId: ctx.session.id,
-          startedAt: event.meta.at,
-          task: event.data.message,
+          startedAt: ctx.now.toISOString(),
+          task: deliveredText(event.data.parts),
         });
       } catch (error) {
         logTraceFailure(ctx.session.id, error);
       }
     },
-    async "result.completed"(event, ctx) {
+    async "content.completed"(event, ctx) {
+      if (event.data.kind !== "result") return;
       try {
         const completion = taskCompletionOutputSchema.safeParse(
-          event.data.result
+          event.data.value
         );
         if (!completion.success) return;
-        await finishTrace(ctx, event.meta.at, {
+        await finishTrace(ctx, ctx.now.toISOString(), {
           resultMessage: completion.data.message,
           status: completion.data.status,
         });
@@ -90,26 +92,24 @@ export default defineHook({
         logTraceFailure(ctx.session.id, error);
       }
     },
-    async "turn.failed"(event, ctx) {
+    async "turn.settled"(event, ctx) {
+      if (event.data.outcome === "completed") return;
       try {
-        await finishTrace(ctx, event.meta.at, {
-          resultMessage: event.data.message,
-          status: "error",
-        });
+        await finishTrace(
+          ctx,
+          ctx.now.toISOString(),
+          event.data.outcome === "failed"
+            ? { resultMessage: event.data.error?.message, status: "error" }
+            : { status: "cancelled" }
+        );
       } catch (error) {
         logTraceFailure(ctx.session.id, error);
       }
     },
-    async "turn.cancelled"(event, ctx) {
+    async "session.ended"(event, ctx) {
+      if (event.data.outcome !== "failed") return;
       try {
-        await finishTrace(ctx, event.meta.at, { status: "cancelled" });
-      } catch (error) {
-        logTraceFailure(ctx.session.id, error);
-      }
-    },
-    async "session.failed"(event, ctx) {
-      try {
-        await finishTrace(ctx, event.meta.at, { status: "error" });
+        await finishTrace(ctx, ctx.now.toISOString(), { status: "error" });
       } catch (error) {
         logTraceFailure(ctx.session.id, error);
       }

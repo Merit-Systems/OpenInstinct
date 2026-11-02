@@ -1,4 +1,10 @@
-import type { MessageStreamEvent } from "eve/client";
+import type { SessionEvent, SessionStreamEvent } from "eve/client";
+import {
+  type CallOutcome,
+  emptySessionView,
+  foldEvents,
+  type JsonValue,
+} from "eve/events";
 import { describe, expect, it } from "vitest";
 import {
   imessageTimestamps,
@@ -6,15 +12,10 @@ import {
   sentMessages,
 } from "./message-events";
 
-type ToolResultOutput = Extract<
-  Extract<MessageStreamEvent, { type: "action.result" }>["data"]["result"],
-  { kind: "tool-result" }
->["output"];
-
 describe("iMessage event projection", () => {
   it("displays the contact introduction and download attachment in browser chat", () => {
     const events = [
-      toolResult("share_contact", {
+      ...toolResult("share_contact", {
         kind: "message",
         text: "Save my contact.",
         attachments: [
@@ -27,7 +28,7 @@ describe("iMessage event projection", () => {
         ],
       }),
     ];
-    expect(sentMessages(events).get("turn-1:assistant")).toEqual([
+    expect(sentMessages(viewOf(events)).get("turn-1:assistant")).toEqual([
       expect.objectContaining({
         parts: [
           expect.objectContaining({ type: "text", text: "Save my contact." }),
@@ -40,13 +41,18 @@ describe("iMessage event projection", () => {
         ],
       }),
     ]);
-    expect(sentMessages([toolResult("share_contact", null)]).size).toBe(0);
+    expect(sentMessages(viewOf(toolResult("share_contact", null))).size).toBe(
+      0
+    );
   });
   it("projects only successful send_message results", () => {
     const events = [
-      completedMessage("Internal terminal output", "2026-09-01T12:00:00.000Z"),
-      toolResult("web_search", { answer: "Internal search result" }, 1),
-      toolResult(
+      ...completedMessage(
+        "Internal terminal output",
+        "2026-09-01T12:00:00.000Z"
+      ),
+      ...toolResult("web_search", { answer: "Internal search result" }),
+      ...toolResult(
         "send_message",
         {
           attachments: [
@@ -59,25 +65,22 @@ describe("iMessage event projection", () => {
           kind: "message",
           text: "Here is the user-visible result.",
         },
-        2,
         "2026-09-01T12:00:02.000Z"
       ),
     ];
 
-    expect(sentMessages(events).get("turn-1:assistant")).toEqual([
+    expect(sentMessages(viewOf(events)).get("turn-1:assistant")).toEqual([
       {
         id: "turn-1:assistant:call-send_message",
         parts: [
           {
             state: "done",
-            stepIndex: 2,
             text: "Here is the user-visible result.",
             type: "text",
           },
           {
             filename: "result.png",
             mediaType: "image/*",
-            stepIndex: 2,
             type: "file",
             url: "https://example.com/result.png",
           },
@@ -93,10 +96,10 @@ describe("iMessage event projection", () => {
 
   it("projects a compact reaction for the Eve chat", () => {
     const events = [
-      toolResult("react_to_message", { operation: "add", type: "heart" }),
+      ...toolResult("react_to_message", { operation: "add", type: "heart" }),
     ];
 
-    expect(sentMessages(events).get("turn-1:assistant")).toEqual([
+    expect(sentMessages(viewOf(events)).get("turn-1:assistant")).toEqual([
       expect.objectContaining({
         id: "turn-1:assistant:call-react_to_message",
         parts: [expect.objectContaining({ text: "❤️" })],
@@ -107,29 +110,27 @@ describe("iMessage event projection", () => {
 
   it("does not project a removed reaction as a new message", () => {
     const events = [
-      toolResult("react_to_message", { operation: "remove", type: "heart" }),
+      ...toolResult("react_to_message", { operation: "remove", type: "heart" }),
     ];
 
-    expect(sentMessages(events).has("turn-1:assistant")).toBe(false);
+    expect(sentMessages(viewOf(events)).has("turn-1:assistant")).toBe(false);
   });
 
   it("projects a native link-preview send as its URL", () => {
     const events = [
-      toolResult(
+      ...toolResult(
         "send_message",
         { kind: "link", url: "https://example.com/article" },
-        1,
         "2026-09-01T12:00:01.000Z"
       ),
     ];
 
-    expect(sentMessages(events).get("turn-1:assistant")).toEqual([
+    expect(sentMessages(viewOf(events)).get("turn-1:assistant")).toEqual([
       {
         id: "turn-1:assistant:call-send_message",
         parts: [
           {
             state: "done",
-            stepIndex: 1,
             text: "https://example.com/article",
             type: "text",
           },
@@ -141,17 +142,16 @@ describe("iMessage event projection", () => {
 
   it("keeps plain-text line breaks visible in the chat view", () => {
     const events = [
-      toolResult(
+      ...toolResult(
         "send_message",
         { kind: "message", text: "line one\nline two" },
-        1,
         "2026-09-01T12:00:01.000Z",
         "completed",
         "call-lines"
       ),
     ];
 
-    expect(sentMessages(events).get("turn-1:assistant")).toEqual([
+    expect(sentMessages(viewOf(events)).get("turn-1:assistant")).toEqual([
       expect.objectContaining({
         parts: [expect.objectContaining({ text: "line one  \nline two" })],
       }),
@@ -160,18 +160,14 @@ describe("iMessage event projection", () => {
 
   it("treats reply association as transport metadata in the Eve chat", () => {
     const events = [
-      toolResult(
-        "send_message",
-        {
-          kind: "message",
-          replyTo: { kind: "current" },
-          text: "This is still a normal Eve message.",
-        },
-        1
-      ),
+      ...toolResult("send_message", {
+        kind: "message",
+        replyTo: { kind: "current" },
+        text: "This is still a normal Eve message.",
+      }),
     ];
 
-    expect(sentMessages(events).get("turn-1:assistant")).toEqual([
+    expect(sentMessages(viewOf(events)).get("turn-1:assistant")).toEqual([
       expect.objectContaining({
         parts: [
           expect.objectContaining({
@@ -184,25 +180,23 @@ describe("iMessage event projection", () => {
 
   it("keeps consecutive sends in the same turn as separate messages", () => {
     const events = [
-      toolResult(
+      ...toolResult(
         "send_message",
         { kind: "message", text: "The useful result." },
-        1,
         "2026-09-01T12:00:01.000Z",
         "completed",
         "call-result"
       ),
-      toolResult(
+      ...toolResult(
         "send_message",
         { kind: "message", text: "Want me to book it?" },
-        2,
         "2026-09-01T12:00:02.000Z",
         "completed",
         "call-question"
       ),
     ];
 
-    expect(sentMessages(events).get("turn-1:assistant")).toEqual([
+    expect(sentMessages(viewOf(events)).get("turn-1:assistant")).toEqual([
       expect.objectContaining({
         id: "turn-1:assistant:call-result",
         parts: [expect.objectContaining({ text: "The useful result." })],
@@ -214,20 +208,19 @@ describe("iMessage event projection", () => {
     ]);
   });
 
-  it.each(["failed", "rejected"] as const)(
+  it.each(["failed", "rejected"] as const satisfies readonly CallOutcome[])(
     "ignores %s send_message results",
     (status) => {
       const events = [
-        toolResult(
+        ...toolResult(
           "send_message",
           { kind: "message", text: "This was not delivered." },
-          0,
           "2026-09-01T12:00:01.000Z",
           status
         ),
       ];
 
-      expect(sentMessages(events).has("turn-1:assistant")).toBe(false);
+      expect(sentMessages(viewOf(events)).has("turn-1:assistant")).toBe(false);
       expect(imessageTimestamps(events).has("turn-1:assistant")).toBe(false);
     }
   );
@@ -235,43 +228,82 @@ describe("iMessage event projection", () => {
 
 function toolResult(
   toolName: string,
-  output: ToolResultOutput,
-  stepIndex = 0,
+  output: JsonValue,
   at = "2026-09-01T12:00:01.000Z",
-  status: Extract<
-    MessageStreamEvent,
-    { type: "action.result" }
-  >["data"]["status"] = "completed",
+  outcome: CallOutcome = "completed",
   callId = `call-${toolName}`
-): MessageStreamEvent {
-  return {
-    data: {
-      result: {
-        callId,
-        kind: "tool-result",
-        output,
-        toolName,
+): SessionStreamEvent[] {
+  const scope = { runId: `run-${callId}`, turnId: "turn-1" };
+  return [
+    streamed(
+      {
+        data: { owner: { turnId: "turn-1" }, runId: scope.runId },
+        scope,
+        type: "model.requested",
       },
-      sequence: stepIndex,
-      status,
-      stepIndex,
-      turnId: "turn-1",
-    },
-    meta: { at, id: `event-${toolName}` },
-    type: "action.result",
+      at
+    ),
+    streamed(
+      {
+        data: {
+          callId,
+          capability: { kind: "tool", name: toolName },
+          input: {},
+          owner: { runId: scope.runId },
+        },
+        scope,
+        type: "call.requested",
+      },
+      at
+    ),
+    streamed(
+      {
+        data:
+          outcome === "completed"
+            ? { callId, outcome, output }
+            : {
+                callId,
+                error: { code: "tool_failed", message: "Not delivered." },
+                outcome,
+              },
+        scope,
+        type: "call.settled",
+      },
+      at
+    ),
+  ];
+}
+
+function completedMessage(value: string, at: string): SessionStreamEvent[] {
+  return [
+    streamed(
+      {
+        data: {
+          kind: "text",
+          partId: "part-reply",
+          phase: "reply",
+          runId: "run-reply",
+          value,
+        },
+        scope: { runId: "run-reply", turnId: "turn-1" },
+        type: "content.completed",
+      },
+      at
+    ),
+  ];
+}
+
+let nextLine = 0;
+
+function streamed(fact: SessionEvent, at: string): SessionStreamEvent {
+  const line = nextLine;
+  nextLine += 1;
+  return {
+    ...fact,
+    meta: { at, endOfLine: true, position: { index: 0, line } },
   };
 }
 
-function completedMessage(message: string, at: string): MessageStreamEvent {
-  return {
-    data: {
-      finishReason: "stop",
-      message,
-      sequence: 0,
-      stepIndex: 0,
-      turnId: "turn-1",
-    },
-    meta: { at, id: "event-message" },
-    type: "message.completed",
-  };
+function viewOf(events: readonly SessionStreamEvent[]) {
+  return foldEvents(emptySessionView(), events);
 }

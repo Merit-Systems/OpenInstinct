@@ -1,18 +1,6 @@
 import { randomUUID } from "node:crypto";
-import {
-  and,
-  asc,
-  desc,
-  eq,
-  inArray,
-  isNotNull,
-  isNull,
-  lte,
-  ne,
-  or,
-  sql,
-} from "drizzle-orm";
-import { isInputRequest, type InputRequest } from "eve/client";
+import { and, asc, desc, eq, inArray, isNull, lte, or, sql } from "drizzle-orm";
+import type { Interaction } from "eve/events";
 import { z } from "zod";
 import type { AccessScope } from "@shared/identity/access-scope";
 import {
@@ -27,8 +15,24 @@ import {
 } from "@shared/schedules/outcome";
 import { db, scheduledAgentJobs, scheduledAgentRuns } from "@db";
 
+// eve exports the Interaction type without a runtime guard; check the fields
+// the answer route and report prompt read before trusting a stored request.
+const storedInteractionSchema = z.looseObject({
+  interactionId: z.string().min(1),
+  request: z.looseObject({
+    kind: z.string().min(1),
+    options: z
+      .array(z.looseObject({ id: z.string(), label: z.string() }))
+      .optional(),
+    prompt: z.string(),
+  }),
+});
 const pendingInputRequestsSchema = z
-  .array(z.custom<InputRequest>(isInputRequest))
+  .array(
+    z.custom<Interaction>(
+      (value) => storedInteractionSchema.safeParse(value).success
+    )
+  )
   .min(1);
 
 const exhaustedRunOutcome = {
@@ -376,7 +380,7 @@ export async function markScheduledAgentRunStarted(
 export async function waitForScheduledAgentRunInput(
   runId: string,
   leaseToken: string,
-  pendingInputRequests: readonly InputRequest[],
+  pendingInputRequests: readonly Interaction[],
   now = new Date()
 ) {
   const parsedRequests = pendingInputRequestsSchema.parse(pendingInputRequests);
@@ -399,29 +403,6 @@ export async function waitForScheduledAgentRunInput(
     )
     .returning();
   return run ? parseRun(run) : undefined;
-}
-
-export async function deferScheduledAgentRunCompletion(
-  runId: string,
-  leaseToken: string,
-  turnId: string,
-  now = new Date()
-) {
-  const [run] = await db
-    .update(scheduledAgentRuns)
-    .set({
-      deferredCompletionTurnId: turnId,
-      updatedAt: now,
-    })
-    .where(
-      and(
-        eq(scheduledAgentRuns.id, runId),
-        eq(scheduledAgentRuns.status, "running"),
-        eq(scheduledAgentRuns.leaseToken, leaseToken)
-      )
-    )
-    .returning({ id: scheduledAgentRuns.id });
-  return run !== undefined;
 }
 
 export async function getScheduledAgentRunInput(
@@ -564,17 +545,9 @@ export async function finishScheduledAgentRunInput(
 export async function completeScheduledAgentRun(
   runId: string,
   leaseToken: string,
-  turnId: string,
   outcome: ScheduledRunOutcome,
   completedAt = new Date()
 ) {
-  const completionCondition =
-    outcome.kind === "nothing_to_report"
-      ? isNull(scheduledAgentRuns.deferredCompletionTurnId)
-      : or(
-          isNull(scheduledAgentRuns.deferredCompletionTurnId),
-          ne(scheduledAgentRuns.deferredCompletionTurnId, turnId)
-        );
   const [run] = await db
     .update(scheduledAgentRuns)
     .set({
@@ -598,24 +571,11 @@ export async function completeScheduledAgentRun(
       and(
         eq(scheduledAgentRuns.id, runId),
         eq(scheduledAgentRuns.status, "running"),
-        eq(scheduledAgentRuns.leaseToken, leaseToken),
-        completionCondition
+        eq(scheduledAgentRuns.leaseToken, leaseToken)
       )
     )
     .returning();
-  if (run) return { status: "completed" as const, run: parseRun(run) };
-  const deferred = await db.query.scheduledAgentRuns.findFirst({
-    columns: { id: true },
-    where: and(
-      eq(scheduledAgentRuns.id, runId),
-      eq(scheduledAgentRuns.status, "running"),
-      eq(scheduledAgentRuns.leaseToken, leaseToken),
-      outcome.kind === "nothing_to_report"
-        ? isNotNull(scheduledAgentRuns.deferredCompletionTurnId)
-        : eq(scheduledAgentRuns.deferredCompletionTurnId, turnId)
-    ),
-  });
-  return deferred ? { status: "deferred" as const } : undefined;
+  return run ? { run: parseRun(run) } : undefined;
 }
 
 export async function releaseScheduledAgentRun(

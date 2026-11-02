@@ -28,7 +28,7 @@ export function ChatConversation({
 }: {
   readonly agent: Pick<
     ChatAgent,
-    "data" | "error" | "events" | "respond" | "status"
+    "error" | "events" | "messages" | "respond" | "status" | "view"
   >;
   readonly history?: {
     readonly hasOlder: boolean;
@@ -41,11 +41,10 @@ export function ChatConversation({
 }) {
   const isBusy = agent.status === "submitted" || agent.status === "streaming";
   const isRestoring =
-    agent.status === "resuming" && agent.data.messages.length === 0;
-  const lastMessage = agent.data.messages.at(-1);
+    agent.status === "resuming" && agent.messages.length === 0;
+  const lastMessage = agent.messages.at(-1);
   const pendingAssistantMessageId =
-    lastMessage?.role === "assistant" &&
-    lastMessage.parts.every((part) => part.type === "step-start")
+    lastMessage?.role === "assistant" && lastMessage.parts.length === 0
       ? lastMessage.id
       : undefined;
   const showPendingThinking =
@@ -59,8 +58,9 @@ export function ChatConversation({
   const errorMessage =
     (agent.error ? toErrorMessage(agent.error) : undefined) ?? turnFailure;
   const messages = useMemo(
-    () => messagesForTraceView(agent.data.messages, agent.events, traceView),
-    [agent.data.messages, agent.events, traceView]
+    () =>
+      messagesForTraceView(agent.messages, agent.events, agent.view, traceView),
+    [agent.messages, agent.events, agent.view, traceView]
   );
   const timestamps = useMemo(
     () =>
@@ -70,8 +70,8 @@ export function ChatConversation({
     [agent.events, traceView]
   );
   const deliveredMessages = useMemo(
-    () => sentMessages(agent.events),
-    [agent.events]
+    () => sentMessages(agent.view),
+    [agent.view]
   );
 
   return (
@@ -80,7 +80,7 @@ export function ChatConversation({
       initial={initial}
       resize={sessionId === undefined ? "smooth" : "instant"}
       scrollRestorationKey={
-        agent.data.messages.length === 0 || sessionId === undefined
+        agent.messages.length === 0 || sessionId === undefined
           ? undefined
           : `eve:web-chat-scroll:${sessionId}`
       }
@@ -124,7 +124,7 @@ export function ChatConversation({
                     isStreaming={false}
                     key={delivery.id}
                     message={{ ...message, id: delivery.id }}
-                    onInputResponses={(responses) => agent.respond(responses)}
+                    onAnswers={(answers) => agent.respond(answers)}
                     sentMessageParts={delivery.parts}
                     timestamp={delivery.timestamp}
                     userVisibleOnly
@@ -142,7 +142,7 @@ export function ChatConversation({
               }
               key={message.id}
               message={message}
-              onInputResponses={(responses) => agent.respond(responses)}
+              onAnswers={(answers) => agent.respond(answers)}
               timestamp={timestamps.get(message.id)}
               userVisibleOnly={traceView === "imessage"}
             />

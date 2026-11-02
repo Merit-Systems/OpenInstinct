@@ -48,19 +48,16 @@ export const calendarCreateEvent = defineTool({
   },
 });
 
-export default defineDynamic({
-  events: {
-    "turn.started": (_event, context) =>
-      resolveModeValue(context, {
-        interactive: {
-          "calendar-check-availability": calendarCheckAvailability,
-          "calendar-create-event": calendarCreateEvent,
-          "calendar-list-events": calendarListEvents,
-        },
-        "scheduled-worker": {
-          "calendar-check-availability": calendarCheckAvailability,
-          "calendar-list-events": calendarListEvents,
-        },
-      }),
-  },
-});
+export default defineDynamic((context) =>
+  resolveModeValue(context, {
+    interactive: {
+      "calendar-check-availability": calendarCheckAvailability,
+      "calendar-create-event": calendarCreateEvent,
+      "calendar-list-events": calendarListEvents,
+    },
+    "scheduled-worker": {
+      "calendar-check-availability": calendarCheckAvailability,
+      "calendar-list-events": calendarListEvents,
+    },
+  })
+);

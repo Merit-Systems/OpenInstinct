@@ -1,10 +1,18 @@
-import type {
-  DynamicResolveContext,
-  ToolContext,
-  ToolDefinition,
-} from "eve/tools";
+import type * as EveTools from "eve/tools";
+import type { DynamicContext, ToolContext, ToolDefinition } from "eve/tools";
 import { z } from "zod";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  dynamicContextFor,
+  dynamicTool,
+  evaluateDynamic,
+  withEvaluableDynamic,
+} from "@tests/helpers/dynamic";
+import { toolContextFor } from "@tests/helpers/tool-context";
+
+vi.mock("eve/tools", async (importOriginal) =>
+  withEvaluableDynamic(await importOriginal<typeof EveTools>())
+);
 import type {
   createScheduledAgentJob,
   getScheduledAgentRunInput,
@@ -43,23 +51,18 @@ describe("schedule tools", () => {
   });
 
   it("lets interactive and reporting turns resume scheduled input", async () => {
-    const resolve = schedules.events["turn.started"];
-    expect(resolve).toBeDefined();
-    if (!resolve) return;
-
-    expect(await resolve({}, dynamicContext("scheduled-worker"))).toBeNull();
-    expect(await resolve({}, resumedWorkerContext())).toBeNull();
     expect(
-      await resolve({}, dynamicContext("scheduled-result"))
+      await evaluateDynamic(schedules, dynamicContext("scheduled-worker"))
+    ).toBeNull();
+    expect(await evaluateDynamic(schedules, resumedWorkerContext())).toBeNull();
+    expect(
+      await evaluateDynamic(schedules, dynamicContext("scheduled-result"))
     ).not.toBeNull();
-    const interactiveTools = await resolve({}, dynamicContext("linq"));
-    const answer =
-      interactiveTools && !("execute" in interactiveTools)
-        ? interactiveTools["schedules-answer"]
-        : null;
-    if (!answer) {
-      throw new Error("Expected the schedules-answer tool.");
-    }
+    const interactiveTools = await evaluateDynamic(
+      schedules,
+      dynamicContext("linq")
+    );
+    const answer = dynamicTool(interactiveTools, "schedules-answer");
     services.getInput.mockResolvedValue({
       leaseToken: "00000000-0000-4000-8000-000000000003",
       runId: "00000000-0000-4000-8000-000000000002",
@@ -89,14 +92,11 @@ describe("schedule tools", () => {
       leaseToken: "00000000-0000-4000-8000-000000000003",
       runId: "00000000-0000-4000-8000-000000000002",
     });
-    const reportTools = await resolve({}, dynamicContext("scheduled-result"));
-    const reportAnswer =
-      reportTools && !("execute" in reportTools)
-        ? reportTools["schedules-answer"]
-        : null;
-    if (!reportAnswer) {
-      throw new Error("Expected the schedules-answer reporting tool.");
-    }
+    const reportTools = await evaluateDynamic(
+      schedules,
+      dynamicContext("scheduled-result")
+    );
+    const reportAnswer = dynamicTool(reportTools, "schedules-answer");
     await reportAnswer.execute(
       {
         answer: "LGA",
@@ -214,26 +214,22 @@ describe("schedule tools", () => {
   });
 
   it("omits messaging capabilities outside their valid turns", async () => {
-    const resolveMessaging = messaging.events["turn.started"];
-    expect(resolveMessaging).toBeDefined();
-    if (!resolveMessaging) return;
-
     expect(
-      await resolveMessaging({}, dynamicContext("scheduled-worker"))
+      await evaluateDynamic(messaging, dynamicContext("scheduled-worker"))
     ).toBeNull();
-    expect(await resolveMessaging({}, resumedWorkerContext())).toBeNull();
-    const reportMessaging = await resolveMessaging(
-      {},
+    expect(await evaluateDynamic(messaging, resumedWorkerContext())).toBeNull();
+    const reportMessaging = await evaluateDynamic(
+      messaging,
       dynamicContext("scheduled-result", "channel:linq")
     );
     expect(Object.keys(reportMessaging ?? {})).toEqual(["send_message"]);
 
-    const debugMessaging = await resolveMessaging(
-      {},
-      dynamicContext("test", "http")
+    const debugMessaging = await evaluateDynamic(
+      messaging,
+      dynamicContext("test", "channel:eve")
     );
-    const interactiveMessaging = await resolveMessaging(
-      {},
+    const interactiveMessaging = await evaluateDynamic(
+      messaging,
       dynamicContext("test", "channel:linq")
     );
     expect(Object.keys(debugMessaging ?? {}).toSorted()).toEqual([
@@ -246,22 +242,13 @@ describe("schedule tools", () => {
       "send_message",
       "share_contact",
     ]);
-    const reportSend =
-      reportMessaging && !("execute" in reportMessaging)
-        ? reportMessaging.send_message
-        : undefined;
-    const interactiveSend =
-      interactiveMessaging && !("execute" in interactiveMessaging)
-        ? interactiveMessaging.send_message
-        : undefined;
-    const debugSend =
-      debugMessaging && !("execute" in debugMessaging)
-        ? debugMessaging.send_message
-        : undefined;
+    const reportSend = dynamicTool(reportMessaging, "send_message");
+    const interactiveSend = dynamicTool(interactiveMessaging, "send_message");
+    const debugSend = dynamicTool(debugMessaging, "send_message");
     if (
-      !(reportSend?.inputSchema instanceof z.ZodType) ||
-      !(interactiveSend?.inputSchema instanceof z.ZodType) ||
-      !(debugSend?.inputSchema instanceof z.ZodType)
+      !(reportSend.inputSchema instanceof z.ZodType) ||
+      !(interactiveSend.inputSchema instanceof z.ZodType) ||
+      !(debugSend.inputSchema instanceof z.ZodType)
     ) {
       throw new Error("Expected authored send_message schemas.");
     }
@@ -306,107 +293,78 @@ describe("schedule tools", () => {
   });
 });
 
-function dynamicContext(authenticator: string, kind = "channel:scheduled-run") {
-  return {
-    model: null,
-    channel: { kind, metadata: {} },
-    messages: [],
-    session: {
-      auth: {
-        current: {
-          attributes: {},
-          authenticator,
-          principalId: "user-1",
-          principalType: "user",
-        },
-        initiator: null,
+function dynamicContext(
+  authenticator: string,
+  kind: DynamicContext["channel"]["kind"] = "channel:scheduled-run"
+) {
+  return dynamicContextFor({
+    auth: {
+      current: {
+        attributes: {},
+        authenticator,
+        principalId: "user-1",
+        principalType: "user",
       },
-      id: "session-1",
+      initiator: null,
     },
-  } satisfies DynamicResolveContext;
+    channel: { kind, metadata: {} },
+    sessionId: "session-1",
+  });
 }
 
 function resumedWorkerContext() {
   const context = dynamicContext("linq");
-  return {
-    ...context,
-    session: {
-      ...context.session,
-      auth: {
-        ...context.session.auth,
-        initiator: {
-          attributes: {},
-          authenticator: "scheduled-worker",
-          principalId: "user-1",
-          principalType: "user" as const,
-        },
+  return dynamicContextFor({
+    auth: {
+      ...context.session.auth,
+      initiator: {
+        attributes: {},
+        authenticator: "scheduled-worker",
+        principalId: "user-1",
+        principalType: "user",
       },
     },
-  } satisfies DynamicResolveContext;
+    channel: context.channel,
+    sessionId: context.session.id,
+  });
 }
 
 function toolContext(
   toolName: string,
   authenticator = "test",
-  conversationChannel: "eve" | "linq" = "linq"
-) {
-  return {
-    abortSignal: new AbortController().signal,
-    callId: "call-schedule",
-    async getSandbox() {
-      throw new Error("Sandbox access is not expected.");
-    },
-    async getToken() {
-      throw new Error("Token access is not expected.");
-    },
-    requireAuth() {
-      throw new Error("Connection authorization is not expected.");
-    },
-    session: {
-      auth: {
-        current: {
-          attributes: {
-            conversationChannel,
-            conversationId: "linq:dm:chat-1",
-            linqMessageId: "message-1",
-            linqThreadId: "linq:dm:chat-1",
-            workspaceId: "workspace-1",
-          },
-          authenticator,
-          principalId: "user-1",
-          principalType: "user",
+  conversationChannel: "eve" | "linq" = "linq",
+  attributes: Record<string, string> = {}
+): ToolContext {
+  return toolContextFor({
+    auth: {
+      current: {
+        attributes: {
+          conversationChannel,
+          conversationId: "linq:dm:chat-1",
+          linqMessageId: "message-1",
+          linqThreadId: "linq:dm:chat-1",
+          workspaceId: "workspace-1",
+          ...attributes,
         },
-        initiator: null,
+        authenticator,
+        principalId: "user-1",
+        principalType: "user",
       },
-      id: "session-1",
-      turn: { id: "turn-1", sequence: 0 },
+      initiator: null,
     },
+    callId: "call-schedule",
+    sessionId: "session-1",
     toolName,
-  } satisfies ToolContext;
+  });
 }
 
 function scheduledReportToolContext() {
-  const context = toolContext("schedules-answer", "scheduled-result");
-  const current = context.session.auth.current;
-  return {
-    ...context,
-    session: {
-      ...context.session,
-      auth: {
-        ...context.session.auth,
-        current: {
-          ...current,
-          attributes: {
-            ...current.attributes,
-            scheduleId: "00000000-0000-4000-8000-000000000001",
-            scheduledReportLeaseToken: "00000000-0000-4000-8000-000000000004",
-            scheduledReportSequence: "1",
-            scheduledRunId: "00000000-0000-4000-8000-000000000002",
-          },
-        },
-      },
-    },
-  } satisfies ToolContext;
+  return toolContext("schedules-answer", "scheduled-result", "linq", {
+    scheduleId: "00000000-0000-4000-8000-000000000001",
+    scheduledReportLeaseToken: "00000000-0000-4000-8000-000000000004",
+    scheduledReportSequence: "1",
+    scheduledRunId: "00000000-0000-4000-8000-000000000002",
+  });
 }
 
 function inputProperties(schema: ToolDefinition["inputSchema"]) {

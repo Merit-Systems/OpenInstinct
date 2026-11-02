@@ -2,8 +2,8 @@ import type {
   ChannelResolveSession,
   ChannelSource,
   RouteHandlerArgs,
-  Session,
 } from "eve/channels";
+import type { Delivery } from "eve/sessions";
 import { describe, expect, it, vi } from "vitest";
 import scheduledRunChannel from "@agent/channels/scheduled-run";
 
@@ -43,13 +43,14 @@ describe("scheduled run channel handoff", () => {
   it("starts a scheduled worker from the channel's native receive hook", async () => {
     const send = vi
       .fn<ChannelSource["send"]>()
-      .mockResolvedValue(workerSession());
-    const reset = vi.fn<ChannelSource["reset"]>();
+      .mockResolvedValue(workerDelivery());
+    const end = vi.fn<ChannelSource["end"]>();
     const source: ChannelSource = {
       cancel: vi.fn<ChannelSource["cancel"]>(),
       clear: vi.fn<ChannelSource["clear"]>(),
       compact: vi.fn<ChannelSource["compact"]>(),
-      reset,
+      create: vi.fn<ChannelSource["create"]>(),
+      end,
       respond: vi.fn<ChannelSource["respond"]>(),
       send,
     };
@@ -83,7 +84,7 @@ describe("scheduled run channel handoff", () => {
     expect(from).toHaveBeenCalledExactlyOnceWith(
       "scheduled-run:00000000-0000-4000-8000-000000000001"
     );
-    expect(reset).toHaveBeenCalledExactlyOnceWith({
+    expect(end).toHaveBeenCalledExactlyOnceWith({
       reason: "Scheduled worker exceeded its runtime.",
     });
     expect(send).toHaveBeenCalledWith(
@@ -93,15 +94,19 @@ describe("scheduled run channel handoff", () => {
         title: "Scheduled run 00000000-0000-4000-8000-000000000001",
       })
     );
-    expect(result.id).toBe("worker-session");
+    expect(result.sessionId).toBe("worker-session");
   });
 });
 
 function unexpectedRouteContext() {
   return {
     attachSession: unexpectedRouteRequest,
+    describe: unexpectedRouteRequest,
     from: unexpectedRouteRequest,
+    invokeTool: unexpectedRouteRequest,
+    listSkillFiles: unexpectedRouteRequest,
     params: {},
+    readSkill: unexpectedRouteRequest,
     requestIp: null,
     resolveSession: unexpectedRouteRequest,
     to: unexpectedRouteRequest,
@@ -113,16 +118,11 @@ function unexpectedRouteRequest(): never {
   throw new Error("The request should stop at authentication.");
 }
 
-function workerSession(): Session {
+function workerDelivery(): Delivery {
   return {
-    cancel: vi.fn<Session["cancel"]>(),
-    clear: vi.fn<Session["clear"]>(),
-    compact: vi.fn<Session["compact"]>(),
-    getEventStream: vi.fn<Session["getEventStream"]>(),
-    getStreamTailIndex: vi.fn<Session["getStreamTailIndex"]>(),
-    id: "worker-session",
-    reset: vi.fn<Session["reset"]>(),
-    respond: vi.fn<Session["respond"]>(),
-    send: vi.fn<Session["send"]>(),
+    deliveryId: "worker-delivery",
+    result: vi.fn<Delivery["result"]>(),
+    sessionId: "worker-session",
+    stream: vi.fn<Delivery["stream"]>(),
   };
 }

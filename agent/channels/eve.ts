@@ -13,6 +13,7 @@ import {
 } from "@shared/identity/access-scope";
 import { getAuthSession } from "@db/services/auth/session";
 import { sendMessageToolResultSchema } from "@shared/chat/message-delivery";
+import { settledToolResult } from "@agent/lib/settled-tool-result";
 import {
   finalizeScheduledReportDelivery,
   releaseScheduledReportDelivery,
@@ -70,31 +71,41 @@ const authenticate: Parameters<typeof routeAuth>[1] = [
 const channel = eveChannel({
   auth: authenticate,
   events: {
-    async "action.result"(event, _channel, session) {
-      const message = sendMessageToolResultSchema.safeParse(event.result);
-      if (event.status === "completed" && message.success) {
-        await finalizeScheduledReportDelivery(session);
-      }
-    },
-    async "message.completed"(event, _channel, session) {
-      if (event.finishReason === "tool-calls") return;
-      if (scheduledReportFromSession(session)) {
-        await finalizeScheduledReportDelivery(session, "suppressed");
-      }
-    },
-    async "session.completed"(_event, _channel, session) {
-      if (scheduledReportFromSession(session)) {
-        await finalizeScheduledReportDelivery(session, "suppressed");
-      }
-    },
-    async "turn.cancelled"(_event, _channel, session) {
-      await releaseScheduledReportDelivery(
-        session,
-        "Scheduled result reporting was cancelled."
+    async "call.settled"(event, ctx) {
+      const message = sendMessageToolResultSchema.safeParse(
+        settledToolResult(event, ctx.view)
       );
+      if (message.success) {
+        await finalizeScheduledReportDelivery(ctx);
+      }
     },
-    async "turn.failed"(event, _channel, session) {
-      await releaseScheduledReportDelivery(session, event.message);
+    async "turn.settled"(event, ctx) {
+      switch (event.data.outcome) {
+        case "completed":
+          if (scheduledReportFromSession(ctx)) {
+            await finalizeScheduledReportDelivery(ctx, "suppressed");
+          }
+          return;
+        case "cancelled":
+          await releaseScheduledReportDelivery(
+            ctx,
+            "Scheduled result reporting was cancelled."
+          );
+          return;
+        case "failed":
+          await releaseScheduledReportDelivery(
+            ctx,
+            event.data.error?.message ?? "The scheduled report turn failed."
+          );
+          return;
+        default:
+          return;
+      }
+    },
+    async "session.ended"(_event, ctx) {
+      if (scheduledReportFromSession(ctx)) {
+        await finalizeScheduledReportDelivery(ctx, "suppressed");
+      }
     },
   },
 });
@@ -105,7 +116,6 @@ const ownedCallbackRoutes = new Set([
   "/eve/v1/connections/:name/callback/:attemptId/:token",
   "/eve/v1/connections/:name/callback/:token",
   "/eve/v1/callback/:token",
-  "/eve/v1/task-input/:token",
 ]);
 
 export default {
@@ -131,7 +141,11 @@ export default {
 
 // Routes without a session subject. Every other eve route must name a session
 // this caller owns, either in the path or inside a hook token.
-const subjectFreeRoutes = new Set(["/eve/v1/info", "/eve/v1/session"]);
+const subjectFreeRoutes = new Set([
+  "/eve/v1/health",
+  "/eve/v1/info",
+  "/eve/v1/session",
+]);
 
 async function requireOwnedRouteSubject(scope: AccessScope, request: Request) {
   const { pathname } = new URL(request.url);

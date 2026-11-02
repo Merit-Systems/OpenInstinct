@@ -23,7 +23,7 @@ describe("agent messages", () => {
         canRespond
         isStreaming={false}
         message={message}
-        onInputResponses={() => undefined}
+        onAnswers={() => undefined}
       />
     );
 
@@ -48,13 +48,15 @@ describe("agent messages", () => {
           type: "reasoning",
         },
         {
+          callId: "call-1",
           input: { query: "example" },
+          kind: "tool",
+          label: "Web search",
+          name: "web_search",
           output: { result: "internal" },
-          state: "output-available",
+          state: "completed",
           stepIndex: 0,
-          toolCallId: "call-1",
-          toolName: "web_search",
-          type: "dynamic-tool",
+          type: "tool",
         },
         {
           state: "done",
@@ -71,7 +73,7 @@ describe("agent messages", () => {
         canRespond
         isStreaming={false}
         message={message}
-        onInputResponses={() => undefined}
+        onAnswers={() => undefined}
         sentMessageParts={[
           {
             state: "done",
@@ -96,28 +98,33 @@ describe("agent messages", () => {
       metadata: { status: "streaming", turnId: "turn-2" },
       parts: [
         {
-          approval: { id: "approval-1" },
+          callId: "call-2",
           input: { amount: 50, recipient: "Hidden recipient" },
-          state: "approval-requested",
-          stepIndex: 0,
-          toolCallId: "call-2",
-          toolMetadata: {
-            eve: {
-              inputRequest: {
-                kind: "tool-approval",
-                options: [
-                  { id: "approve", label: "Approve", style: "primary" },
-                  { id: "cancel", label: "Cancel", style: "danger" },
-                ],
-                prompt: "Approve this action?",
-                requestId: "approval-1",
-              },
-              kind: "tool-call",
+          interaction: {
+            call: {
+              callId: "call-2",
+              input: { amount: 50, recipient: "Hidden recipient" },
               name: "send_payment",
             },
+            interactionId: "approval-1",
+            request: {
+              kind: "approval",
+              options: [
+                { id: "approve", label: "Approve", style: "primary" },
+                { id: "deny", label: "Deny", style: "danger" },
+              ],
+              prompt: "Approve this action?",
+            },
+            status: "open",
+            stepIndex: 0,
+            turnId: "turn-2",
           },
-          toolName: "send_payment",
-          type: "dynamic-tool",
+          kind: "tool",
+          label: "Send payment",
+          name: "send_payment",
+          state: "approval",
+          stepIndex: 0,
+          type: "tool",
         },
       ],
       role: "assistant",
@@ -128,14 +135,14 @@ describe("agent messages", () => {
         canRespond
         isStreaming={false}
         message={message}
-        onInputResponses={() => undefined}
+        onAnswers={() => undefined}
         userVisibleOnly
       />
     );
 
     expect(markup).not.toContain("Approve this action?");
     expect(markup).not.toContain("Approve");
-    expect(markup).not.toContain("Cancel");
+    expect(markup).not.toContain("Deny");
     expect(markup).not.toContain("send_payment");
     expect(markup).not.toContain("Hidden recipient");
   });

@@ -63,20 +63,17 @@ export const gmailSend = defineTool({
   },
 });
 
-export default defineDynamic({
-  events: {
-    "turn.started": (_event, context) =>
-      resolveModeValue(context, {
-        interactive: {
-          "gmail-read-thread": gmailReadThread,
-          "gmail-search": gmailSearch,
-          "gmail-send": gmailSend,
-          "gmail-update": gmailUpdate,
-        },
-        "scheduled-worker": {
-          "gmail-read-thread": gmailReadThread,
-          "gmail-search": gmailSearch,
-        },
-      }),
-  },
-});
+export default defineDynamic((context) =>
+  resolveModeValue(context, {
+    interactive: {
+      "gmail-read-thread": gmailReadThread,
+      "gmail-search": gmailSearch,
+      "gmail-send": gmailSend,
+      "gmail-update": gmailUpdate,
+    },
+    "scheduled-worker": {
+      "gmail-read-thread": gmailReadThread,
+      "gmail-search": gmailSearch,
+    },
+  })
+);

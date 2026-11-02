@@ -1,4 +1,4 @@
-import type { MessageStreamEvent } from "eve/client";
+import type { SessionEvent, SessionStreamEvent } from "eve/client";
 import { describe, expect, it } from "vitest";
 import {
   browserBenchmarkActivity,
@@ -6,131 +6,122 @@ import {
   browserBenchmarkLiveViewUrl,
 } from "../benchmark-activity";
 
+function at(
+  fact: SessionEvent,
+  time: string,
+  line: number,
+  index = 0
+): SessionStreamEvent {
+  return { ...fact, meta: { at: time, position: { index, line } } };
+}
+
+function toolRequested(callId: string, name: string) {
+  return {
+    data: {
+      callId,
+      capability: { kind: "tool", name },
+      input: {},
+      owner: { runId: "run_1" },
+    },
+    scope: { turnId: "turn_1" },
+    type: "call.requested",
+  } satisfies SessionEvent;
+}
+
+const modelStarted = {
+  data: { attempt: 1, modelId: "test/model", runId: "run_1" },
+  scope: { turnId: "turn_1" },
+  type: "model.started",
+} satisfies SessionEvent;
+
 describe("browser benchmark live activity", () => {
   it("shows the current tool in plain language", () => {
     expect(
       browserBenchmarkActivity([
-        {
-          data: {
-            actions: [
-              {
-                callId: "call_vault",
-                input: {},
-                kind: "tool-call",
-                toolName: "fill_from_vault",
-              },
-            ],
-            sequence: 0,
-            stepIndex: 1,
-            turnId: "turn_1",
-          },
-          meta: { at: "2026-08-31T17:00:00.000Z", id: "evt_vault" },
-          type: "actions.requested",
-        } satisfies MessageStreamEvent,
+        at(
+          toolRequested("call_vault", "fill_from_vault"),
+          "2026-08-31T17:00:00.000Z",
+          0
+        ),
       ])
     ).toBe("Securely filling saved user information");
+  });
+
+  it("joins calls requested on the same stored line", () => {
+    expect(
+      browserBenchmarkActivity([
+        at(
+          toolRequested("call_vault", "list_vault"),
+          "2026-08-31T17:00:00.000Z",
+          0
+        ),
+        at(
+          toolRequested("call_search", "web_search"),
+          "2026-08-31T17:00:00.000Z",
+          0,
+          1
+        ),
+      ])
+    ).toBe("Checking saved user information and Searching for live options");
   });
 
   it("prefers the latest visible progress message", () => {
     expect(
       browserBenchmarkActivity([
-        {
-          data: {
-            modelId: "test/model",
-            sequence: 0,
-            stepIndex: 0,
-            turnId: "turn_1",
+        at(modelStarted, "2026-08-31T17:00:00.000Z", 0),
+        at(
+          {
+            data: { delta: "Searching ", kind: "text", partId: "part_1" },
+            scope: { turnId: "turn_1" },
+            type: "content.delta",
           },
-          meta: { at: "2026-08-31T17:00:00.000Z", id: "evt_step" },
-          type: "step.started",
-        } satisfies MessageStreamEvent,
-        {
-          data: {
-            messageDelta: "Searching ",
-            sequence: 0,
-            stepIndex: 0,
-            turnId: "turn_1",
+          "2026-08-31T17:00:01.000Z",
+          1
+        ),
+        at(
+          {
+            data: {
+              delta: "current Brooklyn showtimes",
+              kind: "text",
+              partId: "part_1",
+            },
+            scope: { turnId: "turn_1" },
+            type: "content.delta",
           },
-          meta: { at: "2026-08-31T17:00:01.000Z", id: "evt_message" },
-          type: "message.appended",
-        } satisfies MessageStreamEvent,
-        {
-          data: {
-            messageDelta: "current Brooklyn showtimes",
-            sequence: 0,
-            stepIndex: 0,
-            turnId: "turn_1",
-          },
-          meta: { at: "2026-08-31T17:00:02.000Z", id: "evt_message_2" },
-          type: "message.appended",
-        } satisfies MessageStreamEvent,
+          "2026-08-31T17:00:02.000Z",
+          2
+        ),
       ])
     ).toBe("Searching current Brooklyn showtimes");
   });
 
   it("sums wall time by model and browser activity type", () => {
     const events = [
-      {
-        data: {
-          modelId: "test/model",
-          sequence: 0,
-          stepIndex: 0,
-          turnId: "turn_1",
-        },
-        meta: { at: "2026-08-31T17:00:00.000Z", id: "evt_step_1" },
-        type: "step.started",
-      },
-      {
-        data: {
-          actions: [
-            {
-              callId: "call_playwright",
-              input: {},
-              kind: "tool-call",
-              toolName: "playwright_execute",
-            },
-          ],
-          sequence: 1,
-          stepIndex: 0,
-          turnId: "turn_1",
-        },
-        meta: { at: "2026-08-31T17:00:01.000Z", id: "evt_action_1" },
-        type: "actions.requested",
-      },
-      {
-        data: {
-          result: {
+      at(modelStarted, "2026-08-31T17:00:00.000Z", 0),
+      at(
+        toolRequested("call_playwright", "playwright_execute"),
+        "2026-08-31T17:00:01.000Z",
+        1
+      ),
+      at(
+        {
+          data: {
             callId: "call_playwright",
-            kind: "tool-result",
+            outcome: "completed",
             output: { ok: true },
-            toolName: "playwright_execute",
           },
-          sequence: 2,
-          status: "completed",
-          stepIndex: 0,
-          turnId: "turn_1",
+          scope: { turnId: "turn_1" },
+          type: "call.settled",
         },
-        meta: { at: "2026-08-31T17:00:04.000Z", id: "evt_result_1" },
-        type: "action.result",
-      },
-      {
-        data: {
-          actions: [
-            {
-              callId: "call_semantic",
-              input: {},
-              kind: "tool-call",
-              toolName: "browser_act",
-            },
-          ],
-          sequence: 3,
-          stepIndex: 1,
-          turnId: "turn_1",
-        },
-        meta: { at: "2026-08-31T17:00:07.000Z", id: "evt_action_2" },
-        type: "actions.requested",
-      },
-    ] satisfies MessageStreamEvent[];
+        "2026-08-31T17:00:04.000Z",
+        2
+      ),
+      at(
+        toolRequested("call_semantic", "browser_act"),
+        "2026-08-31T17:00:07.000Z",
+        3
+      ),
+    ];
 
     expect(
       browserBenchmarkActivityDurations(
@@ -141,29 +132,33 @@ describe("browser benchmark live activity", () => {
   });
 
   it("finds the Kernel live browser stream from session creation", () => {
-    const event = {
-      data: {
-        result: {
-          callId: "call_browser",
-          kind: "tool-result",
-          output: {
-            browser: {
-              browser_live_view_url:
-                "https://live.kernel.test/browser/session-1",
+    const events = [
+      at(
+        toolRequested("call_browser", "manage_browsers"),
+        "2026-08-31T17:00:00.000Z",
+        0
+      ),
+      at(
+        {
+          data: {
+            callId: "call_browser",
+            outcome: "completed",
+            output: {
+              browser: {
+                browser_live_view_url:
+                  "https://live.kernel.test/browser/session-1",
+              },
             },
           },
-          toolName: "manage_browsers",
+          scope: { turnId: "turn_1" },
+          type: "call.settled",
         },
-        sequence: 0,
-        status: "completed",
-        stepIndex: 0,
-        turnId: "turn_1",
-      },
-      meta: { at: "2026-08-31T17:00:00.000Z", id: "evt_browser" },
-      type: "action.result",
-    } satisfies MessageStreamEvent;
+        "2026-08-31T17:00:01.000Z",
+        1
+      ),
+    ];
 
-    expect(browserBenchmarkLiveViewUrl([event])).toBe(
+    expect(browserBenchmarkLiveViewUrl(events)).toBe(
       "https://live.kernel.test/browser/session-1"
     );
   });

@@ -139,43 +139,35 @@ function defineShareContact() {
   });
 }
 
-export default defineDynamic({
-  events: {
-    "turn.started": (_event, context) => {
-      const isLinq = context.channel.kind === "channel:linq";
-      const send_message = defineSendMessage();
+export default defineDynamic((context) => {
+  const isLinq = context.channel.kind === "channel:linq";
+  const send_message = defineSendMessage();
 
-      const react_to_message = defineTool({
-        description: isLinq
-          ? "Add or remove a native iMessage Tapback on the user's current message. Use this instead of send_message when a reaction fully communicates a lightweight acknowledgement and words would add nothing. Supports thumbs_up, thumbs_down, heart, laugh, exclamation (emphasis), and question."
-          : "Acknowledge the user's current message with one compact reaction displayed in the conversation. Use this instead of send_message when the reaction fully communicates the response and words would add nothing. Supports thumbs_up, thumbs_down, heart, laugh, exclamation (emphasis), and question.",
-        inputSchema: isLinq
-          ? reactToMessageOutputSchema
-          : addReactionToMessageOutputSchema,
-        execute(reaction) {
-          return reaction;
-        },
-        toModelOutput() {
-          return toolOutput.text(
-            "The reaction was submitted to the active conversation. Do not repeat it in assistant text."
-          );
-        },
-      });
-
-      const interactive = {
-        react_to_message,
-        send_message,
-        share_contact: defineShareContact(),
-      };
-
-      type MessagingTools =
-        | typeof interactive
-        | { send_message: typeof send_message };
-
-      return resolveModeValue<MessagingTools>(context, {
-        interactive,
-        "scheduled-report": { send_message },
-      });
+  const react_to_message = defineTool({
+    description: isLinq
+      ? "Add or remove a native iMessage Tapback on the user's current message. Use this instead of send_message when a reaction fully communicates a lightweight acknowledgement and words would add nothing. Supports thumbs_up, thumbs_down, heart, laugh, exclamation (emphasis), and question."
+      : "Acknowledge the user's current message with one compact reaction displayed in the conversation. Use this instead of send_message when the reaction fully communicates the response and words would add nothing. Supports thumbs_up, thumbs_down, heart, laugh, exclamation (emphasis), and question.",
+    inputSchema: isLinq
+      ? reactToMessageOutputSchema
+      : addReactionToMessageOutputSchema,
+    execute(reaction) {
+      return reaction;
     },
-  },
+    toModelOutput() {
+      return toolOutput.text(
+        "The reaction was submitted to the active conversation. Do not repeat it in assistant text."
+      );
+    },
+  });
+
+  const interactive = {
+    react_to_message,
+    send_message,
+    share_contact: defineShareContact(),
+  };
+
+  return resolveModeValue(context, {
+    interactive,
+    "scheduled-report": { send_message },
+  });
 });

@@ -1,10 +1,6 @@
 "use client";
 
-import {
-  defaultMessageReducer,
-  type MessageStreamEvent,
-  type SubagentCalledStreamEvent,
-} from "eve/client";
+import { conversationOf, type SessionStreamEvent } from "eve/client";
 import { BotIcon, LoaderCircleIcon } from "lucide-react";
 import { useMemo } from "react";
 import { Shimmer } from "@web/components/ai-elements/shimmer";
@@ -18,10 +14,11 @@ import { Badge } from "@web/components/ui/badge";
 import { Button } from "@web/components/ui/button";
 import { getLatestTurnFailure } from "../../_lib/turn-failure";
 import { messageTimestamps } from "../../_lib/message-events";
-import type { SubagentStatus } from "@app/_lib/subagent-sessions";
+import type {
+  SubagentSession,
+  SubagentStatus,
+} from "@app/_lib/subagent-sessions";
 import { AgentMessage } from "../conversation/message";
-
-const messageReducer = defaultMessageReducer();
 
 export function SubagentTrace({
   events,
@@ -33,23 +30,16 @@ export function SubagentTrace({
   status,
   target,
 }: {
-  readonly events: readonly MessageStreamEvent[];
+  readonly events: readonly SessionStreamEvent[];
   readonly hasOlder: boolean;
   readonly isLoading: boolean;
   readonly isLoadingOlder: boolean;
   readonly loadOlder: () => Promise<void>;
   readonly streamError?: string;
   readonly status: SubagentStatus;
-  readonly target: SubagentCalledStreamEvent["data"];
+  readonly target: SubagentSession;
 }) {
-  const data = useMemo(
-    () =>
-      events.reduce(
-        (current, event) => messageReducer.reduce(current, event),
-        messageReducer.initial()
-      ),
-    [events]
-  );
+  const { messages } = useMemo(() => conversationOf(events), [events]);
   const timestamps = useMemo(() => messageTimestamps(events), [events]);
   const isRunning = status === "starting" || status === "working";
   const turnFailure = useMemo(() => getLatestTurnFailure(events), [events]);
@@ -91,17 +81,17 @@ export function SubagentTrace({
             {isLoadingOlder ? "Loading…" : "Load older messages"}
           </Button>
         ) : null}
-        {data.messages.map((message, index) => (
+        {messages.map((message, index) => (
           <AgentMessage
             canRespond={false}
-            isStreaming={isRunning && index === data.messages.length - 1}
+            isStreaming={isRunning && index === messages.length - 1}
             key={message.id}
             message={message}
-            onInputResponses={() => undefined}
+            onAnswers={() => undefined}
             timestamp={timestamps.get(message.id)}
           />
         ))}
-        {(isLoading || isRunning) && data.messages.length === 0 ? (
+        {(isLoading || isRunning) && messages.length === 0 ? (
           <Shimmer className="type-supporting-body" duration={1}>
             Loading task trace
           </Shimmer>

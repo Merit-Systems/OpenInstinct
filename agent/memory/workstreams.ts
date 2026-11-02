@@ -63,7 +63,7 @@ export default defineMemory({
     return interactiveWorkstreamScope(context)?.workspaceId ?? null;
   },
   provider: defineMemoryProvider({
-    recall: { "turn.started": recall, "compaction.completed": recall },
+    recall: { "turn.started": recall },
     async tools(context) {
       const scope = interactiveWorkstreamScope(context);
       if (!scope) return null;

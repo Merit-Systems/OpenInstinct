@@ -1,30 +1,34 @@
-import type { MessageStreamEvent } from "eve/client";
+import type { SessionStreamEvent } from "eve/client";
 import type { ChatUsage } from "@shared/chat/schema";
 
+/**
+ * Sums the session's `usage.recorded` spend: one record per model run, plus
+ * one per delegated call for what the called agent spent.
+ */
 export function summarizeChatUsage(
-  events: readonly MessageStreamEvent[]
+  events: readonly SessionStreamEvent[]
 ): ChatUsage {
   let costUsd = 0;
-  let completedSteps = 0;
+  let records = 0;
   let measuredCosts = 0;
   let inputTokens = 0;
   let outputTokens = 0;
 
   for (const event of events) {
-    if (event.type !== "step.completed") continue;
-    completedSteps += 1;
+    if (event.type !== "usage.recorded") continue;
+    const { usage } = event.data;
+    records += 1;
 
-    inputTokens += event.data.usage?.inputTokens ?? 0;
-    outputTokens += event.data.usage?.outputTokens ?? 0;
-    if (event.data.usage?.costUsd !== undefined) {
-      costUsd += event.data.usage.costUsd;
+    inputTokens += usage.inputTokens;
+    outputTokens += usage.outputTokens;
+    if (usage.costUsd !== undefined) {
+      costUsd += usage.costUsd;
       measuredCosts += 1;
     }
   }
 
   return {
-    costUsd:
-      completedSteps > 0 && measuredCosts === completedSteps ? costUsd : null,
+    costUsd: records > 0 && measuredCosts === records ? costUsd : null,
     inputTokens,
     outputTokens,
   };

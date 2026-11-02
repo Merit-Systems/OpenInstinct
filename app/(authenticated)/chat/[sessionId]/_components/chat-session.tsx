@@ -35,12 +35,14 @@ export function ChatSession({
         <ChatInput agent={agent} sessionId={sessionId} />
       </div>
       <SubagentPanel
+        childOpenings={agent.childOpenings}
         events={agent.events}
         historyComplete={!agent.hasOlder}
         initialUsage={initialUsage}
         onTraceViewChange={setTraceView}
         sessionId={sessionId}
         traceView={traceView}
+        view={agent.view}
       />
     </div>
   );

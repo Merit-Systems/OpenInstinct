@@ -1,7 +1,7 @@
-import type { ToolContext } from "eve/tools";
 import { describe, expect, it, vi } from "vitest";
 import type * as GmailModule from "@agent/lib/google-workspace/gmail";
 import type { updateGmail } from "@agent/lib/google-workspace/gmail";
+import { toolContextFor } from "@tests/helpers/tool-context";
 
 const gmail = vi.hoisted(() => ({
   update: vi
@@ -34,23 +34,9 @@ describe("Google Workspace tools", () => {
 });
 
 function toolContext() {
-  return {
-    abortSignal: new AbortController().signal,
+  return toolContextFor({
     callId: "call-1",
-    async getSandbox() {
-      throw new Error("Sandbox access is outside this focused test.");
-    },
-    async getToken() {
-      throw new Error("Token access is outside this focused test.");
-    },
-    requireAuth() {
-      throw new Error("Authorization is outside this focused test.");
-    },
-    session: {
-      auth: { current: null, initiator: null },
-      id: "session-1",
-      turn: { id: "turn-1", sequence: 0 },
-    },
+    sessionId: "session-1",
     toolName: "gmail-update",
-  } satisfies ToolContext;
+  });
 }

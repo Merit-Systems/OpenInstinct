@@ -1,4 +1,8 @@
-import type { Session } from "eve/channels";
+import {
+  SessionNotActiveError,
+  type Delivery,
+  type Session,
+} from "eve/sessions";
 import type { ScheduleHandlerArgs, ScheduleToFn } from "eve/schedules";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type {
@@ -63,7 +67,7 @@ describe("dynamic schedule dispatch", () => {
     services.claimRuns.mockResolvedValue([claim]);
     const send = vi
       .fn<ReturnType<ScheduleToFn>["send"]>()
-      .mockResolvedValue(workerSession());
+      .mockResolvedValue(acceptedDelivery());
     const to = vi.fn<ScheduleToFn>(() => ({ send }));
 
     await runSchedule(to);
@@ -92,7 +96,7 @@ describe("dynamic schedule dispatch", () => {
     services.claimRuns.mockResolvedValue([claim]);
     const send = vi
       .fn<ReturnType<ScheduleToFn>["send"]>()
-      .mockResolvedValue(workerSession());
+      .mockResolvedValue(acceptedDelivery());
     const to = vi.fn<ScheduleToFn>(() => ({ send }));
 
     await runSchedule(to);
@@ -111,7 +115,7 @@ describe("dynamic schedule dispatch", () => {
     services.claimReports.mockResolvedValue(report);
     const send = vi
       .fn<ReturnType<ScheduleToFn>["send"]>()
-      .mockResolvedValue(workerSession("main-session"));
+      .mockResolvedValue(acceptedDelivery("main-session"));
     const to = vi.fn<ScheduleToFn>(() => ({ send }));
 
     await runSchedule(to);
@@ -177,7 +181,7 @@ describe("scheduled report delivery", () => {
     services.claimReports.mockResolvedValue(report);
     const send = vi
       .fn<ReturnType<ScheduleToFn>["send"]>()
-      .mockResolvedValue(workerSession("main-session"));
+      .mockResolvedValue(acceptedDelivery("main-session"));
     const to = vi.fn<ScheduleToFn>(() => ({ send }));
     const attachSession = vi.fn<(sessionId: string) => Session>();
 
@@ -212,8 +216,8 @@ describe("scheduled report delivery", () => {
     report.job.conversationId = "web-session";
     services.claimReports.mockResolvedValue(report);
     const send = vi.fn<Session["send"]>();
-    const attached = workerSession("web-session", send);
-    send.mockResolvedValue({ sessionId: "web-session", status: "accepted" });
+    const attached = attachedSession("web-session", send);
+    send.mockResolvedValue(acceptedDelivery("web-session"));
     const attachSession = vi
       .fn<(sessionId: string) => Session>()
       .mockReturnValue(attached);
@@ -239,10 +243,10 @@ describe("scheduled report delivery", () => {
     services.claimReports.mockResolvedValue(report);
     const send = vi
       .fn<Session["send"]>()
-      .mockResolvedValue({ status: "session_not_active" });
+      .mockRejectedValue(new SessionNotActiveError());
     const attachSession = vi
       .fn<(sessionId: string) => Session>()
-      .mockReturnValue(workerSession("retired-session", send));
+      .mockReturnValue(attachedSession("retired-session", send));
 
     await dispatchScheduledReport(
       { attachSession, to: vi.fn<ScheduleToFn>() },
@@ -281,20 +285,26 @@ const resultOutcome = {
   urgency: "normal" as const,
 };
 
-function workerSession(
-  id = "worker-session",
-  send = vi.fn<Session["send"]>()
-): Session {
+function acceptedDelivery(sessionId = "worker-session"): Delivery {
+  return {
+    deliveryId: `${sessionId}-delivery`,
+    result: vi.fn<Delivery["result"]>(),
+    sessionId,
+    stream: vi.fn<Delivery["stream"]>(),
+  };
+}
+
+function attachedSession(id: string, send = vi.fn<Session["send"]>()): Session {
   return {
     cancel: vi.fn<Session["cancel"]>(),
     clear: vi.fn<Session["clear"]>(),
     compact: vi.fn<Session["compact"]>(),
-    getEventStream: vi.fn<Session["getEventStream"]>(),
-    getStreamTailIndex: vi.fn<Session["getStreamTailIndex"]>(),
+    end: vi.fn<Session["end"]>(),
     id,
-    reset: vi.fn<Session["reset"]>(),
+    prewarm: vi.fn<Session["prewarm"]>(),
     respond: vi.fn<Session["respond"]>(),
     send,
+    stream: vi.fn<Session["stream"]>(),
   };
 }
 

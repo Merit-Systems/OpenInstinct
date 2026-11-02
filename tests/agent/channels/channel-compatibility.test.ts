@@ -13,9 +13,9 @@ describe("compiled channel compatibility", () => {
     if (!isCompiledChannel(eve))
       throw new Error("Expected a compiled channel.");
 
-    expect(eve.adapter["action.result"]).toBeTypeOf("function");
-    expect(eve.adapter["message.completed"]).toBeTypeOf("function");
-    expect(eve.adapter["turn.failed"]).toBeTypeOf("function");
+    expect(eve.adapter["call.settled"]).toBeTypeOf("function");
+    expect(eve.adapter["turn.settled"]).toBeTypeOf("function");
+    expect(eve.adapter["session.ended"]).toBeTypeOf("function");
   });
 
   it.each([
@@ -29,9 +29,8 @@ describe("compiled channel compatibility", () => {
       const audience = channel.adapter.instrumentation?.audience;
       if (!audience) throw new Error("Expected a native audience classifier.");
       const input = {
-        channel: { kind: "http" },
+        channel: { kind: "channel:eve" },
         environment: "production",
-        mode: "conversation",
         caller: {
           type: "principal",
           principal: {
@@ -41,19 +40,12 @@ describe("compiled channel compatibility", () => {
           },
         },
         state: undefined,
-        // oxlint-disable-next-line typescript/no-deprecated -- Eve still requires the legacy field in the compiled adapter contract.
-        auth: {
-          attributes: {},
-          authenticator: "scheduled-worker",
-          principalType: "user",
-        },
       } satisfies AudienceContext<undefined>;
 
       expect(audience(input)).toBe("private");
-      expect(
-        // oxlint-disable-next-line typescript/no-deprecated -- Exercise anonymous projection of the compiled adapter contract.
-        audience({ ...input, auth: null, caller: { type: "anonymous" } })
-      ).toBe(anonymousAudience);
+      expect(audience({ ...input, caller: { type: "anonymous" } })).toBe(
+        anonymousAudience
+      );
     }
   );
 });

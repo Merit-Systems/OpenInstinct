@@ -1,5 +1,10 @@
-import type { DynamicResolveContext } from "eve";
+import type * as Eve from "eve";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  dynamicContextFor,
+  evaluateDynamic,
+  withEvaluableDynamic,
+} from "@tests/helpers/dynamic";
 import type { isScheduledAgentRunLeaseActive } from "@db/services/scheduled-agent-run-leases";
 import type { getGatewayModel } from "@db/services/settings";
 
@@ -8,6 +13,9 @@ const services = vi.hoisted(() => ({
   isActive: vi.fn<typeof isScheduledAgentRunLeaseActive>(),
 }));
 
+vi.mock("eve", async (importOriginal) =>
+  withEvaluableDynamic(await importOriginal<typeof Eve>())
+);
 vi.mock("@db/services/scheduled-agent-run-leases", () => ({
   isScheduledAgentRunLeaseActive: services.isActive,
 }));
@@ -32,10 +40,7 @@ describe("root agent model resolution", () => {
       return leaseToken === retryLeaseToken;
     });
 
-    const model = await agent.model.events["step.started"]?.(
-      {},
-      scheduledWorkerContext()
-    );
+    const model = await resolveModel();
 
     expect(services.isActive).toHaveBeenCalledExactlyOnceWith(
       runId,
@@ -51,42 +56,41 @@ describe("root agent model resolution", () => {
   it("rejects a scheduled worker after its lease is replaced", async () => {
     services.isActive.mockResolvedValue(false);
 
-    await expect(
-      agent.model.events["step.started"]?.({}, scheduledWorkerContext())
-    ).rejects.toThrow("The scheduled run lease is no longer active.");
+    await expect(resolveModel()).rejects.toThrow(
+      "The scheduled run lease is no longer active."
+    );
     expect(services.getModel).not.toHaveBeenCalled();
   });
 });
 
-function scheduledWorkerContext(): DynamicResolveContext {
-  return {
-    model: null,
-    channel: { kind: "http" },
-    messages: [],
-    session: {
-      auth: {
-        current: {
-          attributes: {
-            scheduledRunId: runId,
-            scheduledRunLeaseToken: retryLeaseToken,
-            workspaceId: "workspace-1",
-          },
-          authenticator: "scheduled-worker",
-          principalId: "user-1",
-          principalType: "user",
+async function resolveModel() {
+  return evaluateDynamic(agent.model, scheduledWorkerContext());
+}
+
+function scheduledWorkerContext() {
+  return dynamicContextFor({
+    auth: {
+      current: {
+        attributes: {
+          scheduledRunId: runId,
+          scheduledRunLeaseToken: retryLeaseToken,
+          workspaceId: "workspace-1",
         },
-        initiator: {
-          attributes: {
-            scheduledRunId: runId,
-            scheduledRunLeaseToken: oldLeaseToken,
-            workspaceId: "workspace-1",
-          },
-          authenticator: "scheduled-worker",
-          principalId: "user-1",
-          principalType: "user",
-        },
+        authenticator: "scheduled-worker",
+        principalId: "user-1",
+        principalType: "user",
       },
-      id: "worker-session",
+      initiator: {
+        attributes: {
+          scheduledRunId: runId,
+          scheduledRunLeaseToken: oldLeaseToken,
+          workspaceId: "workspace-1",
+        },
+        authenticator: "scheduled-worker",
+        principalId: "user-1",
+        principalType: "user",
+      },
     },
-  };
+    sessionId: "worker-session",
+  });
 }

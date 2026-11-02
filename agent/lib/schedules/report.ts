@@ -1,4 +1,5 @@
 import type { AttachSessionFn } from "eve/channels";
+import { SessionNotActiveError } from "eve/client";
 import type { ScheduleToFn } from "eve/schedules";
 import {
   claimScheduledReport,
@@ -51,23 +52,37 @@ export async function dispatchScheduledReport(
         channel: claimed.job.conversationChannel,
         reportSequence: claimed.run.reportSequence,
         runId: claimed.run.id,
-        sessionId: session.id,
+        sessionId: session.sessionId,
       });
       return;
     }
     if (!delivery.attachSession) {
       throw new Error("Eve debug reports require an active session handle.");
     }
-    const result = await delivery
-      .attachSession(claimed.job.conversationId)
-      .send(prompt, options);
-    if (result.status === "session_not_active") {
+    let accepted;
+    try {
+      accepted = await delivery
+        .attachSession(claimed.job.conversationId)
+        .send(prompt, options);
+    } catch (error) {
+      if (
+        !SessionNotActiveError.is(error) ||
+        error.code !== "session_not_active"
+      ) {
+        throw error;
+      }
       await finalizeScheduledReport(claimed.run.id, leaseToken, "suppressed");
+      console.info("[scheduled-run] report session is no longer active", {
+        channel: claimed.job.conversationChannel,
+        reportSequence: claimed.run.reportSequence,
+        runId: claimed.run.id,
+      });
+      return;
     }
     console.info("[scheduled-run] report turn accepted", {
       channel: claimed.job.conversationChannel,
+      deliveryId: accepted.deliveryId,
       reportSequence: claimed.run.reportSequence,
-      resultStatus: result.status,
       runId: claimed.run.id,
     });
   } catch (error) {

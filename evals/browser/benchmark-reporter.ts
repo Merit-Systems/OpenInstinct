@@ -3,7 +3,8 @@ import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import type { EveEvalResult, EveEvalRunSummary } from "eve/evals";
 import type { EvalReporter } from "eve/evals/reporters";
-import type { MessageStreamEvent } from "eve/client";
+import type { SessionStreamEvent } from "eve/client";
+import { emptySessionView, foldEvents } from "eve/events";
 import { z } from "zod";
 import { traceTimelineRows } from "@agent/subagents/browser-agent/lib/trace/timeline";
 import {
@@ -158,7 +159,7 @@ export const browserBenchmarkReporter: EvalReporter = {
 export async function reportBrowserBenchmarkActivity(
   taskName: string,
   sessionId: string,
-  events: readonly MessageStreamEvent[]
+  events: readonly SessionStreamEvent[]
 ) {
   const activity = browserBenchmarkActivity(events);
   const activityDurationsMs = browserBenchmarkActivityDurations(events);
@@ -195,7 +196,7 @@ export async function reportBrowserBenchmarkActivity(
 async function writeLiveTrace(
   taskName: string,
   sessionId: string,
-  events: readonly MessageStreamEvent[]
+  events: readonly SessionStreamEvent[]
 ) {
   const config = liveStatusConfig();
   if (!config || !/^[A-Za-z0-9._:-]+$/u.test(sessionId)) return;
@@ -203,11 +204,21 @@ async function writeLiveTrace(
   const tracePath = join(traceDirectory, `${sessionId}.json`);
   const temporaryPath = `${tracePath}.${String(process.pid)}.${randomUUID()}.tmp`;
   await mkdir(traceDirectory, { recursive: true });
+  const view = foldEvents(emptySessionView(), events);
   await writeFile(
     temporaryPath,
     `${JSON.stringify(
       {
-        events: events.flatMap((event) => traceTimelineRows(event)),
+        events: events.flatMap((event) =>
+          // Hooks never receive child.sent, so the trace timeline skips it.
+          event.type === "child.sent"
+            ? []
+            : traceTimelineRows(event, {
+                now: new Date(event.meta.at),
+                position: event.meta.position,
+                view,
+              })
+        ),
         sessionId,
         taskName,
         updatedAt: new Date().toISOString(),
@@ -227,10 +238,7 @@ function summarizeTaskResult(result: EveEvalResult, name: string) {
     elapsedMs(result.startedAt, result.completedAt)
   );
   const fallbackMessage =
-    result.result.finalMessage ??
-    result.error ??
-    result.skipReason ??
-    "No reply";
+    result.result.reply ?? result.error ?? result.skipReason ?? "No reply";
   const workerSession = result.result.sessions
     ?.filter((session) => !session.primary)
     .toSorted((left, right) => right.events.length - left.events.length)
@@ -275,12 +283,26 @@ function summarizeTaskResult(result: EveEvalResult, name: string) {
       0
     ),
     sessionId: result.result.sessionId ?? null,
-    status: result.result.status,
+    status: benchmarkTaskStatus(result.result.status),
     success: result.verdict === "passed",
     terminalMessage,
     toolCalls,
     verdict: result.verdict,
   };
+}
+
+function benchmarkTaskStatus(
+  status: EveEvalResult["result"]["status"]
+): BrowserBenchmark["tasks"][number]["status"] {
+  switch (status) {
+    case "completed":
+      return "completed";
+    case "failed":
+    case "cancelled":
+      return "failed";
+    default:
+      return "waiting";
+  }
 }
 
 async function buildBenchmark(

@@ -1,4 +1,5 @@
-import type { EveMessagePart } from "eve/react";
+import type { EveMessagePart, EveToolPart } from "eve/react";
+import type { ComponentProps } from "react";
 import { MessageResponse } from "@web/components/ai-elements/message";
 import {
   Reasoning,
@@ -13,26 +14,24 @@ import {
   ToolOutput,
 } from "@web/components/ai-elements/tool";
 import { AttachmentPart } from "./attachment";
-import { AuthorizationPrompt } from "./authorization";
-import { InputRequestActions, QuestionRequest } from "./input-request";
+import { InteractionActions, QuestionRequest } from "./interaction";
+import { SignInPrompt } from "./sign-in";
 import type { RespondToAgentInput } from "./types";
 
 export function AgentMessagePart({
   canRespond,
-  onInputResponses,
+  onAnswers,
   part,
   showCaret,
   userVisibleOnly,
 }: {
   readonly canRespond: boolean;
-  readonly onInputResponses: RespondToAgentInput;
+  readonly onAnswers: RespondToAgentInput;
   readonly part: EveMessagePart;
   readonly showCaret: boolean;
   readonly userVisibleOnly: boolean;
 }) {
   switch (part.type) {
-    case "step-start":
-      return null;
     case "text":
       return (
         <MessageResponse caret="block" isAnimating={showCaret}>
@@ -48,47 +47,66 @@ export function AgentMessagePart({
       );
     case "file":
       return <AttachmentPart part={part} />;
-    case "authorization":
-      return <AuthorizationPrompt part={part} />;
-    case "dynamic-tool": {
-      const inputRequest = part.toolMetadata?.eve?.inputRequest;
-      if (inputRequest?.kind === "question") {
+    case "interaction":
+      if (part.request.kind === "sign-in") {
+        return <SignInPrompt interaction={part} />;
+      }
+      if (part.request.kind === "question") {
         return (
           <QuestionRequest
             canRespond={canRespond}
-            inputRequest={inputRequest}
-            inputResponse={part.toolMetadata?.eve?.inputResponse}
-            onInputResponses={onInputResponses}
+            interaction={part}
+            onAnswers={onAnswers}
           />
         );
       }
-
-      if (userVisibleOnly && inputRequest) {
+      return (
+        <InteractionActions
+          canRespond={canRespond}
+          interaction={part}
+          onAnswers={onAnswers}
+        />
+      );
+    case "tool": {
+      const { interaction } = part;
+      if (interaction?.request.kind === "question") {
         return (
-          <InputRequestActions
+          <QuestionRequest
             canRespond={canRespond}
-            part={part}
-            onInputResponses={onInputResponses}
+            interaction={interaction}
+            onAnswers={onAnswers}
           />
         );
       }
 
+      if (userVisibleOnly && interaction) {
+        return (
+          <InteractionActions
+            canRespond={canRespond}
+            interaction={interaction}
+            onAnswers={onAnswers}
+          />
+        );
+      }
+
+      const status = toolStatus(part);
       return (
         <Tool
           defaultOpen={
-            part.state === "approval-requested" ||
-            part.state === "approval-responded"
+            status === "approval-requested" || status === "approval-responded"
           }
         >
-          <ToolHeader status={part.state} title={part.toolName} />
+          <ToolHeader status={status} title={part.name} />
           <ToolContent>
             <ToolInput input={part.input} />
-            <InputRequestActions
-              canRespond={canRespond}
-              part={part}
-              onInputResponses={onInputResponses}
-            />
-            <ToolOutput errorText={part.errorText} output={part.output} />
+            {interaction ? (
+              <InteractionActions
+                canRespond={canRespond}
+                interaction={interaction}
+                onAnswers={onAnswers}
+              />
+            ) : null}
+            <ToolOutput errorText={part.error?.message} output={part.output} />
           </ToolContent>
         </Tool>
       );
@@ -99,11 +117,37 @@ export function AgentMessagePart({
 
 export function partKey(part: EveMessagePart, index: number): string {
   switch (part.type) {
-    case "authorization":
-      return `authorization:${part.turnId}:${String(part.stepIndex)}:${part.name}`;
-    case "dynamic-tool":
-      return part.toolCallId;
+    case "interaction":
+      return `interaction:${part.interactionId}`;
+    case "tool":
+      return part.callId;
     default:
       return `${part.type}:${String(index)}`;
   }
+}
+
+type ToolStatus = NonNullable<ComponentProps<typeof ToolHeader>["status"]>;
+
+/** Maps eve's call state onto the AI SDK tool states the tool header presents. */
+function toolStatus(part: EveToolPart): ToolStatus {
+  switch (part.state) {
+    case "streaming":
+    case "requested":
+      return "input-streaming";
+    case "approval":
+      return part.interaction?.answer === undefined
+        ? "approval-requested"
+        : "approval-responded";
+    case "running":
+    case "blocked":
+      return "input-available";
+    case "completed":
+      return "output-available";
+    case "rejected":
+      return "output-denied";
+    case "failed":
+    case "cancelled":
+      return "output-error";
+  }
+  throw new Error("Unsupported tool call state.");
 }

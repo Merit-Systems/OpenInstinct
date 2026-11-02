@@ -206,8 +206,8 @@ function memoryToolsContext(
   initiator: MemoryToolsContext["session"]["auth"]["initiator"] = null
 ): MemoryToolsContext {
   return {
-    model: null,
-    channel: {},
+    abortSignal: new AbortController().signal,
+    channel: { kind: "channel:eve", metadata: {} },
     memory: {
       scope: {
         key: "personal-info-key",
@@ -216,12 +216,10 @@ function memoryToolsContext(
       },
       slot: "personal_info",
     },
-    messages: [],
     session: {
       auth: { current, initiator },
       id: "session",
     },
-    turn: { id: "turn", input: [], sequence: 1 },
   };
 }
 
@@ -231,7 +229,7 @@ function memoryContext(
 ): MemoryScopeContext {
   return {
     abortSignal: new AbortController().signal,
-    channel: {},
+    channel: { kind: "channel:eve", metadata: {} },
     session: {
       auth: { current, initiator },
       id: "session",

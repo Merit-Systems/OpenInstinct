@@ -1,6 +1,14 @@
 import { existsSync } from "node:fs";
 import { spawn } from "node:child_process";
-import { cp, mkdir, mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
+import {
+  cp,
+  mkdir,
+  mkdtemp,
+  readFile,
+  rm,
+  symlink,
+  writeFile,
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -18,9 +26,21 @@ try {
     join(root, "agent/tools/run_browser.ts"),
     join(fixture, "agent/tools/run_browser.ts")
   );
+  // Validate the production instruction contract against the installed runtime,
+  // rather than running the deterministic worker with a fixture-only prompt.
   await cp(
-    join(root, "agent/tools/task_cancel.ts"),
-    join(fixture, "agent/tools/task_cancel.ts")
+    join(root, "agent/subagents/browser-agent/instructions.md"),
+    join(fixture, "agent/subagents/browser-agent/instructions.md")
+  );
+  await writeFile(
+    join(fixture, "agent/instructions.md"),
+    [
+      await readFile(join(fixture, "agent/instructions.md"), "utf8"),
+      await readFile(
+        join(root, "agent/instructions/content/worker-coordination.md"),
+        "utf8"
+      ),
+    ].join("\n\n")
   );
   await symlink(
     join(root, "node_modules"),

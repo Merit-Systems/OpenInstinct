@@ -1,13 +1,13 @@
-import type { MessageStreamEvent } from "eve/client";
+import type { SessionStreamEvent } from "eve/client";
 import { describe, expect, it } from "vitest";
 import { combineChatUsage, summarizeChatUsage } from "./chat-usage";
 
 describe("chat usage", () => {
-  it("sums token and complete cost usage across model steps", () => {
+  it("sums token and complete cost usage across usage records", () => {
     expect(
       summarizeChatUsage([
-        completedStep("event-1", 1200, 300, 0.012),
-        completedStep("event-2", 800, 200, 0.008),
+        usageRecorded("run-1", 1200, 300, 0.012),
+        usageRecorded("run-2", 800, 200, 0.008),
       ])
     ).toEqual({ costUsd: 0.02, inputTokens: 2000, outputTokens: 500 });
   });
@@ -15,8 +15,8 @@ describe("chat usage", () => {
   it("does not present a partial model cost as the chat total", () => {
     expect(
       summarizeChatUsage([
-        completedStep("event-1", 1200, 300, 0.012),
-        completedStep("event-2", 800, 200),
+        usageRecorded("run-1", 1200, 300, 0.012),
+        usageRecorded("run-2", 800, 200),
       ])
     ).toEqual({ costUsd: null, inputTokens: 2000, outputTokens: 500 });
   });
@@ -40,21 +40,30 @@ describe("chat usage", () => {
   });
 });
 
-function completedStep(
-  id: string,
+function usageRecorded(
+  runId: string,
   inputTokens: number,
   outputTokens: number,
   costUsd?: number
-): MessageStreamEvent {
+): SessionStreamEvent {
   return {
     data: {
-      finishReason: "stop",
-      sequence: 1,
-      stepIndex: 0,
-      turnId: "turn-1",
-      usage: { costUsd, inputTokens, outputTokens },
+      kind: "model",
+      owner: { runId },
+      usage: {
+        cacheReadTokens: 0,
+        cacheWriteTokens: 0,
+        costUsd,
+        inputTokens,
+        outputTokens,
+      },
     },
-    meta: { at: "2026-08-26T00:00:00.000Z", id },
-    type: "step.completed",
+    meta: {
+      at: "2026-08-26T00:00:00.000Z",
+      endOfLine: true,
+      position: { index: 0, line: 0 },
+    },
+    scope: { runId, turnId: "turn-1" },
+    type: "usage.recorded",
   };
 }

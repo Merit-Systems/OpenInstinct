@@ -1,163 +1,189 @@
-import { Client, type MessageStreamEvent } from "eve/client";
-import { z } from "zod";
+import type { SessionStreamEvent } from "eve/client";
+import type { SessionReader } from "eve/sessions";
 
-const eventsPerRead = 128;
-const messagesPerPage = 4;
-const tailIndexHeader = "x-eve-stream-tail-index";
-const client = new Client({ host: "" });
-const messageStreamEventSchema = z.custom<MessageStreamEvent>(
-  (value) =>
-    z
-      .object({
-        data: z.unknown(),
-        meta: z.object({ at: z.string(), id: z.string() }).loose(),
-        type: z.string(),
-      })
-      .loose()
-      .safeParse(value).success
-);
+const linesPerRead = 128;
+const turnsPerPage = 4;
 
+/** A contiguous window of a session's stream, addressed by stored line. */
 export interface SessionHistoryPage {
+  /** The next line to read after this page. */
   readonly endIndex: number;
-  readonly events: readonly MessageStreamEvent[];
+  readonly events: readonly SessionStreamEvent[];
+  /** Recorded child relationships survive trimming the visible transcript. */
+  readonly childOpenings: readonly Extract<
+    SessionStreamEvent,
+    { type: "child.opened" }
+  >[];
+  /** The first line this page holds. */
   readonly startIndex: number;
 }
 
 export async function readLatestSessionHistory(
-  sessionId: string,
+  reader: SessionReader,
   signal?: AbortSignal
 ): Promise<SessionHistoryPage> {
-  const response = await fetch(
-    sessionStreamUrl(sessionId, {
-      includeTailIndex: true,
-      startIndex: -eventsPerRead,
-    }),
-    { cache: "no-store", signal }
-  );
-  if (!response.ok) throw await streamResponseError(response);
+  const events = await readLines(reader, -linesPerRead, undefined, signal);
+  const last = events.at(-1);
+  const endIndex = last ? lineAfter(last) : 0;
+  const startIndex = events[0]?.meta.position.line ?? endIndex;
 
-  const tailIndex = readTailIndex(response);
-  const latestEvents = await readNdjsonEvents(response);
-  const endIndex = tailIndex + 1;
-  const startIndex = Math.max(0, endIndex - latestEvents.length);
-
-  return await extendToMessageBoundary(
-    { endIndex, events: latestEvents, startIndex },
-    sessionId,
+  const page = await extendToTurnBoundary(
+    { childOpenings: [], endIndex, events, startIndex },
+    reader,
     signal
   );
+  return await retainChildOpenings(page, reader, events, signal);
 }
 
 export async function readOlderSessionHistory(
-  sessionId: string,
+  reader: SessionReader,
   before: number,
   signal?: AbortSignal
 ): Promise<SessionHistoryPage> {
-  return await extendToMessageBoundary(
-    { endIndex: before, events: [], startIndex: before },
-    sessionId,
+  const page = await extendToTurnBoundary(
+    { childOpenings: [], endIndex: before, events: [], startIndex: before },
+    reader,
     signal
   );
+  return await retainChildOpenings(page, reader, [], signal);
 }
 
-async function extendToMessageBoundary(
+/** The line a reader resumes from after `event`, once its line is complete. */
+function lineAfter(event: SessionStreamEvent) {
+  return event.meta.next ?? event.meta.position.line + 1;
+}
+
+/** Appends streamed events once each, keyed by their stored position. */
+export function appendHistoryEvent(
+  page: SessionHistoryPage,
+  event: SessionStreamEvent
+): SessionHistoryPage {
+  const endIndex =
+    event.meta.endOfLine === false
+      ? page.endIndex
+      : Math.max(page.endIndex, lineAfter(event));
+  const { line, index } = event.meta.position;
+  const known = page.events.some(
+    (candidate) =>
+      candidate.meta.position.line === line &&
+      candidate.meta.position.index === index
+  );
+  const childOpenings =
+    event.type === "child.opened"
+      ? [
+          ...page.childOpenings.filter(
+            (opened) => opened.data.sessionId !== event.data.sessionId
+          ),
+          event,
+        ]
+      : page.childOpenings;
+  return known
+    ? { ...page, endIndex }
+    : { ...page, childOpenings, endIndex, events: [...page.events, event] };
+}
+
+async function extendToTurnBoundary(
   initial: SessionHistoryPage,
-  sessionId: string,
+  reader: SessionReader,
   signal?: AbortSignal
 ) {
   let page = initial;
 
   while (
     page.startIndex > 0 &&
-    receivedMessageCount(page.events) < messagesPerPage
+    startedTurnLines(page.events).length < turnsPerPage
   ) {
+    const from = Math.max(0, page.startIndex - linesPerRead);
     /* oxlint-disable-next-line eslint/no-await-in-loop -- Each backward read starts at the cursor returned by the preceding read. */
-    const older = await readEventChunk(sessionId, page.startIndex, signal);
+    const older = await readLines(reader, from, page.startIndex, signal);
     page = {
+      childOpenings: [
+        ...page.childOpenings,
+        ...older.filter((event) => event.type === "child.opened"),
+      ],
       endIndex: page.endIndex,
-      events: [...older.events, ...page.events],
-      startIndex: older.startIndex,
+      events: [...older, ...page.events],
+      startIndex: from,
     };
   }
 
-  const messageIndexes = page.events.flatMap((event, index) =>
-    event.type === "message.received" ? [index] : []
-  );
-  const firstMessage = messageIndexes.at(-messagesPerPage);
-  if (firstMessage === undefined || firstMessage === 0) return page;
+  // Start the page on a whole turn, so the fold sees each turn it renders open.
+  const firstTurnLine = startedTurnLines(page.events).at(-turnsPerPage);
+  if (firstTurnLine === undefined || firstTurnLine <= page.startIndex) {
+    return page;
+  }
 
   return {
     ...page,
-    events: page.events.slice(firstMessage),
-    startIndex: page.startIndex + firstMessage,
+    childOpenings: [
+      ...page.childOpenings,
+      ...page.events.filter((event) => event.type === "child.opened"),
+    ],
+    events: page.events.filter(
+      (event) => event.meta.position.line >= firstTurnLine
+    ),
+    startIndex: firstTurnLine,
   };
 }
 
-async function readEventChunk(
-  sessionId: string,
-  before: number,
+async function readLines(
+  reader: SessionReader,
+  startIndex: number,
+  before: number | undefined,
   signal?: AbortSignal
-): Promise<SessionHistoryPage> {
-  const startIndex = Math.max(0, before - eventsPerRead);
-  const eventLimit = before - startIndex;
-  const session = client.sessions.attach(sessionId, {
-    streamIndex: startIndex,
-  });
-  const events: MessageStreamEvent[] = [];
+) {
+  const events: SessionStreamEvent[] = [];
 
-  for await (const event of session.stream({
+  for await (const event of reader.stream({
     follow: false,
     signal,
     startIndex,
   })) {
+    if (before !== undefined && event.meta.position.line >= before) break;
     events.push(event);
-    if (events.length === eventLimit) break;
   }
 
-  return { endIndex: before, events, startIndex };
-}
-
-function receivedMessageCount(events: readonly MessageStreamEvent[]) {
-  return events.reduce(
-    (count, event) => count + Number(event.type === "message.received"),
-    0
-  );
-}
-
-function sessionStreamUrl(
-  sessionId: string,
-  options: { readonly includeTailIndex: boolean; readonly startIndex: number }
-) {
-  const search = new URLSearchParams({
-    startIndex: options.startIndex.toString(),
-  });
-  if (options.includeTailIndex) search.set("includeTailIndex", "1");
-  return `/eve/v1/session/${encodeURIComponent(sessionId)}/stream?${search}`;
-}
-
-function readTailIndex(response: Response) {
-  const value = response.headers.get(tailIndexHeader);
-  const index = value === null ? Number.NaN : Number(value);
-  if (!Number.isSafeInteger(index) || index < -1) {
-    throw new Error("The session stream did not report a valid tail index.");
-  }
-  return index;
-}
-
-async function readNdjsonEvents(response: Response) {
-  const body = await response.text();
-  const events: MessageStreamEvent[] = [];
-  for (const line of body.split("\n")) {
-    if (!line.trim()) continue;
-    events.push(messageStreamEventSchema.parse(JSON.parse(line)));
-  }
   return events;
 }
 
-async function streamResponseError(response: Response) {
-  const body = await response.text();
-  return new Error(
-    body.trim() ||
-      `Unable to read the session stream (${String(response.status)}).`
+function startedTurnLines(events: readonly SessionStreamEvent[]) {
+  return events.flatMap((event) =>
+    event.type === "turn.started" ? [event.meta.position.line] : []
   );
+}
+
+/** Resolve relationships needed by recent calls without rendering older transcript turns. */
+export async function retainChildOpenings(
+  page: SessionHistoryPage,
+  reader: SessionReader,
+  seed: readonly SessionStreamEvent[],
+  signal?: AbortSignal
+): Promise<SessionHistoryPage> {
+  const needed = new Set(
+    page.events.flatMap((event) =>
+      event.type === "child.sent" || event.type === "child.opened"
+        ? [event.data.sessionId]
+        : []
+    )
+  );
+  const openings = new Map<
+    string,
+    SessionHistoryPage["childOpenings"][number]
+  >();
+  const collect = (events: readonly SessionStreamEvent[]) => {
+    for (const event of events) {
+      if (event.type === "child.opened" && needed.has(event.data.sessionId)) {
+        openings.set(event.data.sessionId, event);
+      }
+    }
+  };
+  collect([...seed, ...page.childOpenings, ...page.events]);
+  let before = page.startIndex;
+  while (before > 0 && openings.size < needed.size) {
+    const from = Math.max(0, before - linesPerRead);
+    // oxlint-disable-next-line eslint/no-await-in-loop -- Resolve older relationships through bounded backward reads.
+    collect(await readLines(reader, from, before, signal));
+    before = from;
+  }
+  return { ...page, childOpenings: [...openings.values()] };
 }

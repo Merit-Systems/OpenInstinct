@@ -49,16 +49,12 @@ export function resolveProfileMemoryScope(context: MemoryScopeContext) {
 }
 
 export function preserveProfileMemoryCancellation(provider: MemoryProvider) {
-  const compactionRecall = provider.recall["compaction.completed"];
+  // eve recalls memory before each turn, outside the history compaction rewrites.
   return defineMemoryProvider({
     ...provider,
     recall: {
       "turn.started": (context) =>
         recallWithCancellationReason(provider.recall["turn.started"], context),
-      "compaction.completed": (context) =>
-        compactionRecall
-          ? recallWithCancellationReason(compactionRecall, context)
-          : undefined,
     },
   });
 }

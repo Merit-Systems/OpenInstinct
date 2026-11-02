@@ -1,4 +1,5 @@
 import type { LinqChannelConfig } from "eve/channels/linq";
+import type { CallSettled, InteractionOpened, JsonValue } from "eve/events";
 import {
   createLinqAdapter,
   type LinqSendOptions,
@@ -9,6 +10,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type * as Blob from "@vercel/blob";
 import type * as EnvModule from "@shared/environment";
 import { sendMessageOutputSchema } from "@shared/chat/message-delivery";
+import { viewOf } from "@tests/helpers/session-view";
 import type { AccessScope } from "@shared/identity/access-scope";
 import type {
   finalizeScheduledReport,
@@ -146,17 +148,57 @@ vi.mock("@vercel/blob", async (importOriginal) => {
     },
   };
 });
-const handleActionResult = linqChannelCapture.config?.events?.["action.result"];
-if (!handleActionResult) {
-  throw new Error("The Linq channel must configure action result delivery.");
+const configuredCallSettled =
+  linqChannelCapture.config?.events?.["call.settled"];
+if (!configuredCallSettled) {
+  throw new Error("The Linq channel must configure call result delivery.");
 }
-const handleAuthorizationRequired =
-  linqChannelCapture.config?.events?.["authorization.required"];
-if (!handleAuthorizationRequired) {
-  throw new Error("The Linq channel must configure authorization delivery.");
+const handleCallSettled = configuredCallSettled;
+const configuredInteractionOpened =
+  linqChannelCapture.config?.events?.["interaction.opened"];
+if (!configuredInteractionOpened) {
+  throw new Error("The Linq channel must configure sign-in delivery.");
+}
+const handleInteractionOpened = configuredInteractionOpened;
+
+type CallHandlerContext = Parameters<typeof handleCallSettled>[1];
+type LinqEventChannel = CallHandlerContext["channel"];
+type LinqSessionContext = Omit<
+  CallHandlerContext,
+  "channel" | "position" | "view"
+>;
+
+interface SettledToolCall {
+  readonly event: CallSettled;
+  readonly view: CallHandlerContext["view"];
 }
 
-type ActionHandlerParameters = Parameters<typeof handleActionResult>;
+/** Delivers a settled call the way eve does: the view names the call's tool. */
+function handleActionResult(
+  result: SettledToolCall,
+  channel: LinqEventChannel,
+  session: LinqSessionContext
+) {
+  return handleCallSettled(result.event, {
+    ...session,
+    channel,
+    position: { index: 0, line: 3 },
+    view: result.view,
+  });
+}
+
+function handleAuthorizationRequired(
+  event: InteractionOpened,
+  channel: LinqEventChannel,
+  session: LinqSessionContext
+) {
+  return handleInteractionOpened(event, {
+    ...session,
+    channel,
+    position: { index: 0, line: 3 },
+    view: viewOf([]),
+  });
+}
 
 interface LinqTestMessage {
   readonly attachments?: readonly {
@@ -196,7 +238,7 @@ describe("Linq message delivery", () => {
   });
 
   it("does not register automatic assistant text posting", () => {
-    expect(linqChannelCapture.config?.events?.["message.completed"]).toBeTypeOf(
+    expect(linqChannelCapture.config?.events?.["content.completed"]).toBeTypeOf(
       "function"
     );
   });
@@ -220,7 +262,7 @@ describe("Linq message delivery", () => {
   });
 
   it("does not resend share_contact output from the channel event", async () => {
-    const event = sendMessageResult({
+    const event = settledToolCall("share_contact", {
       kind: "message",
       text: "Save my contact.",
       attachments: [
@@ -230,9 +272,6 @@ describe("Linq message delivery", () => {
         },
       ],
     });
-    if (event.result.kind !== "tool-result")
-      throw new Error("Expected tool result.");
-    event.result.toolName = "share_contact";
     const { context, post } = handlerContext();
     await handleActionResult(event, context, sessionContext());
     expect(post).not.toHaveBeenCalled();
@@ -251,7 +290,7 @@ describe("Linq message delivery", () => {
       "chat-1",
       {
         message: {
-          idempotency_key: "authorization:session-1:auth-attempt:prompt",
+          idempotency_key: "authorization:session-1:sign-in-1:prompt",
           parts: [
             {
               type: "text",
@@ -268,7 +307,7 @@ describe("Linq message delivery", () => {
       "chat-1",
       {
         message: {
-          idempotency_key: "authorization:session-1:auth-attempt:link",
+          idempotency_key: "authorization:session-1:sign-in-1:link",
           parts: [
             {
               type: "link",
@@ -280,9 +319,6 @@ describe("Linq message delivery", () => {
       },
       undefined
     );
-    expect(context.state.pendingAuthMessageIds).toEqual({
-      link: "native-text-message",
-    });
     expect(post).not.toHaveBeenCalled();
   });
 
@@ -296,10 +332,10 @@ describe("Linq message delivery", () => {
         ([, body]) => body.message.idempotency_key
       )
     ).toEqual([
-      "authorization:session-1:auth-attempt:prompt",
-      "authorization:session-1:auth-attempt:link",
-      "authorization:session-1:auth-attempt:prompt",
-      "authorization:session-1:auth-attempt:link",
+      "authorization:session-1:sign-in-1:prompt",
+      "authorization:session-1:sign-in-1:link",
+      "authorization:session-1:sign-in-1:prompt",
+      "authorization:session-1:sign-in-1:link",
     ]);
   });
 
@@ -327,7 +363,10 @@ describe("Linq message delivery", () => {
   it("keeps delegated authorization challenges out of the root conversation", async () => {
     const { context, post } = handlerContext();
     await handleAuthorizationRequired(
-      { ...authorizationEvent(), candidateId: "worker" },
+      authorizationEvent({
+        interactionId: "worker-sign-in",
+        sessionId: "worker-session",
+      }),
       context,
       sessionContext()
     );
@@ -1066,42 +1105,47 @@ describe("Linq message delivery", () => {
   });
 });
 
-function sendMessageResult(
-  output: ActionHandlerParameters[0]["result"] extends { output: infer Output }
-    ? Output
-    : never
-): ActionHandlerParameters[0] {
+function settledToolCall(toolName: string, output: JsonValue): SettledToolCall {
+  const callId = `call-${toolName}`;
   return {
-    result: {
-      callId: "call-send-message",
-      kind: "tool-result",
-      output,
-      toolName: "send_message",
+    event: {
+      data: { callId, outcome: "completed", output },
+      scope: { runId: "run-1", turnId: "turn-1" },
+      type: "call.settled",
     },
-    sequence: 0,
-    status: "completed",
-    stepIndex: 0,
-    turnId: "turn-1",
+    view: viewOf([
+      [
+        {
+          data: {
+            cause: { deliveryId: "delivery-1" },
+            follows: null,
+            turnId: "turn-1",
+          },
+          type: "turn.started",
+        },
+      ],
+      [
+        {
+          data: {
+            callId,
+            capability: { kind: "tool", name: toolName },
+            input: output,
+            owner: { runId: "run-1" },
+          },
+          scope: { runId: "run-1", turnId: "turn-1" },
+          type: "call.requested",
+        },
+      ],
+    ]),
   };
 }
 
-function reactToMessageResult(
-  output: ActionHandlerParameters[0]["result"] extends { output: infer Output }
-    ? Output
-    : never
-): ActionHandlerParameters[0] {
-  return {
-    result: {
-      callId: "call-react-to-message",
-      kind: "tool-result",
-      output,
-      toolName: "react_to_message",
-    },
-    sequence: 0,
-    status: "completed",
-    stepIndex: 0,
-    turnId: "turn-1",
-  };
+function sendMessageResult(output: JsonValue) {
+  return settledToolCall("send_message", output);
+}
+
+function reactToMessageResult(output: JsonValue) {
+  return settledToolCall("react_to_message", output);
 }
 
 function handlerContext(currentMessageId: string | null = "message-1") {
@@ -1148,30 +1192,36 @@ function handlerContext(currentMessageId: string | null = "message-1") {
   };
 }
 
-function authorizationEvent(): Parameters<
-  NonNullable<typeof handleAuthorizationRequired>
->[0] {
+function authorizationEvent(
+  origin?: Readonly<{ interactionId: string; sessionId: string }>
+): InteractionOpened {
   return {
-    name: "link",
-    description: "Authorization required for Link wallet",
-    attemptId: "auth-attempt",
-    authorization: {
-      displayName: "Link wallet",
-      instructions:
-        "Connect your Link wallet to continue.\n\nPurchases require separate approval.",
-      url: "https://example.com/api/link?attempt=00000000-0000-4000-8000-000000000001",
+    data: {
+      interactionId: "sign-in-1",
+      origin,
+      request: {
+        kind: "sign-in",
+        prompt: "Authorization required for Link wallet",
+        signIn: {
+          displayName: "Link wallet",
+          instructions:
+            "Connect your Link wallet to continue.\n\nPurchases require separate approval.",
+          name: "link",
+          url: "https://example.com/api/link?attempt=00000000-0000-4000-8000-000000000001",
+        },
+      },
+      subject: { turnId: "turn-1" },
     },
-    sequence: 0,
-    stepIndex: 0,
-    turnId: "turn-1",
+    scope: { turnId: "turn-1" },
+    type: "interaction.opened",
   };
 }
 
 // oxlint-disable-next-line anti-slop/no-unknown-parameters -- This test adapter deliberately accepts a focused structural fixture.
-function handlerEventContext(value: unknown): ActionHandlerParameters[1] {
+function handlerEventContext(value: unknown): LinqEventChannel {
   // SAFETY: Callers provide every Linq context field exercised by these focused handlers.
   // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- A complete Chat SDK bot mock would add 97 unrelated methods.
-  return value as ActionHandlerParameters[1];
+  return value as LinqEventChannel;
 }
 
 function sessionContext(
@@ -1219,5 +1269,5 @@ function sessionContext(
       id: "session-1",
       turn: { id: "turn-1", sequence: 0 },
     },
-  } satisfies ActionHandlerParameters[2];
+  } satisfies LinqSessionContext;
 }

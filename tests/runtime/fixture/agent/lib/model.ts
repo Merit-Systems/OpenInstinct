@@ -21,12 +21,26 @@ export function fixtureModel(worker: boolean) {
         .some((message) => message.role === "tool");
       let toolName: string | undefined;
       let input = "{}";
+      const instructions = prompt
+        .filter((message) => message.role === "system")
+        .map((message) => message.content)
+        .join("\n");
+      if (instructions.includes("`final_output`")) {
+        throw new Error(
+          "Production instructions reference an unavailable completion tool."
+        );
+      }
       if (worker) {
+        if (!instructions.includes("structured completion tool Eve supplies")) {
+          throw new Error(
+            "The runtime fixture must exercise the production completion instructions."
+          );
+        }
         toolName =
           text.includes("Wait for cancellation") && !returned
             ? "wait_for_cancellation"
-            : "final_output";
-        if (toolName === "final_output")
+            : "eve__reply";
+        if (toolName === "eve__reply")
           input = JSON.stringify({
             status: "success",
             message: "Verified fixture outcome",
@@ -41,12 +55,12 @@ export function fixtureModel(worker: boolean) {
         };
         input = JSON.stringify(
           text.startsWith("Resume:")
-            ? { ...assignment, agentId: text.slice(7) }
+            ? { ...assignment, taskId: text.slice(7) }
             : assignment
         );
       } else if (!returned && text.startsWith("Cancel:")) {
-        toolName = "task_cancel";
-        input = JSON.stringify({ taskIds: [text.slice(7)] });
+        toolName = "eve__task_cancel";
+        input = JSON.stringify({ taskId: text.slice(7) });
       }
       if (toolName && !tools?.some((tool) => tool.name === toolName))
         throw new Error(`Missing fixture tool: ${toolName}`);
