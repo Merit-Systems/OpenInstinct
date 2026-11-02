@@ -23,6 +23,7 @@ export function ActivityCard({
   statuses,
   traceView,
   usage,
+  usageLabel,
   workingCount,
 }: {
   readonly doneCount: number;
@@ -33,6 +34,7 @@ export function ActivityCard({
   readonly statuses: ReadonlyMap<string, SubagentStatus>;
   readonly traceView: TraceView;
   readonly usage: ChatUsage;
+  readonly usageLabel: string;
   readonly workingCount: number;
 }) {
   return (
@@ -57,7 +59,7 @@ export function ActivityCard({
           </Field>
           <div className="flex items-center gap-4">
             <span className="type-supporting-body">
-              <span className="font-[300]">Usage</span>
+              <span className="font-[300]">{usageLabel}</span>
             </span>
             <span className="ml-auto type-caption text-muted-foreground tabular-nums">
               {formatChatUsage(usage)}

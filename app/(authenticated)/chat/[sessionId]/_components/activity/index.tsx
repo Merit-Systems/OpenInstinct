@@ -55,7 +55,7 @@ export function SubagentPanel({
     () => collectSubagentSessions(events, view, childOpenings),
     [childOpenings, events, view]
   );
-  const usage = useChatUsage({
+  const { usage, label: usageLabel } = useChatUsage({
     events,
     historyComplete,
     initialUsage,
@@ -127,6 +127,7 @@ export function SubagentPanel({
       statuses={statuses}
       traceView={traceView}
       usage={usage}
+      usageLabel={usageLabel}
       workingCount={workingCount}
     />
   );

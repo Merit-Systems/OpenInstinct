@@ -130,6 +130,13 @@ export function ChatConversation({
                     userVisibleOnly
                   />
                 ))}
+                <AgentMessage
+                  canRespond={!isBusy && agent.status !== "resuming"}
+                  isStreaming={false}
+                  message={message}
+                  onAnswers={(answers) => agent.respond(answers)}
+                  userVisibleOnly
+                />
               </Fragment>
             );
           }
@@ -149,9 +156,7 @@ export function ChatConversation({
           );
         })}
         {showPendingThinking ? <PendingThinking /> : null}
-        {traceView === "trace" && errorMessage ? (
-          <ErrorMessage message={errorMessage} />
-        ) : null}
+        {errorMessage ? <ErrorMessage message={errorMessage} /> : null}
       </ConversationContent>
       <ConversationScrollButton />
     </Conversation>

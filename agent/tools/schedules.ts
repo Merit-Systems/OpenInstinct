@@ -102,7 +102,7 @@ export const answerSchedule = defineTool({
         runId: pending.runId,
       }
     );
-    if (!response.ok) {
+    if (response.status !== 202) {
       throw new Error(
         response.status === 422
           ? "That answer does not match the pending choices."

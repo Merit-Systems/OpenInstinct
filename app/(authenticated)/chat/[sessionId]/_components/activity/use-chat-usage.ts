@@ -1,6 +1,9 @@
 import type { SessionStreamEvent } from "eve/client";
 import { useEffect, useMemo, useRef } from "react";
-import { summarizeChatUsage } from "../../../_lib/chat-usage";
+import {
+  chatUsageSnapshot,
+  summarizeChatUsage,
+} from "../../../_lib/chat-usage";
 import type { ChatUsage } from "@shared/chat/schema";
 import { api } from "@web/trpc/client";
 
@@ -18,10 +21,11 @@ export function useChatUsage({
   const { mutate: saveChat } = api.chats.save.useMutation();
   const persistedTurn = useRef<string | undefined>(undefined);
   const measuredUsage = useMemo(() => summarizeChatUsage(events), [events]);
-  const usage = useMemo(
-    () => preferCompleteUsage(measuredUsage, initialUsage),
-    [initialUsage, measuredUsage]
+  const snapshot = useMemo(
+    () => chatUsageSnapshot(measuredUsage, initialUsage, historyComplete),
+    [historyComplete, initialUsage, measuredUsage]
   );
+  const { usage } = snapshot;
   const latestSettledTurn = events.findLast(
     (event) => event.type === "turn.settled"
   );
@@ -45,12 +49,5 @@ export function useChatUsage({
     saveChat({ sessionId, usage });
   }, [historyComplete, latestTerminalTurnId, saveChat, sessionId, usage]);
 
-  return usage;
-}
-
-function preferCompleteUsage(measured: ChatUsage, initial?: ChatUsage) {
-  if (initial === undefined) return measured;
-  const initialTokens = initial.inputTokens + initial.outputTokens;
-  const measuredTokens = measured.inputTokens + measured.outputTokens;
-  return measuredTokens >= initialTokens ? measured : initial;
+  return snapshot;
 }

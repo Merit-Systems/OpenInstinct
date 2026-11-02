@@ -78,3 +78,15 @@ export function formatChatUsage(usage: ChatUsage) {
 
   return `${tokenLabel} · ${costLabel}`;
 }
+
+/** A paged window cannot replace a saved total, even when it contains more tokens. */
+export function chatUsageSnapshot(
+  measured: ChatUsage,
+  initial: ChatUsage | undefined,
+  historyComplete: boolean
+) {
+  if (historyComplete) return { usage: measured, label: "Usage" };
+  return initial === undefined
+    ? { usage: measured, label: "Loaded usage" }
+    : { usage: initial, label: "Saved usage" };
+}

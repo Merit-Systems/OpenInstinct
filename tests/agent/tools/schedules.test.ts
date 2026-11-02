@@ -47,7 +47,10 @@ import schedules, {
 describe("schedule tools", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(null)));
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(new Response(null, { status: 202 }))
+    );
   });
 
   it("lets interactive and reporting turns resume scheduled input", async () => {
@@ -119,6 +122,23 @@ describe("schedule tools", () => {
       )
     ).rejects.toThrow("This reporting turn cannot resume that run.");
     expect(services.getInput).toHaveBeenCalledOnce();
+  });
+
+  it("does not report a scheduled answer as resumed when the callback hits an HTML fallback", async () => {
+    services.getInput.mockResolvedValue({
+      leaseToken: "00000000-0000-4000-8000-000000000003",
+      runId: "00000000-0000-4000-8000-000000000002",
+    });
+    vi.mocked(fetch).mockResolvedValue(
+      new Response("<h1>404</h1>", { status: 200 })
+    );
+    const tools = await evaluateDynamic(schedules, dynamicContext("linq"));
+    await expect(
+      dynamicTool(tools, "schedules-answer").execute(
+        { answer: "Beta", runId: "00000000-0000-4000-8000-000000000002" },
+        toolContext("schedules-answer", "linq")
+      )
+    ).rejects.toThrow("The scheduled task could not be resumed.");
   });
 
   it("creates a schedule without a multiplexed action field", async () => {

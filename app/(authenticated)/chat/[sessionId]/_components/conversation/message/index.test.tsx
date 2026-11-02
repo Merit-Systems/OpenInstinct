@@ -92,7 +92,7 @@ describe("agent messages", () => {
     expect(markup).not.toContain("web_search");
   });
 
-  it("hides non-send_message controls in the iMessage projection", () => {
+  it("shows approval controls without exposing tool internals in the iMessage projection", () => {
     const message = {
       id: "turn-2:assistant",
       metadata: { status: "streaming", turnId: "turn-2" },
@@ -140,9 +140,9 @@ describe("agent messages", () => {
       />
     );
 
-    expect(markup).not.toContain("Approve this action?");
-    expect(markup).not.toContain("Approve");
-    expect(markup).not.toContain("Deny");
+    expect(markup).toContain("Approve this action?");
+    expect(markup).toContain("Approve");
+    expect(markup).toContain("Deny");
     expect(markup).not.toContain("send_payment");
     expect(markup).not.toContain("Hidden recipient");
   });

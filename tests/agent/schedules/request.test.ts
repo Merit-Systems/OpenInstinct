@@ -28,7 +28,10 @@ vi.mock("@shared/environment/origin", () => ({
   applicationOrigin: () => "https://example.com",
 }));
 
-import { postScheduledRunRoute } from "@agent/lib/schedules/request";
+import {
+  postScheduledReport,
+  postScheduledRunRoute,
+} from "@agent/lib/schedules/request";
 
 describe("scheduled run requests", () => {
   beforeEach(() => {
@@ -48,6 +51,23 @@ describe("scheduled run requests", () => {
 
   afterEach(() => {
     vi.unstubAllGlobals();
+  });
+
+  it("accepts only the report handler's asynchronous acknowledgment", async () => {
+    vi.mocked(fetch).mockResolvedValue(new Response(null, { status: 202 }));
+    await expect(postScheduledReport("run-1")).resolves.toBeUndefined();
+  });
+
+  it("rejects a successful HTML fallback instead of losing a scheduled report", async () => {
+    vi.mocked(fetch).mockResolvedValue(
+      new Response("<!doctype html><h1>404</h1>", {
+        status: 200,
+        headers: { "content-type": "text/html" },
+      })
+    );
+    await expect(postScheduledReport("run-1")).rejects.toThrow(
+      "Scheduled report callback failed (200)"
+    );
   });
 
   it("authenticates Vercel callbacks with the deployment OIDC token", async () => {
