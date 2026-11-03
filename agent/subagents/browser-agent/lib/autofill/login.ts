@@ -7,6 +7,14 @@ export const nativeLoginAutofillTokens = [
   "current-password",
 ] as const;
 
+// A field whose name or label pairs "password" with any of these words asks for
+// a password the site is about to set, or for a second copy of one, and never
+// for the saved current password. The two words do not have to be adjacent:
+// "password_confirmation", "Confirm your password" and "Re-enter password" are
+// all ordinary spellings of the same control.
+const passwordReentryWords =
+  /\b(?:again|confirm|confirmation|create|new|reenter|repeat|retype|verify|re (?:enter|input|type))\b/u;
+
 export interface NativeLoginControlDescriptor {
   readonly autocomplete: string;
   readonly focused: boolean;
@@ -46,7 +54,10 @@ export function classifyNativeLoginControl(
   const searchable = normalizeText(
     [descriptor.name, descriptor.label].filter(Boolean).join(" ")
   );
-  if (/\b(?:new|confirm|create|repeat)\s*password\b/u.test(searchable)) {
+  if (
+    /\bpasswords?\b/u.test(searchable) &&
+    passwordReentryWords.test(searchable)
+  ) {
     return null;
   }
   if (descriptor.type === "password") {
