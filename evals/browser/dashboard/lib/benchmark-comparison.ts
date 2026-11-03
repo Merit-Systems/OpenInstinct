@@ -1,4 +1,5 @@
 interface ComparableTask {
+  readonly costComplete: boolean;
   readonly costUsd: number | null;
   readonly durationMs: number | null;
   readonly id: string;
@@ -13,7 +14,10 @@ export function compareBenchmarkTasks(
     return { cost: null, time: null };
   }
   return {
-    cost: improvementRatio(baseline.costUsd, candidate.costUsd),
+    cost:
+      baseline.costComplete && candidate.costComplete
+        ? improvementRatio(baseline.costUsd, candidate.costUsd)
+        : null,
     time: improvementRatio(baseline.durationMs, candidate.durationMs),
   };
 }

@@ -29,11 +29,14 @@ const baselineComparableDurations = comparablePairs.map(
 const candidateComparableDurations = comparablePairs.map(
   (pair) => pair.candidate.durationMs
 );
+const costComparablePairs = comparablePairs.filter(
+  (pair) => pair.baseline.costComplete && pair.candidate.costComplete
+);
 const baselineComparableCost = sumNullable(
-  comparablePairs.map((pair) => pair.baseline.costUsd)
+  costComparablePairs.map((pair) => pair.baseline.costUsd)
 );
 const candidateComparableCost = sumNullable(
-  comparablePairs.map((pair) => pair.candidate.costUsd)
+  costComparablePairs.map((pair) => pair.candidate.costUsd)
 );
 
 console.log("");
@@ -64,9 +67,9 @@ for (const pair of pairs) {
       comparable
         ? formatDelta(pair.baseline.durationMs, pair.candidate.durationMs, "ms")
         : "—",
-      formatCost(pair.baseline.costUsd),
-      formatCost(pair.candidate.costUsd),
-      comparable
+      formatCost(pair.baseline.costUsd, pair.baseline.costComplete),
+      formatCost(pair.candidate.costUsd, pair.candidate.costComplete),
+      comparable && pair.baseline.costComplete && pair.candidate.costComplete
         ? formatNullableDelta(
             pair.baseline.costUsd,
             pair.candidate.costUsd,
@@ -88,10 +91,10 @@ console.log(
   `Comparable P95: ${formatOptionalDuration(percentile(baselineComparableDurations, 0.95))} → ${formatOptionalDuration(percentile(candidateComparableDurations, 0.95))} (${formatNullableDelta(percentile(baselineComparableDurations, 0.95), percentile(candidateComparableDurations, 0.95), "ms")})`
 );
 console.log(
-  `Comparable LLM cost: ${formatCost(baselineComparableCost)} → ${formatCost(candidateComparableCost)} (${formatNullableDelta(baselineComparableCost, candidateComparableCost, "$")})`
+  `Comparable LLM cost (${String(costComparablePairs.length)} shared complete measurements): ${formatCost(baselineComparableCost, true)} → ${formatCost(candidateComparableCost, true)} (${formatNullableDelta(baselineComparableCost, candidateComparableCost, "$")})`
 );
 console.log(
-  `Total LLM spend: ${formatCost(baseline.summary.totalCostUsd)} → ${formatCost(candidate.summary.totalCostUsd)}`
+  `Total LLM spend: ${formatCost(baseline.summary.totalCostUsd, baseline.summary.costComplete)} → ${formatCost(candidate.summary.totalCostUsd, candidate.summary.costComplete)}`
 );
 console.log(
   `Judge score: ${formatScore(baseline.summary.meanJudgeScore)} → ${formatScore(candidate.summary.meanJudgeScore)}`
@@ -140,8 +143,10 @@ function formatOptionalDuration(milliseconds: number | null) {
   return milliseconds === null ? "—" : formatDuration(milliseconds);
 }
 
-function formatCost(costUsd: number | null) {
-  return costUsd === null ? "—" : `$${costUsd.toFixed(6)}`;
+function formatCost(costUsd: number | null, complete: boolean) {
+  return costUsd === null
+    ? "—"
+    : `${complete ? "" : "~"}$${costUsd.toFixed(6)}`;
 }
 
 function formatRate(rate: number) {
