@@ -927,6 +927,15 @@ export const PromptInput = ({
         form.reset();
       }
 
+      const restoreText = () => {
+        if (usingProvider) return;
+        const input = form.elements.namedItem("message");
+        if (input instanceof HTMLTextAreaElement && input.value === "") {
+          input.value = text;
+          input.dispatchEvent(new Event("input", { bubbles: true }));
+        }
+      };
+
       try {
         // Convert blob URLs to data URLs asynchronously
         const convertedFiles: FileUIPart[] = await Promise.all(
@@ -955,6 +964,7 @@ export const PromptInput = ({
             }
           } catch {
             // Don't clear on error - user may want to retry
+            restoreText();
           }
         } else {
           // Sync function completed without throwing, clear inputs
@@ -965,6 +975,7 @@ export const PromptInput = ({
         }
       } catch {
         // Don't clear on error - user may want to retry
+        restoreText();
       }
     },
     [usingProvider, controller, files, onSubmit, clear]
@@ -1086,8 +1097,10 @@ export const PromptInputTextarea = ({
       });
     };
     form.addEventListener("reset", handleReset);
+    textarea.addEventListener("input", handleReset);
     return () => {
       form.removeEventListener("reset", handleReset);
+      textarea.removeEventListener("input", handleReset);
     };
   }, []);
 
