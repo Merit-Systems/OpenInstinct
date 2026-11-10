@@ -368,9 +368,6 @@ async function readBoundedResponse(response: Response) {
   return bytes;
 }
 
-export default defineDynamic({
-  events: {
-    "session.started": () =>
-      env.BROWSER_PROVIDER === "notte" ? null : kernelTool,
-  },
-});
+export default defineDynamic(() =>
+  env.BROWSER_PROVIDER === "notte" ? null : kernelTool
+);

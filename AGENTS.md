@@ -20,6 +20,8 @@ Use a bounded authoring loop:
 
 Follow links or inspect public types only when the routed page leaves the task unanswered. Do not recursively glob `node_modules`, enumerate the entire docs tree, or read unrelated scaffold files when the direct path is known. Package-manager links can hide files from recursive glob tools even though direct reads work.
 
+With Eve 1.0, `defineDynamic` takes a function that returns tools or `null`; the older `events` map form is unsupported.
+
 ## Prefer an existing integration
 
 When a task names an external product or service, search the registry before implementing its integration. For a generic capability, author a tool instead.

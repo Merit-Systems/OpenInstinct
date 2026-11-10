@@ -273,9 +273,6 @@ function toBatchAction(
   throw new Error("Unsupported computer action.");
 }
 
-export default defineDynamic({
-  events: {
-    "session.started": () =>
-      env.BROWSER_PROVIDER === "notte" ? null : kernelTool,
-  },
-});
+export default defineDynamic(() =>
+  env.BROWSER_PROVIDER === "notte" ? null : kernelTool
+);

@@ -42,8 +42,7 @@ export default defineDynamic(() => {
     allSpecs
       .filter(
         (spec) =>
-          env.BROWSER_PROVIDER !== "notte" ||
-          spec.name !== "playwright_execute"
+          env.BROWSER_PROVIDER !== "notte" || spec.name !== "playwright_execute"
       )
       .map((spec) => [
         spec.name,

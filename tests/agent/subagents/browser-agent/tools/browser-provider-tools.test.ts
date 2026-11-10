@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import semanticBrowser from "@agent/subagents/browser-agent/tools/semantic_browser";
 import computerAction from "@agent/subagents/browser-agent/tools/computer_action";
 import captureImage from "@agent/subagents/browser-agent/tools/capture_browser_image";
+import { resolveDynamicTool } from "@tests/helpers/resolve-dynamic-tool";
 
 const settings = vi.hoisted(() => ({ provider: "notte" }));
 
@@ -18,19 +19,9 @@ vi.mock("@shared/environment", async (importOriginal) => {
     },
   };
 });
-const context = {
-  model: null,
-  session: { id: "test", auth: { current: null, initiator: null } },
-  channel: {},
-  messages: [],
-};
-
 describe("provider tool selection", () => {
   it("exposes semantic CDP tools and omits Kernel-only tools with Notte", async () => {
-    const tools = await semanticBrowser.events["session.started"]?.(
-      {},
-      context
-    );
+    const tools = await resolveDynamicTool(semanticBrowser);
     expect(Object.keys(tools ?? {})).toEqual([
       "browser_snapshot",
       "browser_text",
@@ -38,26 +29,15 @@ describe("provider tool selection", () => {
       "browser_wait_for",
       "browser_act",
     ]);
-    expect(
-      await computerAction.events["session.started"]?.({}, context)
-    ).toBeNull();
-    expect(
-      await captureImage.events["session.started"]?.({}, context)
-    ).toBeNull();
+    expect(await resolveDynamicTool(computerAction)).toBeNull();
+    expect(await resolveDynamicTool(captureImage)).toBeNull();
   });
 
   it("keeps the full Kernel tool surface by default", async () => {
     settings.provider = "kernel";
-    const tools = await semanticBrowser.events["session.started"]?.(
-      {},
-      context
-    );
+    const tools = await resolveDynamicTool(semanticBrowser);
     expect(tools).toHaveProperty("playwright_execute");
-    expect(
-      await computerAction.events["session.started"]?.({}, context)
-    ).not.toBeNull();
-    expect(
-      await captureImage.events["session.started"]?.({}, context)
-    ).not.toBeNull();
+    expect(await resolveDynamicTool(computerAction)).not.toBeNull();
+    expect(await resolveDynamicTool(captureImage)).not.toBeNull();
   });
 });
