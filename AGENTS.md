@@ -20,6 +20,8 @@ Use a bounded authoring loop:
 
 Follow links or inspect public types only when the routed page leaves the task unanswered. Do not recursively glob `node_modules`, enumerate the entire docs tree, or read unrelated scaffold files when the direct path is known. Package-manager links can hide files from recursive glob tools even though direct reads work.
 
+With Eve 1.0, `defineDynamic` takes a function that returns tools or `null`; the older `events` map form is unsupported.
+
 ## Prefer an existing integration
 
 When a task names an external product or service, search the registry before implementing its integration. For a generic capability, author a tool instead.
@@ -60,7 +62,7 @@ Run the validation the task requests. When it does not establish the behavior yo
 - The workspace manager lives on `/` and the agent chat on `/chat`; browser execution belongs only to the declared browser-agent subagent's flat tool surface under `agent/subagents/browser-agent/tools`.
 - Keep each worker browser tool's schema and implementation together. Share the Kernel SDK client through `agent/subagents/browser-agent/lib/kernel.ts`; do not add a Kernel extension or root browser connection.
 - `agent/subagents/browser-agent/lib` is for code genuinely shared by worker tools. Group a shared worker domain in a lower-case folder, such as `trace/domains.ts` or `autofill/provider.ts`; do not use it as a holding area for a tool's one-off logic.
-- Validate runtime environment variables through `shared/environment/env.ts`. `KERNEL_API_KEY` is required by the worker browser tools.
+- Validate runtime environment variables through `shared/environment/env.ts`. `BROWSER_PROVIDER` defaults to `kernel`; worker browser tools require `KERNEL_API_KEY` for Kernel or `NOTTE_API_KEY` for Notte.
 - Run `pnpm check` and `pnpm build` before handing off changes.
 
 ## Code organization

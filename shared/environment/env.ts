@@ -63,7 +63,15 @@ export const env = createEnv({
   server: {
     // Required
     DATABASE_URL: databaseUrlSchema,
-    KERNEL_API_KEY: requiredValue,
+    BROWSER_PROVIDER: z.enum(["kernel", "notte"]).default("kernel"),
+    KERNEL_API_KEY:
+      process.env.BROWSER_PROVIDER === "notte"
+        ? requiredValue.optional()
+        : requiredValue,
+    NOTTE_API_KEY:
+      process.env.BROWSER_PROVIDER === "notte"
+        ? requiredValue
+        : requiredValue.optional(),
 
     // Optional overrides with local defaults. Vercel deployments provision
     // installation secrets in their connected private Blob store.

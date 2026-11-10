@@ -1,6 +1,7 @@
 /* oxlint-disable vitest/require-mock-type-parameters -- The test fixtures implement only the external API surface exercised by the tool. */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { toolContextFor } from "@tests/helpers/tool-context";
+import { resolveSingleDynamicTool } from "@tests/helpers/resolve-dynamic-tool";
 
 const artifactId = "0d01e667-d128-4bb7-a248-1ae21db72f4f";
 const png = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
@@ -58,7 +59,12 @@ vi.mock("@agent/subagents/browser-agent/lib/kernel", () => ({
   },
 }));
 
-import captureBrowserImage from "@agent/subagents/browser-agent/tools/capture_browser_image";
+import captureBrowserImageDefinition from "@agent/subagents/browser-agent/tools/capture_browser_image";
+
+const captureBrowserImage = await resolveSingleDynamicTool(
+  captureBrowserImageDefinition
+);
+if (!captureBrowserImage) throw new Error("Kernel tool is unavailable.");
 
 const scope = { userId: "user-1", workspaceId: "workspace-1" };
 const reservation = {

@@ -1,3 +1,5 @@
+import { env } from "@shared/environment";
+import { retrieveNotteBrowser } from "../lib/notte";
 import { defineTool } from "eve/tools";
 import { z } from "zod";
 import { requireOwnedBrowserSession } from "@agent/subagents/browser-agent/lib/owned-browser";
@@ -46,11 +48,17 @@ export default defineTool({
       );
     }
     if (item.kind === "login") {
-      const browser = await kernel.browsers.retrieve(
-        input.browserSessionId,
-        {},
-        { signal: context.abortSignal }
-      );
+      const browser =
+        env.BROWSER_PROVIDER === "notte"
+          ? await retrieveNotteBrowser(
+              input.browserSessionId,
+              context.abortSignal
+            )
+          : await kernel.browsers.retrieve(
+              input.browserSessionId,
+              {},
+              { signal: context.abortSignal }
+            );
       if (!browser.profile_save_changes) {
         throw new Error(
           "Login autofill requires a browser created with save_changes: true. Delete this browser, create a writable browser at the same URL, then focus and fill again."

@@ -3,7 +3,11 @@ import * as WorkerAccess from "@agent/subagents/browser-agent/lib/access";
 import * as OwnedBrowser from "@agent/subagents/browser-agent/lib/owned-browser";
 import { kernel } from "@agent/subagents/browser-agent/lib/kernel";
 import { toolContextFor } from "@tests/helpers/tool-context";
-import computerAction from "@agent/subagents/browser-agent/tools/computer_action";
+import { resolveSingleDynamicTool } from "@tests/helpers/resolve-dynamic-tool";
+import computerActionDefinition from "@agent/subagents/browser-agent/tools/computer_action";
+
+const computerAction = await resolveSingleDynamicTool(computerActionDefinition);
+if (!computerAction) throw new Error("Kernel tool is unavailable.");
 
 const mocks = {
   batch: vi.spyOn(kernel.browsers.computer, "batch"),
@@ -34,9 +38,8 @@ beforeEach(() => {
 
 describe("worker browser tools", () => {
   it("sends contiguous computer actions through Kernel batch while preserving read order", async () => {
-    const execute = computerAction.execute;
     const context = toolContextFor();
-    const result = await execute(
+    const result = await computerAction.execute(
       {
         actions: [
           { click_mouse: { x: 10, y: 20 }, type: "click_mouse" },
