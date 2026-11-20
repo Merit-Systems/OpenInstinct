@@ -115,6 +115,9 @@ describe("Eve scheduled report delivery", () => {
 function scheduledReportContext(view: SessionView) {
   return {
     channel: {},
+    waitUntil(task: Promise<unknown>) {
+      void task;
+    },
     async getSandbox() {
       throw new Error("Sandbox access is outside this focused test.");
     },
