@@ -25,4 +25,3 @@ allowBuilds:
   sharp: true
 patchedDependencies:
   "@linqapp/chat-sdk-adapter@0.5.1": patches/@linqapp__chat-sdk-adapter@0.5.1.patch
-  eve@1.0.0-rc.1: patches/eve@1.0.0-rc.1.patch

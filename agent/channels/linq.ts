@@ -1,3 +1,4 @@
+import { createLinqAdapter } from "@linqapp/chat-sdk-adapter";
 import type { LinqAPIV3 } from "@linqapp/sdk";
 import type { AdapterPostableMessage } from "chat";
 import {
@@ -174,20 +175,18 @@ export default linqChannel({
           ? (content: AdapterPostableMessage) =>
               adapter.postMessage(thread.id, content, { idempotencyKey })
           : (content: AdapterPostableMessage) => thread.post(content);
+        const replyAdapter = createLinqAdapter({
+          credentials: async () => ({ apiKey: await linqCredentials.apiKey() }),
+          webhookVerifier: () => false,
+        });
         const postReply = (
           content: AdapterPostableMessage,
           replyToMessageId: string
-        ) => {
-          if (idempotencyKey) {
-            return adapter.postMessage(thread.id, content, {
-              idempotencyKey,
-              replyToMessageId,
-            });
-          }
-          return adapter.postMessage(thread.id, content, {
+        ) =>
+          replyAdapter.postMessage(thread.id, content, {
+            idempotencyKey,
             replyToMessageId,
           });
-        };
         const resolveExistingChatId = () => {
           const { chatId, pendingHandle } = adapter.decodeThreadId(thread.id);
           if (pendingHandle || !chatId) {

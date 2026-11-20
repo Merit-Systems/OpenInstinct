@@ -20,6 +20,9 @@ export function dynamicContextFor({
 }: TestDynamicContextOptions = {}): DynamicContext {
   return {
     channel,
+    async getSandbox() {
+      throw new Error("This test context has no sandbox.");
+    },
     memo: async (_key, fn) =>
       fn({ abortSignal: new AbortController().signal, idempotencyKey: "memo" }),
     async messages() {
